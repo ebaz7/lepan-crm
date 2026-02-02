@@ -1,31 +1,39 @@
 
 import React, { useState, useEffect } from 'react';
-import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole, SystemSettings } from '../types';
+import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, SystemSettings } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, ArrowLeft, ArrowRight, CheckCircle2, Calendar, RefreshCcw, User as UserIcon, Building2 } from 'lucide-react';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
+    // Stepper State
     const [step, setStep] = useState(1);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [permitNumber, setPermitNumber] = useState('');
-    const [loadingNum, setLoadingNum] = useState(false);
-    const [selectedCompany, setSelectedCompany] = useState('');
-    const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
     
+    // Core Form State
+    const [permitNumber, setPermitNumber] = useState('');
+    const [selectedCompany, setSelectedCompany] = useState('');
+    
+    // Date State
     const currentShamsi = getCurrentShamsiDate();
     const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
 
+    // Item & Destination State
     const [items, setItems] = useState<ExitPermitItem[]>([{ id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }]);
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
 
-    // Initial load for companies
+    // Loading States
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loadingNum, setLoadingNum] = useState(false);
+    const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
+    
+    // Initial Load
     useEffect(() => {
         getSettings().then(s => {
             const names = s.companies?.map(c => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
+            // Auto-select default
             if (s.defaultCompany) {
                 setSelectedCompany(s.defaultCompany);
                 fetchNextNumber(s.defaultCompany);
@@ -33,19 +41,23 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         });
     }, []);
 
-    // Function to fetch next number - PER COMPANY
+    // Fetch next number safely
     const fetchNextNumber = (company?: string) => {
         if (!company) return;
         setLoadingNum(true);
+        // Use timestamp to bypass cache
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
                 if (res && res.nextNumber) {
                     setPermitNumber(res.nextNumber.toString());
                 } else {
-                    setPermitNumber('1001');
+                    setPermitNumber('1001'); // Fallback
                 }
             })
-            .catch(() => setPermitNumber('1001'))
+            .catch(err => {
+                console.error("Number fetch error", err);
+                setPermitNumber('1001');
+            })
             .finally(() => setLoadingNum(false));
     };
 
@@ -55,53 +67,77 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         fetchNextNumber(val);
     };
 
+    // --- SUBMIT HANDLER (REWRITTEN FOR STABILITY) ---
     const handleSubmit = async () => {
+        // 1. Validation
         if (!permitNumber) return alert('شماره مجوز الزامی است');
         if (!selectedCompany) return alert('انتخاب شرکت الزامی است');
-        if (items.some(i => !i.goodsName || !i.cartonCount)) return alert('اطلاعات کالا ناقص است');
-        if (destinations.some(d => !d.recipientName)) return alert('اطلاعات گیرنده ناقص است');
+        
+        const validItems = items.filter(i => i.goodsName.trim() !== '');
+        if (validItems.length === 0) return alert('حداقل یک کالا وارد کنید');
+        
+        const validDestinations = destinations.filter(d => d.recipientName.trim() !== '');
+        if (validDestinations.length === 0) return alert('حداقل یک گیرنده وارد کنید');
 
         setIsSubmitting(true);
+        
         try {
+            // 2. Robust Date Conversion
             let isoDate;
             try {
                 const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day);
-                if (isNaN(date.getTime())) throw new Error('Invalid Date');
+                if (isNaN(date.getTime())) throw new Error("Invalid Date");
                 isoDate = date.toISOString().split('T')[0];
             } catch (err) {
-                isoDate = new Date().toISOString().split('T')[0]; // Fallback
+                // Fallback to today if conversion fails (prevents crash)
+                console.error("Date conversion error", err);
+                isoDate = new Date().toISOString().split('T')[0]; 
             }
+            
+            // 3. Safe Integer Parsing
+            const finalPermitNumber = parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0;
+            if (finalPermitNumber === 0) throw new Error("Invalid Permit Number");
 
+            // 4. Construct Object
             const newPermit: ExitPermit = {
                 id: generateUUID(),
-                permitNumber: Number(permitNumber),
+                permitNumber: finalPermitNumber,
                 company: selectedCompany,
                 date: isoDate,
                 requester: currentUser.fullName,
-                items,
-                destinations,
-                goodsName: items.map(i => i.goodsName).join('، '),
-                recipientName: destinations.map(d => d.recipientName).join('، '),
-                cartonCount: items.reduce((acc, i) => acc + i.cartonCount, 0),
-                weight: items.reduce((acc, i) => acc + i.weight, 0),
+                items: validItems,
+                destinations: validDestinations,
+                
+                // Legacy fields for backward compatibility
+                goodsName: validItems.map(i => i.goodsName).join('، '),
+                recipientName: validDestinations.map(d => d.recipientName).join('، '),
+                cartonCount: validItems.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0),
+                weight: validItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0),
+                
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
                 status: ExitPermitStatus.PENDING_CEO,
                 createdAt: Date.now()
             };
+            
+            // 5. Send
             await saveExitPermit(newPermit);
             onSuccess();
-        } catch (e) {
-            alert('خطا در ثبت درخواست');
+            
+        } catch (e: any) {
+            console.error("Submit Error:", e);
+            alert(`خطا در ثبت درخواست: ${e.message || 'مشکل ناشناخته'}`);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="max-w-3xl mx-auto bg-white md:rounded-[2.5rem] shadow-none md:shadow-2xl md:shadow-blue-100 overflow-hidden animate-fade-in border-0 md:border border-gray-100 min-h-screen md:min-h-0">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white sticky top-0 z-10 md:static">
+        <div className="max-w-3xl mx-auto bg-white md:rounded-[2.5rem] shadow-none md:shadow-2xl md:shadow-blue-100 overflow-hidden animate-fade-in border-0 md:border border-gray-100 min-h-screen md:min-h-0 relative flex flex-col">
+            
+            {/* Header Steps */}
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white sticky top-0 z-30 md:static shadow-md md:shadow-none">
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h2 className="text-xl font-black">ثبت خروج</h2>
@@ -118,7 +154,8 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 </div>
             </div>
 
-            <div className="p-4 md:p-8 pb-24 md:pb-8">
+            {/* Content Body - Added pb-32 for mobile footer space */}
+            <div className="p-4 md:p-8 pb-32 md:pb-8 flex-1 overflow-y-auto">
                 {step === 1 && (
                     <div className="space-y-6 animate-slide-up">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -136,11 +173,18 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             <div className="space-y-2">
                                 <label className="text-sm font-black text-gray-700 flex items-center gap-2"><Hash size={18} className="text-blue-500"/> شماره سند</label>
                                 <div className="relative">
-                                    <input type="number" className="w-full border-2 border-gray-200 rounded-2xl p-4 pl-12 bg-gray-50 font-mono font-bold text-xl text-blue-600 focus:border-blue-500 outline-none transition-all" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} />
+                                    <input 
+                                        type="number" 
+                                        className="w-full border-2 border-gray-200 rounded-2xl p-4 pl-12 bg-gray-50 font-mono font-bold text-xl text-blue-600 focus:border-blue-500 outline-none transition-all" 
+                                        value={permitNumber} 
+                                        onChange={e => setPermitNumber(e.target.value)}
+                                        placeholder={loadingNum ? "دریافت..." : ""}
+                                    />
                                     <button 
                                         onClick={() => fetchNextNumber(selectedCompany)} 
                                         disabled={loadingNum || !selectedCompany}
                                         className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-xl text-blue-600 hover:bg-blue-100 transition-colors"
+                                        title="بروزرسانی شماره"
                                     >
                                         <RefreshCcw size={18} className={loadingNum ? 'animate-spin' : ''}/>
                                     </button>
@@ -230,24 +274,25 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         </div>
                     </div>
                 )}
+            </div>
 
-                <div className="fixed md:static bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 md:p-0 md:bg-transparent md:border-0 md:mt-8 z-20 safe-pb">
-                    <div className="flex gap-3">
-                        {step > 1 && (
-                            <button onClick={() => setStep(s => s - 1)} className="px-6 py-4 rounded-2xl bg-gray-100 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-200 transition-all active:scale-95">
-                                <ArrowRight size={20}/>
-                            </button>
-                        )}
-                        <button 
-                            onClick={step === 3 ? handleSubmit : () => setStep(s => s + 1)} 
-                            disabled={isSubmitting || !selectedCompany}
-                            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
-                        >
-                            {isSubmitting ? <Loader2 className="animate-spin" /> : (step === 3 ? 'ثبت نهایی' : 'مرحله بعد')}
-                            {step < 3 && !isSubmitting && <ArrowLeft size={20}/>}
-                            {step === 3 && !isSubmitting && <CheckCircle2 size={20}/>}
+            {/* Footer Buttons - Fixed to Bottom (Visible on Mobile) */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 p-4 md:static md:bg-transparent md:border-0 md:p-0 z-50 safe-pb shadow-[0_-4px_10px_rgba(0,0,0,0.05)] md:shadow-none">
+                <div className="flex gap-3 max-w-3xl mx-auto">
+                    {step > 1 && (
+                        <button onClick={() => setStep(s => s - 1)} className="px-6 py-4 rounded-2xl bg-gray-100 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-200 transition-all active:scale-95">
+                            <ArrowRight size={20}/>
                         </button>
-                    </div>
+                    )}
+                    <button 
+                        onClick={step === 3 ? handleSubmit : () => setStep(s => s + 1)} 
+                        disabled={isSubmitting || !selectedCompany}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
+                    >
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : (step === 3 ? 'ثبت نهایی' : 'مرحله بعد')}
+                        {step < 3 && !isSubmitting && <ArrowLeft size={20}/>}
+                        {step === 3 && !isSubmitting && <CheckCircle2 size={20}/>}
+                    </button>
                 </div>
             </div>
         </div>
