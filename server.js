@@ -64,7 +64,7 @@ app.use(cors());
 app.use(compression()); 
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(ROOT_DIR, 'dist')));
+// Static files served AFTER API routes definition logic (see below)
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // --- DB HANDLERS ---
@@ -78,7 +78,7 @@ const DEFAULT_DB = {
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
     if (!Array.isArray(data.orders)) data.orders = [];
-    if (!Array.isArray(data.exitPermits)) data.exitPermits = []; // Critical for 404 fix
+    if (!Array.isArray(data.exitPermits)) data.exitPermits = [];
     if (!Array.isArray(data.warehouseItems)) data.warehouseItems = [];
     if (!Array.isArray(data.warehouseTransactions)) data.warehouseTransactions = [];
     if (!Array.isArray(data.users)) data.users = DEFAULT_DB.users;
@@ -154,7 +154,7 @@ app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.or
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// --- EXIT PERMITS (CRITICAL FIX FOR 404) ---
+// --- EXIT PERMITS (CRITICAL FIX: Ensure Routes Exist) ---
 app.get('/api/exit-permits', (req, res) => {
     const db = getDb();
     res.json(db.exitPermits || []);
@@ -171,8 +171,10 @@ app.post('/api/exit-permits', (req, res) => {
         db.exitPermits.push(permit);
         
         saveDb(db);
+        console.log(`Exit Permit Created: ${permit.permitNumber}`);
         res.json(db.exitPermits);
     } catch (e) {
+        console.error("Create Exit Permit Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -245,7 +247,14 @@ app.post('/api/render-pdf', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Serving Static Files (Must be last to avoid 404ing API routes)
+app.use(express.static(path.join(ROOT_DIR, 'dist')));
+
 app.get('*', (req, res) => { 
+    // If request starts with /api/, send 404 instead of index.html to avoid client-side confusion
+    if (req.url.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API endpoint not found' });
+    }
     const p = path.join(ROOT_DIR, 'dist', 'index.html'); 
     if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Frontend build missing.');
 });

@@ -37,12 +37,16 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
     const fetchNextNumber = (company?: string) => {
         if (!company) return;
+        // Ensure API call is correct
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
                 if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
                 else setPermitNumber('1001');
             })
-            .catch(() => setPermitNumber('1001'));
+            .catch((e) => {
+                console.error("Fetch Number Error", e);
+                setPermitNumber('1001');
+            });
     };
 
     const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -86,13 +90,17 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 createdAt: Date.now()
             };
 
+            // Call API
             await saveExitPermit(newPermit);
             
             // Initiate Auto-Send Process
             setTempPermit(newPermit);
             
             setTimeout(async () => {
-                const element = document.getElementById(`print-permit-create-${newPermit.id}`);
+                // Ensure element exists
+                const elementId = `print-permit-create-${newPermit.id}`;
+                const element = document.getElementById(elementId);
+                
                 if (element) {
                     try {
                         // @ts-ignore
@@ -105,15 +113,24 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         if (ceo) {
                             const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             
-                            if (ceo.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } });
+                            if (ceo.phoneNumber) {
+                                await apiCall('/send-whatsapp', 'POST', { 
+                                    number: ceo.phoneNumber, 
+                                    message: caption, 
+                                    mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
+                                });
+                            }
                         }
                     } catch (e) { console.error("Notification Error", e); }
                 }
+                
+                // Clear and navigate
                 onSuccess();
-            }, 2500);
+            }, 2000);
 
         } catch (e: any) {
-            alert(`خطا در ثبت حواله: ${e.message || 'خطای شبکه'}`);
+            console.error("Submit Error:", e);
+            alert(`خطا در ثبت حواله: ${e.message || 'Server Error'}`);
             setIsSubmitting(false);
         }
     };
