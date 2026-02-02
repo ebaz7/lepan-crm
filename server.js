@@ -223,17 +223,17 @@ const calculateNextNumber = (db, type, companyName = null) => {
 
     try {
         if (type === 'payment') {
+            // Find max based on scope
             if (Array.isArray(db.orders)) {
                 db.orders.forEach(o => {
                     // Check Global OR Company sequence depending on logic.
-                    // Assuming global sequence for orders usually, but if fiscal year has company specifics:
                     if (activeYear && activeYear.companySequences?.[safeCompany]) {
                         if (o.payingCompany === safeCompany) {
                              const num = parseInt(o.trackingNumber);
                              if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                         }
                     } else {
-                        // Global Sequence Fallback
+                        // Global Sequence Fallback - Check everything to be safe
                         const num = parseInt(o.trackingNumber);
                         if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                     }
@@ -244,15 +244,13 @@ const calculateNextNumber = (db, type, companyName = null) => {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
             }
             // Global setting fallback
-            if (maxFoundInDb === 0 && fiscalStart === 0) {
+            if (fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
             }
 
         } else if (type === 'exit') {
             if (Array.isArray(db.exitPermits)) {
                 db.exitPermits.forEach(p => {
-                    // Exit Permits usually company specific or global? Let's Assume Global unless filtered
-                    // To be safe, find MAX globally to avoid collision if not strictly scoped
                     const num = parseInt(p.permitNumber);
                     if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                 });
@@ -260,12 +258,11 @@ const calculateNextNumber = (db, type, companyName = null) => {
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
             }
-            if (maxFoundInDb === 0 && fiscalStart === 0) {
+            if (fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
             }
 
         } else if (type === 'bijak') {
-            // Bijaks ARE Company Specific usually
             if (Array.isArray(db.warehouseTransactions)) {
                 db.warehouseTransactions
                     .filter(t => t.type === 'OUT' && t.company === safeCompany)
@@ -277,7 +274,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
             }
-            if (maxFoundInDb === 0 && fiscalStart === 0) {
+            if (fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.warehouseSequences?.[safeCompany]) || 1000;
             }
         }
@@ -290,12 +287,16 @@ const calculateNextNumber = (db, type, companyName = null) => {
     
     // Algorithm: Look at Max in DB. If Max >= FiscalStart, next is Max+1. 
     // If Max < FiscalStart (new year), next is FiscalStart.
-    if (maxFoundInDb > 0) {
-        nextNum = Math.max(maxFoundInDb + 1, fiscalStart);
+    // Ensure we never return 0 or negative
+    if (maxFoundInDb >= fiscalStart) {
+        nextNum = maxFoundInDb + 1;
     } else {
         nextNum = fiscalStart > 0 ? fiscalStart : 1001;
     }
     
+    // Safety check
+    if (!nextNum || nextNum < 1000) nextNum = 1001;
+
     // Update settings cache to reflect reality (Fixes the settings lag)
     if (type === 'payment' && !activeYear) db.settings.currentTrackingNumber = nextNum;
     if (type === 'exit' && !activeYear) db.settings.currentExitPermitNumber = nextNum;
@@ -304,7 +305,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
          db.settings.warehouseSequences[safeCompany] = nextNum;
     }
 
-    logToFile(`[NumberGen] ${type} (Co: ${safeCompany}): MaxDB=${maxFoundInDb}, Fiscal=${fiscalStart} -> NEXT=${nextNum}`);
+    // logToFile(`[NumberGen] ${type} (Co: ${safeCompany}): MaxDB=${maxFoundInDb}, Fiscal=${fiscalStart} -> NEXT=${nextNum}`);
     return nextNum;
 };
 

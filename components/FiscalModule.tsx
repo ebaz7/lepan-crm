@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { FiscalYear, SystemSettings, Company, CompanySequenceConfig } from '../types';
 import { getSettings, saveSettings } from '../services/storageService';
@@ -99,6 +100,7 @@ export const FiscalYearManager: React.FC = () => {
 
         companies.forEach(c => {
             // FIX: Using type assertion to avoid property errors on empty object
+            // Also ensure we handle potential company renames gracefully in future (though ID based is better, current logic is Name based)
             const seq = (year.companySequences?.[c.name] || {}) as CompanySequenceConfig;
             
             // Warehouse Bijak: Use specific company sequence if available in settings, else 1
@@ -159,9 +161,9 @@ export const FiscalYearManager: React.FC = () => {
         Object.entries(companyConfig).forEach(([compName, vals]) => {
             const values = vals as { pay: string, exit: string, bijak: string };
             sequences[compName] = {
-                startTrackingNumber: parseInt(values.pay) || 1,
-                startExitPermitNumber: parseInt(values.exit) || 1,
-                startBijakNumber: parseInt(values.bijak) || 1,
+                startTrackingNumber: parseInt(values.pay) || 1001,
+                startExitPermitNumber: parseInt(values.exit) || 1001,
+                startBijakNumber: parseInt(values.bijak) || 1001,
             };
         });
 
@@ -227,9 +229,9 @@ export const FiscalYearManager: React.FC = () => {
                         <div className="flex flex-col">
                             <h3 className="font-bold text-indigo-800 flex items-center gap-2"><Building2 size={20}/> تنظیم شماره‌های شروع - سال {editingYear.label}</h3>
                             <span className="text-[10px] text-gray-500 mt-1">
-                                شماره شروع اسناد برای هر شرکت در این سال مالی را وارد کنید. اگر می‌خواهید ادامه سال قبل باشد، آخرین شماره سال قبل + ۱ را وارد کنید.
+                                شماره شروع اسناد برای هر شرکت در این سال مالی را وارد کنید.
                                 <br/>
-                                <span className="text-green-600 font-bold">نکته: شماره‌های فعلی سیستم به صورت پیش‌فرض در فیلدها قرار گرفته‌اند.</span>
+                                <span className="text-green-600 font-bold">نکته: در صورت عدم تنظیم، از شماره‌گذاری سراسری سیستم استفاده می‌شود.</span>
                             </span>
                         </div>
                         <button onClick={handleSaveCompanyConfig} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-sm"><Save size={16}/> ذخیره تغییرات</button>

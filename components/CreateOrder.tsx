@@ -71,14 +71,20 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
   // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
   const fetchNextNumber = (company?: string) => {
-    // Allows fetching without company (global sequence)
+    // Reset to a temporary loader state if needed, but keeping old value is often better UX.
+    // However, to indicate change:
     setLoadingNum(true);
+    
     getNextTrackingNumber(company)
         .then(num => {
-            if (num) setTrackingNumber(num.toString());
+            // FORCE A NUMBER. If API returns 0 or null, use 1001.
+            const validNum = (num && num > 0) ? num : 1001;
+            setTrackingNumber(validNum.toString());
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
+            // Fallback on error
+            setTrackingNumber('1001');
         })
         .finally(() => setLoadingNum(false));
   };
@@ -349,7 +355,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Hash size={16}/> شماره دستور پرداخت</label>
                     <div className="relative">
-                        <input required type="number" className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 font-mono font-bold text-blue-600 dir-ltr text-left" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} onKeyDown={handleKeyDown} />
+                        <input required type="number" className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 font-mono font-bold text-blue-600 dir-ltr text-left" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} onKeyDown={handleKeyDown} placeholder="در حال دریافت..." />
                         <button 
                             type="button"
                             onClick={() => fetchNextNumber(payingCompany)} 
