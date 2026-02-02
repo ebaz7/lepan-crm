@@ -58,32 +58,41 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const handleSubmit = async () => {
         if (!permitNumber) return alert('شماره مجوز الزامی است');
         if (!selectedCompany) return alert('انتخاب شرکت الزامی است');
-        if (items.some(i => !i.goodsName || !i.cartonCount)) return alert('اطلاعات کالا ناقص است');
-        if (destinations.some(d => !d.recipientName)) return alert('اطلاعات گیرنده ناقص است');
+        if (items.some(i => !i.goodsName)) return alert('نام کالا الزامی است');
+        if (destinations.some(d => !d.recipientName)) return alert('نام گیرنده الزامی است');
 
         setIsSubmitting(true);
         try {
+            // ROBUST DATE HANDLING
             let isoDate;
             try {
                 const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day);
-                if (isNaN(date.getTime())) throw new Error('Invalid Date');
+                // Check if date is valid
+                if (isNaN(date.getTime())) throw new Error("Invalid Date");
                 isoDate = date.toISOString().split('T')[0];
             } catch (err) {
-                isoDate = new Date().toISOString().split('T')[0]; // Fallback
+                // Safe Fallback to prevent crash
+                isoDate = new Date().toISOString().split('T')[0]; 
             }
+            
+            // Ensure permitNumber is integer
+            const finalPermitNumber = parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0;
+            if (finalPermitNumber === 0) throw new Error("Invalid Permit Number");
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
-                permitNumber: Number(permitNumber),
+                permitNumber: finalPermitNumber,
                 company: selectedCompany,
                 date: isoDate,
                 requester: currentUser.fullName,
-                items,
-                destinations,
+                items: items,
+                destinations: destinations,
+                // Legacy support fields
                 goodsName: items.map(i => i.goodsName).join('، '),
                 recipientName: destinations.map(d => d.recipientName).join('، '),
-                cartonCount: items.reduce((acc, i) => acc + i.cartonCount, 0),
-                weight: items.reduce((acc, i) => acc + i.weight, 0),
+                cartonCount: items.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0),
+                weight: items.reduce((acc, i) => acc + (Number(i.weight) || 0), 0),
+                
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
@@ -92,8 +101,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             };
             await saveExitPermit(newPermit);
             onSuccess();
-        } catch (e) {
-            alert('خطا در ثبت درخواست');
+        } catch (e: any) {
+            console.error(e);
+            alert(`خطا در ثبت درخواست: ${e.message || 'نامشخص'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -141,6 +151,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                         onClick={() => fetchNextNumber(selectedCompany)} 
                                         disabled={loadingNum || !selectedCompany}
                                         className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-xl text-blue-600 hover:bg-blue-100 transition-colors"
+                                        title="بروزرسانی شماره"
                                     >
                                         <RefreshCcw size={18} className={loadingNum ? 'animate-spin' : ''}/>
                                     </button>
