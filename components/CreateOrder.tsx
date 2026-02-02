@@ -84,6 +84,10 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   };
 
   useEffect(() => {
+      // 1. Fetch IMMEDIATELY (Global Sequence) to ensure field is never empty
+      fetchNextNumber();
+
+      // 2. Then load settings and refine if default company exists
       getSettings().then((s) => {
           setSettings(s);
           const names = s.companies?.map(c => c.name) || s.companyNames || [];
@@ -93,9 +97,9 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
           if (defCompany) {
               setPayingCompany(defCompany);
               updateBanksForCompany(defCompany, s);
+              // 3. Re-fetch for specific company sequence if needed
+              fetchNextNumber(defCompany);
           }
-          // Fetch number immediately on mount (Global or Company based)
-          fetchNextNumber(defCompany);
       });
   }, []);
 
