@@ -19,11 +19,8 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const currentShamsi = getCurrentShamsiDate();
   const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
   const [formData, setFormData] = useState({ payee: '', description: '', });
-  
-  // FIX: Separate loading state for number
   const [trackingNumber, setTrackingNumber] = useState<string>('');
-  const [isNumberLoading, setIsNumberLoading] = useState(false);
-
+  const [loadingNum, setLoadingNum] = useState(false); 
   const [payingCompany, setPayingCompany] = useState('');
   
   const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
@@ -50,7 +47,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
       amount: '', 
       chequeNumber: '', 
       bankName: '', 
-      description: '', 
+      description: '',
       chequeDate: { year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day } as any,
       sheba: '',
       recipientBank: '',
@@ -72,19 +69,20 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const [newBankName, setNewBankName] = useState('');
   const [newBankAccount, setNewBankAccount] = useState('');
 
-  // FIX: Robust Fetch Function
-  const fetchNextNumber = (companyName: string) => {
-    if (!companyName) return;
-    setIsNumberLoading(true);
-    // Add timestamp to prevent caching
-    apiCall<{ nextTrackingNumber: number }>(`/next-tracking-number?company=${encodeURIComponent(companyName)}&t=${Date.now()}`)
-        .then(res => {
-            if (res && res.nextTrackingNumber) {
-                setTrackingNumber(res.nextTrackingNumber.toString());
-            }
+  // Function to fetch next number - EXPLICITLY PER COMPANY
+  const fetchNextNumber = (company?: string) => {
+    // Prevent fetching if company is not selected yet to avoid 1001 default
+    if (!company) return;
+
+    setLoadingNum(true);
+    getNextTrackingNumber(company)
+        .then(num => {
+            if (num) setTrackingNumber(num.toString());
         })
-        .catch(err => console.error("Error fetching number", err))
-        .finally(() => setIsNumberLoading(false));
+        .catch((e) => {
+            console.error("Fetch Number Error", e);
+        })
+        .finally(() => setLoadingNum(false));
   };
 
   useEffect(() => {
@@ -97,7 +95,6 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
           if (defCompany) {
               setPayingCompany(defCompany);
               updateBanksForCompany(defCompany, s);
-              // Fetch initial number
               fetchNextNumber(defCompany);
           }
       });
@@ -117,8 +114,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
       setPayingCompany(newVal);
       if (settings) updateBanksForCompany(newVal, settings);
       setNewLine(prev => ({ ...prev, bankName: '' })); 
-      
-      // FIX: Trigger fetch immediately on change
+      // IMMEDIATE FETCH on change
       fetchNextNumber(newVal);
   };
 
@@ -285,8 +281,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
     try { 
         const newOrder: PaymentOrder = { 
             id: generateUUID(), 
-            // Use trackingNumber from state (ensuring it's parsed as int)
-            trackingNumber: trackingNumber ? parseInt(trackingNumber) : 0, 
+            trackingNumber: trackingNumber ? Number(trackingNumber) : 0, 
             date: getIsoDate(), 
             payee: formData.payee, 
             totalAmount: sumPaymentLines, 
@@ -351,25 +346,15 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Hash size={16}/> شماره دستور پرداخت</label>
                     <div className="relative">
-                        {/* FIX: Ensure value binds to state and placeholder indicates loading */}
-                        <input 
-                            required 
-                            type="number" 
-                            className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 font-mono font-bold text-blue-600 dir-ltr text-left disabled:opacity-50" 
-                            value={trackingNumber} 
-                            onChange={e => setTrackingNumber(e.target.value)} 
-                            onKeyDown={handleKeyDown} 
-                            placeholder={isNumberLoading ? "در حال دریافت..." : ""}
-                            disabled={isNumberLoading}
-                        />
-                         <button 
+                        <input required type="number" className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 font-mono font-bold text-blue-600 dir-ltr text-left" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} onKeyDown={handleKeyDown} />
+                        <button 
                             type="button"
                             onClick={() => fetchNextNumber(payingCompany)} 
-                            disabled={isNumberLoading || !payingCompany}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                            disabled={loadingNum || !payingCompany}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
                             title="بروزرسانی شماره از سرور"
                         >
-                            <RefreshCcw size={16} className={isNumberLoading ? 'animate-spin' : ''}/>
+                            <RefreshCcw size={16} className={loadingNum ? 'animate-spin' : ''}/>
                         </button>
                     </div>
                 </div>
@@ -379,7 +364,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
             
             <div className="space-y-2"><div className="flex justify-between items-center"><label className="text-sm font-bold text-gray-700">شرح پرداخت</label><button type="button" onClick={handleEnhance} disabled={isEnhancing || !formData.description} className="text-xs flex items-center gap-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">{isEnhancing ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}بهبود متن با هوش مصنوعی</button></div><textarea required rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 resize-none" placeholder="توضیحات کامل دستور پرداخت..." value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} onKeyDown={handleKeyDown} /></div>
 
-            {/* Payment Lines Section */}
+            {/* Payment Lines Section (Unchanged logic) */}
             <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                     <h3 className="font-bold text-gray-700">روش‌های پرداخت</h3>
@@ -403,7 +388,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    {/* ... Existing Input Fields (Unchanged logic) ... */}
+                    {/* ... Existing Fields ... */}
                     <div className="md:col-span-2 space-y-1">
                         <label className="text-xs text-gray-500">نوع</label>
                         <select className="w-full border rounded-lg p-2 text-sm bg-white" value={newLine.method} onChange={e => setNewLine({ ...newLine, method: e.target.value as PaymentMethod })}>

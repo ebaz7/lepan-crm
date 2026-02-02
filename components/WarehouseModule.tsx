@@ -90,6 +90,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         if(selectedCompany) { 
             setLoadingBijakNum(true);
             try {
+                // FORCE REFRESH: Use apiCall with company param
                 const response = await apiCall<{ nextNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(selectedCompany)}&t=${Date.now()}`);
                 if (response && response.nextNumber) {
                     setNextBijakNum(response.nextNumber);
@@ -482,12 +483,25 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     <div className="max-w-4xl mx-auto bg-red-50 p-6 rounded-2xl border border-red-200">
                         <h3 className="font-bold text-red-800 mb-4 flex items-center gap-2"><ArrowUpCircle/> ثبت خروج کالا (صدور بیجک)</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">شرکت فرستنده</label><select className="w-full border rounded p-2 bg-white" value={selectedCompany} onChange={e=>setSelectedCompany(e.target.value)}><option value="">انتخاب...</option>{companyList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                            <div>
+                                <label className="block text-xs font-bold mb-1">شرکت فرستنده</label>
+                                <select 
+                                    className="w-full border rounded p-2 bg-white" 
+                                    value={selectedCompany} 
+                                    onChange={e => {
+                                        setSelectedCompany(e.target.value);
+                                        // The useEffect will handle updating the number
+                                    }}
+                                >
+                                    <option value="">انتخاب...</option>
+                                    {companyList.map(c=><option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold mb-1">شماره بیجک (سیستمی)</label>
                                 <div className="bg-white p-2 rounded border font-mono text-center text-red-600 font-bold flex justify-center items-center gap-2 h-[42px]">
                                     {loadingBijakNum ? <Loader2 className="animate-spin" size={16}/> : (nextBijakNum > 0 ? nextBijakNum : '---')}
-                                    <button type="button" onClick={updateNextBijak} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500"><RefreshCcw size={14}/></button>
+                                    <button type="button" onClick={updateNextBijak} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500" title="بروزرسانی شماره"><RefreshCcw size={14}/></button>
                                 </div>
                             </div>
                             <div><label className="block text-xs font-bold mb-1">تاریخ خروج</label><div className="flex gap-1 dir-ltr"><select className="border rounded p-1 text-sm flex-1" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select><select className="border rounded p-1 text-sm flex-1" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select><select className="border rounded p-1 text-sm flex-1" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div><div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 bg-white" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"><div><label className="block text-xs font-bold mb-1">راننده</label><input className="w-full border rounded p-2 bg-white" value={driverName} onChange={e=>setDriverName(e.target.value)}/></div><div><label className="block text-xs font-bold mb-1">پلاک</label><input className="w-full border rounded p-2 bg-white dir-ltr" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/></div><div><label className="block text-xs font-bold mb-1">مقصد</label><input className="w-full border rounded p-2 bg-white" value={destination} onChange={e=>setDestination(e.target.value)}/></div></div><div className="space-y-2 bg-white p-4 rounded-xl border">{txItems.map((row, idx) => (<div key={idx} className="flex gap-2 items-end"><div className="flex-1"><label className="text-[10px] text-gray-500">کالا</label><select className="w-full border rounded p-2 text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}><option value="">انتخاب...</option>{items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></div><div className="w-20"><label className="text-[10px] text-gray-500">تعداد</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/></div><div className="w-20"><label className="text-[10px] text-gray-500">وزن</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/></div><div className="w-32"><label className="text-[10px] text-gray-500">فی (ریال)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr font-bold text-blue-600" value={formatNumberString(row.unitPrice)} onChange={e=>updateTxItem(idx, 'unitPrice', deformatNumberString(e.target.value))}/></div>{idx > 0 && <button onClick={()=>handleRemoveTxItemRow(idx)} className="text-red-500 p-2"><Trash2 size={16}/></button>}</div>))}<button onClick={handleAddTxItemRow} className="text-xs text-blue-600 font-bold flex items-center gap-1 mt-2"><Plus size={14}/> افزودن ردیف کالا</button></div>
