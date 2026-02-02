@@ -69,11 +69,9 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const [newBankName, setNewBankName] = useState('');
   const [newBankAccount, setNewBankAccount] = useState('');
 
-  // Function to fetch next number - EXPLICITLY PER COMPANY
+  // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
   const fetchNextNumber = (company?: string) => {
-    // Prevent fetching if company is not selected yet to avoid 1001 default
-    if (!company) return;
-
+    // Allows fetching without company (global sequence)
     setLoadingNum(true);
     getNextTrackingNumber(company)
         .then(num => {
@@ -95,8 +93,9 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
           if (defCompany) {
               setPayingCompany(defCompany);
               updateBanksForCompany(defCompany, s);
-              fetchNextNumber(defCompany);
           }
+          // Fetch number immediately on mount (Global or Company based)
+          fetchNextNumber(defCompany);
       });
   }, []);
 
@@ -350,7 +349,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                         <button 
                             type="button"
                             onClick={() => fetchNextNumber(payingCompany)} 
-                            disabled={loadingNum || !payingCompany}
+                            disabled={loadingNum}
                             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
                             title="بروزرسانی شماره از سرور"
                         >
