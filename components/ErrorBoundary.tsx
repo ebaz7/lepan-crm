@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,13 +11,11 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fixed inheritance by using React.Component directly
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Removed redundant state declaration which could conflict with React.Component's internal members
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // Standard state initialization for class components
     this.state = {
       hasError: false,
       error: null,
@@ -32,12 +29,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
-    // Correctly accessing setState from React.Component
     this.setState({ errorInfo });
   }
 
   public render() {
-    // Correctly accessing this.state from React.Component
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -69,7 +64,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Correctly accessing this.props from React.Component
     return this.props.children;
   }
 }
