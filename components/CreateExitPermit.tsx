@@ -4,7 +4,9 @@ import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestinati
 import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
+import { getUsers } from '../services/authService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, ArrowLeft, ArrowRight, CheckCircle2, Calendar, RefreshCcw, User as UserIcon, Building2 } from 'lucide-react';
+import PrintExitPermit from './PrintExitPermit';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [step, setStep] = useState(1);
@@ -13,6 +15,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [loadingNum, setLoadingNum] = useState(false);
     const [selectedCompany, setSelectedCompany] = useState('');
     const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
+    const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
     
     const currentShamsi = getCurrentShamsiDate();
     const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
@@ -33,17 +36,13 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         });
     }, []);
 
-    // Function to fetch next number - PER COMPANY
     const fetchNextNumber = (company?: string) => {
         if (!company) return;
         setLoadingNum(true);
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
-                if (res && res.nextNumber) {
-                    setPermitNumber(res.nextNumber.toString());
-                } else {
-                    setPermitNumber('1001');
-                }
+                if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
+                else setPermitNumber('1001');
             })
             .catch(() => setPermitNumber('1001'))
             .finally(() => setLoadingNum(false));
@@ -63,21 +62,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
         setIsSubmitting(true);
         try {
-            // ROBUST DATE HANDLING
             let isoDate;
             try {
                 const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day);
-                // Check if date is valid
                 if (isNaN(date.getTime())) throw new Error("Invalid Date");
                 isoDate = date.toISOString().split('T')[0];
-            } catch (err) {
-                // Safe Fallback to prevent crash
-                isoDate = new Date().toISOString().split('T')[0]; 
-            }
+            } catch (err) { isoDate = new Date().toISOString().split('T')[0]; }
             
-            // Ensure permitNumber is integer
             const finalPermitNumber = parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0;
-            if (finalPermitNumber === 0) throw new Error("Invalid Permit Number");
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
@@ -87,36 +79,67 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 requester: currentUser.fullName,
                 items: items,
                 destinations: destinations,
-                // Legacy support fields
                 goodsName: items.map(i => i.goodsName).join('، '),
                 recipientName: destinations.map(d => d.recipientName).join('، '),
                 cartonCount: items.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0),
                 weight: items.reduce((acc, i) => acc + (Number(i.weight) || 0), 0),
-                
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
                 status: ExitPermitStatus.PENDING_CEO,
                 createdAt: Date.now()
             };
+
             await saveExitPermit(newPermit);
-            onSuccess();
+            
+            // Trigger Auto-Send to CEO
+            setTempPermit(newPermit);
+            
+            setTimeout(async () => {
+                const element = document.getElementById(`print-permit-create-${newPermit.id}`);
+                if (element) {
+                    try {
+                        // @ts-ignore
+                        const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                        const base64 = canvas.toDataURL('image/png').split(',')[1];
+                        
+                        const users = await getUsers();
+                        const ceo = users.find(u => u.role === UserRole.CEO);
+                        
+                        if (ceo) {
+                            const caption = `📢 *درخواست خروج جدید (فروش)*\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n👤 ثبت کننده: ${newPermit.requester}\n\nجهت بررسی و تایید.`;
+                            
+                            // Send to all channels if available
+                            if (ceo.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` } });
+                            if (ceo.telegramChatId) await apiCall('/send-telegram', 'POST', { chatId: ceo.telegramChatId, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` } });
+                            if (ceo.baleChatId) await apiCall('/send-bale', 'POST', { chatId: ceo.baleChatId, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` } });
+                        }
+                    } catch (e) { console.error("Notification Error", e); }
+                }
+                onSuccess();
+            }, 2000);
+
         } catch (e: any) {
-            console.error(e);
             alert(`خطا در ثبت درخواست: ${e.message || 'نامشخص'}`);
-        } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="max-w-3xl mx-auto bg-white md:rounded-[2.5rem] shadow-none md:shadow-2xl md:shadow-blue-100 overflow-hidden animate-fade-in border-0 md:border border-gray-100 min-h-screen md:min-h-0">
+        <div className="max-w-3xl mx-auto bg-white md:rounded-[2.5rem] shadow-none md:shadow-2xl md:shadow-blue-100 overflow-hidden animate-fade-in border-0 md:border border-gray-100 min-h-screen md:min-h-0 relative">
+            
+            {/* Hidden Print Element for Auto-Send */}
+            {tempPermit && (
+                <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                    <div id={`print-permit-create-${tempPermit.id}`}>
+                        <PrintExitPermit permit={tempPermit} onClose={()=>{}} embed />
+                    </div>
+                </div>
+            )}
+
             <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white sticky top-0 z-10 md:static">
                 <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 className="text-xl font-black">ثبت خروج</h2>
-                        <p className="text-xs text-gray-400 mt-1">درخواست جدید</p>
-                    </div>
+                    <div><h2 className="text-xl font-black">ثبت خروج</h2><p className="text-xs text-gray-400 mt-1">درخواست جدید (فروش)</p></div>
                     <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm">
                          {step === 1 ? <Hash size={24} className="text-blue-300" /> : step === 2 ? <Package size={24} className="text-blue-300" /> : <MapPin size={24} className="text-blue-300" />}
                     </div>
@@ -134,11 +157,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label className="text-sm font-black text-gray-700 flex items-center gap-2"><Building2 size={18} className="text-blue-500"/> شرکت صادر کننده</label>
-                                <select 
-                                    className="w-full border-2 border-gray-200 rounded-2xl p-4 bg-white font-bold focus:border-blue-500 outline-none transition-all"
-                                    value={selectedCompany}
-                                    onChange={handleCompanyChange}
-                                >
+                                <select className="w-full border-2 border-gray-200 rounded-2xl p-4 bg-white font-bold focus:border-blue-500 outline-none transition-all" value={selectedCompany} onChange={handleCompanyChange}>
                                     <option value="">-- انتخاب شرکت --</option>
                                     {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
@@ -147,12 +166,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 <label className="text-sm font-black text-gray-700 flex items-center gap-2"><Hash size={18} className="text-blue-500"/> شماره سند</label>
                                 <div className="relative">
                                     <input type="number" className="w-full border-2 border-gray-200 rounded-2xl p-4 pl-12 bg-gray-50 font-mono font-bold text-xl text-blue-600 focus:border-blue-500 outline-none transition-all" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} />
-                                    <button 
-                                        onClick={() => fetchNextNumber(selectedCompany)} 
-                                        disabled={loadingNum || !selectedCompany}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-xl text-blue-600 hover:bg-blue-100 transition-colors"
-                                        title="بروزرسانی شماره"
-                                    >
+                                    <button onClick={() => fetchNextNumber(selectedCompany)} disabled={loadingNum || !selectedCompany} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-xl text-blue-600 hover:bg-blue-100 transition-colors" title="بروزرسانی شماره">
                                         <RefreshCcw size={18} className={loadingNum ? 'animate-spin' : ''}/>
                                     </button>
                                 </div>
@@ -194,11 +208,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                         </div>
                                     </div>
                                 </div>
-                                {items.length > 1 && (
-                                    <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-100 text-red-500 p-2 rounded-full shadow-sm hover:bg-red-200 border-2 border-white">
-                                        <Trash2 size={16}/>
-                                    </button>
-                                )}
+                                {items.length > 1 && (<button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-red-100 text-red-500 p-2 rounded-full shadow-sm hover:bg-red-200 border-2 border-white"><Trash2 size={16}/></button>)}
                             </div>
                         ))}
                     </div>
@@ -207,36 +217,17 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 {step === 3 && (
                     <div className="space-y-6 animate-slide-up">
                         <div className="bg-blue-50 p-5 rounded-[2rem] border border-blue-100 space-y-4">
-                            <div className="flex items-center gap-2 text-blue-800 font-black border-b border-blue-200 pb-2">
-                                <UserIcon size={20}/>
-                                <h3>مشخصات گیرنده</h3>
-                            </div>
+                            <div className="flex items-center gap-2 text-blue-800 font-black border-b border-blue-200 pb-2"><UserIcon size={20}/><h3>مشخصات گیرنده</h3></div>
                             <div className="space-y-3">
-                                <div>
-                                    <label className="text-xs text-blue-600 font-bold block mb-1">نام گیرنده</label>
-                                    <input className="w-full bg-white rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="نام..." value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-blue-600 font-bold block mb-1">آدرس مقصد</label>
-                                    <textarea className="w-full bg-white rounded-xl p-3 text-sm shadow-sm h-20 outline-none focus:ring-2 focus:ring-blue-300" placeholder="آدرس دقیق..." value={destinations[0].address} onChange={e => { const d = [...destinations]; d[0].address = e.target.value; setDestinations(d); }} />
-                                </div>
+                                <div><label className="text-xs text-blue-600 font-bold block mb-1">نام گیرنده</label><input className="w-full bg-white rounded-xl p-3 text-sm font-bold shadow-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="نام..." value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} /></div>
+                                <div><label className="text-xs text-blue-600 font-bold block mb-1">آدرس مقصد</label><textarea className="w-full bg-white rounded-xl p-3 text-sm shadow-sm h-20 outline-none focus:ring-2 focus:ring-blue-300" placeholder="آدرس دقیق..." value={destinations[0].address} onChange={e => { const d = [...destinations]; d[0].address = e.target.value; setDestinations(d); }} /></div>
                             </div>
                         </div>
-
                         <div className="bg-gray-50 p-5 rounded-[2rem] border border-gray-200 space-y-4">
-                            <div className="flex items-center gap-2 text-gray-700 font-black border-b border-gray-200 pb-2">
-                                <Truck size={20}/>
-                                <h3>حمل و نقل (اختیاری)</h3>
-                            </div>
+                            <div className="flex items-center gap-2 text-gray-700 font-black border-b border-gray-200 pb-2"><Truck size={20}/><h3>حمل و نقل (اختیاری)</h3></div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs text-gray-500 font-bold block mb-1">نام راننده</label>
-                                    <input className="w-full bg-white rounded-xl p-3 text-sm shadow-sm outline-none" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-gray-500 font-bold block mb-1">شماره پلاک</label>
-                                    <input className="w-full bg-white rounded-xl p-3 text-sm shadow-sm dir-ltr text-center font-mono outline-none" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} />
-                                </div>
+                                <div><label className="text-xs text-gray-500 font-bold block mb-1">نام راننده</label><input className="w-full bg-white rounded-xl p-3 text-sm shadow-sm outline-none" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
+                                <div><label className="text-xs text-gray-500 font-bold block mb-1">شماره پلاک</label><input className="w-full bg-white rounded-xl p-3 text-sm shadow-sm dir-ltr text-center font-mono outline-none" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
                             </div>
                         </div>
                     </div>
@@ -244,17 +235,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
                 <div className="fixed md:static bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 md:p-0 md:bg-transparent md:border-0 md:mt-8 z-20 safe-pb">
                     <div className="flex gap-3">
-                        {step > 1 && (
-                            <button onClick={() => setStep(s => s - 1)} className="px-6 py-4 rounded-2xl bg-gray-100 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-200 transition-all active:scale-95">
-                                <ArrowRight size={20}/>
-                            </button>
-                        )}
-                        <button 
-                            onClick={step === 3 ? handleSubmit : () => setStep(s => s + 1)} 
-                            disabled={isSubmitting || !selectedCompany}
-                            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95"
-                        >
-                            {isSubmitting ? <Loader2 className="animate-spin" /> : (step === 3 ? 'ثبت نهایی' : 'مرحله بعد')}
+                        {step > 1 && (<button onClick={() => setStep(s => s - 1)} className="px-6 py-4 rounded-2xl bg-gray-100 text-gray-600 font-bold flex items-center justify-center hover:bg-gray-200 transition-all active:scale-95"><ArrowRight size={20}/></button>)}
+                        <button onClick={step === 3 ? handleSubmit : () => setStep(s => s + 1)} disabled={isSubmitting || !selectedCompany} className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-95">
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : (step === 3 ? 'ثبت نهایی و ارسال به مدیرعامل' : 'مرحله بعد')}
                             {step < 3 && !isSubmitting && <ArrowLeft size={20}/>}
                             {step === 3 && !isSubmitting && <CheckCircle2 size={20}/>}
                         </button>
