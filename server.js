@@ -132,6 +132,36 @@ const DEFAULT_DB = {
     securityIncidents: []
 };
 
+// --- DATA SANITIZER (CRITICAL FIX FOR CORRUPT RESTORES) ---
+const sanitizeDb = (data) => {
+    if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
+
+    // Enforce Arrays
+    if (!Array.isArray(data.orders)) data.orders = [];
+    if (!Array.isArray(data.exitPermits)) data.exitPermits = [];
+    if (!Array.isArray(data.warehouseItems)) data.warehouseItems = [];
+    if (!Array.isArray(data.warehouseTransactions)) data.warehouseTransactions = [];
+    if (!Array.isArray(data.users)) data.users = DEFAULT_DB.users;
+    if (!Array.isArray(data.tradeRecords)) data.tradeRecords = [];
+    if (!Array.isArray(data.securityLogs)) data.securityLogs = [];
+    if (!Array.isArray(data.personnelDelays)) data.personnelDelays = [];
+    if (!Array.isArray(data.securityIncidents)) data.securityIncidents = [];
+    
+    // Enforce Settings Object
+    if (!data.settings || typeof data.settings !== 'object') {
+        data.settings = { ...DEFAULT_DB.settings };
+    } else {
+        // Enforce nested settings arrays
+        if (!Array.isArray(data.settings.companies)) data.settings.companies = [];
+        if (!Array.isArray(data.settings.fiscalYears)) data.settings.fiscalYears = [];
+        if (!Array.isArray(data.settings.printTemplates)) data.settings.printTemplates = [];
+        if (!data.settings.warehouseSequences) data.settings.warehouseSequences = {};
+        if (!data.settings.rolePermissions) data.settings.rolePermissions = {};
+    }
+
+    return data;
+};
+
 // --- FAIL-SAFE DATABASE LOADER ---
 const getDb = () => {
     try {
@@ -144,18 +174,27 @@ const getDb = () => {
         const data = fs.readFileSync(DB_FILE, 'utf8');
         if (!data || data.trim() === '') throw new Error("Empty DB File");
         
-        const parsed = JSON.parse(data);
+        let parsed;
+        try {
+            parsed = JSON.parse(data);
+        } catch (jsonErr) {
+            logToFile("DB JSON Corrupt. Backup created. Resetting.");
+            fs.copyFileSync(DB_FILE, `${DB_FILE}.corrupt`);
+            return DEFAULT_DB;
+        }
         
-        // Ensure critical arrays exist (Fix for restore issues)
-        if (!parsed.orders) parsed.orders = [];
-        if (!parsed.exitPermits) parsed.exitPermits = [];
-        if (!parsed.warehouseTransactions) parsed.warehouseTransactions = [];
-        if (!parsed.settings) parsed.settings = DEFAULT_DB.settings;
+        // AUTO-REPAIR: Sanitize structure on every load to fix runtime issues immediately
+        const safeData = sanitizeDb(parsed);
         
-        return { ...DEFAULT_DB, ...parsed };
+        // Optional: If we fixed something critical (like null orders), save it back to sync disk
+        if (parsed.orders === null || parsed.exitPermits === null) {
+            logToFile("Auto-repaired DB structure in memory.");
+        }
+        
+        return safeData;
 
     } catch (e) {
-        logToFile(`!!! CRITICAL DB CORRUPTION: ${e.message}`);
+        logToFile(`!!! CRITICAL DB ERROR: ${e.message}`);
         return DEFAULT_DB; 
     }
 };
@@ -163,7 +202,9 @@ const getDb = () => {
 const saveDb = (data) => {
     try {
         const tempFile = `${DB_FILE}.tmp`;
-        fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+        // Ensure data is valid before saving
+        const safeData = sanitizeDb(data);
+        fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
         fs.renameSync(tempFile, DB_FILE);
     } catch (e) {
         logToFile("!!! Error saving DB: " + e.message);
@@ -217,7 +258,6 @@ const calculateNextNumber = (db, type, companyName = null) => {
 
     try {
         if (type === 'payment') {
-            // 1. Scan DB
             if (Array.isArray(db.orders)) {
                 db.orders.forEach(o => {
                     if (o.payingCompany && o.payingCompany.trim() === safeCompany) {
@@ -226,17 +266,14 @@ const calculateNextNumber = (db, type, companyName = null) => {
                     }
                 });
             }
-            // 2. Check Fiscal Setting
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
             }
-            // 3. Fallback
             if (maxFoundInDb === 0 && fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
             }
 
         } else if (type === 'exit') {
-            // 1. Scan DB
             if (Array.isArray(db.exitPermits)) {
                 db.exitPermits.forEach(p => {
                     if (p.company && p.company.trim() === safeCompany) {
@@ -245,17 +282,14 @@ const calculateNextNumber = (db, type, companyName = null) => {
                     }
                 });
             }
-            // 2. Check Fiscal
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
             }
-            // 3. Fallback
             if (maxFoundInDb === 0 && fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
             }
 
         } else if (type === 'bijak') {
-            // 1. Scan DB
             if (Array.isArray(db.warehouseTransactions)) {
                 db.warehouseTransactions
                     .filter(t => t.type === 'OUT' && t.company && t.company.trim() === safeCompany)
@@ -264,25 +298,18 @@ const calculateNextNumber = (db, type, companyName = null) => {
                         if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                     });
             }
-            // 2. Check Fiscal
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
             }
-            // 3. Fallback
             if (maxFoundInDb === 0 && fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.warehouseSequences?.[safeCompany]) || 1000;
             }
         }
     } catch (e) {
         logToFile(`[NumberGen] Error calculating ${type}: ${e.message}`);
-        // Emergency fallback: If DB scan crashes, assume 1000 or timestamp-ish to prevent blockage
+        // Fallback random to prevent block, but ensure > 1000
         return 1000 + Math.floor(Math.random() * 100); 
     }
-
-    // Logic:
-    // If DB has records (maxFoundInDb > 0), we MUST prioritize maintaining sequence: max + 1.
-    // However, if Fiscal Start is explicitly set higher than DB max (e.g. new year jump), use Fiscal Start.
-    // If DB is empty, use Fiscal Start or Fallback.
     
     let nextNum = 0;
     
@@ -352,25 +379,34 @@ app.post('/api/login', (req, res) => {
     u ? res.json(u) : res.status(401).send('Invalid'); 
 });
 
-// --- SAFE BACKUP RESTORE ---
+// --- SAFE BACKUP RESTORE (FIXED) ---
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
         if (!fileData) throw new Error("No data");
         
-        // Remove data:application/json;base64, prefix if present
         const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
-        const parsed = JSON.parse(jsonStr);
+        let parsed;
+        try {
+            parsed = JSON.parse(jsonStr);
+        } catch(e) {
+            throw new Error("Invalid JSON File");
+        }
 
-        // Basic Validation
-        if (!parsed.users && !parsed.orders) throw new Error("Invalid Backup Format");
+        // SANITIZE AND MERGE
+        // We use sanitizeDb on the parsed data to fix any null arrays BEFORE merging
+        const safeParsed = sanitizeDb(parsed);
         
-        // Merge with defaults to ensure missing arrays exist
-        const safeRestore = { ...DEFAULT_DB, ...parsed };
-        saveDb(safeRestore);
+        // Merge with defaults to ensure missing new fields exist, but prioritize backup data
+        const finalDb = { ...DEFAULT_DB, ...safeParsed };
         
-        logToFile("Database Restored Successfully via Emergency Route");
+        // Double check deep merge for settings to avoid losing new settings features
+        finalDb.settings = { ...DEFAULT_DB.settings, ...safeParsed.settings };
+
+        saveDb(finalDb);
+        
+        logToFile("Database Restored & Sanitized Successfully via Emergency Route");
         res.json({ success: true });
     } catch (e) {
         logToFile(`Restore Failed: ${e.message}`);
@@ -386,6 +422,9 @@ app.post('/api/orders', (req, res) => {
         const order = req.body; 
         order.id = Date.now().toString(); 
         
+        // Ensure array exists
+        if (!Array.isArray(db.orders)) db.orders = [];
+
         // FORCE SERVER-SIDE CALCULATION
         const finalNum = calculateNextNumber(db, 'payment', order.payingCompany);
         order.trackingNumber = finalNum;
@@ -413,6 +452,9 @@ app.post('/api/exit-permits', (req, res) => {
         const db = getDb(); 
         const permit = req.body; 
         
+        // Ensure array exists
+        if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
+
         // FORCE SERVER-SIDE CALCULATION
         const finalNum = calculateNextNumber(db, 'exit', permit.company);
         permit.permitNumber = finalNum;
@@ -449,18 +491,25 @@ app.get('/api/users', (req, res) => res.json(getDb().users || []));
 // Warehouse transactions
 app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions || []));
 app.post('/api/warehouse/transactions', (req, res) => { 
-    const db = getDb(); 
-    const tx = req.body; 
-    
-    // If OUT transaction, calculate number based on company
-    if (tx.type === 'OUT') {
-        const finalNum = calculateNextNumber(db, 'bijak', tx.company);
-        tx.number = finalNum;
+    try {
+        const db = getDb(); 
+        const tx = req.body; 
+
+        if (!Array.isArray(db.warehouseTransactions)) db.warehouseTransactions = [];
+        
+        // If OUT transaction, calculate number based on company
+        if (tx.type === 'OUT') {
+            const finalNum = calculateNextNumber(db, 'bijak', tx.company);
+            tx.number = finalNum;
+        }
+        
+        db.warehouseTransactions.unshift(tx); 
+        saveDb(db); 
+        res.json(db.warehouseTransactions); 
+    } catch (e) {
+        logToFile("Warehouse Tx Save Error: " + e.message);
+        res.status(500).json({ error: "Failed to save transaction" });
     }
-    
-    db.warehouseTransactions.unshift(tx); 
-    saveDb(db); 
-    res.json(db.warehouseTransactions); 
 });
 
 // Serve React App

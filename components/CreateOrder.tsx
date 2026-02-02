@@ -166,7 +166,21 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
       } 
   };
   
-  const getIsoDate = () => { try { const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day); const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; } catch (e) { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; } };
+  const getIsoDate = () => { 
+      try { 
+          const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day); 
+          // Validate Date
+          if (isNaN(date.getTime())) throw new Error("Invalid Date");
+          const y = date.getFullYear(); 
+          const m = String(date.getMonth() + 1).padStart(2, '0'); 
+          const d = String(date.getDate()).padStart(2, '0'); 
+          return `${y}-${m}-${d}`; 
+      } catch (e) { 
+          // Fallback to today to prevent crash
+          const now = new Date(); 
+          return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; 
+      } 
+  };
   
   const handleEnhance = async () => { if (!formData.description) return; setIsEnhancing(true); const improved = await enhanceDescription(formData.description); setFormData(p => ({ ...p, description: improved })); setIsEnhancing(false); };
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setUploading(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const result = await uploadFile(file.name, ev.target?.result as string); setAttachments([...attachments, { fileName: result.fileName, data: result.url }]); } catch (e) { alert('خطا در آپلود'); } finally { setUploading(false); } }; reader.readAsDataURL(file); e.target.value = ''; };

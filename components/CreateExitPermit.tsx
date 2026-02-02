@@ -63,7 +63,15 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
         setIsSubmitting(true);
         try {
-            const isoDate = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day).toISOString().split('T')[0];
+            let isoDate;
+            try {
+                const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day);
+                if (isNaN(date.getTime())) throw new Error('Invalid Date');
+                isoDate = date.toISOString().split('T')[0];
+            } catch (err) {
+                isoDate = new Date().toISOString().split('T')[0]; // Fallback
+            }
+
             const newPermit: ExitPermit = {
                 id: generateUUID(),
                 permitNumber: Number(permitNumber),
