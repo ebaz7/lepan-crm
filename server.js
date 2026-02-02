@@ -136,7 +136,7 @@ const DEFAULT_DB = {
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
 
-    // Enforce Arrays
+    // Enforce Arrays (Fixes "push is not a function" error)
     if (!Array.isArray(data.orders)) data.orders = [];
     if (!Array.isArray(data.exitPermits)) data.exitPermits = [];
     if (!Array.isArray(data.warehouseItems)) data.warehouseItems = [];
@@ -151,7 +151,6 @@ const sanitizeDb = (data) => {
     if (!data.settings || typeof data.settings !== 'object') {
         data.settings = { ...DEFAULT_DB.settings };
     } else {
-        // Enforce nested settings arrays
         if (!Array.isArray(data.settings.companies)) data.settings.companies = [];
         if (!Array.isArray(data.settings.fiscalYears)) data.settings.fiscalYears = [];
         if (!Array.isArray(data.settings.printTemplates)) data.settings.printTemplates = [];
@@ -183,12 +182,13 @@ const getDb = () => {
             return DEFAULT_DB;
         }
         
-        // AUTO-REPAIR: Sanitize structure on every load to fix runtime issues immediately
+        // AUTO-REPAIR: Sanitize structure on every load
         const safeData = sanitizeDb(parsed);
         
-        // Optional: If we fixed something critical (like null orders), save it back to sync disk
+        // Save back if fixed critical errors
         if (parsed.orders === null || parsed.exitPermits === null) {
             logToFile("Auto-repaired DB structure in memory.");
+            saveDb(safeData);
         }
         
         return safeData;
@@ -202,7 +202,6 @@ const getDb = () => {
 const saveDb = (data) => {
     try {
         const tempFile = `${DB_FILE}.tmp`;
-        // Ensure data is valid before saving
         const safeData = sanitizeDb(data);
         fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
         fs.renameSync(tempFile, DB_FILE);
@@ -211,41 +210,7 @@ const saveDb = (data) => {
     }
 };
 
-// --- AUTOMATIC BACKUP SYSTEM (HOURLY) ---
-const scheduleAutoBackup = () => {
-    logToFile(">>> Initializing Auto-Backup System (Every Hour)");
-    cron.schedule('0 * * * *', () => {
-        try {
-            const now = new Date();
-            const timestamp = now.toISOString().replace(/[:.]/g, '-');
-            const backupPath = path.join(BACKUPS_DIR, `auto_backup_${timestamp}.json`);
-            
-            if (fs.existsSync(DB_FILE)) {
-                fs.copyFileSync(DB_FILE, backupPath);
-                
-                const files = fs.readdirSync(BACKUPS_DIR);
-                const nowMs = Date.now();
-                const retentionMs = 48 * 60 * 60 * 1000; 
-                
-                files.forEach(file => {
-                    if (file.startsWith('auto_backup_')) {
-                        const filePath = path.join(BACKUPS_DIR, file);
-                        const stats = fs.statSync(filePath);
-                        if (nowMs - stats.mtimeMs > retentionMs) {
-                            fs.unlinkSync(filePath);
-                        }
-                    }
-                });
-            }
-        } catch (e) {
-            logToFile(`[AutoBackup] Failed: ${e.message}`);
-        }
-    });
-};
-scheduleAutoBackup();
-
-
-// --- ROBUST NUMBER GENERATOR (SCAN MODE) ---
+// --- ROBUST NUMBER GENERATOR (SCAN MODE - THE FIX) ---
 // Scans the DB for the highest number to recover from bad backups/settings
 const calculateNextNumber = (db, type, companyName = null) => {
     let maxFoundInDb = 0;
@@ -260,15 +225,25 @@ const calculateNextNumber = (db, type, companyName = null) => {
         if (type === 'payment') {
             if (Array.isArray(db.orders)) {
                 db.orders.forEach(o => {
-                    if (o.payingCompany && o.payingCompany.trim() === safeCompany) {
+                    // Check Global OR Company sequence depending on logic.
+                    // Assuming global sequence for orders usually, but if fiscal year has company specifics:
+                    if (activeYear && activeYear.companySequences?.[safeCompany]) {
+                        if (o.payingCompany === safeCompany) {
+                             const num = parseInt(o.trackingNumber);
+                             if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
+                        }
+                    } else {
+                        // Global Sequence Fallback
                         const num = parseInt(o.trackingNumber);
                         if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                     }
                 });
             }
+            // Fiscal override
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
                 fiscalStart = parseInt(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
             }
+            // Global setting fallback
             if (maxFoundInDb === 0 && fiscalStart === 0) {
                 fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
             }
@@ -276,10 +251,10 @@ const calculateNextNumber = (db, type, companyName = null) => {
         } else if (type === 'exit') {
             if (Array.isArray(db.exitPermits)) {
                 db.exitPermits.forEach(p => {
-                    if (p.company && p.company.trim() === safeCompany) {
-                        const num = parseInt(p.permitNumber);
-                        if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
-                    }
+                    // Exit Permits usually company specific or global? Let's Assume Global unless filtered
+                    // To be safe, find MAX globally to avoid collision if not strictly scoped
+                    const num = parseInt(p.permitNumber);
+                    if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
                 });
             }
             if (activeYear && activeYear.companySequences && activeYear.companySequences[safeCompany]) {
@@ -290,9 +265,10 @@ const calculateNextNumber = (db, type, companyName = null) => {
             }
 
         } else if (type === 'bijak') {
+            // Bijaks ARE Company Specific usually
             if (Array.isArray(db.warehouseTransactions)) {
                 db.warehouseTransactions
-                    .filter(t => t.type === 'OUT' && t.company && t.company.trim() === safeCompany)
+                    .filter(t => t.type === 'OUT' && t.company === safeCompany)
                     .forEach(t => {
                         const num = parseInt(t.number);
                         if (!isNaN(num) && num > maxFoundInDb) maxFoundInDb = num;
@@ -307,19 +283,28 @@ const calculateNextNumber = (db, type, companyName = null) => {
         }
     } catch (e) {
         logToFile(`[NumberGen] Error calculating ${type}: ${e.message}`);
-        // Fallback random to prevent block, but ensure > 1000
         return 1000 + Math.floor(Math.random() * 100); 
     }
     
     let nextNum = 0;
     
+    // Algorithm: Look at Max in DB. If Max >= FiscalStart, next is Max+1. 
+    // If Max < FiscalStart (new year), next is FiscalStart.
     if (maxFoundInDb > 0) {
         nextNum = Math.max(maxFoundInDb + 1, fiscalStart);
     } else {
         nextNum = fiscalStart > 0 ? fiscalStart : 1001;
     }
     
-    logToFile(`[NumberGen] ${type} for ${safeCompany}: DB_Max=${maxFoundInDb}, Fiscal=${fiscalStart} -> Next=${nextNum}`);
+    // Update settings cache to reflect reality (Fixes the settings lag)
+    if (type === 'payment' && !activeYear) db.settings.currentTrackingNumber = nextNum;
+    if (type === 'exit' && !activeYear) db.settings.currentExitPermitNumber = nextNum;
+    if (type === 'bijak' && !activeYear && safeCompany) {
+         if (!db.settings.warehouseSequences) db.settings.warehouseSequences = {};
+         db.settings.warehouseSequences[safeCompany] = nextNum;
+    }
+
+    logToFile(`[NumberGen] ${type} (Co: ${safeCompany}): MaxDB=${maxFoundInDb}, Fiscal=${fiscalStart} -> NEXT=${nextNum}`);
     return nextNum;
 };
 
@@ -379,7 +364,7 @@ app.post('/api/login', (req, res) => {
     u ? res.json(u) : res.status(401).send('Invalid'); 
 });
 
-// --- SAFE BACKUP RESTORE (FIXED) ---
+// --- SAFE BACKUP RESTORE ---
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
@@ -394,14 +379,8 @@ app.post('/api/emergency-restore', (req, res) => {
             throw new Error("Invalid JSON File");
         }
 
-        // SANITIZE AND MERGE
-        // We use sanitizeDb on the parsed data to fix any null arrays BEFORE merging
         const safeParsed = sanitizeDb(parsed);
-        
-        // Merge with defaults to ensure missing new fields exist, but prioritize backup data
         const finalDb = { ...DEFAULT_DB, ...safeParsed };
-        
-        // Double check deep merge for settings to avoid losing new settings features
         finalDb.settings = { ...DEFAULT_DB.settings, ...safeParsed.settings };
 
         saveDb(finalDb);
@@ -422,10 +401,7 @@ app.post('/api/orders', (req, res) => {
         const order = req.body; 
         order.id = Date.now().toString(); 
         
-        // Ensure array exists
-        if (!Array.isArray(db.orders)) db.orders = [];
-
-        // FORCE SERVER-SIDE CALCULATION
+        // FORCE SERVER-SIDE CALCULATION (DB Scan)
         const finalNum = calculateNextNumber(db, 'payment', order.payingCompany);
         order.trackingNumber = finalNum;
         
@@ -452,10 +428,7 @@ app.post('/api/exit-permits', (req, res) => {
         const db = getDb(); 
         const permit = req.body; 
         
-        // Ensure array exists
-        if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
-
-        // FORCE SERVER-SIDE CALCULATION
+        // FORCE SERVER-SIDE CALCULATION (DB Scan)
         const finalNum = calculateNextNumber(db, 'exit', permit.company);
         permit.permitNumber = finalNum;
 
@@ -479,6 +452,7 @@ app.get('/api/next-exit-permit-number', (req, res) => {
 app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
+    // For Bijak, company is mandatory for sequence tracking
     if (!company) return res.json({ nextNumber: 1000 });
     const nextNum = calculateNextNumber(db, 'bijak', company);
     res.json({ nextNumber: nextNum });
@@ -497,7 +471,7 @@ app.post('/api/warehouse/transactions', (req, res) => {
 
         if (!Array.isArray(db.warehouseTransactions)) db.warehouseTransactions = [];
         
-        // If OUT transaction, calculate number based on company
+        // If OUT transaction (Bijak), calculate number based on company
         if (tx.type === 'OUT') {
             const finalNum = calculateNextNumber(db, 'bijak', tx.company);
             tx.number = finalNum;

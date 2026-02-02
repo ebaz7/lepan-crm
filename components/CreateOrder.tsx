@@ -71,7 +71,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
   // Function to fetch next number - EXPLICITLY PER COMPANY
   const fetchNextNumber = (company?: string) => {
-    // Prevent fetching if company is not selected yet to avoid 1001 default
+    // Prevent fetching if company is not selected yet
     if (!company) return;
 
     setLoadingNum(true);
@@ -169,14 +169,13 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const getIsoDate = () => { 
       try { 
           const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day); 
-          // Validate Date
           if (isNaN(date.getTime())) throw new Error("Invalid Date");
           const y = date.getFullYear(); 
           const m = String(date.getMonth() + 1).padStart(2, '0'); 
           const d = String(date.getDate()).padStart(2, '0'); 
           return `${y}-${m}-${d}`; 
       } catch (e) { 
-          // Fallback to today to prevent crash
+          // Safe fallback
           const now = new Date(); 
           return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; 
       } 
@@ -277,9 +276,6 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
     e.preventDefault();
     if (paymentLines.length === 0) { alert("لطفا حداقل یک روش پرداخت اضافه کنید."); return; }
     if (!payingCompany) { alert("انتخاب شرکت الزامی است."); return; }
-    
-    // Server generates tracking number now, but UI field is still useful for manual override if needed.
-    // If empty, backend assigns. If user types, we send it.
     
     setIsSubmitting(true);
     try { 
