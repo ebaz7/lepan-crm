@@ -20,8 +20,10 @@ const QRCode = ({ value, size }: { value: string, size: number }) => {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center text-gray-400 text-xs border-2 border-dashed border-gray-300 rounded-lg p-2" style={{width: size, height: size}}>
-                <WifiOff size={24} className="mb-2"/>
-                <span className="text-center">امکان نمایش QR وجود ندارد (آفلاین)</span>
+                <div className="flex flex-col items-center">
+                    <WifiOff size={24} className="mb-2"/>
+                    <span className="text-center">امکان نمایش QR وجود ندارد (آفلاین)</span>
+                </div>
             </div>
         );
     }
@@ -295,7 +297,6 @@ const Settings: React.FC = () => {
       } catch (e) { setMessage('خطا ❌'); } finally { setLoading(false); } 
   };
 
-  // ... (Keep existing contact handlers) ...
   const handleAddOrUpdateContact = () => { 
       if (!contactName.trim() || !contactNumber.trim()) return; 
       
@@ -553,7 +554,8 @@ const Settings: React.FC = () => {
                                             </div>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => handleEditContact(c)} className="text-amber-500 hover:text-amber-700 bg-amber-50 p-1.5 rounded"><Pencil size={14} /></button>
-                                                <button type="button" onClick={() => handleDeleteContact(id)} className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded"><Trash2 size={14} /></button>
+                                                {/* Fixed: Passed c.id to handleDeleteContact instead of undefined 'id' variable */}
+                                                <button type="button" onClick={() => handleDeleteContact(c.id)} className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded"><Trash2 size={14} /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -788,7 +790,8 @@ const Settings: React.FC = () => {
                                             </div>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => handleEditTemplate(t)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"><Pencil size={18}/></button>
-                                                <button type="button" onClick={() => handleDeleteTemplate(id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
+                                                {/* Fixed: Used t.id instead of undefined variable id */}
+                                                <button type="button" onClick={() => handleDeleteTemplate(t.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
                                             </div>
                                         </div>
                                         <div className="mt-4 pt-4 border-t text-xs text-gray-400 flex gap-4">

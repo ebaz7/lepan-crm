@@ -10,6 +10,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- TERMINAL DECORATION ---
+const LOG_PREFIX = "\x1b[36m[SYSTEM DEBUG]\x1b[0m";
+const ERR_PREFIX = "\x1b[31m[CRITICAL ERROR]\x1b[0m";
+
 // --- INTELLIGENT PATH FINDER ---
 const findRootDirectory = () => {
     const candidates = ["C:\\PaymentSystem", __dirname, process.cwd()];
@@ -27,10 +31,10 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors()); 
 app.use(compression()); 
-app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '100mb' })); 
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// --- ROBUST DB SCHEMA DEFINITION ---
+// --- THE MASTER SCHEMA ---
 const DEFAULT_DB = { 
     settings: { 
         currentTrackingNumber: 1000, 
@@ -60,227 +64,238 @@ const DEFAULT_DB = {
 };
 
 /**
- * SELF-HEALING DATABASE LOGIC
- * Compares current DB to DEFAULT_DB and fixes missing module tables.
+ * DEEP REPAIR ENGINE
+ * Investigates the restored DB and fixes broken dependencies/missing tables.
  */
-const sanitizeDb = (data) => {
-    if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
+const performDeepRepair = (data) => {
+    console.log(`${LOG_PREFIX} Running data integrity check...`);
+    if (!data || typeof data !== 'object') {
+        console.log(`${ERR_PREFIX} Database file is invalid or empty. Restoring factory defaults.`);
+        return { ...DEFAULT_DB };
+    }
     
-    let repaired = false;
+    let repairCount = 0;
     Object.keys(DEFAULT_DB).forEach(key => {
-        if (!data[key] || !Array.isArray(data[key]) && key !== 'settings') {
-            console.log(`[SCHEMA REPAIR] Initializing missing table: ${key}`);
+        // If key is missing or is not the correct type (most should be Arrays)
+        if (data[key] === undefined || data[key] === null) {
+            console.log(`${LOG_PREFIX} Missing table detected: [${key}]. Re-initializing...`);
             data[key] = DEFAULT_DB[key];
-            repaired = true;
+            repairCount++;
+        } else if (key !== 'settings' && !Array.isArray(data[key])) {
+            console.log(`${ERR_PREFIX} Table [${key}] is corrupted (Not an Array). Converting to empty list.`);
+            data[key] = [];
+            repairCount++;
         }
     });
 
-    if (!data.settings) {
+    // Deep check settings
+    if (!data.settings || typeof data.settings !== 'object') {
         data.settings = DEFAULT_DB.settings;
-        repaired = true;
+        repairCount++;
+    } else {
+        Object.keys(DEFAULT_DB.settings).forEach(sKey => {
+            if (data.settings[sKey] === undefined) {
+                data.settings[sKey] = DEFAULT_DB.settings[sKey];
+                repairCount++;
+            }
+        });
     }
 
-    if (repaired) {
-        console.log(">>> Database schema was repaired. Saving changes...");
+    if (repairCount > 0) {
+        console.log(`${LOG_PREFIX} Integrity Check Finished. Total repairs performed: ${repairCount}`);
         saveDb(data);
+    } else {
+        console.log(`${LOG_PREFIX} Integrity Check: Status Green. No schema mismatches found.`);
     }
+
     return data;
 };
 
 const getDb = () => {
     try {
         if (!fs.existsSync(DB_FILE)) { 
-            console.log(`>>> Creating new database at: ${DB_FILE}`);
+            console.log(`${LOG_PREFIX} No database file found. Creating new instance.`);
             saveDb(DEFAULT_DB); 
             return DEFAULT_DB; 
         }
         const data = fs.readFileSync(DB_FILE, 'utf8');
-        return sanitizeDb(JSON.parse(data));
+        let parsed;
+        try {
+            parsed = JSON.parse(data);
+        } catch (jsonErr) {
+            console.log(`${ERR_PREFIX} JSON Parse Failed! Data file is likely corrupted.`);
+            throw jsonErr;
+        }
+        return performDeepRepair(parsed);
     } catch (e) { 
-        console.error("CRITICAL: Failed to read database.json:", e.message);
-        return DEFAULT_DB; 
+        console.error(`${ERR_PREFIX} Database Read Failure:`, e.message);
+        // Return a safe minimal object to prevent route crashes
+        return JSON.parse(JSON.stringify(DEFAULT_DB)); 
     }
 };
 
 const saveDb = (data) => {
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-    } catch (e) { console.error("CRITICAL: Failed to write database.json:", e.message); }
+    } catch (e) { 
+        console.error(`${ERR_PREFIX} Database WRITE Failure:`, e.message); 
+    }
 };
 
-// --- TERMINAL TRACING MIDDLEWARE ---
+// --- TERMINAL TRACE MIDDLEWARE ---
 app.use((req, res, next) => {
     if (req.path.startsWith('/api')) {
-        console.log(`[DEBUG] ${new Date().toLocaleTimeString()} | ${req.method} ${req.path}`);
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`${LOG_PREFIX} [${timestamp}] ${req.method} ${req.path}`);
+        if (['POST', 'PUT'].includes(req.method)) {
+            console.log(`${LOG_PREFIX} Body Sample:`, JSON.stringify(req.body).substring(0, 150) + "...");
+        }
     }
     next();
 });
 
-// --- API ROUTES ---
+// --- SAFE ROUTE WRAPPER ---
+const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(err => {
+        console.error(`${ERR_PREFIX} Error in route [${req.method} ${req.path}]:`);
+        console.error(err.stack); // PRINT FULL STACK TO CMD
+        res.status(500).json({ 
+            error: "Internal Server Error", 
+            message: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
+    });
+};
 
-// System Version & Health
+// --- CORE API ROUTES (NOW PROTECTED) ---
+
 app.get('/api/version', (req, res) => {
     const db = getDb();
     res.json({ 
-        version: '1.5.1-DEBUG',
-        counts: {
+        version: '1.6.0-RECOVERY',
+        stats: {
             orders: db.orders.length,
+            warehouse: db.warehouseItems.length,
             trade: db.tradeRecords.length,
-            messages: db.messages.length,
-            exitPermits: db.exitPermits.length
+            chat: db.messages.length
         }
     });
 });
 
-app.post('/api/login', (req, res) => { 
-    const db = getDb(); 
-    const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); 
-    u ? res.json(u) : res.status(401).send('Invalid'); 
-});
+app.post('/api/login', asyncHandler(async (req, res) => {
+    const db = getDb();
+    const { username, password } = req.body;
+    const u = db.users.find(x => x.username === username && x.password === password);
+    if (u) res.json(u); else res.status(401).send('Invalid Credentials');
+}));
 
-// Settings & Users
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
-app.post('/api/settings', (req, res) => { 
-    const db = getDb(); 
-    db.settings = { ...db.settings, ...req.body }; 
-    saveDb(db); 
-    res.json(db.settings); 
-});
+app.post('/api/settings', asyncHandler(async (req, res) => {
+    const db = getDb();
+    db.settings = { ...db.settings, ...req.body };
+    saveDb(db);
+    res.json(db.settings);
+}));
+
 app.get('/api/users', (req, res) => res.json(getDb().users));
 
-// MODULE: PAYMENTS
-app.get('/api/orders', (req, res) => res.json(getDb().orders));
-app.post('/api/orders', (req, res) => { 
-    const db = getDb(); 
-    const order = req.body; 
-    order.id = Date.now().toString(); 
-    db.orders.unshift(order); 
-    saveDb(db); 
-    res.json(db.orders); 
-});
-app.put('/api/orders/:id', (req, res) => {
-    const db = getDb();
-    const idx = db.orders.findIndex(o => o.id === req.params.id);
-    if(idx > -1) { db.orders[idx] = { ...db.orders[idx], ...req.body }; saveDb(db); res.json(db.orders); }
-    else res.status(404).json({error: 'Not found'});
-});
-
-// MODULE: TRADE (Commercial) - RE-IMPLEMENTED
-app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords || []));
-app.post('/api/trade', (req, res) => {
-    const db = getDb();
-    const record = req.body;
-    record.id = Date.now().toString();
-    db.tradeRecords.unshift(record);
-    saveDb(db);
-    res.json(db.tradeRecords);
-});
-app.put('/api/trade/:id', (req, res) => {
-    const db = getDb();
-    const idx = db.tradeRecords.findIndex(t => t.id === req.params.id);
-    if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); }
-    else res.status(404).json({error: 'Not found'});
-});
-
-// MODULE: CHAT & CONVERSATIONS - RE-IMPLEMENTED
-app.get('/api/chat', (req, res) => res.json(getDb().messages || []));
-app.post('/api/chat', (req, res) => {
-    const db = getDb();
-    const msg = req.body;
-    msg.id = Date.now().toString();
-    db.messages.push(msg);
-    if (db.messages.length > 2000) db.messages.shift(); // Hard cap for performance
-    saveDb(db);
-    res.json(db.messages);
-});
-
-app.get('/api/groups', (req, res) => res.json(getDb().groups || []));
-app.post('/api/groups', (req, res) => {
-    const db = getDb();
-    const grp = req.body;
-    grp.id = Date.now().toString();
-    db.groups.push(grp);
-    saveDb(db);
-    res.json(db.groups);
-});
-
-app.get('/api/tasks', (req, res) => res.json(getDb().tasks || []));
-app.post('/api/tasks', (req, res) => {
-    const db = getDb();
-    const task = req.body;
-    task.id = Date.now().toString();
-    db.tasks.push(task);
-    saveDb(db);
-    res.json(db.tasks);
-});
-
-// MODULE: WAREHOUSE & EXIT PERMITS
-app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
-app.post('/api/exit-permits', (req, res) => {
-    const db = getDb();
-    const permit = req.body;
-    permit.id = Date.now().toString();
-    db.exitPermits.push(permit);
-    saveDb(db);
-    res.json(db.exitPermits);
-});
-
+// --- MODULE: WAREHOUSE (HEALED) ---
 app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems || []));
-app.post('/api/warehouse/items', (req, res) => {
+app.post('/api/warehouse/items', asyncHandler(async (req, res) => {
     const db = getDb();
     const item = req.body;
-    item.id = Date.now().toString();
+    item.id = item.id || Date.now().toString();
     db.warehouseItems.push(item);
     saveDb(db);
+    console.log(`${LOG_PREFIX} Warehouse Item Created: ${item.name}`);
     res.json(db.warehouseItems);
-});
+}));
 
 app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions || []));
-app.post('/api/warehouse/transactions', (req, res) => {
+app.post('/api/warehouse/transactions', asyncHandler(async (req, res) => {
     const db = getDb();
     const tx = req.body;
-    tx.id = Date.now().toString();
+    tx.id = tx.id || Date.now().toString();
     db.warehouseTransactions.unshift(tx);
     saveDb(db);
     res.json(db.warehouseTransactions);
-});
+}));
 
-// MODULE: SECURITY
-app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs || []));
-app.get('/api/security/delays', (req, res) => res.json(getDb().personnelDelays || []));
-app.get('/api/security/incidents', (req, res) => res.json(getDb().securityIncidents || []));
+// --- MODULE: CONVERSATIONS (HEALED) ---
+app.get('/api/chat', (req, res) => res.json(getDb().messages || []));
+app.post('/api/chat', asyncHandler(async (req, res) => {
+    const db = getDb();
+    const msg = req.body;
+    msg.id = msg.id || Date.now().toString();
+    db.messages.push(msg);
+    // Auto-prune old messages to prevent DB bloating
+    if (db.messages.length > 3000) db.messages.shift();
+    saveDb(db);
+    res.json(db.messages);
+}));
 
-// EMERGENCY DATABASE RESTORE ENDPOINT (UI FIX)
-app.post('/api/emergency-restore', (req, res) => {
-    try {
-        const { fileData } = req.body;
-        const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
-        const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
-        const parsed = JSON.parse(jsonStr);
-        saveDb(sanitizeDb(parsed));
-        console.log(">>> [RESTORE SUCCESS] Database overwritten by emergency request.");
-        res.json({ success: true });
-    } catch (e) { 
-        console.error(">>> [RESTORE FAILED]", e.message);
-        res.status(500).json({ success: false, error: e.message }); 
-    }
-});
+app.get('/api/groups', (req, res) => res.json(getDb().groups || []));
+app.post('/api/groups', asyncHandler(async (req, res) => {
+    const db = getDb();
+    const group = req.body;
+    group.id = group.id || Date.now().toString();
+    db.groups.push(group);
+    saveDb(db);
+    res.json(db.groups);
+}));
 
-// START SERVER
+// --- MODULE: TRADE (HEALED) ---
+app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords || []));
+app.post('/api/trade', asyncHandler(async (req, res) => {
+    const db = getDb();
+    const record = req.body;
+    record.id = record.id || Date.now().toString();
+    db.tradeRecords.unshift(record);
+    saveDb(db);
+    res.json(db.tradeRecords);
+}));
+app.put('/api/trade/:id', asyncHandler(async (req, res) => {
+    const db = getDb();
+    const idx = db.tradeRecords.findIndex(r => r.id === req.params.id);
+    if (idx > -1) {
+        db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body };
+        saveDb(db);
+        res.json(db.tradeRecords);
+    } else res.status(404).send('Not Found');
+}));
+
+// --- EMERGENCY RESTORE ENDPOINT ---
+app.post('/api/emergency-restore', asyncHandler(async (req, res) => {
+    const { fileData } = req.body;
+    if (!fileData) return res.status(400).send('No data provided');
+    
+    console.log(`${LOG_PREFIX} Emergency Restore Request Received.`);
+    const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
+    const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
+    const parsed = JSON.parse(jsonStr);
+    
+    // The repair engine will handle schema mismatches in the restored file
+    const repaired = performDeepRepair(parsed);
+    saveDb(repaired);
+    
+    console.log(`${LOG_PREFIX} Emergency Restore Completed Successfully.`);
+    res.json({ success: true });
+}));
+
+// --- START SERVER ---
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n==============================================`);
-    console.log(`   PAYMENT SYSTEM BACKEND (HEAL MODE)`);
-    console.log(`   PORT: ${PORT}`);
-    console.log(`   ROOT: ${ROOT_DIR}`);
-    console.log(`   DB FILE: ${DB_FILE}`);
+    console.log(`   PAYMENT SYSTEM BACKEND - RECOVERY MODE`);
+    console.log(`   Port: ${PORT}`);
+    console.log(`   Database Path: ${DB_FILE}`);
     console.log(`==============================================\n`);
     
-    // Test Load
+    // Initialize & Repair on startup
     const db = getDb();
-    console.log(`[STARTUP SUMMARY]`);
-    console.log(`- Orders Found: ${db.orders.length}`);
-    console.log(`- Trade Records Found: ${db.tradeRecords.length}`);
-    console.log(`- Chat Messages Found: ${db.messages.length}`);
-    console.log(`- Warehouse Items Found: ${db.warehouseItems.length}`);
-    console.log(`==============================================\n`);
+    console.log(`${LOG_PREFIX} System Ready. Summary:`);
+    console.log(`  - Users: ${db.users.length}`);
+    console.log(`  - Orders: ${db.orders.length}`);
+    console.log(`  - Warehouse Items: ${db.warehouseItems.length}`);
+    console.log(`  - Trade Records: ${db.tradeRecords.length}`);
+    console.log(`  - Chat History: ${db.messages.length}`);
 });
