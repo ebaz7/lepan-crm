@@ -36,7 +36,6 @@ export const LS_KEYS = {
     WH_TX: 'app_data_wh_tx'
 };
 
-// Exported so App.tsx can use it for instant load
 export const getLocalData = <T>(key: string, defaultData: T): T => {
     try {
         const item = localStorage.getItem(key);
@@ -49,29 +48,31 @@ export const getLocalData = <T>(key: string, defaultData: T): T => {
 export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> => {
     try {
         const controller = new AbortController();
-        // Increased timeout significantly for mobile networks AND large file uploads (60s)
         const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
         let baseUrl = '';
         const host = getServerHost();
 
+        // Robust Base URL Construction
         if (isNativeApp) {
-            if (!host) {
-                throw new Error("SERVER_URL_MISSING");
-            }
-            baseUrl = `${host}/api`;
+            if (!host) throw new Error("SERVER_URL_MISSING");
+            // Prevent double /api if user entered it in host
+            const cleanHost = host.replace(/\/api$/, '');
+            baseUrl = `${cleanHost}/api`;
         } else {
             if (host) {
-                baseUrl = `${host}/api`;
+                const cleanHost = host.replace(/\/api$/, '');
+                baseUrl = `${cleanHost}/api`;
             } else {
                 baseUrl = '/api';
             }
         }
 
-        // endpoint should start with /
-        const finalUrl = `${baseUrl}${endpoint}`;
+        // Ensure endpoint starts with / and construction doesn't double it
+        const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        const finalUrl = `${baseUrl}${cleanEndpoint}`;
 
-        console.log(`API calling: ${method} ${finalUrl}`); 
+        console.log(`[API] ${method} ${finalUrl}`); 
 
         const response = await fetch(finalUrl, {
             method,
@@ -83,54 +84,23 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
 
         if (response.ok) {
             const contentType = response.headers.get("content-type");
-            let data;
             if (contentType && contentType.includes("application/json")) {
-                data = await response.json();
-            } else {
-                data = { success: true } as unknown as T;
+                return await response.json();
             }
-
-            // --- CACHING ENABLED ---
-            // Crucial for Android app to prevent "raw/empty" state if network fluctuates
-            if (method === 'GET') {
-                try {
-                    if (endpoint === '/orders') localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(data));
-                    else if (endpoint === '/users') localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data));
-                    else if (endpoint === '/settings') localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(data));
-                    else if (endpoint === '/chat') localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(data));
-                    else if (endpoint === '/trade') localStorage.setItem(LS_KEYS.TRADE, JSON.stringify(data));
-                    else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
-                    else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
-                } catch (cacheError) {
-                    console.warn("Cache write failed (storage full?)", cacheError);
-                }
-            }
-            
-            return data;
+            return { success: true } as unknown as T;
         }
 
-        throw new Error(`Server Error: ${response.status}`);
-    } catch (error: any) {
+        // If not ok, try to get error message
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server Error: ${response.status}`);
         
-        if (error.message === "SERVER_URL_MISSING") {
-            throw error; 
-        }
+    } catch (error: any) {
+        if (error.message === "SERVER_URL_MISSING") throw error;
+        console.warn(`[API ERROR] ${endpoint}:`, error);
 
-        console.warn(`API Error for ${endpoint}:`, error);
-
-        if (endpoint === '/login' && method === 'POST') {
-             throw new Error('اتصال به سرور برقرار نشد. آدرس سرور یا اینترنت را بررسی کنید.');
-        }
-
-        // --- CACHE FALLBACK (READ-ONLY) ---
-        // If network fails, return cached data to prevent empty UI
         if (method === 'GET') {
             if (endpoint === '/orders') return getLocalData<any>(LS_KEYS.ORDERS, INITIAL_ORDERS);
-            if (endpoint === '/trade') return getLocalData<any>(LS_KEYS.TRADE, []);
-            if (endpoint === '/warehouse/items') return getLocalData<any>(LS_KEYS.WH_ITEMS, []);
-            if (endpoint === '/warehouse/transactions') return getLocalData<any>(LS_KEYS.WH_TX, []);
             if (endpoint === '/settings') return getLocalData<any>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 });
-            if (endpoint === '/chat') return getLocalData<any>(LS_KEYS.CHAT, []);
             if (endpoint === '/users') return getLocalData<any>(LS_KEYS.USERS, MOCK_USERS);
         }
         

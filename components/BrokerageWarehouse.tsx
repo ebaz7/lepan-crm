@@ -50,8 +50,9 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
             
             setItems(Array.isArray(itemsData) ? itemsData : []);
             setTransactions(Array.isArray(txData) ? txData : []);
-        } catch (e) { 
+        } catch (e: any) { 
             console.error("Brokerage Data Load Error:", e);
+            // Don't show alert for 404 on list if just starting, just set empty
             setItems([]);
             setTransactions([]);
         }
@@ -87,7 +88,6 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
     }, [safeItems, safeTransactions]);
 
     const handleCreateItem = async () => {
-        // Validation with User Feedback
         if (!selectedCompany) {
             alert('لطفاً ابتدا یک شرکت را از نوار بالا انتخاب کنید.');
             return;
@@ -102,17 +102,21 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
             const item: BrokerageItem = {
                 id: generateUUID(),
                 companyName: selectedCompany,
-                ...newItem
+                name: newItem.name.trim(),
+                color: newItem.color,
+                unit: newItem.unit,
+                initialQuantity: newItem.initialQuantity,
+                initialWeight: newItem.initialWeight,
+                code: newItem.code
             };
             await apiCall('/brokerage/items', 'POST', item);
             
-            // Reset Form & Refresh
             setNewItem({ name: '', color: '', unit: 'عدد', initialQuantity: 0, initialWeight: 0, code: '' });
             await loadData();
-            alert('کالا با موفقیت در انبار ' + selectedCompany + ' ثبت شد.');
+            alert('کالا با موفقیت ثبت شد.');
         } catch (error: any) {
             console.error("Save Item Error:", error);
-            alert('خطا در ثبت کالا: ' + (error.message || 'ارتباط با سرور برقرار نشد.'));
+            alert(`خطا در ارتباط با سرور: ${error.message || '۴۰۴ - یافت نشد'}`);
         } finally {
             setIsSaving(false);
         }
@@ -130,7 +134,10 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
 
         setIsSaving(true);
         try {
-            const nextSerialRes = await apiCall<{next: number}>(`/brokerage/next-serial?company=${selectedCompany}`);
+            // URL Encode company name to prevent path breakage
+            const encodedCompany = encodeURIComponent(selectedCompany);
+            const nextSerialRes = await apiCall<{next: number}>(`/brokerage/next-serial?company=${encodedCompany}`);
+            
             const tx: BrokerageTransaction = {
                 id: generateUUID(),
                 type: newTx.type as 'IN' | 'OUT',
@@ -152,29 +159,29 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
             await loadData();
             
             if (newTx.type === 'OUT') {
-                alert('بیجک خروج با شماره ' + tx.serialNumber + ' ثبت و جهت تایید مدیر ارسال شد.');
+                alert('بیجک خروج با شماره ' + tx.serialNumber + ' ثبت شد.');
             } else {
-                alert('رسید ورود کالا با موفقیت ثبت شد.');
+                alert('رسید ورود کالا ثبت شد.');
             }
             
             setNewTx({ type: 'OUT', recipient: '', driver: '', plate: '', destination: '', items: [], description: '' });
         } catch (error: any) {
             console.error("Transaction Error:", error);
-            alert('خطا در ثبت تراکنش: ' + (error.message || 'ارتباط با سرور قطع شده است.'));
+            alert(`خطای سرور: ${error.message}`);
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleApprove = async (tx: BrokerageTransaction) => {
-        if (!confirm('آیا این بیجک را تایید می‌کنید؟ پس از تایید، اعلان به گروه انبار ارسال خواهد شد.')) return;
+        if (!confirm('آیا این بیجک را تایید می‌کنید؟')) return;
         try {
             await apiCall(`/brokerage/transactions/${tx.id}`, 'PUT', { 
                 status: 'APPROVED', 
                 approvedBy: currentUser.fullName,
                 updatedAt: Date.now()
             });
-            alert('بیجک تایید شد و پیام اطلاع‌رسانی ارسال گردید.');
+            alert('تایید شد.');
             loadData();
             setViewBijak(null);
         } catch (error: any) {
@@ -299,11 +306,11 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                 تعریف کالای جدید {selectedCompany ? `برای ${selectedCompany}` : '(لطفاً شرکت را انتخاب کنید)'}
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">نام کالا</label><input className="w-full border rounded-xl p-3 focus:ring-2 focus:ring-indigo-200 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="مثال: لوله پنج لایه"/></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">رنگ</label><input className="w-full border rounded-xl p-3" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})} placeholder="سفید / آبی..."/></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded-xl p-3 bg-white" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>شاخه</option><option>رول</option></select></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">موجودی اولیه (تعداد)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialQuantity} onChange={e => setNewItem({...newItem, initialQuantity: Number(e.target.value)})}/></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">وزن اولیه (KG)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialWeight} onChange={e => setNewItem({...newItem, initialWeight: Number(e.target.value)})}/></div>
+                                <div className="space-y-1"><label className="text-sm font-bold text-gray-700">نام کالا</label><input className="w-full border rounded-xl p-3 focus:ring-2 focus:ring-indigo-200 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="مثال: لوله پنج لایه"/></div>
+                                <div className="space-y-1"><label className="text-sm font-bold text-gray-700">رنگ</label><input className="w-full border rounded-xl p-3" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})} placeholder="سفید / آبی..."/></div>
+                                <div className="space-y-1"><label className="text-sm font-bold text-gray-700">واحد</label><select className="w-full border rounded-xl p-3 bg-white" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>شاخه</option><option>رول</option></select></div>
+                                <div className="space-y-1"><label className="text-sm font-bold text-gray-700">موجودی اولیه (تعداد)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialQuantity} onChange={e => setNewItem({...newItem, initialQuantity: Number(e.target.value)})}/></div>
+                                <div className="space-y-1"><label className="text-sm font-bold text-gray-700">وزن اولیه (KG)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialWeight} onChange={e => setNewItem({...newItem, initialWeight: Number(e.target.value)})}/></div>
                                 <button 
                                     onClick={handleCreateItem} 
                                     disabled={isSaving || !selectedCompany}

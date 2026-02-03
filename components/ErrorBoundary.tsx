@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,29 +12,26 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fix: Use named Component import to ensure proper inheritance in TypeScript and resolve missing setState/props errors.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Initialize state using property initializer.
+// Fix: Explicitly using React.Component to ensure the class correctly inherits properties and methods like setState and props.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fix: Declaring and initializing state using the ErrorBoundaryState interface.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null
   };
 
-  // Fix: Ensure the static method returns the correct state shape for the component.
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fix: componentDidCatch properly uses the inherited setState method.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
-    // Properly access inherited setState
+    // Fix: Using the inherited setState method to store error info in the component state.
     this.setState({ errorInfo });
   }
 
   public render() {
-    // Properly access inherited state
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -66,7 +63,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fix: Properly return the inherited props.children.
+    // Fix: Accessing the inherited props object to render children components.
     return this.props.children;
   }
 }
