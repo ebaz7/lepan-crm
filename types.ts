@@ -188,12 +188,9 @@ export interface SystemSettings {
   defaultWarehouseGroup?: string;
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
-  exitPermitNotificationGroup?: string; // Legacy, kept for compatibility
-  
-  // NEW GROUPS FOR EXIT PERMIT
-  exitPermitGroup1Id?: string; // Management Group
-  exitPermitGroup2Id?: string; // Operations Group
-
+  exitPermitNotificationGroup?: string;
+  exitPermitGroup1Id?: string;
+  exitPermitGroup2Id?: string;
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
@@ -254,7 +251,7 @@ export interface PaymentOrder {
   paymentDetails: PaymentDetail[];
   attachments?: { fileName: string, data: string }[];
   payingCompany?: string;
-  paymentPlace?: string;
+  paymentPlace?: string; // محل پرداخت
   approverFinancial?: string;
   approverManager?: string;
   approverCeo?: string;

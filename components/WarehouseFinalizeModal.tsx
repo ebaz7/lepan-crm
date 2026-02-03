@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { ExitPermit, ExitPermitItem } from '../types';
-// Add missing Warehouse icon import
-import { Save, X, Package, Scale, Calculator, Warehouse } from 'lucide-react';
+import { Save, X, Package, Calculator, Plus, Trash2 } from 'lucide-react';
+import { generateUUID } from '../constants';
 
 interface Props {
   permit: ExitPermit;
@@ -12,67 +12,96 @@ interface Props {
 
 const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) => {
   const [items, setItems] = useState<ExitPermitItem[]>(
-    permit.items.map(i => ({
-      ...i,
-      deliveredCartonCount: i.deliveredCartonCount ?? i.cartonCount,
-      deliveredWeight: i.deliveredWeight ?? i.weight
-    }))
+    permit.items && permit.items.length > 0 
+      ? permit.items.map(i => ({
+          ...i,
+          deliveredCartonCount: i.deliveredCartonCount ?? i.cartonCount,
+          deliveredWeight: i.deliveredWeight ?? i.weight
+        })) 
+      : [{ id: generateUUID(), goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: permit.cartonCount || 0, deliveredWeight: permit.weight || 0 }]
   );
 
-  const handleUpdateItem = (index: number, field: keyof ExitPermitItem, value: number) => {
+  const handleUpdateItem = (index: number, field: keyof ExitPermitItem, value: string | number) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
   };
 
+  const handleAddItem = () => {
+    setItems([...items, { id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0, deliveredCartonCount: 0, deliveredWeight: 0 }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (items.length === 1) return alert("حداقل یک ردیف کالا باید وجود داشته باشد.");
+    const newItems = [...items];
+    newItems.splice(index, 1);
+    setItems(newItems);
+  };
+
+  const totalRequestedCount = items.reduce((sum, i) => sum + (Number(i.cartonCount) || 0), 0);
   const totalDeliveredCount = items.reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0);
+  const totalRequestedWeight = items.reduce((sum, i) => sum + (Number(i.weight) || 0), 0);
   const totalDeliveredWeight = items.reduce((sum, i) => sum + (Number(i.deliveredWeight) || 0), 0);
 
+  const handleSave = () => {
+    if (items.some(i => !i.goodsName)) return alert("نام کالا نمی‌تواند خالی باشد.");
+    const finalizedItems = items.map(i => ({
+        ...i,
+        cartonCount: Number(i.deliveredCartonCount), 
+        weight: Number(i.deliveredWeight),
+        deliveredCartonCount: Number(i.deliveredCartonCount),
+        deliveredWeight: Number(i.deliveredWeight)
+    }));
+    onConfirm(finalizedItems);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-orange-50 p-6 border-b border-orange-100 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="bg-orange-200 p-3 rounded-2xl text-orange-700 shadow-inner"><Warehouse size={28} /></div>
-            <div>
-                <h3 className="font-black text-xl text-gray-800">تایید توزین و تحویل انبار</h3>
-                <p className="text-xs text-gray-500 font-bold mt-1">مقدار دقیق خروجی را جهت صدور نهایی وارد کنید.</p>
-            </div>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Package size={24} /></div>
+            <div><h3 className="font-bold text-lg text-gray-800">تایید نهایی انبار (توزین خروج)</h3><p className="text-xs text-gray-500">لطفاً مقدار دقیق خروجی را وارد کنید.</p></div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors"><X size={28} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        <div className="p-8 overflow-y-auto bg-gray-50/50">
-          <div className="space-y-4">
-            {items.map((item, idx) => (
-              <div key={item.id} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-6">
-                <div className="flex-1">
-                    <span className="text-[10px] font-black text-slate-400 block mb-1">شرح کالا</span>
-                    <div className="font-bold text-slate-800">{item.goodsName}</div>
-                </div>
-                <div className="w-full md:w-32">
-                    <label className="text-[10px] font-black text-blue-600 block mb-1">تعداد خروجی</label>
-                    <input type="number" className="w-full border-2 border-blue-50 rounded-2xl p-3 text-center font-black text-blue-700 focus:border-blue-400 outline-none" value={item.deliveredCartonCount} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', +e.target.value)} />
-                </div>
-                <div className="w-full md:w-40">
-                    <label className="text-[10px] font-black text-green-600 block mb-1">وزن نهایی (KG)</label>
-                    <input type="number" className="w-full border-2 border-green-50 rounded-2xl p-3 text-center font-black text-green-700 focus:border-green-400 outline-none" value={item.deliveredWeight} onChange={e => handleUpdateItem(idx, 'deliveredWeight', +e.target.value)} />
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-8 bg-slate-900 rounded-[2rem] p-6 text-white flex flex-col md:flex-row justify-around items-center shadow-xl">
-              <div className="flex items-center gap-3"><Calculator className="text-blue-400"/> <span className="text-sm font-bold opacity-70">جمع کل تعداد:</span> <span className="text-2xl font-black font-mono">{totalDeliveredCount}</span></div>
-              <div className="w-px h-10 bg-white/10 hidden md:block"></div>
-              <div className="flex items-center gap-3"><Scale className="text-green-400"/> <span className="text-sm font-bold opacity-70">جمع کل وزن:</span> <span className="text-2xl font-black font-mono">{totalDeliveredWeight} kg</span></div>
+        <div className="p-6 overflow-y-auto bg-gray-50">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <table className="w-full text-sm text-center">
+              <thead className="bg-gray-100 text-gray-700 font-bold">
+                <tr><th className="p-3 w-10">#</th><th className="p-3 text-right">شرح کالا</th><th className="p-3 w-28 bg-blue-50 text-blue-800 border-l border-white">تعداد درخواستی</th><th className="p-3 w-28 bg-green-50 text-green-800">تعداد خروجی</th><th className="p-3 w-28 bg-blue-50 text-blue-800 border-l border-white">وزن درخواستی</th><th className="p-3 w-28 bg-green-50 text-green-800">وزن خروجی</th><th className="p-3 w-10"></th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {items.map((item, idx) => (
+                  <tr key={item.id || idx} className="hover:bg-blue-50/30 transition-colors">
+                    <td className="p-3 text-gray-500 font-mono">{idx + 1}</td>
+                    <td className="p-3"><input className="w-full border rounded-lg p-2 text-sm font-bold" value={item.goodsName} onChange={e => handleUpdateItem(idx, 'goodsName', e.target.value)} placeholder="نام کالا"/></td>
+                    <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.cartonCount}</td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none bg-white" value={item.deliveredCartonCount} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', Number(e.target.value))}/></td>
+                    <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.weight}</td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none bg-white" value={item.deliveredWeight} onChange={e => handleUpdateItem(idx, 'deliveredWeight', Number(e.target.value))}/></td>
+                    <td className="p-3 text-center"><button onClick={() => handleRemoveItem(idx)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={18}/></button></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t border-gray-200">
+                <tr>
+                  <td colSpan={2} className="p-3 text-left pl-6 font-bold text-gray-600 flex items-center justify-between"><button onClick={handleAddItem} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-blue-100 font-bold border border-blue-200"><Plus size={14}/> افزودن کالا</button><span className="flex items-center gap-2"><Calculator size={16}/> جمع کل:</span></td>
+                  <td className="p-3 font-bold text-gray-500 font-mono text-lg bg-blue-50/30 border-l border-gray-200">{totalRequestedCount}</td>
+                  <td className="p-3 font-black text-green-700 font-mono text-lg bg-green-50/30 border-l border-gray-200">{totalDeliveredCount}</td>
+                  <td className="p-3 font-bold text-gray-500 font-mono text-lg bg-blue-50/30 border-l border-gray-200">{totalRequestedWeight}</td>
+                  <td className="p-3 font-black text-green-700 font-mono text-lg bg-green-50/30">{totalDeliveredWeight}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
-
-        <div className="p-6 border-t bg-white flex justify-end gap-3">
-          <button onClick={onClose} className="px-8 py-3 rounded-2xl border-2 border-gray-100 text-gray-500 font-bold hover:bg-gray-50">انصراف</button>
-          <button onClick={() => onConfirm(items)} className="px-10 py-3 rounded-2xl bg-orange-600 text-white font-black hover:bg-orange-700 shadow-xl shadow-orange-200 transition-all flex items-center gap-2">
-            <Save size={20} /> تایید و ارسال به انتظامات
+        <div className="p-4 border-t bg-white flex justify-end gap-3">
+          <button onClick={onClose} className="px-6 py-2 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50">انصراف</button>
+          <button onClick={handleSave} className="px-6 py-2 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 shadow-lg flex items-center gap-2">
+            <Save size={18} /> تایید نهایی و ارسال به انتظامات
           </button>
         </div>
       </div>

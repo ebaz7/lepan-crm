@@ -1,18 +1,18 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
-  children?: ReactNode;
+  children?: React.ReactNode;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
+  errorInfo: React.ErrorInfo | null;
 }
 
-// Explicitly use React.Component to ensure type recognition for setState and props
+// Fixed: Using React.Component explicitly to ensure TypeScript correctly resolves inherited members like setState and props
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -24,9 +24,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
-    // Fixed: setState is now correctly identified on the component instance
+    // Fixed: setState is a standard method of React.Component
     this.setState({ errorInfo });
   }
 
@@ -62,7 +62,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fixed: props is now correctly identified on the component instance
+    // Fixed: props is a standard property of React.Component
     return this.props.children;
   }
 }
