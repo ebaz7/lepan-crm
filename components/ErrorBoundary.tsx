@@ -1,5 +1,4 @@
-
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,10 +11,13 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fixed: Explicitly extend Component and ensure standard class structure for setState and props availability
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Error boundaries must be class components.
+// Fix: Explicitly extending React.Component<Props, State> ensures that 'this.state', 'this.setState', and 'this.props' are correctly inherited and recognized by TypeScript.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    // Initialize state correctly within the constructor.
+    // Fix: Use this.state which is provided by the React.Component base class.
     this.state = {
       hasError: false,
       error: null,
@@ -24,16 +26,19 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log the error for debugging and update state with errorInfo.
     console.error("Critical Application Error:", error, errorInfo);
-    // Fixed: setState is correctly available on the instance
+    // Fix: setState is a standard method available on instances of React.Component.
     this.setState({ errorInfo });
   }
 
   public render() {
+    // Fix: Access state via this.state to determine if fallback UI should be shown.
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -49,6 +54,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             
             <div className="bg-gray-100 p-4 rounded-xl text-left dir-ltr mb-6 overflow-auto max-h-40 border border-gray-200">
               <code className="text-xs text-red-600 font-mono break-all font-bold">
+                {/* Fix: Access error from this.state */}
                 {this.state.error?.message || 'Unknown Error'}
               </code>
             </div>
@@ -65,7 +71,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: props correctly available on the instance
+    // Fix: Access props via this.props which is correctly defined when extending React.Component.
     return this.props.children;
   }
 }
