@@ -1,135 +1,195 @@
+
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
-import { Save, Loader2, Truck, Package, MapPin, Plus, Trash2, Building2, Calendar, Send } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Plus, Trash2, Building2, Calendar, FileText, Send } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
-import { getUsers } from '../services/authService';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [permitNumber, setPermitNumber] = useState('');
     const [selectedCompany, setSelectedCompany] = useState('');
     const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
-    const [shamsiDate, setShamsiDate] = useState({ year: 1403, month: 1, day: 1 });
+    
+    const currentShamsi = getCurrentShamsiDate();
+    const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+
     const [items, setItems] = useState<ExitPermitItem[]>([{ id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }]);
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
-    const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
+    
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     useEffect(() => {
         getSettings().then(s => {
-            setAvailableCompanies(s.companies?.map(c => c.name) || s.companyNames || []);
-            setSelectedCompany(s.defaultCompany || '');
+            const names = s.companies?.map(c => c.name) || s.companyNames || [];
+            setAvailableCompanies(names);
+            if (s.defaultCompany) setSelectedCompany(s.defaultCompany);
         });
-        apiCall<{ nextNumber: number }>('/next-exit-permit-number').then(res => {
-            if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
-        });
-        const now = getCurrentShamsiDate();
-        setShamsiDate({ year: now.year, month: now.month, day: now.day });
+        fetchNextNumber();
     }, []);
+
+    const fetchNextNumber = async () => {
+        const res = await apiCall<{ nextNumber: number }>('/next-exit-permit-number');
+        setPermitNumber(res.nextNumber.toString());
+    };
+
+    const handleItemChange = (index: number, field: keyof ExitPermitItem, value: any) => {
+        const newItems = [...items];
+        newItems[index] = { ...newItems[index], [field]: value };
+        setItems(newItems);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsSubmitting(true);
-        const isoDate = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day).toISOString().split('T')[0];
-        const newPermit: ExitPermit = {
-            id: generateUUID(),
-            permitNumber: parseInt(permitNumber) || 0,
-            company: selectedCompany,
-            date: isoDate,
-            requester: currentUser.fullName,
-            items,
-            destinations,
-            goodsName: items.map(i => i.goodsName).join('، '),
-            recipientName: destinations.map(d => d.recipientName).join('، '),
-            plateNumber: driverInfo.plateNumber,
-            driverName: driverInfo.driverName,
-            description: driverInfo.description,
-            status: ExitPermitStatus.PENDING_CEO,
-            createdAt: Date.now()
-        };
+        if (!selectedCompany) return alert('لطفاً شرکت صادرکننده را انتخاب کنید.');
+        if (items.some(i => !i.goodsName)) return alert('نام کالا در تمام ردیف‌ها الزامی است.');
 
+        setIsSubmitting(true);
         try {
+            const isoDate = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day).toISOString().split('T')[0];
+
+            const newPermit: ExitPermit = {
+                id: generateUUID(),
+                permitNumber: parseInt(permitNumber) || 0,
+                company: selectedCompany,
+                date: isoDate,
+                requester: currentUser.fullName,
+                items,
+                destinations,
+                goodsName: items.map(i => i.goodsName).join('، '),
+                recipientName: destinations.map(d => d.recipientName).join('، '),
+                status: ExitPermitStatus.PENDING_CEO,
+                createdAt: Date.now()
+            };
+
             await saveExitPermit(newPermit);
             setTempPermit(newPermit);
 
             setTimeout(async () => {
-                const element = document.getElementById(`print-permit-capture-new`);
+                const element = document.getElementById(`capture-new-permit-${newPermit.id}`);
                 if (element) {
                     // @ts-ignore
                     const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
                     const base64 = canvas.toDataURL('image/png').split(',')[1];
-                    const allUsers = await getUsers();
-                    const ceo = allUsers.find(u => u.role === UserRole.CEO && u.phoneNumber);
+                    const allUsers = await (await apiCall('/users')) as any[];
+                    const ceo = allUsers.find(u => u.role === 'ceo' && u.phoneNumber);
                     
                     if (ceo) {
-                        const targets = [{ type: 'whatsapp', id: ceo.phoneNumber }];
-                        if (ceo.telegramChatId) targets.push({ type: 'telegram', id: ceo.telegramChatId });
-                        if (ceo.baleChatId) targets.push({ type: 'bale', id: ceo.baleChatId });
-
-                        const caption = `🆕 *درخواست جدید خروج کالا*\n🔢 شماره: ${newPermit.permitNumber}\n👤 ثبت توسط: ${newPermit.requester}\n📦 گیرنده: ${newPermit.recipientName}\n\nجهت تایید نهایی بررسی نمایید.`;
-                        await apiCall('/send-multichannel', 'POST', { targets, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` } });
+                        const caption = `🆕 *درخواست جدید خروج کالا*\n🔢 شماره: ${newPermit.permitNumber}\n👤 ثبت توسط: ${newPermit.requester}\n📦 گیرنده: ${newPermit.recipientName}\n----------------\nلطفاً جهت تایید نهایی بررسی نمایید.`;
+                        await apiCall('/send-multichannel', 'POST', {
+                            targets: [{ type: 'whatsapp', id: ceo.phoneNumber }, ...(ceo.telegramChatId ? [{type:'telegram', id:ceo.telegramChatId}] : []), ...(ceo.baleChatId ? [{type:'bale', id:ceo.baleChatId}] : [])],
+                            message: caption,
+                            mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` }
+                        });
                     }
                 }
                 setIsSubmitting(false);
                 onSuccess();
             }, 1500);
-        } catch (error) {
-            console.error(error);
-            alert('خطا در ثبت نهایی');
-            setIsSubmitting(false);
-        }
+        } catch (e) { alert('خطا در ارتباط با سرور'); setIsSubmitting(false); }
     };
 
     return (
         <div className="bg-gray-50 min-h-screen pb-32 animate-fade-in relative">
             {tempPermit && (
-                <div className="fixed -left-[3000px] top-0">
-                    <div id="print-permit-capture-new">
+                <div className="fixed -left-[3000px]">
+                    <div id={`capture-new-permit-${tempPermit.id}`}>
                         <PrintExitPermit permit={tempPermit} onClose={()=>{}} embed />
                     </div>
                 </div>
             )}
+
             <div className="bg-slate-900 text-white p-8 md:p-12 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-white/10 p-4 rounded-3xl border border-white/20 backdrop-blur-md"><Truck size={36} className="text-blue-400"/></div>
-                        <div><h2 className="text-3xl font-black">صدور درخواست خروج</h2><p className="text-slate-400 text-sm mt-1">مدیریت هوشمند لجستیک کارخانه</p></div>
+                    <div className="flex items-center gap-5">
+                        <div className="bg-white/10 p-5 rounded-[2rem] border border-white/20 backdrop-blur-md shadow-xl">
+                            <Truck size={40} className="text-blue-400"/>
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-black tracking-tight">صدور درخواست خروج</h2>
+                            <p className="text-slate-400 text-sm mt-1 font-medium">مدیریت هوشمند زنجیره تامین و فروش</p>
+                        </div>
                     </div>
-                    <div className="bg-white/10 px-8 py-4 rounded-3xl border border-white/10 text-center backdrop-blur-md shadow-inner">
-                        <div className="text-[10px] font-black uppercase text-slate-400 mb-1">شماره سند بعدی</div>
-                        <div className="text-4xl font-mono font-black text-blue-400">{permitNumber}</div>
+                    <div className="bg-white/10 px-10 py-5 rounded-[2rem] border border-white/10 text-center backdrop-blur-md shadow-inner">
+                        <div className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">شماره سند سیستمی</div>
+                        <div className="text-4xl font-mono font-black text-blue-400 tracking-tighter">{permitNumber}</div>
                     </div>
                 </div>
             </div>
-            <form onSubmit={handleSubmit} className="max-w-5xl mx-auto -mt-10 px-4 relative z-20 space-y-6">
-                <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-1">
-                            <label className="text-xs font-black text-slate-400 mr-2">شرکت صادرکننده</label>
-                            <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold" value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)} required>
-                                <option value="">انتخاب کنید...</option>
-                                {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+
+            <form onSubmit={handleSubmit} className="max-w-5xl mx-auto -mt-12 px-4 relative z-20 space-y-8">
+                <div className="bg-white rounded-[3rem] shadow-2xl p-8 md:p-12 border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="space-y-3">
+                        <label className="text-sm font-black text-slate-700 flex items-center gap-2"><Building2 size={20} className="text-blue-600"/> شرکت صادرکننده</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] p-4 text-base font-bold focus:bg-white focus:border-blue-500 transition-all outline-none appearance-none" value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
+                            <option value="">انتخاب شرکت...</option>
+                            {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="space-y-3">
+                        <label className="text-sm font-black text-slate-700 flex items-center gap-2"><Calendar size={20} className="text-blue-600"/> تاریخ پیشنهادی خروج</label>
+                        <div className="flex gap-2 dir-ltr">
+                            <select className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] p-4 text-center font-black outline-none" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: +e.target.value})}>
+                                {Array.from({length:31}, (_,i)=>i+1).map(d=><option key={d} value={d}>{d}</option>)}
                             </select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-black text-slate-400 mr-2">نام گیرنده</label>
-                            <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold" value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} required />
-                        </div>
-                        <div className="space-y-1 md:col-span-2">
-                            <label className="text-xs font-black text-slate-400 mr-2">شرح کالا</label>
-                            <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-bold" value={items[0].goodsName} onChange={e => { const i = [...items]; i[0].goodsName = e.target.value; setItems(i); }} required />
+                            <select className="flex-[2] bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] p-4 text-center font-black outline-none" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: +e.target.value})}>
+                                {['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'].map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+                            </select>
+                            <select className="flex-[1.5] bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] p-4 text-center font-black outline-none" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: +e.target.value})}>
+                                {[1403, 1404, 1405].map(y=><option key={y} value={y}>{y}</option>)}
+                            </select>
                         </div>
                     </div>
                 </div>
-                <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl shadow-2xl flex items-center justify-center gap-3 hover:bg-slate-800 transition-all disabled:opacity-70">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={24}/> : <Send size={24}/>}
-                    ثبت و ارسال به مدیرعامل
-                </button>
+
+                <div className="bg-white rounded-[3rem] shadow-2xl p-8 md:p-12 border border-slate-100 space-y-8">
+                    <div className="flex justify-between items-center border-b border-slate-50 pb-6">
+                        <h3 className="font-black text-2xl text-slate-800 flex items-center gap-4"><Package size={28} className="text-orange-500"/> لیست اقلام و کالاها</h3>
+                        <button type="button" onClick={() => setItems([...items, { id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }])} className="text-xs bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl font-black hover:bg-orange-100 transition-all border border-orange-100">+ افزودن ردیف</button>
+                    </div>
+                    {items.map((item, idx) => (
+                        <div key={item.id} className="flex flex-col md:flex-row gap-6 p-6 bg-slate-50 rounded-[2rem] border border-slate-100 relative group transition-all hover:bg-white hover:shadow-lg">
+                            <div className="flex-1 space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">نام و مشخصات محصول</label>
+                                <input className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-base font-bold focus:border-orange-400 outline-none shadow-sm" value={item.goodsName} onChange={e => handleItemChange(idx, 'goodsName', e.target.value)} placeholder="مثال: قطعات یدکی..." />
+                            </div>
+                            <div className="w-full md:w-40 space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">تعداد (کارتن)</label>
+                                <input type="number" className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-base font-black text-center focus:border-orange-400 outline-none shadow-sm" value={item.cartonCount} onChange={e => handleItemChange(idx, 'cartonCount', +e.target.value)} />
+                            </div>
+                            {items.length > 1 && (
+                                <button type="button" onClick={() => setItems(items.filter((_,i)=>i!==idx))} className="bg-red-50 text-red-500 p-4 rounded-2xl self-end mb-1 hover:bg-red-100 transition-colors"><Trash2 size={24}/></button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="bg-white rounded-[3rem] shadow-2xl p-8 md:p-12 border border-slate-100 space-y-8">
+                    <h3 className="font-black text-2xl text-slate-800 flex items-center gap-4 border-b border-slate-50 pb-6"><MapPin size={28} className="text-green-500"/> اطلاعات گیرنده و مشتری</h3>
+                    <div className="grid grid-cols-1 gap-8">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">نام گیرنده نهایی / مشتری</label>
+                            <input className="w-full bg-slate-50 border border-slate-100 rounded-[1.5rem] p-4 text-base font-bold focus:bg-white transition-all outline-none" value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">آدرس کامل مقصد جهت درج در بیجک</label>
+                            <textarea className="w-full bg-slate-50 border border-slate-100 rounded-[1.5rem] p-4 text-base font-bold h-32 resize-none focus:bg-white transition-all outline-none" value={destinations[0].address} onChange={e => { const d = [...destinations]; d[0].address = e.target.value; setDestinations(d); }} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="fixed bottom-8 left-8 right-8 z-[60] md:static">
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 text-white py-6 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-4 hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-70">
+                        {isSubmitting ? <Loader2 className="animate-spin" size={32}/> : <Send size={28}/>}
+                        ثبت و ارسال به مدیرعامل
+                    </button>
+                </div>
             </form>
         </div>
     );
 };
+
 export default CreateExitPermit;

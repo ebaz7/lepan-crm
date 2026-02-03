@@ -1,5 +1,7 @@
+
 import React, { useState } from 'react';
 import { ExitPermit, ExitPermitItem } from '../types';
+// Add missing Warehouse icon import
 import { Save, X, Package, Scale, Calculator, Warehouse } from 'lucide-react';
 
 interface Props {
@@ -69,16 +71,12 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
 
         <div className="p-6 border-t bg-white flex justify-end gap-3">
           <button onClick={onClose} className="px-8 py-3 rounded-2xl border-2 border-gray-100 text-gray-500 font-bold hover:bg-gray-50">انصراف</button>
-          <button onClick={handleSave} className="px-10 py-3 rounded-2xl bg-orange-600 text-white font-black hover:bg-orange-700 shadow-xl shadow-orange-200 transition-all flex items-center gap-2">
+          <button onClick={() => onConfirm(items)} className="px-10 py-3 rounded-2xl bg-orange-600 text-white font-black hover:bg-orange-700 shadow-xl shadow-orange-200 transition-all flex items-center gap-2">
             <Save size={20} /> تایید و ارسال به انتظامات
           </button>
         </div>
       </div>
     </div>
   );
-
-  function handleSave() {
-      onConfirm(items);
-  }
 };
 export default WarehouseFinalizeModal;

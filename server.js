@@ -1,3 +1,4 @@
+
 import 'dotenv/config'; 
 import express from 'express';
 import cors from 'cors';
@@ -38,31 +39,19 @@ app.use(cors());
 app.use(compression()); 
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/api/uploads', express.static(UPLOADS_DIR));
 
 const getDb = () => {
     if (!fs.existsSync(DB_FILE)) return { settings: { currentExitPermitNumber: 1000 }, exitPermits: [], orders: [], users: [] };
-    try {
-        const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-        if (!data.exitPermits) data.exitPermits = [];
-        return data;
-    } catch (e) {
-        return { settings: { currentExitPermitNumber: 1000 }, exitPermits: [], orders: [], users: [] };
-    }
+    const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    if (!data.exitPermits) data.exitPermits = [];
+    return data;
 };
 
 const saveDb = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
-const calculateNextNumber = (db, type, companyName = null) => {
-    let maxFound = 0;
-    const items = type === 'exit' ? db.exitPermits : db.orders;
-    const numKey = type === 'exit' ? 'permitNumber' : 'trackingNumber';
-    items.forEach(i => { if (parseInt(i[numKey]) > maxFound) maxFound = parseInt(i[numKey]); });
-    const fiscalStart = type === 'exit' ? (db.settings.currentExitPermitNumber || 1000) : (db.settings.currentTrackingNumber || 1000);
-    return Math.max(maxFound, fiscalStart) + 1;
-};
-
+// API ROUTES
 app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
+
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => {
     const db = getDb();
@@ -78,7 +67,7 @@ app.post('/api/login', (req, res) => {
     u ? res.json(u) : res.status(401).send('Invalid');
 });
 
-// EXIT PERMIT ROUTES - CRITICAL FIX
+// EXIT PERMITS - CRITICAL FIX FOR 404
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
 
 app.post('/api/exit-permits', (req, res) => {
@@ -86,7 +75,8 @@ app.post('/api/exit-permits', (req, res) => {
     const permit = req.body;
     permit.id = permit.id || Date.now().toString();
     if (!permit.permitNumber || permit.permitNumber === 0) {
-        permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
+        const max = db.exitPermits.reduce((acc, p) => Math.max(acc, p.permitNumber || 0), db.settings.currentExitPermitNumber || 1000);
+        permit.permitNumber = max + 1;
     }
     db.exitPermits.push(permit);
     saveDb(db);
@@ -100,7 +90,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
         db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
         saveDb(db);
         res.json(db.exitPermits);
-    } else res.status(404).json({ error: "Not Found" });
+    } else res.status(404).json({ error: "Permit Not Found" });
 });
 
 app.delete('/api/exit-permits/:id', (req, res) => {
@@ -111,20 +101,12 @@ app.delete('/api/exit-permits/:id', (req, res) => {
 });
 
 app.get('/api/next-exit-permit-number', (req, res) => {
-    res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) });
-});
-
-app.get('/api/orders', (req, res) => res.json(getDb().orders));
-app.post('/api/orders', (req, res) => {
     const db = getDb();
-    const order = req.body;
-    order.id = order.id || Date.now().toString();
-    db.orders.push(order);
-    saveDb(db);
-    res.json(db.orders);
+    const max = db.exitPermits.reduce((acc, p) => Math.max(acc, p.permitNumber || 0), db.settings.currentExitPermitNumber || 1000);
+    res.json({ nextNumber: max + 1 });
 });
 
-// MULTICHANNEL SEND
+// MULTICHANNEL MESSAGING
 app.post('/api/send-multichannel', async (req, res) => {
     const { targets, message, mediaData } = req.body;
     const db = getDb();
@@ -135,7 +117,7 @@ app.post('/api/send-multichannel', async (req, res) => {
             if (target.type === 'whatsapp' && integrations.whatsapp) {
                 await integrations.whatsapp.sendMessage(target.id, message, mediaData);
             } else if (target.type === 'telegram' && integrations.telegram && settings.telegramBotToken) {
-                await integrations.telegram.sendDocument(target.id, mediaData, message); 
+                await integrations.telegram.sendDocument(target.id, mediaData, message);
             } else if (target.type === 'bale' && integrations.bale && settings.baleBotToken) {
                 await integrations.bale.sendBaleMessage(settings.baleBotToken, target.id, message, mediaData);
             }
