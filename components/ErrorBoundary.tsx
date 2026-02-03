@@ -12,29 +12,29 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fix: Explicitly extend React.Component with props and state types to resolve inherited member errors.
+// Fix: Explicitly extend React.Component to ensure inherited members like 'state', 'setState', and 'props' are recognized.
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-        hasError: false,
-        error: null,
-        errorInfo: null
-    };
-  }
+  // Fix: Use public class property for state initialization to resolve errors where 'state' was not found on the instance.
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null
+  };
 
-  // Fix: Standard static method for updating state when an error occurs.
+  // Standard static method for updating state when an error occurs during rendering.
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
-  // Fix: Lifecycle method for handling side effects of errors.
+  // Standard lifecycle method for handling side effects of errors.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
+    // Fix: setState is now correctly recognized as an inherited member.
     this.setState({ errorInfo });
   }
 
   public render() {
+    // Fix: Property 'state' is now correctly recognized as an inherited member.
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -66,6 +66,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
+    // Fix: Property 'props' is now correctly recognized as an inherited member.
     return this.props.children;
   }
 }
