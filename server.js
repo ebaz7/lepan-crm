@@ -1,3 +1,4 @@
+
 import 'dotenv/config'; 
 import express from 'express';
 import cors from 'cors';
@@ -31,16 +32,15 @@ const findRootDirectory = () => {
 
 const ROOT_DIR = findRootDirectory();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
-const BACKUPS_DIR = path.join(ROOT_DIR, 'backups');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
-const WAUTH_DIR = path.join(ROOT_DIR, 'wauth');
 const LOG_FILE = path.join(ROOT_DIR, 'server_status.log');
+
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // --- LOGGING ---
 const logToFile = (message) => {
     const timestamp = new Date().toISOString();
     try {
-        if (!fs.existsSync(ROOT_DIR)) fs.mkdirSync(ROOT_DIR, { recursive: true });
         fs.appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`);
         console.log(message);
     } catch (e) { console.error("Logger failed:", e); }
@@ -61,28 +61,46 @@ let integrations = { whatsapp: null, telegram: null, bale: null };
 
 app.use(cors()); 
 app.use(compression()); 
-app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// Static files served AFTER API routes definition logic (see below)
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.json({ limit: '100mb' })); 
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // --- DB HANDLERS ---
 const DEFAULT_DB = { 
     settings: { currentTrackingNumber: 1000, currentExitPermitNumber: 1000, companyNames: [], companies: [], fiscalYears: [], rolePermissions: {}, customRoles: [], operatingBankNames: [], commodityGroups: [], warehouseSequences: {}, companyNotifications: {}, insuranceCompanies: [], printTemplates: [], dailySecurityMeta: {}, savedContacts: [], bankNames: [] }, 
-    orders: [], exitPermits: [], warehouseItems: [], warehouseTransactions: [], 
+    orders: [], 
+    exitPermits: [], 
+    warehouseItems: [], 
+    warehouseTransactions: [], 
+    tradeRecords: [],
+    securityLogs: [], 
+    personnelDelays: [], 
+    securityIncidents: [],
     users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }], 
-    messages: [], groups: [], tasks: [], tradeRecords: [], securityLogs: [], personnelDelays: [], securityIncidents: []
+    messages: [], 
+    groups: [], 
+    tasks: []
 };
 
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
-    if (!Array.isArray(data.orders)) data.orders = [];
-    if (!Array.isArray(data.exitPermits)) data.exitPermits = [];
-    if (!Array.isArray(data.warehouseItems)) data.warehouseItems = [];
-    if (!Array.isArray(data.warehouseTransactions)) data.warehouseTransactions = [];
-    if (!Array.isArray(data.users)) data.users = DEFAULT_DB.users;
-    if (!data.settings) data.settings = { ...DEFAULT_DB.settings };
-    return data;
+    const db = { ...DEFAULT_DB, ...data };
+    
+    // Force array initialization for all modules to prevent frontend crashes
+    if (!Array.isArray(db.orders)) db.orders = [];
+    if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
+    if (!Array.isArray(db.warehouseItems)) db.warehouseItems = [];
+    if (!Array.isArray(db.warehouseTransactions)) db.warehouseTransactions = [];
+    if (!Array.isArray(db.tradeRecords)) db.tradeRecords = [];
+    if (!Array.isArray(db.securityLogs)) db.securityLogs = [];
+    if (!Array.isArray(db.personnelDelays)) db.personnelDelays = [];
+    if (!Array.isArray(db.securityIncidents)) db.securityIncidents = [];
+    if (!Array.isArray(db.messages)) db.messages = [];
+    if (!Array.isArray(db.groups)) db.groups = [];
+    if (!Array.isArray(db.tasks)) db.tasks = [];
+    if (!Array.isArray(db.users) || db.users.length === 0) db.users = DEFAULT_DB.users;
+    
+    if (!db.settings) db.settings = { ...DEFAULT_DB.settings };
+    return db;
 };
 
 const getDb = () => {
@@ -90,14 +108,16 @@ const getDb = () => {
         if (!fs.existsSync(DB_FILE)) { saveDb(DEFAULT_DB); return DEFAULT_DB; }
         const data = fs.readFileSync(DB_FILE, 'utf8');
         return sanitizeDb(JSON.parse(data));
-    } catch (e) { return DEFAULT_DB; }
+    } catch (e) { 
+        logToFile("DB Read Failed, using default: " + e.message);
+        return DEFAULT_DB; 
+    }
 };
 
 const saveDb = (data) => {
     try {
-        const tempFile = `${DB_FILE}.tmp`;
-        fs.writeFileSync(tempFile, JSON.stringify(sanitizeDb(data), null, 2));
-        fs.renameSync(tempFile, DB_FILE);
+        const cleanData = sanitizeDb(data);
+        fs.writeFileSync(DB_FILE, JSON.stringify(cleanData, null, 2));
     } catch (e) { logToFile("Error saving DB: " + e.message); }
 };
 
@@ -110,116 +130,174 @@ const calculateNextNumber = (db, type, companyName = null) => {
 
     try {
         if (type === 'payment') {
-            db.orders.forEach(o => { if (parseInt(o.trackingNumber) > maxFoundInDb) maxFoundInDb = parseInt(o.trackingNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
+            db.orders.forEach(o => { if (Number(o.trackingNumber) > maxFoundInDb) maxFoundInDb = Number(o.trackingNumber); });
+            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
+            if (fiscalStart === 0) fiscalStart = Number(db.settings.currentTrackingNumber) || 1000;
         } else if (type === 'exit') {
-            db.exitPermits.forEach(p => { if (parseInt(p.permitNumber) > maxFoundInDb) maxFoundInDb = parseInt(p.permitNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
+            db.exitPermits.forEach(p => { if (Number(p.permitNumber) > maxFoundInDb) maxFoundInDb = Number(p.permitNumber); });
+            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
+            if (fiscalStart === 0) fiscalStart = Number(db.settings.currentExitPermitNumber) || 1000;
         } else if (type === 'bijak') {
-            db.warehouseTransactions.filter(t => t.type === 'OUT' && t.company === safeCompany).forEach(t => { if (parseInt(t.number) > maxFoundInDb) maxFoundInDb = parseInt(t.number); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.warehouseSequences?.[safeCompany]) || 1000;
+            db.warehouseTransactions.filter(t => t.type === 'OUT' && t.company === safeCompany).forEach(t => { if (Number(t.number) > maxFoundInDb) maxFoundInDb = Number(t.number); });
+            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
+            if (fiscalStart === 0) fiscalStart = Number(db.settings.warehouseSequences?.[safeCompany]) || 1000;
         }
-    } catch (e) {}
+    } catch (e) { console.error("Sequence Calculation Error:", e); }
     
-    let nextNum = maxFoundInDb >= fiscalStart ? maxFoundInDb + 1 : (fiscalStart > 0 ? fiscalStart : 1001);
-    if (!nextNum || nextNum < 1000) nextNum = 1001;
-
-    // Update global cache
-    if (type === 'payment' && !activeYear) db.settings.currentTrackingNumber = nextNum;
-    if (type === 'exit' && !activeYear) db.settings.currentExitPermitNumber = nextNum;
-    if (type === 'bijak' && !activeYear && safeCompany) { if (!db.settings.warehouseSequences) db.settings.warehouseSequences = {}; db.settings.warehouseSequences[safeCompany] = nextNum; }
-    
-    return nextNum;
+    return maxFoundInDb >= fiscalStart ? maxFoundInDb + 1 : (fiscalStart > 0 ? fiscalStart : 1001);
 };
 
 // --- API ROUTES ---
 
-// System
 app.get('/api/version', (req, res) => res.json({ version: SERVER_BUILD_ID }));
 app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
 
-// Settings & Users
+// Settings
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
+
+// Users
 app.get('/api/users', (req, res) => res.json(getDb().users));
+app.post('/api/users', (req, res) => { const db = getDb(); const user = req.body; db.users.push(user); saveDb(db); res.json(db.users); });
+app.put('/api/users/:id', (req, res) => { const db = getDb(); const idx = db.users.findIndex(u => u.id === req.params.id); if(idx > -1) { db.users[idx] = { ...db.users[idx], ...req.body }; saveDb(db); res.json(db.users); } else res.status(404).send('Not Found'); });
+app.delete('/api/users/:id', (req, res) => { const db = getDb(); db.users = db.users.filter(u => u.id !== req.params.id); saveDb(db); res.json(db.users); });
 
 // Orders
 app.get('/api/orders', (req, res) => res.json(getDb().orders));
-app.post('/api/orders', (req, res) => { const db = getDb(); const order = req.body; order.id = Date.now().toString(); order.trackingNumber = calculateNextNumber(db, 'payment', order.payingCompany); db.orders.unshift(order); saveDb(db); res.json(db.orders); });
+app.post('/api/orders', (req, res) => { 
+    const db = getDb(); 
+    const order = req.body; 
+    order.id = order.id || Date.now().toString(); 
+    order.trackingNumber = calculateNextNumber(db, 'payment', order.payingCompany); 
+    db.orders.unshift(order); 
+    saveDb(db); 
+    res.json(db.orders); 
+});
 app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.orders.findIndex(o => o.id === req.params.id); if(idx > -1) { db.orders[idx] = { ...db.orders[idx], ...req.body }; saveDb(db); res.json(db.orders); } else res.status(404).send('Not Found'); });
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// --- EXIT PERMITS (CRITICAL FIX: Ensure Routes Exist) ---
-app.get('/api/exit-permits', (req, res) => {
-    const db = getDb();
-    res.json(db.exitPermits || []);
-});
-
+// Exit Permits
+app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
 app.post('/api/exit-permits', (req, res) => {
     try {
         const db = getDb();
         const permit = req.body;
-        permit.id = Date.now().toString(); // Ensure ID
-        permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
-        
-        if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
-        db.exitPermits.push(permit);
-        
-        saveDb(db);
-        console.log(`Exit Permit Created: ${permit.permitNumber}`);
-        res.json(db.exitPermits);
-    } catch (e) {
-        console.error("Create Exit Permit Error:", e);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.put('/api/exit-permits/:id', (req, res) => {
-    try {
-        const db = getDb();
-        const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
-        if (idx > -1) {
-            db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
-            saveDb(db);
-            res.json(db.exitPermits);
-        } else {
-            res.status(404).json({ error: "Permit not found" });
+        permit.id = permit.id || Date.now().toString();
+        if (!permit.permitNumber || permit.permitNumber === 0) {
+            permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
         }
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+        db.exitPermits.push(permit);
+        saveDb(db);
+        logToFile(`Exit Permit Registered: ${permit.permitNumber}`);
+        res.json(db.exitPermits);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-app.delete('/api/exit-permits/:id', (req, res) => {
-    const db = getDb();
-    db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id);
-    saveDb(db);
-    res.json(db.exitPermits);
+app.put('/api/exit-permits/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
+    if (idx > -1) { 
+        db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.exitPermits); 
+    } else res.status(404).send('Not Found'); 
 });
-
-app.get('/api/next-exit-permit-number', (req, res) => {
-    const nextNum = calculateNextNumber(getDb(), 'exit', req.query.company);
-    res.json({ nextNumber: nextNum });
-});
+app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
+app.get('/api/next-exit-permit-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) }));
 
 // Warehouse
+app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems));
+app.post('/api/warehouse/items', (req, res) => {
+    const db = getDb();
+    const item = req.body;
+    if (!item.id) item.id = Date.now().toString();
+    db.warehouseItems.push(item);
+    saveDb(db);
+    res.json(db.warehouseItems);
+});
+app.put('/api/warehouse/items/:id', (req, res) => {
+    const db = getDb();
+    const idx = db.warehouseItems.findIndex(i => i.id === req.params.id);
+    if (idx > -1) {
+        db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body };
+        saveDb(db);
+        res.json(db.warehouseItems);
+    } else res.status(404).send('Item Not Found');
+});
+app.delete('/api/warehouse/items/:id', (req, res) => {
+    const db = getDb();
+    db.warehouseItems = db.warehouseItems.filter(i => i.id !== req.params.id);
+    saveDb(db);
+    res.json(db.warehouseItems);
+});
+
+// Warehouse Transactions
 app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions));
 app.post('/api/warehouse/transactions', (req, res) => { 
     const db = getDb(); 
     const tx = req.body; 
-    if (tx.type === 'OUT') tx.number = calculateNextNumber(db, 'bijak', tx.company);
+    if (tx.type === 'OUT') {
+        if (!tx.number || tx.number === 0) tx.number = calculateNextNumber(db, 'bijak', tx.company);
+    }
+    tx.id = tx.id || Date.now().toString();
     db.warehouseTransactions.unshift(tx); 
     saveDb(db); 
     res.json(db.warehouseTransactions); 
 });
 app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); if(idx > -1) { db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; saveDb(db); res.json(db.warehouseTransactions); } else res.status(404).send('Not Found'); });
+app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
 app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
 
-// Backup Restore
+// Trade Records
+app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
+app.post('/api/trade', (req, res) => { const db = getDb(); const record = req.body; record.id = record.id || Date.now().toString(); db.tradeRecords.push(record); saveDb(db); res.json(db.tradeRecords); });
+app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
+app.delete('/api/trade/:id', (req, res) => { const db = getDb(); db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); saveDb(db); res.json(db.tradeRecords); });
+
+// Security
+app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs));
+app.post('/api/security/logs', (req, res) => { const db = getDb(); db.securityLogs.push(req.body); saveDb(db); res.json(db.securityLogs); });
+app.put('/api/security/logs/:id', (req, res) => { const db = getDb(); const idx = db.securityLogs.findIndex(l => l.id === req.params.id); if(idx > -1) { db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; saveDb(db); res.json(db.securityLogs); } else res.status(404).send('Not Found'); });
+app.delete('/api/security/logs/:id', (req, res) => { const db = getDb(); db.securityLogs = db.securityLogs.filter(l => l.id !== req.params.id); saveDb(db); res.json(db.securityLogs); });
+
+// Delays & Incidents (Security)
+app.get('/api/security/delays', (req, res) => res.json(getDb().personnelDelays));
+app.post('/api/security/delays', (req, res) => { const db = getDb(); const d = req.body; d.id = d.id || Date.now().toString(); db.personnelDelays.push(d); saveDb(db); res.json(db.personnelDelays); });
+app.get('/api/security/incidents', (req, res) => res.json(getDb().securityIncidents));
+app.post('/api/security/incidents', (req, res) => { const db = getDb(); const i = req.body; i.id = i.id || Date.now().toString(); db.securityIncidents.push(i); saveDb(db); res.json(db.securityIncidents); });
+
+// Chat
+app.get('/api/chat', (req, res) => res.json(getDb().messages));
+app.post('/api/chat', (req, res) => { const db = getDb(); const msg = req.body; msg.id = msg.id || Date.now().toString(); db.messages.push(msg); if(db.messages.length > 500) db.messages.shift(); saveDb(db); res.json(db.messages); });
+// Fix: Added missing chat message management routes for update and delete
+app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
+app.delete('/api/chat/:id', (req, res) => { const db = getDb(); db.messages = db.messages.filter(m => m.id !== req.params.id); saveDb(db); res.json(db.messages); });
+
+// Fix: Added missing group management routes for Chat feature
+app.get('/api/groups', (req, res) => res.json(getDb().groups));
+app.post('/api/groups', (req, res) => { const db = getDb(); const group = req.body; group.id = group.id || Date.now().toString(); db.groups.push(group); saveDb(db); res.json(db.groups); });
+app.put('/api/groups/:id', (req, res) => { const db = getDb(); const idx = db.groups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.groups[idx] = { ...db.groups[idx], ...req.body }; saveDb(db); res.json(db.groups); } else res.status(404).send('Not Found'); });
+app.delete('/api/groups/:id', (req, res) => { const db = getDb(); db.groups = db.groups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.groups); });
+
+// Fix: Added missing task management routes for Chat Group Tasks feature
+app.get('/api/tasks', (req, res) => res.json(getDb().tasks));
+app.post('/api/tasks', (req, res) => { const db = getDb(); const task = req.body; task.id = task.id || Date.now().toString(); db.tasks.push(task); saveDb(db); res.json(db.tasks); });
+app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
+app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
+
+// WhatsApp Integration
+app.post('/api/send-whatsapp', async (req, res) => {
+    const { number, message, mediaData } = req.body;
+    if (integrations.whatsapp) {
+        try {
+            await integrations.whatsapp.sendMessage(number, message, mediaData);
+            res.json({ success: true });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    } else res.status(503).json({ error: "WhatsApp service not ready" });
+});
+
+// Full Backup & Restore
+app.get('/api/backup', (req, res) => res.json(getDb()));
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
@@ -231,23 +309,18 @@ app.post('/api/emergency-restore', (req, res) => {
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// WhatsApp Bridge (CRITICAL FIX FOR 404)
-app.post('/api/send-whatsapp', async (req, res) => {
-    const { number, message, mediaData } = req.body;
-    if (integrations.whatsapp) {
-        try {
-            await integrations.whatsapp.sendMessage(number, message, mediaData);
-            res.json({ success: true });
-        } catch (e) {
-            logToFile("WhatsApp Send Error: " + e.message);
-            res.status(500).json({ error: e.message });
-        }
-    } else {
-        res.status(503).json({ error: "WhatsApp service not initialized" });
-    }
+// File Upload
+app.post('/api/upload', (req, res) => {
+    try {
+        const { fileName, fileData } = req.body;
+        const base64 = fileData.split(';base64,').pop();
+        const filePath = path.join(UPLOADS_DIR, `${Date.now()}_${fileName}`);
+        fs.writeFileSync(filePath, base64, { encoding: 'base64' });
+        res.json({ fileName, url: `/api/uploads/${path.basename(filePath)}` });
+    } catch (e) { res.status(500).send(e.message); }
 });
 
-// PDF
+// PDF Rendering
 app.post('/api/render-pdf', async (req, res) => {
     try {
         const { html, landscape, format, width, height } = req.body;
@@ -262,16 +335,14 @@ app.post('/api/render-pdf', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Serving Static Files (Must be last to avoid 404ing API routes)
+// --- SERVING STATIC FILES (LAST) ---
+app.use('/api/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(ROOT_DIR, 'dist')));
 
 app.get('*', (req, res) => { 
-    // If request starts with /api/, send 404 instead of index.html to avoid client-side confusion
-    if (req.url.startsWith('/api/')) {
-        return res.status(404).json({ error: 'API endpoint not found' });
-    }
+    if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'Endpoint Not Found' });
     const p = path.join(ROOT_DIR, 'dist', 'index.html'); 
-    if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Frontend build missing.');
+    if(fs.existsSync(p)) res.sendFile(p); else res.send('Frontend build missing. Please run build.');
 });
 
-app.listen(PORT, '0.0.0.0', () => logToFile(`Server running on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => logToFile(`Server listening on port ${PORT}`));

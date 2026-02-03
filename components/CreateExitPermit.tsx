@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
-import { saveExitPermit, getSettings } from '../services/storageService';
+import { saveExitPermit, getSettings, getNextExitPermitNumber } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
@@ -20,7 +20,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
     
-    // Auto-Send preview state
+    // For auto-send preview
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     useEffect(() => {
@@ -34,17 +34,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         });
     }, []);
 
-    const fetchNextNumber = (company?: string) => {
+    const fetchNextNumber = async (company: string) => {
         if (!company) return;
-        apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
-            .then(res => {
-                if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
-                else setPermitNumber('1001');
-            })
-            .catch((e) => {
-                console.error("Fetch Number Error", e);
-                setPermitNumber('1001');
-            });
+        try {
+            const num = await getNextExitPermitNumber(company);
+            setPermitNumber(num.toString());
+        } catch (e) {
+            setPermitNumber('1001');
+        }
     };
 
     const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -57,9 +54,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         e.preventDefault();
         if (!selectedCompany) return alert('لطفا شرکت صادرکننده را انتخاب کنید');
         if (!permitNumber) return alert('شماره حواله الزامی است');
-        if (items.some(i => !i.goodsName)) return alert('نام کالا الزامی است');
-        if (destinations.some(d => !d.recipientName)) return alert('نام گیرنده الزامی است');
-
+        
         setIsSubmitting(true);
         
         try {
@@ -71,7 +66,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
-                permitNumber: parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0,
+                permitNumber: parseInt(permitNumber) || 0,
                 company: selectedCompany,
                 date: isoDate,
                 requester: currentUser.fullName,
@@ -88,13 +83,11 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 createdAt: Date.now()
             };
 
-            // 1. Save Permit
             await saveExitPermit(newPermit);
             
-            // 2. Setup hidden print area for auto-notification
+            // Auto-send notification trigger
             setTempPermit(newPermit);
             
-            // 3. Wait for DOM and trigger notification
             setTimeout(async () => {
                 const elementId = `print-permit-create-${newPermit.id}`;
                 const element = document.getElementById(elementId);
@@ -105,11 +98,11 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         
-                        const users = await getUsers();
-                        const ceo = users.find(u => u.role === UserRole.CEO);
+                        const allUsers = await getUsers();
+                        const ceo = allUsers.find(u => u.role === UserRole.CEO);
                         
                         if (ceo && ceo.phoneNumber) {
-                            const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
+                            const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 ثبت توسط: ${newPermit.requester}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             
                             await apiCall('/send-whatsapp', 'POST', { 
                                 number: ceo.phoneNumber, 
@@ -117,7 +110,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
                             });
                         }
-                    } catch (e) { console.error("Notification Error (Handled):", e); }
+                    } catch (e) { console.error("Notification Error", e); }
                 }
                 
                 onSuccess();
@@ -132,8 +125,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
     return (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in relative max-w-4xl mx-auto my-6">
-            
-            {/* Hidden Print Element for Auto-Send Notification */}
             {tempPermit && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-create-${tempPermit.id}`}>
@@ -150,13 +141,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         <p className="text-teal-100 text-xs mt-1">فرم رسمی درخواست خروج کالا و محصول</p>
                     </div>
                 </div>
-                <div className="hidden md:block text-teal-200 text-sm font-bold bg-white/10 px-3 py-1 rounded-full">
-                    مرحله ۱: ثبت فروش
-                </div>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
-                
                 <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
                     <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
                         <Hash size={16}/> اطلاعات پایه
@@ -193,7 +180,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex-1 w-full">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1">نام کالا / محصول</label>
-                                    <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="شرح کالا..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
+                                    <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="نام کالا..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
@@ -235,7 +222,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         <div className="space-y-3 mt-2">
                             <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-xl p-2 text-sm bg-white" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
                             <div><label className="text-xs font-bold block mb-1">پلاک خودرو</label><input className="w-full border rounded-xl p-2 text-sm bg-white dir-ltr text-center font-mono font-bold tracking-widest" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
-                            <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm bg-white h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
                         </div>
                     </div>
                 </div>
