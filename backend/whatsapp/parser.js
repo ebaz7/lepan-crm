@@ -76,23 +76,19 @@ export const parseMessage = async (text, db) => {
     if (cleanText.includes('راهنما') || cleanText === 'help') return { intent: 'HELP' };
 
     // --- 4. AI FALLBACK ---
-    // Fix: Properly initialize Gemini SDK with environment variable process.env.API_KEY using named parameter.
-    if (process.env.API_KEY && !cleanText.startsWith('!')) {
+    if (db.settings.geminiApiKey && !cleanText.startsWith('!')) {
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: db.settings.geminiApiKey });
             const prompt = `Extract entities from this Persian command. Output JSON ONLY: { "intent": "...", "args": { ... } }. 
             Intents: CREATE_PAYMENT (args: amount, payee, description, bank), CREATE_BIJAK (args: count, itemName, recipient, driver, plate), REPORT. 
             Input: "${cleanText}"`;
             
-            // Fix: Use recommended model for text tasks.
             const response = await ai.models.generateContent({ 
-                model: 'gemini-3-flash-preview', 
-                contents: prompt 
+                model: "gemini-2.5-flash", 
+                contents: [{ role: 'user', parts: [{ text: prompt }] }] 
             });
             
-            // Fix: Access .text property directly instead of calling it as a function text().
-            const textResult = response.text;
-            const jsonMatch = textResult?.match(/\{[\s\S]*\}/);
+            const jsonMatch = response.text.match(/\{[\s\S]*\}/);
             if (jsonMatch) return JSON.parse(jsonMatch[0]);
         } catch (e) { /* Ignore AI error */ }
     }
