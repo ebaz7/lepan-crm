@@ -1,4 +1,3 @@
-
 import 'dotenv/config'; 
 import express from 'express';
 import cors from 'cors';
@@ -230,6 +229,22 @@ app.post('/api/emergency-restore', (req, res) => {
         saveDb(sanitizeDb(parsed));
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// WhatsApp Bridge (CRITICAL FIX FOR 404)
+app.post('/api/send-whatsapp', async (req, res) => {
+    const { number, message, mediaData } = req.body;
+    if (integrations.whatsapp) {
+        try {
+            await integrations.whatsapp.sendMessage(number, message, mediaData);
+            res.json({ success: true });
+        } catch (e) {
+            logToFile("WhatsApp Send Error: " + e.message);
+            res.status(500).json({ error: e.message });
+        }
+    } else {
+        res.status(503).json({ error: "WhatsApp service not initialized" });
+    }
 });
 
 // PDF

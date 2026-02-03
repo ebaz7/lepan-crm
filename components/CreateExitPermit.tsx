@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
@@ -21,7 +20,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
     
-    // Auto-Send Hook
+    // Auto-Send preview state
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     useEffect(() => {
@@ -37,7 +36,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
     const fetchNextNumber = (company?: string) => {
         if (!company) return;
-        // Ensure API call is correct
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
                 if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
@@ -90,14 +88,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 createdAt: Date.now()
             };
 
-            // Call API
+            // 1. Save Permit
             await saveExitPermit(newPermit);
             
-            // Initiate Auto-Send Process
+            // 2. Setup hidden print area for auto-notification
             setTempPermit(newPermit);
             
+            // 3. Wait for DOM and trigger notification
             setTimeout(async () => {
-                // Ensure element exists
                 const elementId = `print-permit-create-${newPermit.id}`;
                 const element = document.getElementById(elementId);
                 
@@ -110,21 +108,18 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         const users = await getUsers();
                         const ceo = users.find(u => u.role === UserRole.CEO);
                         
-                        if (ceo) {
+                        if (ceo && ceo.phoneNumber) {
                             const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             
-                            if (ceo.phoneNumber) {
-                                await apiCall('/send-whatsapp', 'POST', { 
-                                    number: ceo.phoneNumber, 
-                                    message: caption, 
-                                    mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
-                                });
-                            }
+                            await apiCall('/send-whatsapp', 'POST', { 
+                                number: ceo.phoneNumber, 
+                                message: caption, 
+                                mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
+                            });
                         }
-                    } catch (e) { console.error("Notification Error", e); }
+                    } catch (e) { console.error("Notification Error (Handled):", e); }
                 }
                 
-                // Clear and navigate
                 onSuccess();
             }, 2000);
 
@@ -138,7 +133,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     return (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in relative max-w-4xl mx-auto my-6">
             
-            {/* Hidden Print Element for Auto-Send */}
+            {/* Hidden Print Element for Auto-Send Notification */}
             {tempPermit && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-create-${tempPermit.id}`}>
@@ -147,7 +142,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 </div>
             )}
 
-            {/* Header */}
             <div className="bg-gradient-to-r from-teal-700 to-teal-900 p-6 text-white flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm"><Truck size={28} className="text-white"/></div>
@@ -163,7 +157,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
             <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
                 
-                {/* 1. General Info */}
                 <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
                     <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
                         <Hash size={16}/> اطلاعات پایه
@@ -191,7 +184,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     </div>
                 </div>
 
-                {/* 2. Items */}
                 <div className="bg-teal-50/50 p-5 rounded-2xl border border-teal-100 relative">
                      <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-teal-700 border border-teal-200 rounded-lg shadow-sm flex items-center gap-2">
                         <Package size={16}/> لیست اقلام و کالاها
@@ -201,7 +193,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex-1 w-full">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1">نام کالا / محصول</label>
-                                    <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="مثال: میلگرد 14..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
+                                    <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="شرح کالا..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
@@ -224,7 +216,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     </div>
                 </div>
 
-                {/* 3. Destination & Driver */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
                         <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
@@ -249,14 +240,12 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     </div>
                 </div>
 
-                {/* Footer Action */}
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
                     <button type="submit" disabled={isSubmitting || !selectedCompany} className="bg-gradient-to-r from-teal-600 to-teal-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-teal-200 hover:shadow-teal-300 transform hover:-translate-y-1 transition-all flex items-center gap-3 disabled:opacity-70 disabled:transform-none">
                         {isSubmitting ? <Loader2 className="animate-spin" size={24}/> : <CheckSquare size={24}/>}
                         <span>ثبت نهایی و ارسال به کارتابل مدیرعامل</span>
                     </button>
                 </div>
-
             </form>
         </div>
     );

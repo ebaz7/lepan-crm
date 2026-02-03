@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,19 +12,28 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null
-  };
+// Explicitly extend React.Component to ensure correctly typed inheritance of members like setState and props
+// which resolves cases where names might be shadowed or type inference fails in certain TS configurations.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Use constructor for state initialization to ensure proper instance scoping of state.
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null
+    };
+  }
 
+  // Standard React lifecycle for Error Boundaries to catch errors during rendering and update state.
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
+  // Lifecycle to handle side effects of errors (like logging or updating local state for display).
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
+    // Fix: setState is now correctly recognized as inherited from React.Component.
     this.setState({ errorInfo });
   }
 
@@ -60,6 +69,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    // Fix: Property 'props' is now correctly recognized as inherited from React.Component.
     return this.props.children;
   }
 }
