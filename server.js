@@ -7,7 +7,6 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
-import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +19,7 @@ const findRootDirectory = () => {
         process.cwd(),       
         path.resolve(__dirname, '..') 
     ];
+
     for (const dir of candidates) {
         if (fs.existsSync(path.join(dir, 'package.json'))) {
             return dir;
@@ -31,8 +31,22 @@ const findRootDirectory = () => {
 const ROOT_DIR = findRootDirectory();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
+const LOG_FILE = path.join(ROOT_DIR, 'server_status.log');
 
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// --- LOGGING ---
+const logToFile = (message) => {
+    const timestamp = new Date().toISOString();
+    try {
+        if (!fs.existsSync(ROOT_DIR)) fs.mkdirSync(ROOT_DIR, { recursive: true });
+        fs.appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`);
+        console.log(message);
+    } catch (e) { console.error("Logger failed:", e); }
+};
+
+// --- SETUP ---
+const app = express();
+const PORT = process.env.PORT || 3000;
+const SERVER_BUILD_ID = Date.now().toString();
 
 // --- INTEGRATIONS ---
 let integrations = { whatsapp: null, telegram: null, bale: null };
@@ -42,117 +56,198 @@ let integrations = { whatsapp: null, telegram: null, bale: null };
     try { integrations.bale = await import('./backend/bale.js'); } catch (e) {}
 })();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors()); 
 app.use(compression()); 
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/api/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // --- DB HANDLERS ---
+const DEFAULT_DB = { 
+    settings: { currentTrackingNumber: 1000, currentExitPermitNumber: 1000, companyNames: [], companies: [], fiscalYears: [], rolePermissions: {}, customRoles: [], operatingBankNames: [], commodityGroups: [], warehouseSequences: {}, companyNotifications: {}, insuranceCompanies: [], printTemplates: [], dailySecurityMeta: {}, savedContacts: [], bankNames: [] }, 
+    orders: [], exitPermits: [], warehouseItems: [], warehouseTransactions: [], 
+    users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }], 
+    messages: [], groups: [], tasks: [], tradeRecords: [], securityLogs: [], personnelDelays: [], securityIncidents: []
+};
+
 const getDb = () => {
-    if (!fs.existsSync(DB_FILE)) return { settings: {}, exitPermits: [], orders: [], users: [] };
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    try {
+        if (!fs.existsSync(DB_FILE)) { 
+            fs.writeFileSync(DB_FILE, JSON.stringify(DEFAULT_DB, null, 2)); 
+            return DEFAULT_DB; 
+        }
+        const data = fs.readFileSync(DB_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed.exitPermits)) parsed.exitPermits = [];
+        if (!Array.isArray(parsed.orders)) parsed.orders = [];
+        return parsed;
+    } catch (e) { 
+        return DEFAULT_DB; 
+    }
 };
 
 const saveDb = (data) => {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    try {
+        const tempFile = `${DB_FILE}.tmp`;
+        fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+        fs.renameSync(tempFile, DB_FILE);
+    } catch (e) { logToFile("Error saving DB: " + e.message); }
+};
+
+const calculateNextNumber = (db, type, companyName = null) => {
+    let maxFoundInDb = 0;
+    const safeCompany = companyName ? companyName.trim() : (db.settings.defaultCompany || '');
+    let fiscalStart = 0;
+
+    try {
+        const activeYearId = db.settings.activeFiscalYearId;
+        const activeYear = activeYearId ? db.settings.fiscalYears?.find(y => y.id === activeYearId) : null;
+        
+        if (type === 'exit') {
+            db.exitPermits.forEach(p => { if (parseInt(p.permitNumber) > maxFoundInDb) maxFoundInDb = parseInt(p.permitNumber); });
+            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
+            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
+        } else if (type === 'payment') {
+            db.orders.forEach(o => { if (parseInt(o.trackingNumber) > maxFoundInDb) maxFoundInDb = parseInt(o.trackingNumber); });
+            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
+        } else if (type === 'bijak') {
+             db.warehouseTransactions.filter(t => t.type === 'OUT' && t.company === safeCompany).forEach(t => { if (parseInt(t.number) > maxFoundInDb) maxFoundInDb = parseInt(t.number); });
+             if (fiscalStart === 0) fiscalStart = parseInt(db.settings.warehouseSequences?.[safeCompany]) || 1000;
+        }
+    } catch (e) {}
+    
+    let nextNum = maxFoundInDb >= fiscalStart ? maxFoundInDb + 1 : (fiscalStart > 0 ? fiscalStart : 1001);
+    if (!nextNum || nextNum < 1000) nextNum = 1001;
+    return nextNum;
 };
 
 // --- CORE API ROUTES ---
-app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
+
+app.get('/api/version', (req, res) => res.json({ version: SERVER_BUILD_ID }));
+app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
 
 // Settings
-app.get('/api/settings', (req, res) => res.json(getDb().settings || {}));
-app.post('/api/settings', (req, res) => { 
-    const db = getDb(); 
-    db.settings = { ...db.settings, ...req.body }; 
-    saveDb(db); 
-    res.json(db.settings); 
+app.get('/api/settings', (req, res) => res.json(getDb().settings));
+app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
+app.get('/api/users', (req, res) => res.json(getDb().users));
+
+// Orders
+app.get('/api/orders', (req, res) => res.json(getDb().orders));
+app.post('/api/orders', (req, res) => { const db = getDb(); const order = req.body; order.id = Date.now().toString(); order.trackingNumber = calculateNextNumber(db, 'payment', order.payingCompany); db.orders.unshift(order); saveDb(db); res.json(db.orders); });
+app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.orders.findIndex(o => o.id === req.params.id); if(idx > -1) { db.orders[idx] = { ...db.orders[idx], ...req.body }; saveDb(db); res.json(db.orders); } else res.status(404).send('Not Found'); });
+app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
+app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
+
+// ==========================================
+// *** ROBUST EXIT PERMIT ROUTES ***
+// ==========================================
+
+// GET ALL
+app.get('/api/exit-permits', (req, res) => {
+    const db = getDb();
+    res.json(db.exitPermits || []);
 });
 
-// Users
-app.get('/api/users', (req, res) => res.json(getDb().users || []));
-app.post('/api/login', (req, res) => { 
-    const db = getDb(); 
-    const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); 
-    u ? res.json(u) : res.status(401).send('Invalid'); 
-});
-
-// Exit Permits (Fixing 404s and handling updates)
-app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
-
+// CREATE (POST)
 app.post('/api/exit-permits', (req, res) => {
-    const db = getDb();
-    const permit = req.body;
-    permit.id = permit.id || Date.now().toString();
-    if (!db.exitPermits) db.exitPermits = [];
-    db.exitPermits.push(permit);
-    saveDb(db);
-    res.json(db.exitPermits);
-});
-
-app.put('/api/exit-permits/:id', (req, res) => {
-    const db = getDb();
-    const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
-    if (idx > -1) {
-        db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
+    try {
+        const db = getDb();
+        const permit = req.body;
+        permit.id = permit.id || Date.now().toString();
+        permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
+        
+        if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
+        db.exitPermits.push(permit);
+        
         saveDb(db);
+        logToFile(`New Permit: ${permit.permitNumber}`);
         res.json(db.exitPermits);
-    } else res.status(404).json({ error: "Permit not found" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// UPDATE (PUT) - Covers Status Changes and Edits
+app.put('/api/exit-permits/:id', (req, res) => {
+    try {
+        const db = getDb();
+        const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
+        if (idx > -1) {
+            db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
+            saveDb(db);
+            logToFile(`Updated Permit: ${db.exitPermits[idx].permitNumber}`);
+            res.json(db.exitPermits);
+        } else {
+            res.status(404).json({ error: "Permit not found" });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
-    db.exitPermits = (db.exitPermits || []).filter(p => p.id !== req.params.id);
+    db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id);
     saveDb(db);
     res.json(db.exitPermits);
 });
 
 app.get('/api/next-exit-permit-number', (req, res) => {
-    const db = getDb();
-    const permits = db.exitPermits || [];
-    const max = permits.reduce((acc, p) => Math.max(acc, Number(p.permitNumber) || 0), 1000);
-    res.json({ nextNumber: max + 1 });
+    const nextNum = calculateNextNumber(getDb(), 'exit', req.query.company);
+    res.json({ nextNumber: nextNum });
 });
 
 // --- MULTI-CHANNEL MESSAGING ---
 app.post('/api/send-multichannel', async (req, res) => {
     const { targets, message, mediaData } = req.body;
+    // targets: [{ type: 'whatsapp', id: '...' }, { type: 'telegram', id: '...' }, { type: 'bale', id: '...' }]
+    
     const db = getDb();
     const settings = db.settings;
+    const errors = [];
     
-    const results = [];
-    for (const target of targets) {
+    // De-duplicate targets based on ID and Type
+    const uniqueTargets = targets.filter((v,i,a)=>a.findIndex(t=>(t.id===v.id && t.type===v.type))===i);
+
+    for (const target of uniqueTargets) {
         try {
-            // WhatsApp
             if (target.type === 'whatsapp' && integrations.whatsapp) {
                 await integrations.whatsapp.sendMessage(target.id, message, mediaData);
+            } 
+            else if (target.type === 'telegram' && integrations.telegram && settings.telegramBotToken) {
+                await integrations.telegram.sendDocument(target.id, mediaData, message); 
             }
-            // Telegram
-            if (target.type === 'telegram' && integrations.telegram && settings.telegramBotToken) {
-                // Assuming telegram integration has sendDocument or sendPhoto
-                await integrations.telegram.sendMessage(target.id, message, mediaData);
-            }
-            // Bale
-            if (target.type === 'bale' && integrations.bale && settings.baleBotToken) {
+            else if (target.type === 'bale' && integrations.bale && settings.baleBotToken) {
                 await integrations.bale.sendBaleMessage(settings.baleBotToken, target.id, message, mediaData);
             }
-            results.push({ target: target.id, success: true });
         } catch (e) {
-            results.push({ target: target.id, success: false, error: e.message });
+            console.error(`Failed to send to ${target.type}/${target.id}:`, e.message);
+            errors.push(`${target.type}: ${e.message}`);
         }
     }
-    res.json({ success: true, results });
+    
+    res.json({ success: true, errors });
 });
 
-// Standard Fallbacks
+// Warehouse
+app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions));
+app.post('/api/warehouse/transactions', (req, res) => { const db = getDb(); const tx = req.body; if (tx.type === 'OUT') tx.number = calculateNextNumber(db, 'bijak', tx.company); db.warehouseTransactions.unshift(tx); saveDb(db); res.json(db.warehouseTransactions); });
+app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); if(idx > -1) { db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; saveDb(db); res.json(db.warehouseTransactions); } else res.status(404).send('Not Found'); });
+app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
+
+// PDF & Restore
+app.post('/api/emergency-restore', (req, res) => { try { const { fileData } = req.body; const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData; const jsonStr = Buffer.from(base64, 'base64').toString('utf-8'); saveDb(JSON.parse(jsonStr)); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+app.post('/api/render-pdf', async (req, res) => { try { const { html, landscape, format, width, height } = req.body; const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] }); const page = await browser.newPage(); if(width && height) await page.setViewport({ width: 1200, height: 800 }); await page.setContent(html, { waitUntil: 'networkidle0' }); const pdf = await page.pdf({ printBackground: true, landscape: !!landscape, format: width ? undefined : (format || 'A4'), width, height }); await browser.close(); res.contentType("application/pdf"); res.send(pdf); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// Static Files
 app.use(express.static(path.join(ROOT_DIR, 'dist')));
-app.get('*', (req, res) => {
-    if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'Not Found' });
-    res.sendFile(path.join(ROOT_DIR, 'dist', 'index.html'));
+
+// Fallback for SPA
+app.get('*', (req, res) => { 
+    if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API route not found' });
+    const p = path.join(ROOT_DIR, 'dist', 'index.html'); 
+    if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Frontend build missing.');
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => logToFile(`Server running on ${PORT}`));
