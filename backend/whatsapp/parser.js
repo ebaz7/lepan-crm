@@ -76,19 +76,25 @@ export const parseMessage = async (text, db) => {
     if (cleanText.includes('راهنما') || cleanText === 'help') return { intent: 'HELP' };
 
     // --- 4. AI FALLBACK ---
-    if (db.settings.geminiApiKey && !cleanText.startsWith('!')) {
+    // Fix: Obtain Gemini API key exclusively from environment variable process.env.API_KEY
+    if (process.env.API_KEY && !cleanText.startsWith('!')) {
         try {
-            const ai = new GoogleGenAI({ apiKey: db.settings.geminiApiKey });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `Extract entities from this Persian command. Output JSON ONLY: { "intent": "...", "args": { ... } }. 
             Intents: CREATE_PAYMENT (args: amount, payee, description, bank), CREATE_BIJAK (args: count, itemName, recipient, driver, plate), REPORT. 
             Input: "${cleanText}"`;
             
             const response = await ai.models.generateContent({ 
-                model: "gemini-2.5-flash", 
-                contents: [{ role: 'user', parts: [{ text: prompt }] }] 
+                // Fix: Select gemini-3-flash-preview for basic text analysis tasks
+                model: "gemini-3-flash-preview", 
+                contents: prompt
             });
             
-            const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+            // Fix: Access response.text property directly as a string output
+            const jsonStr = response.text?.trim();
+            if (!jsonStr) return null;
+            
+            const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
             if (jsonMatch) return JSON.parse(jsonMatch[0]);
         } catch (e) { /* Ignore AI error */ }
     }

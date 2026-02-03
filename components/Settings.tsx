@@ -60,7 +60,6 @@ const Settings: React.FC = () => {
       smsSenderNumber: '', 
       googleCalendarId: '', 
       whatsappNumber: '', 
-      geminiApiKey: '',
       warehouseSequences: {},
       companyNotifications: {},
       defaultWarehouseGroup: '',
@@ -554,7 +553,7 @@ const Settings: React.FC = () => {
                                             </div>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => handleEditContact(c)} className="text-amber-500 hover:text-amber-700 bg-amber-50 p-1.5 rounded"><Pencil size={14} /></button>
-                                                <button type="button" onClick={() => handleDeleteContact(c.id)} className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded"><Trash2 size={14} /></button>
+                                                <button type="button" onClick={() => handleDeleteContact(id)} className="text-red-400 hover:text-red-600 bg-red-50 p-1.5 rounded"><Trash2 size={14} /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -761,11 +760,6 @@ const Settings: React.FC = () => {
                                     <input type="text" className="w-full border rounded-lg p-3 dir-ltr text-left" value={settings.googleCalendarId} onChange={e => setSettings({...settings, googleCalendarId: e.target.value})} placeholder="calendar-id@group.calendar.google.com" />
                                 </div>
                                 <div>
-                                    <label className="text-sm font-bold text-gray-700 block mb-1">کلید هوش مصنوعی (Gemini API)</label>
-                                    <input type="password" className="w-full border rounded-lg p-3 dir-ltr text-left" value={settings.geminiApiKey} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Studio Key..." />
-                                    <p className="text-xs text-gray-500 mt-1">برای استفاده از قابلیت‌های هوشمند (تحلیل متن، استخراج داده از واتساپ و...) نیاز است.</p>
-                                </div>
-                                <div>
                                     <label className="text-sm font-bold text-gray-700 block mb-1">توکن ربات تلگرام</label>
                                     <input type="password" className="w-full border rounded-lg p-3 dir-ltr text-left" value={settings.telegramBotToken} onChange={e => setSettings({...settings, telegramBotToken: e.target.value})} placeholder="123456:ABC-DEF..." />
                                 </div>
@@ -794,7 +788,7 @@ const Settings: React.FC = () => {
                                             </div>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => handleEditTemplate(t)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"><Pencil size={18}/></button>
-                                                <button type="button" onClick={() => handleDeleteTemplate(t.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
+                                                <button type="button" onClick={() => handleDeleteTemplate(id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18}/></button>
                                             </div>
                                         </div>
                                         <div className="mt-4 pt-4 border-t text-xs text-gray-400 flex gap-4">
