@@ -78,7 +78,6 @@ const getDb = () => {
         }
         const data = fs.readFileSync(DB_FILE, 'utf8');
         const parsed = JSON.parse(data);
-        // Ensure critical arrays exist
         if (!Array.isArray(parsed.exitPermits)) parsed.exitPermits = [];
         if (!Array.isArray(parsed.orders)) parsed.orders = [];
         return parsed;
@@ -140,16 +139,16 @@ app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
 // ==========================================
-// *** FIX: EXPLICIT EXIT PERMIT ROUTES ***
+// *** ROBUST EXIT PERMIT ROUTES ***
 // ==========================================
 
-// 1. GET ALL
+// GET ALL
 app.get('/api/exit-permits', (req, res) => {
     const db = getDb();
     res.json(db.exitPermits || []);
 });
 
-// 2. CREATE (POST)
+// CREATE (POST)
 app.post('/api/exit-permits', (req, res) => {
     try {
         const db = getDb();
@@ -161,21 +160,22 @@ app.post('/api/exit-permits', (req, res) => {
         db.exitPermits.push(permit);
         
         saveDb(db);
+        logToFile(`New Permit: ${permit.permitNumber}`);
         res.json(db.exitPermits);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// 3. UPDATE / APPROVE (PUT) - This is what fixes the 404
+// UPDATE (PUT) - Covers Status Changes and Edits
 app.put('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
         const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
         if (idx > -1) {
-            // Update the record with new data
             db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
             saveDb(db);
+            logToFile(`Updated Permit: ${db.exitPermits[idx].permitNumber}`);
             res.json(db.exitPermits);
         } else {
             res.status(404).json({ error: "Permit not found" });
@@ -185,7 +185,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
     }
 });
 
-// 4. DELETE
+// DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id);
@@ -197,7 +197,38 @@ app.get('/api/next-exit-permit-number', (req, res) => {
     const nextNum = calculateNextNumber(getDb(), 'exit', req.query.company);
     res.json({ nextNumber: nextNum });
 });
-// ==========================================
+
+// --- MULTI-CHANNEL MESSAGING ---
+app.post('/api/send-multichannel', async (req, res) => {
+    const { targets, message, mediaData } = req.body;
+    // targets: [{ type: 'whatsapp', id: '...' }, { type: 'telegram', id: '...' }, { type: 'bale', id: '...' }]
+    
+    const db = getDb();
+    const settings = db.settings;
+    const errors = [];
+    
+    // De-duplicate targets based on ID and Type
+    const uniqueTargets = targets.filter((v,i,a)=>a.findIndex(t=>(t.id===v.id && t.type===v.type))===i);
+
+    for (const target of uniqueTargets) {
+        try {
+            if (target.type === 'whatsapp' && integrations.whatsapp) {
+                await integrations.whatsapp.sendMessage(target.id, message, mediaData);
+            } 
+            else if (target.type === 'telegram' && integrations.telegram && settings.telegramBotToken) {
+                await integrations.telegram.sendDocument(target.id, mediaData, message); 
+            }
+            else if (target.type === 'bale' && integrations.bale && settings.baleBotToken) {
+                await integrations.bale.sendBaleMessage(settings.baleBotToken, target.id, message, mediaData);
+            }
+        } catch (e) {
+            console.error(`Failed to send to ${target.type}/${target.id}:`, e.message);
+            errors.push(`${target.type}: ${e.message}`);
+        }
+    }
+    
+    res.json({ success: true, errors });
+});
 
 // Warehouse
 app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions));

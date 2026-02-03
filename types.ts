@@ -188,7 +188,12 @@ export interface SystemSettings {
   defaultWarehouseGroup?: string;
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
-  exitPermitNotificationGroup?: string;
+  exitPermitNotificationGroup?: string; // Legacy, kept for compatibility
+  
+  // NEW GROUPS FOR EXIT PERMIT
+  exitPermitGroup1Id?: string; // Management Group
+  exitPermitGroup2Id?: string; // Operations Group
+
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
@@ -605,7 +610,6 @@ export interface InspectionData {
     inspectionCompany?: string;
 }
 
-// Added missing trade-related interfaces
 export interface TradeTransaction {
     id: string;
     date: string;
@@ -667,7 +671,7 @@ export interface GreenLeafTax {
     part: string;
     bank: string;
     date: string;
-}
+    }
 
 export interface GreenLeafRoadToll {
     id: string;
