@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, BrokerageItem, BrokerageTransaction, SystemSettings, UserRole } from '../types';
 import { apiCall } from '../services/apiService';
-import { generateUUID, formatDate, formatNumberString, deformatNumberString } from '../constants';
+import { generateUUID, formatDate } from '../constants';
 import { 
     Warehouse, Package, Plus, ArrowDownLeft, ArrowUpRight, History, 
     Printer, Search, Loader2, CheckCircle, XCircle, Share2, 
@@ -37,27 +37,35 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
     const loadData = async () => {
         setLoading(true);
         try {
-            const [itemsData, txData] = await Promise.all([
-                apiCall<BrokerageItem[]>('/brokerage/items'),
-                apiCall<BrokerageTransaction[]>('/brokerage/transactions')
-            ]);
-            setItems(itemsData || []);
-            setTransactions(txData || []);
-        } catch (e) { console.error(e); }
+            const itemsData = await apiCall<BrokerageItem[]>('/brokerage/items');
+            const txData = await apiCall<BrokerageTransaction[]>('/brokerage/transactions');
+            
+            // SECURITY CHECK: Ensure we always work with arrays to prevent .map errors
+            setItems(Array.isArray(itemsData) ? itemsData : []);
+            setTransactions(Array.isArray(txData) ? txData : []);
+        } catch (e) { 
+            console.error("Brokerage Data Load Error:", e);
+            setItems([]);
+            setTransactions([]);
+        }
         finally { setLoading(false); }
     };
+
+    // Safe items and transactions for calculations
+    const safeItems = Array.isArray(items) ? items : [];
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
     // --- LOGIC ---
     const stockData = useMemo(() => {
         const report: Record<string, any[]> = {};
-        const companies = Array.from(new Set(items.map(i => i.companyName)));
+        const companies = Array.from(new Set(safeItems.map(i => i.companyName)));
 
         companies.forEach(company => {
-            const companyItems = items.filter(i => i.companyName === company);
+            const companyItems = safeItems.filter(i => i.companyName === company);
             const processed = companyItems.map(item => {
                 let qty = item.initialQuantity || 0;
                 let weight = item.initialWeight || 0;
-                transactions.filter(t => (t.status === 'APPROVED' || t.type === 'IN') && t.companyName === company).forEach(t => {
+                safeTransactions.filter(t => (t.status === 'APPROVED' || t.type === 'IN') && t.companyName === company).forEach(t => {
                     t.items.forEach(ti => {
                         if (ti.itemId === item.id) {
                             if (t.type === 'IN') { qty += (ti.quantity || 0); weight += (ti.weight || 0); }
@@ -70,7 +78,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
             report[company] = processed;
         });
         return report;
-    }, [items, transactions]);
+    }, [safeItems, safeTransactions]);
 
     const handleCreateItem = async () => {
         if (!selectedCompany || !newItem.name) return;
@@ -90,7 +98,6 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
         const nextSerial = await apiCall<{next: number}>(`/brokerage/next-serial?company=${selectedCompany}`);
         const tx: BrokerageTransaction = {
             id: generateUUID(),
-            // Added explicit cast to resolve 'unknown' index type error on line 70
             type: newTx.type as 'IN' | 'OUT',
             companyName: selectedCompany,
             serialNumber: nextSerial.next,
@@ -110,7 +117,6 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
         loadData();
         
         if (newTx.type === 'OUT') {
-            // Trigger auto-notif to CEO logic
             alert('بیجک خروج ثبت شد. تصویر و کپشن برای مدیرعامل ارسال گردید.');
         } else {
             alert('رسید ورود با موفقیت ثبت شد.');
@@ -132,13 +138,16 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
     };
 
     const addTxItemRow = (itemId: string) => {
-        const item = items.find(i => i.id === itemId);
+        const item = safeItems.find(i => i.id === itemId);
         if (!item) return;
         setNewTx({
             ...newTx,
             items: [...newTx.items, { itemId, itemName: item.name, color: item.color, quantity: 1, weight: 0 }]
         });
     };
+
+    // Safe settings companies access
+    const safeCompanies = Array.isArray(settings?.companies) ? settings.companies : [];
 
     // --- RENDER ---
     return (
@@ -156,7 +165,6 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                 </div>
                 <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl">
                     {[
-                        // Fixed: Added LayoutDashboard to imports and used here
                         { id: 'dashboard', label: 'میز کار', icon: LayoutDashboard },
                         { id: 'items', label: 'تعریف کالا', icon: Package },
                         { id: 'stock', label: 'موجودی', icon: ClipboardList },
@@ -177,7 +185,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
 
             {/* Company Selector Global */}
             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
-                {(settings?.companies || []).map(c => (
+                {safeCompanies.map(c => (
                     <button 
                         key={c.id} 
                         onClick={() => setSelectedCompany(c.name)}
@@ -193,15 +201,15 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                 {activeTab === 'dashboard' && (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-indigo-200 transition-all">
-                            <div><div className="text-3xl font-black text-gray-800">{items.filter(i => i.companyName === selectedCompany).length}</div><div className="text-xs text-gray-400 font-bold uppercase tracking-wider">کالاهای {selectedCompany}</div></div>
+                            <div><div className="text-3xl font-black text-gray-800">{safeItems.filter(i => i.companyName === selectedCompany).length}</div><div className="text-xs text-gray-400 font-bold uppercase tracking-wider">کالاهای {selectedCompany}</div></div>
                             <Package className="text-indigo-100 group-hover:text-indigo-500 transition-colors" size={48}/>
                         </div>
                         <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 flex items-center justify-between">
-                            <div><div className="text-3xl font-black text-emerald-700">{transactions.filter(t=>t.type==='IN' && t.companyName === selectedCompany).length}</div><div className="text-xs text-emerald-600 font-bold uppercase">رسید ورود</div></div>
+                            <div><div className="text-3xl font-black text-emerald-700">{safeTransactions.filter(t=>t.type==='IN' && t.companyName === selectedCompany).length}</div><div className="text-xs text-emerald-600 font-bold uppercase">رسید ورود</div></div>
                             <ArrowDownLeft className="text-emerald-200" size={48}/>
                         </div>
                         <div className="bg-rose-50 p-6 rounded-3xl border border-rose-100 flex items-center justify-between">
-                            <div><div className="text-3xl font-black text-rose-700">{transactions.filter(t=>t.type==='OUT' && t.status==='APPROVED' && t.companyName === selectedCompany).length}</div><div className="text-xs text-rose-600 font-bold uppercase">خروج نهایی</div></div>
+                            <div><div className="text-3xl font-black text-rose-700">{safeTransactions.filter(t=>t.type==='OUT' && t.status==='APPROVED' && t.companyName === selectedCompany).length}</div><div className="text-xs text-rose-600 font-bold uppercase">خروج نهایی</div></div>
                             <ArrowUpRight className="text-rose-200" size={48}/>
                         </div>
                         <button onClick={() => setShowPrintStock(true)} className="bg-slate-800 p-6 rounded-3xl shadow-xl text-white flex flex-col items-center justify-center gap-2 hover:bg-slate-900 transition-all transform hover:-translate-y-1">
@@ -217,7 +225,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                         <tr><th className="p-4">نوع</th><th className="p-4">شماره سریال</th><th className="p-4">تاریخ</th><th className="p-4">تحویل‌گیرنده</th><th className="p-4">وضعیت</th><th className="p-4">عملیات</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                        {transactions.filter(t => t.companyName === selectedCompany).slice(0, 10).map(t => (
+                                        {safeTransactions.filter(t => t.companyName === selectedCompany).slice(0, 10).map(t => (
                                             <tr key={t.id} className="hover:bg-gray-50 transition-colors group">
                                                 <td className="p-4">{t.type === 'IN' ? <span className="text-emerald-600 font-bold">ورود</span> : <span className="text-rose-600 font-bold">خروج</span>}</td>
                                                 <td className="p-4 font-mono font-bold text-gray-500">{t.serialNumber}</td>
@@ -257,7 +265,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                             <table className="w-full text-right">
                                 <thead className="bg-gray-50"><tr><th className="p-4">نام کالا</th><th className="p-4">رنگ</th><th className="p-4">واحد</th><th className="p-4">موجودی اولیه</th><th className="p-4">عملیات</th></tr></thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {items.filter(i => i.companyName === selectedCompany).map(i => (
+                                    {safeItems.filter(i => i.companyName === selectedCompany).map(i => (
                                         <tr key={i.id} className="hover:bg-gray-50">
                                             <td className="p-4 font-black">{i.name}</td>
                                             <td className="p-4"><span className="flex items-center gap-1"><Palette size={12} style={{color: i.color}}/> {i.color || '-'}</span></td>
@@ -296,7 +304,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                     <div className="space-y-1">
                                         <label className="text-xs font-bold text-gray-500">انتخاب کالا برای افزودن</label>
                                         <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded-xl p-2 bg-gray-50">
-                                            {items.filter(i => i.companyName === selectedCompany).map(item => (
+                                            {safeItems.filter(i => i.companyName === selectedCompany).map(item => (
                                                 <button key={item.id} onClick={() => addTxItemRow(item.id)} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 hover:border-indigo-300 hover:shadow-sm text-right text-sm group">
                                                     <div>
                                                         <span className="font-bold text-gray-800">{item.name}</span>
@@ -316,7 +324,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                 <table className="w-full text-right text-sm">
                                     <thead className="bg-gray-50"><tr><th className="p-3">کالا</th><th className="p-3">رنگ</th><th className="p-3 w-32">تعداد</th><th className="p-3 w-32">وزن (KG)</th><th className="p-3 w-10"></th></tr></thead>
                                     <tbody className="divide-y">
-                                        {newTx.items.map((it, idx) => (
+                                        {Array.isArray(newTx.items) && newTx.items.map((it, idx) => (
                                             <tr key={idx}>
                                                 <td className="p-3 font-bold">{it.itemName}</td>
                                                 <td className="p-3 text-xs">{it.color}</td>
@@ -325,7 +333,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                                 <td className="p-3"><button onClick={() => { const n = newTx.items.filter((_, i) => i !== idx); setNewTx({...newTx, items: n}); }} className="text-red-400 hover:text-red-600"><X size={16}/></button></td>
                                             </tr>
                                         ))}
-                                        {newTx.items.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">هیچ کالایی اضافه نشده است.</td></tr>}
+                                        {(!newTx.items || newTx.items.length === 0) && <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">هیچ کالایی اضافه نشده است.</td></tr>}
                                     </tbody>
                                 </table>
                             </div>
@@ -347,10 +355,10 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                         <Building2 size={24} className="text-indigo-400"/>
                                         <span className="text-lg font-black">{company}</span>
                                     </div>
-                                    <span className="bg-white/10 px-4 py-1 rounded-full text-xs font-bold">{companyItems.length} نوع کالا</span>
+                                    <span className="bg-white/10 px-4 py-1 rounded-full text-xs font-bold">{Array.isArray(companyItems) ? companyItems.length : 0} نوع کالا</span>
                                 </div>
                                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {companyItems.map(item => (
+                                    {Array.isArray(companyItems) && companyItems.map(item => (
                                         <div key={item.id} className="p-5 border border-gray-100 rounded-2xl hover:border-indigo-300 transition-all bg-gray-50/30">
                                             <div className="flex justify-between items-start mb-4">
                                                 <h4 className="font-black text-gray-800">{item.name}</h4>
@@ -388,14 +396,14 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                     <label className="text-xs font-bold text-gray-500">فیلتر شرکت</label>
                                     <select className="w-full border rounded-xl p-2 bg-white" value={kardexFilter.company} onChange={e => setKardexFilter({...kardexFilter, company: e.target.value})}>
                                         <option value="">همه شرکت‌ها</option>
-                                        {(settings?.companies || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                        {safeCompanies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-bold text-gray-500">انتخاب کالا</label>
                                     <select className="w-full border rounded-xl p-2 bg-white" value={kardexFilter.itemId} onChange={e => setKardexFilter({...kardexFilter, itemId: e.target.value})}>
                                         <option value="">همه کالاها</option>
-                                        {items.filter(i => !kardexFilter.company || i.companyName === kardexFilter.company).map(i => <option key={i.id} value={i.id}>{i.name} ({i.color})</option>)}
+                                        {safeItems.filter(i => !kardexFilter.company || i.companyName === kardexFilter.company).map(i => <option key={i.id} value={i.id}>{i.name} ({i.color})</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -407,15 +415,13 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                     </thead>
                                     <tbody className="divide-y divide-gray-50 font-medium">
                                         {(() => {
-                                            // Fixed: added explicit cast to BrokerageTransaction[] to resolve potential 'unknown' property issues
-                                            const filteredTxs = (transactions as BrokerageTransaction[])
+                                            const filteredTxs = (safeTransactions as BrokerageTransaction[])
                                                 .filter(t => (!kardexFilter.company || t.companyName === kardexFilter.company) && (t.status === 'APPROVED' || t.type === 'IN'))
                                                 .sort((a, b) => a.createdAt - b.createdAt);
                                             
                                             let runningQty = 0;
                                             let runningWeight = 0;
                                             
-                                            // Fixed: filteredTxs is correctly inferred as an array, map works as expected
                                             return filteredTxs.map(t => {
                                                 const txItem = t.items.find(ti => !kardexFilter.itemId || ti.itemId === kardexFilter.itemId);
                                                 if (!txItem) return null;

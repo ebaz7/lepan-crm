@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,32 +12,28 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fixed: Explicitly using Component from 'react' to ensure proper inheritance.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fixed: state initialization is correctly recognized now that we've updated the class signature.
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null
-    };
+// Fix: Use React.Component explicitly instead of destructured import to ensure proper type inheritance.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fix: Initialize state using property initializer for better compatibility with modern TypeScript.
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null
+  };
+
+  // Fix: Ensure the static method returns the correct state shape for the component.
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error, errorInfo: null };
   }
 
-  // Standard static method for updating state when an error occurs during rendering.
-  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    return { hasError: true, error };
-  }
-
-  // Standard lifecycle method for handling side effects of errors.
+  // Fix: setState is now correctly inherited from React.Component.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
-    // Fixed: setState is correctly recognized as an inherited member.
     this.setState({ errorInfo });
   }
 
   public render() {
-    // Fixed: Property 'state' is now correctly recognized as an inherited member.
+    // Fix: state property is now correctly inherited from React.Component.
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -69,7 +65,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: Property 'props' is now correctly recognized as an inherited member.
+    // Fix: props property is now correctly inherited from React.Component.
     return this.props.children;
   }
 }
