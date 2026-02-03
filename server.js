@@ -140,20 +140,20 @@ app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
 // ==========================================
-// *** NEW ROBUST EXIT PERMIT ROUTES ***
+// *** FIX: EXPLICIT EXIT PERMIT ROUTES ***
 // ==========================================
 
+// 1. GET ALL
 app.get('/api/exit-permits', (req, res) => {
     const db = getDb();
     res.json(db.exitPermits || []);
 });
 
+// 2. CREATE (POST)
 app.post('/api/exit-permits', (req, res) => {
     try {
         const db = getDb();
         const permit = req.body;
-        
-        // Force ID and Number on server side to prevent client errors
         permit.id = permit.id || Date.now().toString();
         permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
         
@@ -161,19 +161,19 @@ app.post('/api/exit-permits', (req, res) => {
         db.exitPermits.push(permit);
         
         saveDb(db);
-        logToFile(`New Exit Permit Created: #${permit.permitNumber}`);
         res.json(db.exitPermits);
     } catch (e) {
-        logToFile(`Error creating permit: ${e.message}`);
         res.status(500).json({ error: e.message });
     }
 });
 
+// 3. UPDATE / APPROVE (PUT) - This is what fixes the 404
 app.put('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
         const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
         if (idx > -1) {
+            // Update the record with new data
             db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
             saveDb(db);
             res.json(db.exitPermits);
@@ -185,6 +185,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
     }
 });
 
+// 4. DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id);
