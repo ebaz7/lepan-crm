@@ -6,40 +6,32 @@ import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
 import { formatDate } from '../constants';
 import { 
-    Eye, Trash2, Search, CheckCircle, Truck, Edit, Loader2, 
-    Archive, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, ArrowRight, Filter, X
+    Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
+    Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
+    User as UserIcon, Building2, Bell, AlertTriangle
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
 import EditExitPermitModal from './EditExitPermitModal';
 
 const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any }> = ({ currentUser, settings, statusFilter }) => {
-    // --- STATE ---
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'MY_CARTABLE' | 'ACTIVE_FLOW' | 'ARCHIVE'>('MY_CARTABLE');
+    // New Tabs: CARTABLE (My Tasks), FLOW (Active items not with me), ARCHIVE (Done/Rejected)
+    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // Modals
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
-    
-    // Processing State
     const [processingId, setProcessingId] = useState<string | null>(null);
-    
-    // Auto-Send Dummy State
     const [autoSendPermit, setAutoSendPermit] = useState<ExitPermit | null>(null);
 
-    // Initial Load
-    useEffect(() => {
-        loadData();
-    }, []);
+    useEffect(() => { loadData(); }, []);
     
+    // Auto-switch tab based on filter or data
     useEffect(() => {
-        if (statusFilter === 'pending') {
-            setActiveTab('MY_CARTABLE');
+        if (statusFilter) {
+            // Logic to switch tab based on external filter requests
         }
     }, [statusFilter]);
 
@@ -50,165 +42,133 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const safeData = Array.isArray(data) ? data : [];
             setPermits(safeData.sort((a, b) => b.createdAt - a.createdAt));
         } catch (e) {
-            console.error("Load Error", e);
+            console.error("Failed to load permits", e);
             setPermits([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // --- LOGIC: IS IT MY TURN? ---
+    // --- WORKFLOW & PERMISSION LOGIC ---
+
+    // Define "Is it my turn?" logic strictly
     const isMyTurn = (p: ExitPermit) => {
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
 
-        const role = currentUser.role;
-        // CEO Step
-        if (p.status === ExitPermitStatus.PENDING_CEO && (role === UserRole.CEO || role === UserRole.ADMIN)) return true;
-        // Factory Step
-        if (p.status === ExitPermitStatus.PENDING_FACTORY && (role === UserRole.FACTORY_MANAGER || role === UserRole.ADMIN)) return true;
-        // Warehouse Step
-        if (p.status === ExitPermitStatus.PENDING_WAREHOUSE && (role === UserRole.WAREHOUSE_KEEPER || role === UserRole.ADMIN)) return true;
-        // Security Step
-        if (p.status === ExitPermitStatus.PENDING_SECURITY && (role === UserRole.SECURITY_HEAD || role === UserRole.SECURITY_GUARD || role === UserRole.ADMIN)) return true;
+        switch (currentUser.role) {
+            case UserRole.CEO:
+                // CEO approves first step
+                return p.status === ExitPermitStatus.PENDING_CEO;
+            
+            case UserRole.FACTORY_MANAGER:
+                // Factory Manager approves second step
+                return p.status === ExitPermitStatus.PENDING_FACTORY;
+            
+            case UserRole.WAREHOUSE_KEEPER:
+                // Warehouse Keeper approves third step (weighing)
+                return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
+            
+            case UserRole.SECURITY_HEAD:
+            case UserRole.SECURITY_GUARD:
+                // Security approves final step
+                return p.status === ExitPermitStatus.PENDING_SECURITY;
 
-        return false;
+            case UserRole.ADMIN:
+                // Admin sees everything as their turn if it's pending
+                return true; 
+                
+            default:
+                return false;
+        }
     };
 
-    const getNextActionLabel = (status: ExitPermitStatus) => {
+    const getActionLabel = (status: ExitPermitStatus) => {
         switch(status) {
             case ExitPermitStatus.PENDING_CEO: return 'تایید مدیرعامل';
             case ExitPermitStatus.PENDING_FACTORY: return 'تایید مدیر کارخانه';
-            case ExitPermitStatus.PENDING_WAREHOUSE: return 'توزین و تایید انبار';
-            case ExitPermitStatus.PENDING_SECURITY: return 'ثبت خروج (انتظامات)';
+            case ExitPermitStatus.PENDING_WAREHOUSE: return 'توزین و تحویل انبار';
+            case ExitPermitStatus.PENDING_SECURITY: return 'تایید و ثبت خروج';
             default: return '';
         }
     };
 
-    // --- NOTIFICATION ENGINE ---
-    const broadcastStep = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
-        const elementId = `print-permit-autosend-${permit.id}`;
-        const element = document.getElementById(elementId);
-        if (!element || !settings) {
-            console.error("Print element not found or settings missing");
-            return;
-        }
+    // --- FILTERING ---
+    const myCartablePermits = permits.filter(p => isMyTurn(p));
+    const activeFlowPermits = permits.filter(p => !isMyTurn(p) && p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
+    const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
 
-        try {
-            // @ts-ignore
-            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
-            const base64 = canvas.toDataURL('image/png').split(',')[1];
-            
-            const targets: {type: string, id: string}[] = [];
-            const allUsers = await getUsers();
+    const getDisplayPermits = () => {
+        let source = [];
+        if (activeTab === 'CARTABLE') source = myCartablePermits;
+        else if (activeTab === 'FLOW') source = activeFlowPermits;
+        else source = archivePermits;
 
-            // Settings Groups
-            const group1 = settings.exitPermitGroup1Id; // Group 1 (Management/Sales)
-            const group2 = settings.exitPermitGroup2Id; // Group 2 (Operations/Warehouse)
-
-            // Helper
-            const addRole = (role: string) => {
-                const u = allUsers.find(x => x.role === role && x.phoneNumber);
-                if (u) {
-                    targets.push({ type: 'whatsapp', id: u.phoneNumber });
-                    if(u.telegramChatId) targets.push({ type: 'telegram', id: u.telegramChatId });
-                    if(u.baleChatId) targets.push({ type: 'bale', id: u.baleChatId });
-                }
-            };
-            const addGroup = (gid?: string) => {
-                if(gid) targets.push({ type: 'whatsapp', id: gid });
-            };
-
-            let captionTitle = '';
-
-            // 1. CEO Approved -> Send to Group 1 + Factory Manager
-            if (prevStatus === ExitPermitStatus.PENDING_CEO) {
-                captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
-                addGroup(group1);
-                addRole(UserRole.FACTORY_MANAGER);
-            } 
-            // 2. Factory Approved -> Send to Group 2 + Warehouse Keeper
-            // Note: User asked for "Send to Group 2 and Warehouse" specifically
-            else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
-                captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
-                addGroup(group2); // Group 2
-                addRole(UserRole.WAREHOUSE_KEEPER);
-            }
-            // 3. Warehouse Approved (Weights Entered) -> Send to Group 2 + Everywhere + Security
-            // "Everywhere" implies Group 1 as well? User said "Everywhere and Group 2 and Security".
-            else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
-                captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
-                addGroup(group1); // Everywhere (G1)
-                addGroup(group2); // Group 2
-                addRole(UserRole.SECURITY_HEAD);
-            }
-            // 4. Security Approved (Exit) -> Send to Both Groups + Everywhere
-            else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
-                captionTitle = '👋 خروج نهایی از کارخانه';
-                addGroup(group1);
-                addGroup(group2);
-            }
-
-            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n🔢 شماره: ${permit.permitNumber}\n👤 گیرنده: ${permit.recipientName}\n`;
-            
-            // Add Item Details if Warehouse Step Just Finished
-            if (permit.items.length > 0) {
-                 caption += `📦 اقلام: ${permit.items.map(i => `${i.cartonCount} کارتن ${i.goodsName} (${i.weight} kg)`).join('، ')}\n`;
-            }
-            
-            if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
-            
-            // Add approver name
-            if (prevStatus === ExitPermitStatus.PENDING_CEO) caption += `\nتایید کننده: ${permit.approverCeo}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) caption += `\nتایید کننده: ${permit.approverFactory}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `\nانباردار: ${permit.approverWarehouse}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) caption += `\nانتظامات: ${permit.approverSecurity}`;
-
-            const uniqueTargets = targets.filter((v,i,a)=>a.findIndex(t=>(t.id===v.id && t.type===v.type))===i);
-            
-            if (uniqueTargets.length > 0) {
-                await apiCall('/send-multichannel', 'POST', { 
-                    targets: uniqueTargets, 
-                    message: caption, 
-                    mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } 
-                });
-            }
-
-        } catch (e) {
-            console.error("Auto Send Failed", e);
-        }
+        return source.filter(p => 
+            p.permitNumber.toString().includes(searchTerm) || 
+            p.recipientName?.includes(searchTerm) || 
+            p.goodsName?.includes(searchTerm)
+        );
     };
+
+    const displayPermits = getDisplayPermits();
 
     // --- ACTIONS ---
 
-    const handleApprove = async (p: ExitPermit) => {
-        // Warehouse needs special modal for weighing
-        if (p.status === ExitPermitStatus.PENDING_WAREHOUSE) {
-            setWarehouseFinalize(p);
-            return;
-        }
+    const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'SECURITY') => {
+        if (p.status === ExitPermitStatus.EXITED) return 'done';
+        if (p.status === ExitPermitStatus.REJECTED) return 'rejected';
 
+        // Map statuses to sequence indices
+        const statusOrder = [
+            ExitPermitStatus.PENDING_CEO,
+            ExitPermitStatus.PENDING_FACTORY,
+            ExitPermitStatus.PENDING_WAREHOUSE,
+            ExitPermitStatus.PENDING_SECURITY
+        ];
+        
+        const currentIdx = statusOrder.indexOf(p.status);
+        let stepIdx = -1;
+        
+        if (step === 'CEO') stepIdx = 0;
+        else if (step === 'FACTORY') stepIdx = 1;
+        else if (step === 'WAREHOUSE') stepIdx = 2;
+        else if (step === 'SECURITY') stepIdx = 3;
+
+        if (currentIdx === -1) return 'pending'; 
+
+        if (currentIdx > stepIdx) return 'done';
+        if (currentIdx === stepIdx) return 'current';
+        return 'pending';
+    };
+
+    const handleApprove = async (p: ExitPermit) => {
+        if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
+            setWarehouseFinalize(p); 
+            return; 
+        }
+        
         let exitTimeStr = '';
+        // Security Step needs Time
         if (p.status === ExitPermitStatus.PENDING_SECURITY) {
-            const now = new Date();
-            const timeDefault = now.toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'});
-            const t = prompt('ساعت خروج را وارد کنید:', timeDefault);
+            const t = prompt('ساعت خروج را وارد کنید (مثال 14:30):', new Date().toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'}));
             if (!t) return;
             exitTimeStr = t;
         } else {
-            if (!confirm(`آیا "${getNextActionLabel(p.status)}" را انجام می‌دهید؟`)) return;
+            if (!confirm(`آیا مطمئن هستید؟ (${getActionLabel(p.status)})`)) return;
         }
 
         setProcessingId(p.id);
-
+        
         try {
-            // Calculate Next Status
-            let nextStatus = ExitPermitStatus.PENDING_FACTORY; 
+            // Determine Next Status
+            let nextStatus = ExitPermitStatus.PENDING_FACTORY;
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
+            else if (p.status === ExitPermitStatus.PENDING_WAREHOUSE) nextStatus = ExitPermitStatus.PENDING_SECURITY;
             else if (p.status === ExitPermitStatus.PENDING_SECURITY) nextStatus = ExitPermitStatus.EXITED;
 
             const updatedPermit = { ...p, status: nextStatus };
-            // Set Approver Name based on current step
+            // Assign approver name
             if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_SECURITY) {
@@ -216,20 +176,20 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 updatedPermit.exitTime = exitTimeStr;
             }
 
-            // Corrected: use PUT for status update
             await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: exitTimeStr });
             
-            // Notification
+            // Trigger Auto-Send
             setAutoSendPermit(updatedPermit);
+            
             setTimeout(async () => {
-                await broadcastStep(updatedPermit, p.status, exitTimeStr);
+                await sendNotification(updatedPermit, p.status, exitTimeStr);
                 setProcessingId(null);
                 setAutoSendPermit(null);
                 loadData();
-            }, 2000);
+            }, 2500);
 
-        } catch (e: any) {
-            alert(`خطا در انجام عملیات: ${e.message}`);
+        } catch (e) {
+            alert('خطا در عملیات تایید');
             setProcessingId(null);
         }
     };
@@ -237,242 +197,262 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const handleWarehouseSubmit = async (finalItems: any[]) => {
         if (!warehouseFinalize) return;
         setProcessingId(warehouseFinalize.id);
-        
         try {
-            const updated = {
-                ...warehouseFinalize,
-                items: finalItems,
-                approverWarehouse: currentUser.fullName,
+            const updated = { 
+                ...warehouseFinalize, 
+                items: finalItems, 
+                approverWarehouse: currentUser.fullName, 
                 status: ExitPermitStatus.PENDING_SECURITY,
                 weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0),
                 cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0)
             };
             
-            // Use editExitPermit because items changed
-            await editExitPermit(updated);
-
+            await editExitPermit(updated); 
+            
             setAutoSendPermit(updated);
             setTimeout(async () => {
-                await broadcastStep(updated, ExitPermitStatus.PENDING_WAREHOUSE);
+                await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
                 setProcessingId(null);
                 setWarehouseFinalize(null);
                 setAutoSendPermit(null);
                 loadData();
-            }, 2000);
-
-        } catch (e) {
-            alert('خطا در ثبت انبار');
-            setProcessingId(null);
-        }
+            }, 2500);
+        } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
     };
 
-    const handleReject = async (p: ExitPermit) => {
-        const reason = prompt('دلیل رد درخواست را بنویسید:');
-        if (!reason) return;
+    const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
+        const element = document.getElementById(`print-permit-autosend-${permit.id}`);
+        if (!element) return;
         
-        setProcessingId(p.id);
         try {
-            await updateExitPermitStatus(p.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason });
-            loadData();
-        } catch(e) { alert('خطا'); } finally { setProcessingId(null); }
-    };
-
-    // --- DELETE LOGIC: CEO/Admin Only -> Notify Groups ---
-    const handleDelete = async (p: ExitPermit) => {
-        if (currentUser.role !== UserRole.CEO && currentUser.role !== UserRole.ADMIN) {
-             alert("حذف فقط توسط مدیرعامل امکان‌پذیر است.");
-             return;
-        }
-
-        if (!confirm('⚠️ هشدار: آیا از حذف کامل این حواله اطمینان دارید؟\nاین عملیات غیرقابل بازگشت است و به تمام گروه‌ها اطلاع‌رسانی می‌شود.')) return;
-        
-        setProcessingId(p.id);
-
-        // Prepare Mock Deleted Permit for Screenshot
-        const deletedPermit = { ...p, status: 'REJECTED' as any }; // Use rejected status just to render the watermark
-        setAutoSendPermit(deletedPermit);
-
-        setTimeout(async () => {
-            const element = document.getElementById(`print-permit-autosend-${deletedPermit.id}`);
-            if (element) {
-                try {
-                    // @ts-ignore
-                    const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
-                    const base64 = canvas.toDataURL('image/png').split(',')[1];
-                    
-                    const caption = `❌❌ *مجوز خروج حذف شد* ❌❌\n\n⛔ شماره: ${p.permitNumber}\n👤 گیرنده: ${p.recipientName}\n\n⚠️ این مجوز توسط مدیریت حذف و باطل گردید.`;
-                    
-                    // Notify Group 1 and Group 2
-                    const targets = [];
-                    if (settings?.exitPermitGroup1Id) targets.push({ type: 'whatsapp', id: settings.exitPermitGroup1Id });
-                    if (settings?.exitPermitGroup2Id) targets.push({ type: 'whatsapp', id: settings.exitPermitGroup2Id });
-                    
-                    await apiCall('/send-multichannel', 'POST', { 
-                        targets, 
-                        message: caption, 
-                        mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_DELETED_${p.permitNumber}.png` } 
-                    });
-
-                } catch(e) { console.error("Delete notification failed", e); }
-            }
+            // @ts-ignore
+            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+            const base64 = canvas.toDataURL('image/png').split(',')[1];
             
-            await deleteExitPermit(p.id);
-            setProcessingId(null);
-            setAutoSendPermit(null);
-            loadData();
-            alert("حذف شد و اطلاع‌رسانی گردید.");
-        }, 2000);
+            const targets = [];
+            const group1 = settings?.exitPermitNotificationGroup;
+            const group2 = settings?.exitPermitSecondGroupConfig?.groupId;
+
+            let captionTitle = '';
+            // Determine Caption & Targets based on Transition
+            if (prevStatus === ExitPermitStatus.PENDING_CEO) {
+                captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
+                targets.push({ role: UserRole.FACTORY_MANAGER });
+                if (group1) targets.push({ group: group1 });
+            } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
+                captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
+                targets.push({ role: UserRole.WAREHOUSE_KEEPER });
+                if (group2) targets.push({ group: group2 });
+            } else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
+                captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
+                targets.push({ role: UserRole.SECURITY_HEAD });
+                if (group1) targets.push({ group: group1 });
+                if (group2) targets.push({ group: group2 });
+            } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
+                captionTitle = '👋 خروج نهایی از کارخانه';
+                if (group1) targets.push({ group: group1 });
+                if (group2) targets.push({ group: group2 });
+            }
+
+            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n🔢 شماره: ${permit.permitNumber}\n👤 گیرنده: ${permit.recipientName}\n`;
+            if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
+            if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `📦 وزن نهایی: ${permit.weight} KG\n`;
+            caption += `\nتایید کننده: ${currentUser.fullName}`;
+
+            const allUsers = await getUsers();
+            for (const t of targets) {
+                if (t.role) {
+                    const u = allUsers.find(x => x.role === t.role);
+                    if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                }
+                if (t.group) {
+                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                }
+            }
+        } catch (e) { console.error("Notif Error", e); }
     };
 
-    // --- FILTERING ---
-    const getFilteredPermits = () => {
-        let baseList = [];
-        
-        if (activeTab === 'MY_CARTABLE') {
-            baseList = permits.filter(p => isMyTurn(p));
-        } else if (activeTab === 'ACTIVE_FLOW') {
-            baseList = permits.filter(p => 
-                p.status !== ExitPermitStatus.EXITED && 
-                p.status !== ExitPermitStatus.REJECTED && 
-                !isMyTurn(p)
-            );
-        } else {
-            baseList = permits.filter(p => 
-                p.status === ExitPermitStatus.EXITED || 
-                p.status === ExitPermitStatus.REJECTED
-            );
-        }
+    const handleDelete = async (id: string) => {
+        if(!confirm('حذف شود؟')) return;
+        await deleteExitPermit(id);
+        loadData();
+    };
 
-        if (!searchTerm) return baseList;
-        
-        const lowerSearch = searchTerm.toLowerCase();
-        return baseList.filter(p => 
-            p.permitNumber.toString().includes(lowerSearch) ||
-            p.recipientName?.includes(lowerSearch) ||
-            p.goodsName?.includes(lowerSearch)
+    // Step Visualizer
+    const TimelineStep = ({ status, label, icon: Icon }: any) => {
+        let colorClass = 'bg-gray-100 text-gray-400 border-gray-200'; // Pending
+        if (status === 'current') colorClass = 'bg-blue-100 text-blue-600 border-blue-500 animate-pulse ring-2 ring-blue-200';
+        if (status === 'done') colorClass = 'bg-green-500 text-white border-green-600 shadow-md';
+        if (status === 'rejected') colorClass = 'bg-red-500 text-white border-red-600';
+
+        return (
+            <div className="flex flex-col items-center gap-1 z-10 w-14">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${colorClass}`}>
+                    <Icon size={14} />
+                </div>
+                <span className={`text-[9px] font-bold text-center leading-tight ${status === 'current' ? 'text-blue-700' : 'text-gray-500'}`}>{label}</span>
+            </div>
         );
     };
 
-    const displayPermits = getFilteredPermits();
-
-    const WorkflowTimeline = ({ status }: { status: ExitPermitStatus }) => {
-        const steps = [
-            { id: 'ceo', label: 'مدیرعامل', activeStatuses: [ExitPermitStatus.PENDING_CEO] },
-            { id: 'factory', label: 'کارخانه', activeStatuses: [ExitPermitStatus.PENDING_FACTORY] },
-            { id: 'warehouse', label: 'انبار', activeStatuses: [ExitPermitStatus.PENDING_WAREHOUSE] },
-            { id: 'security', label: 'انتظامات', activeStatuses: [ExitPermitStatus.PENDING_SECURITY] },
-            { id: 'done', label: 'خروج', activeStatuses: [ExitPermitStatus.EXITED] }
-        ];
-
-        let currentIndex = -1;
-        if (status === ExitPermitStatus.REJECTED) currentIndex = -2;
-        else if (status === ExitPermitStatus.EXITED) currentIndex = 4;
-        else if (status === ExitPermitStatus.PENDING_SECURITY) currentIndex = 3;
-        else if (status === ExitPermitStatus.PENDING_WAREHOUSE) currentIndex = 2;
-        else if (status === ExitPermitStatus.PENDING_FACTORY) currentIndex = 1;
-        else if (status === ExitPermitStatus.PENDING_CEO) currentIndex = 0;
-
+    const renderPermitCard = (p: ExitPermit) => {
+        const canAct = isMyTurn(p);
+        
         return (
-            <div className="flex items-center w-full mt-4 relative">
-                <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-100 -z-10 rounded"></div>
-                <div className={`absolute top-1/2 right-0 h-1 bg-green-500 -z-10 rounded transition-all duration-500`} style={{ width: currentIndex >= 0 ? `${(currentIndex / 4) * 100}%` : '0%' }}></div>
-                <div className="flex justify-between w-full">
-                    {steps.map((step, idx) => {
-                        let stateClass = 'bg-gray-100 text-gray-400 border-gray-200';
-                        if (idx < currentIndex) stateClass = 'bg-green-500 text-white border-green-500';
-                        else if (idx === currentIndex) stateClass = 'bg-blue-600 text-white border-blue-600 ring-4 ring-blue-100';
-                        if (status === ExitPermitStatus.REJECTED && idx === 0) stateClass = 'bg-red-500 text-white';
-
-                        return (
-                            <div key={step.id} className="flex flex-col items-center gap-1">
-                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 transition-all duration-300 ${stateClass}`}>
-                                    {idx === 0 ? <UserIcon size={14}/> : idx === 1 ? <Building2 size={14}/> : idx === 2 ? <Warehouse size={14}/> : idx === 3 ? <ShieldCheck size={14}/> : <Truck size={14}/>}
-                                </div>
-                                <span className={`text-[9px] font-bold ${idx === currentIndex ? 'text-blue-700' : 'text-gray-400'}`}>{step.label}</span>
+            <div key={p.id} className={`bg-white rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
+                {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
+                {p.status === ExitPermitStatus.REJECTED && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
+                
+                <div className="p-5">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex gap-3 items-center">
+                            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center font-black text-xl text-gray-700 border border-gray-200 shadow-inner">
+                                {p.permitNumber}
                             </div>
-                        );
-                    })}
+                            <div>
+                                <h3 className="font-bold text-gray-800 text-lg">{p.recipientName}</h3>
+                                <p className="text-xs text-gray-500">{p.goodsName} | {formatDate(p.date)}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            {canAct && !processingId && (
+                                <button onClick={() => handleApprove(p)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
+                                    <CheckCircle size={16}/> {getActionLabel(p.status)}
+                                </button>
+                            )}
+                            <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
+                                <>
+                                    <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
+                                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-100"><Trash2 size={18}/></button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Timeline */}
+                    <div className="relative mt-6 px-2 pb-2">
+                        <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 -z-0"></div>
+                        <div className="flex justify-between relative z-10">
+                            <TimelineStep status="done" label="ثبت" icon={UserIcon} />
+                            <TimelineStep status={getStepStatus(p, 'CEO')} label="مدیرعامل" icon={UserCheck} />
+                            <TimelineStep status={getStepStatus(p, 'FACTORY')} label="کارخانه" icon={Building2} />
+                            <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="انبار" icon={Warehouse} />
+                            <TimelineStep status={getStepStatus(p, 'SECURITY')} label="انتظامات" icon={ShieldCheck} />
+                        </div>
+                    </div>
                 </div>
+
+                {processingId === p.id && (
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center z-20">
+                        <Loader2 className="animate-spin text-blue-600 mb-2" size={32}/>
+                        <span className="text-xs font-bold text-blue-700 animate-pulse">در حال ثبت و ارسال پیام...</span>
+                    </div>
+                )}
             </div>
         );
     };
 
     return (
-        <div className="space-y-6 pb-24 animate-fade-in relative min-h-screen bg-gray-50/50">
-            
-            {/* Hidden Renderer */}
-            {autoSendPermit && (
+        <div className="space-y-6 pb-20 animate-fade-in">
+             {/* Hidden Render */}
+             {autoSendPermit && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-autosend-${autoSendPermit.id}`}>
-                        {/* We use DELETED watermark if mocking rejection for deletion */}
-                        <PrintExitPermit permit={autoSendPermit} onClose={()=>{}} embed watermark={autoSendPermit.status === 'REJECTED' as any ? 'DELETED' : null} />
+                        <PrintExitPermit permit={autoSendPermit} onClose={()=>{}} embed />
                     </div>
                 </div>
             )}
 
-            {/* Header */}
-            <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 sticky top-0 z-20">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-xl font-black text-slate-800 flex items-center gap-2"><Truck className="text-blue-600"/> کارتابل خروج کالا</h1>
-                    <div className="text-xs text-slate-400 font-bold bg-slate-50 px-3 py-1 rounded-full border">{permits.length} حواله</div>
+            {/* Header / Tabs */}
+            <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                    <h1 className="text-xl font-black text-gray-800 flex items-center gap-2"><Truck className="text-teal-600"/> کارتابل خروج</h1>
+                    <button onClick={loadData} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><RefreshCw size={18} className={loading ? 'animate-spin' : ''}/></button>
                 </div>
-                <div className="flex p-1 bg-slate-100 rounded-2xl mb-4 relative overflow-hidden">
-                    <button onClick={() => setActiveTab('MY_CARTABLE')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all relative z-10 flex items-center justify-center gap-2 ${activeTab === 'MY_CARTABLE' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>
-                        <Bell size={14} className={getFilteredPermits().length > 0 && activeTab === 'MY_CARTABLE' ? "animate-swing" : ""}/> کارتابل من
+                
+                <div className="flex p-1 bg-gray-200 rounded-xl overflow-x-auto no-scrollbar">
+                    <button 
+                        onClick={() => setActiveTab('CARTABLE')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'bg-white text-blue-700 shadow-md' : 'text-gray-500'}`}
+                    >
+                        <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
+                        کارتابل من ({myCartablePermits.length})
                     </button>
-                    <button onClick={() => setActiveTab('ACTIVE_FLOW')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all relative z-10 ${activeTab === 'ACTIVE_FLOW' ? 'bg-white text-slate-800 shadow-md' : 'text-slate-500'}`}>جریان فعال</button>
-                    <button onClick={() => setActiveTab('ARCHIVE')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all relative z-10 ${activeTab === 'ARCHIVE' ? 'bg-white text-slate-800 shadow-md' : 'text-slate-500'}`}>بایگانی</button>
+                    <button 
+                        onClick={() => setActiveTab('FLOW')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
+                    >
+                        جریان فعال
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('ARCHIVE')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
+                    >
+                        بایگانی
+                    </button>
                 </div>
+
                 <div className="relative">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-                    <input className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pr-10 pl-4 text-sm outline-none focus:bg-white focus:border-blue-400 transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input className="w-full bg-white border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="جستجو در لیست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
             </div>
 
             {/* List */}
-            <div className="px-1 space-y-4">
+            <div className="space-y-4 min-h-[300px]">
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3"><Loader2 className="animate-spin text-blue-500" size={32}/><span className="text-sm font-bold">در حال بارگذاری...</span></div>
+                    <div className="text-center py-20 text-gray-400 flex flex-col items-center gap-2">
+                        <Loader2 className="animate-spin text-blue-500"/> در حال بارگذاری...
+                    </div>
                 ) : displayPermits.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-200 text-slate-400"><Archive size={48} className="mb-2 opacity-20"/><span className="text-sm font-bold">موردی یافت نشد</span></div>
+                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+                        <div className="text-gray-400 font-bold">موردی یافت نشد.</div>
+                        {activeTab === 'CARTABLE' && <div className="text-xs text-gray-300 mt-2">خوشبختانه کارتابل شما خالی است! 🎉</div>}
+                    </div>
                 ) : (
-                    displayPermits.map(permit => {
-                        const canAct = isMyTurn(permit);
-                        return (
-                            <div key={permit.id} className={`bg-white rounded-3xl p-5 border transition-all relative overflow-hidden group ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-slate-200 shadow-sm hover:border-slate-300'}`}>
-                                {canAct && <div className="absolute top-0 left-0 right-0 bg-blue-500 h-1.5"></div>}
-                                <div className="flex justify-between items-start mb-4 pl-2">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center border border-slate-200 font-mono text-xl font-black text-slate-700 shadow-inner">{permit.permitNumber}</div>
-                                        <div><h3 className="font-bold text-slate-800 text-lg mb-1">{permit.recipientName}</h3><div className="text-xs text-slate-500 flex items-center gap-2"><span>{formatDate(permit.date)}</span><span className="w-1 h-1 bg-slate-300 rounded-full"></span><span className="truncate max-w-[150px]">{permit.goodsName}</span></div></div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        {canAct && !processingId && <button onClick={() => handleApprove(permit)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"><CheckCircle size={16}/> {getNextActionLabel(permit.status)}</button>}
-                                        <div className="flex gap-1">
-                                            <button onClick={() => setViewPermit(permit)} className="bg-slate-100 text-slate-600 p-2 rounded-lg hover:bg-slate-200"><Eye size={16}/></button>
-                                            {/* Edit/Delete: CEO & Admin Only */}
-                                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
-                                                <>
-                                                    <button onClick={() => setEditPermit(permit)} className="bg-amber-50 text-amber-600 p-2 rounded-lg hover:bg-amber-100"><Edit size={16}/></button>
-                                                    <button onClick={() => handleDelete(permit)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100"><Trash2 size={16}/></button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-4 pt-4 border-t border-slate-50"><WorkflowTimeline status={permit.status} /></div>
-                                {processingId === permit.id && <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-50"><Loader2 className="animate-spin text-blue-600 mb-2" size={40}/><span className="text-xs font-bold text-blue-800 animate-pulse">در حال پردازش و ارسال پیام...</span></div>}
-                            </div>
-                        );
-                    })
+                    displayPermits.map(p => renderPermitCard(p))
                 )}
             </div>
 
             {/* Modals */}
-            {viewPermit && <PrintExitPermit permit={viewPermit} onClose={() => setViewPermit(null)} settings={settings} onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined} onReject={isMyTurn(viewPermit) ? () => handleReject(viewPermit) : undefined} />}
-            {editPermit && <EditExitPermitModal permit={editPermit} onClose={() => setEditPermit(null)} onSave={() => { setEditPermit(null); loadData(); }} />}
-            {warehouseFinalize && <WarehouseFinalizeModal permit={warehouseFinalize} onClose={() => setWarehouseFinalize(null)} onConfirm={handleWarehouseSubmit} />}
+            {viewPermit && (
+                <PrintExitPermit 
+                    permit={viewPermit} 
+                    onClose={() => setViewPermit(null)} 
+                    settings={settings}
+                    onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined}
+                    onReject={isMyTurn(viewPermit) ? async () => {
+                         const reason = prompt('دلیل رد:'); 
+                         if(reason) { 
+                             await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
+                             loadData(); setViewPermit(null); 
+                         } 
+                    } : undefined}
+                    onEdit={
+                        (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
+                        ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
+                        : undefined
+                    }
+                />
+            )}
 
+            {editPermit && (
+                <EditExitPermitModal 
+                    permit={editPermit} 
+                    onClose={() => setEditPermit(null)} 
+                    onSave={() => { setEditPermit(null); loadData(); }} 
+                />
+            )}
+
+            {warehouseFinalize && (
+                <WarehouseFinalizeModal 
+                    permit={warehouseFinalize} 
+                    onClose={() => setWarehouseFinalize(null)} 
+                    onConfirm={handleWarehouseSubmit} 
+                />
+            )}
         </div>
     );
 };
