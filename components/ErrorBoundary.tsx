@@ -11,8 +11,8 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fix: Explicitly use React.Component to ensure setState and props are inherited correctly from the base component class
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Use the named Component import to ensure setState and props are inherited correctly from the base component class
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicitly initialize state using ErrorBoundaryState interface.
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -62,7 +62,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: Correctly access this.props to render nested children from the React.Component base class.
+    // Fix: Correctly access this.props to render nested children from the Component base class.
     return this.props.children;
   }
 }
