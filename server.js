@@ -1,4 +1,3 @@
-
 import 'dotenv/config'; 
 import express from 'express';
 import cors from 'cors';
@@ -66,11 +65,8 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // --- DB HANDLERS ---
 const DEFAULT_DB = { 
-    settings: { currentTrackingNumber: 1000, currentExitPermitNumber: 1000, companyNames: [], companies: [], fiscalYears: [], rolePermissions: {}, customRoles: [], operatingBankNames: [], commodityGroups: [], warehouseSequences: {}, companyNotifications: {}, insuranceCompanies: [], printTemplates: [], dailySecurityMeta: {}, savedContacts: [], bankNames: [] }, 
+    settings: { currentTrackingNumber: 1000, companyNames: [], companies: [], fiscalYears: [], rolePermissions: {}, customRoles: [], operatingBankNames: [], commodityGroups: [], insuranceCompanies: [], printTemplates: [], dailySecurityMeta: {}, savedContacts: [], bankNames: [] }, 
     orders: [], 
-    exitPermits: [], 
-    warehouseItems: [], 
-    warehouseTransactions: [], 
     tradeRecords: [],
     securityLogs: [], 
     personnelDelays: [], 
@@ -85,11 +81,8 @@ const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
     const db = { ...DEFAULT_DB, ...data };
     
-    // Force array initialization for all modules to prevent frontend crashes
+    // Core Module Check
     if (!Array.isArray(db.orders)) db.orders = [];
-    if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
-    if (!Array.isArray(db.warehouseItems)) db.warehouseItems = [];
-    if (!Array.isArray(db.warehouseTransactions)) db.warehouseTransactions = [];
     if (!Array.isArray(db.tradeRecords)) db.tradeRecords = [];
     if (!Array.isArray(db.securityLogs)) db.securityLogs = [];
     if (!Array.isArray(db.personnelDelays)) db.personnelDelays = [];
@@ -133,14 +126,6 @@ const calculateNextNumber = (db, type, companyName = null) => {
             db.orders.forEach(o => { if (Number(o.trackingNumber) > maxFoundInDb) maxFoundInDb = Number(o.trackingNumber); });
             if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
             if (fiscalStart === 0) fiscalStart = Number(db.settings.currentTrackingNumber) || 1000;
-        } else if (type === 'exit') {
-            db.exitPermits.forEach(p => { if (Number(p.permitNumber) > maxFoundInDb) maxFoundInDb = Number(p.permitNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = Number(db.settings.currentExitPermitNumber) || 1000;
-        } else if (type === 'bijak') {
-            db.warehouseTransactions.filter(t => t.type === 'OUT' && t.company === safeCompany).forEach(t => { if (Number(t.number) > maxFoundInDb) maxFoundInDb = Number(t.number); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = Number(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = Number(db.settings.warehouseSequences?.[safeCompany]) || 1000;
         }
     } catch (e) { console.error("Sequence Calculation Error:", e); }
     
@@ -177,77 +162,6 @@ app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.or
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// Exit Permits
-app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
-app.post('/api/exit-permits', (req, res) => {
-    try {
-        const db = getDb();
-        const permit = req.body;
-        permit.id = permit.id || Date.now().toString();
-        if (!permit.permitNumber || permit.permitNumber === 0) {
-            permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
-        }
-        db.exitPermits.push(permit);
-        saveDb(db);
-        logToFile(`Exit Permit Registered: ${permit.permitNumber}`);
-        res.json(db.exitPermits);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.put('/api/exit-permits/:id', (req, res) => { 
-    const db = getDb(); 
-    const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
-    if (idx > -1) { 
-        db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
-        saveDb(db); 
-        res.json(db.exitPermits); 
-    } else res.status(404).send('Not Found'); 
-});
-app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
-app.get('/api/next-exit-permit-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) }));
-
-// Warehouse
-app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems));
-app.post('/api/warehouse/items', (req, res) => {
-    const db = getDb();
-    const item = req.body;
-    if (!item.id) item.id = Date.now().toString();
-    db.warehouseItems.push(item);
-    saveDb(db);
-    res.json(db.warehouseItems);
-});
-app.put('/api/warehouse/items/:id', (req, res) => {
-    const db = getDb();
-    const idx = db.warehouseItems.findIndex(i => i.id === req.params.id);
-    if (idx > -1) {
-        db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body };
-        saveDb(db);
-        res.json(db.warehouseItems);
-    } else res.status(404).send('Item Not Found');
-});
-app.delete('/api/warehouse/items/:id', (req, res) => {
-    const db = getDb();
-    db.warehouseItems = db.warehouseItems.filter(i => i.id !== req.params.id);
-    saveDb(db);
-    res.json(db.warehouseItems);
-});
-
-// Warehouse Transactions
-app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions));
-app.post('/api/warehouse/transactions', (req, res) => { 
-    const db = getDb(); 
-    const tx = req.body; 
-    if (tx.type === 'OUT') {
-        if (!tx.number || tx.number === 0) tx.number = calculateNextNumber(db, 'bijak', tx.company);
-    }
-    tx.id = tx.id || Date.now().toString();
-    db.warehouseTransactions.unshift(tx); 
-    saveDb(db); 
-    res.json(db.warehouseTransactions); 
-});
-app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); if(idx > -1) { db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; saveDb(db); res.json(db.warehouseTransactions); } else res.status(404).send('Not Found'); });
-app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
-app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
-
 // Trade Records
 app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
 app.post('/api/trade', (req, res) => { const db = getDb(); const record = req.body; record.id = record.id || Date.now().toString(); db.tradeRecords.push(record); saveDb(db); res.json(db.tradeRecords); });
@@ -269,21 +183,14 @@ app.post('/api/security/incidents', (req, res) => { const db = getDb(); const i 
 // Chat
 app.get('/api/chat', (req, res) => res.json(getDb().messages));
 app.post('/api/chat', (req, res) => { const db = getDb(); const msg = req.body; msg.id = msg.id || Date.now().toString(); db.messages.push(msg); if(db.messages.length > 500) db.messages.shift(); saveDb(db); res.json(db.messages); });
-// Fix: Added missing chat message management routes for update and delete
 app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
 app.delete('/api/chat/:id', (req, res) => { const db = getDb(); db.messages = db.messages.filter(m => m.id !== req.params.id); saveDb(db); res.json(db.messages); });
 
-// Fix: Added missing group management routes for Chat feature
+// Groups & Tasks
 app.get('/api/groups', (req, res) => res.json(getDb().groups));
 app.post('/api/groups', (req, res) => { const db = getDb(); const group = req.body; group.id = group.id || Date.now().toString(); db.groups.push(group); saveDb(db); res.json(db.groups); });
-app.put('/api/groups/:id', (req, res) => { const db = getDb(); const idx = db.groups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.groups[idx] = { ...db.groups[idx], ...req.body }; saveDb(db); res.json(db.groups); } else res.status(404).send('Not Found'); });
-app.delete('/api/groups/:id', (req, res) => { const db = getDb(); db.groups = db.groups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.groups); });
-
-// Fix: Added missing task management routes for Chat Group Tasks feature
 app.get('/api/tasks', (req, res) => res.json(getDb().tasks));
 app.post('/api/tasks', (req, res) => { const db = getDb(); const task = req.body; task.id = task.id || Date.now().toString(); db.tasks.push(task); saveDb(db); res.json(db.tasks); });
-app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
-app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
 
 // WhatsApp Integration
 app.post('/api/send-whatsapp', async (req, res) => {

@@ -1,5 +1,10 @@
 
-import { PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident } from '../types';
+import { 
+    PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, 
+    ChatGroup, GroupTask, TradeRecord, SecurityLog, PersonnelDelay, 
+    SecurityIncident, ExitPermit, ExitPermitStatus, WarehouseItem, 
+    WarehouseTransaction 
+} from '../types';
 import { apiCall } from './apiService';
 
 const safeArray = <T>(data: any): T[] => {
@@ -43,9 +48,10 @@ export const getNextTrackingNumber = async (company?: string): Promise<number> =
 };
 
 // --- EXIT PERMITS ---
+// Added missing exports for Exit Permits to resolve errors in ManageExitPermits and CreateExitPermit
 export const getExitPermits = async (): Promise<ExitPermit[]> => { 
-    const res = await apiCall<ExitPermit[]>('/exit-permits');
-    return safeArray(res);
+    const res = await apiCall<ExitPermit[]>('/exit-permits'); 
+    return safeArray(res); 
 };
 export const saveExitPermit = async (permit: ExitPermit): Promise<ExitPermit[]> => { 
     return await apiCall<ExitPermit[]>('/exit-permits', 'POST', permit); 
@@ -53,36 +59,24 @@ export const saveExitPermit = async (permit: ExitPermit): Promise<ExitPermit[]> 
 export const editExitPermit = async (updatedPermit: ExitPermit): Promise<ExitPermit[]> => { 
     return await apiCall<ExitPermit[]>(`/exit-permits/${updatedPermit.id}`, 'PUT', updatedPermit); 
 };
-export const updateExitPermitStatus = async (id: string, status: ExitPermitStatus, approverUser: User, extra?: { rejectionReason?: string, exitTime?: string }): Promise<ExitPermit[]> => {
+export const updateExitPermitStatus = async (id: string, status: ExitPermitStatus, approverUser: User, updates: any = {}): Promise<ExitPermit[]> => {
     const permits = await getExitPermits();
     const permit = permits.find(p => p.id === id);
-    if(permit) {
-        const updates: any = { status, updatedAt: Date.now() };
-        if (status === ExitPermitStatus.PENDING_FACTORY) updates.approverCeo = approverUser.fullName;
-        else if (status === ExitPermitStatus.PENDING_WAREHOUSE) updates.approverFactory = approverUser.fullName;
-        else if (status === ExitPermitStatus.PENDING_SECURITY) updates.approverWarehouse = approverUser.fullName;
-        else if (status === ExitPermitStatus.EXITED) {
-            updates.approverSecurity = approverUser.fullName;
-            if (extra?.exitTime) updates.exitTime = extra.exitTime;
-        }
-        if (status === ExitPermitStatus.REJECTED) {
-            updates.rejectionReason = extra?.rejectionReason || 'رد شد';
-            updates.rejectedBy = approverUser.fullName;
-        }
-        return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'PUT', { ...permit, ...updates });
+    if (permit) {
+        return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'PUT', { ...permit, status, ...updates, updatedAt: Date.now() });
     }
     return permits;
 };
 export const deleteExitPermit = async (id: string): Promise<ExitPermit[]> => { 
     return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'DELETE'); 
 };
-export const getNextExitPermitNumber = async (company?: string): Promise<number> => { 
-    const url = company ? `/next-exit-permit-number?company=${encodeURIComponent(company)}` : '/next-exit-permit-number';
-    const res = await apiCall<{ nextNumber: number }>(url); 
-    return res.nextNumber; 
+export const getNextExitPermitNumber = async (company: string): Promise<number> => { 
+    const res = await apiCall<{ nextExitPermitNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}`); 
+    return res.nextExitPermitNumber;
 };
 
 // --- WAREHOUSE ---
+// Added missing exports for Warehouse Items and Transactions to resolve errors in WarehouseModule and Dashboard
 export const getWarehouseItems = async (): Promise<WarehouseItem[]> => { 
     const res = await apiCall<WarehouseItem[]>('/warehouse/items'); 
     return safeArray(res); 
@@ -96,7 +90,6 @@ export const updateWarehouseItem = async (item: WarehouseItem): Promise<Warehous
 export const deleteWarehouseItem = async (id: string): Promise<WarehouseItem[]> => { 
     return await apiCall<WarehouseItem[]>(`/warehouse/items/${id}`, 'DELETE'); 
 };
-
 export const getWarehouseTransactions = async (): Promise<WarehouseTransaction[]> => { 
     const res = await apiCall<WarehouseTransaction[]>('/warehouse/transactions'); 
     return safeArray(res); 
@@ -110,10 +103,9 @@ export const updateWarehouseTransaction = async (tx: WarehouseTransaction): Prom
 export const deleteWarehouseTransaction = async (id: string): Promise<WarehouseTransaction[]> => { 
     return await apiCall<WarehouseTransaction[]>(`/warehouse/transactions/${id}`, 'DELETE'); 
 };
-export const getNextBijakNumber = async (company?: string): Promise<number> => { 
-    const url = company ? `/next-bijak-number?company=${encodeURIComponent(company)}` : '/next-bijak-number';
-    const res = await apiCall<{ nextNumber: number }>(url); 
-    return res.nextNumber; 
+export const getNextBijakNumber = async (company: string): Promise<number> => { 
+    const res = await apiCall<{ nextBijakNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(company)}`); 
+    return res.nextBijakNumber;
 };
 
 // --- SECURITY ---
@@ -186,17 +178,15 @@ export const uploadFile = async (fileName: string, fileData: string): Promise<{ 
 // --- CHAT ---
 export const getMessages = async (): Promise<ChatMessage[]> => { return safeArray(await apiCall<ChatMessage[]>('/chat')); };
 export const sendMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>('/chat', 'POST', message); };
-// Fix: Added missing chat message management exports for editing and deleting
 export const deleteMessage = async (id: string): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${id}`, 'DELETE'); };
 export const updateMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${message.id}`, 'PUT', message); };
 
-// Fix: Added missing group management exports for ChatRoom features
 export const getGroups = async (): Promise<ChatGroup[]> => { return safeArray(await apiCall<ChatGroup[]>('/groups')); };
 export const createGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>('/groups', 'POST', group); };
-export const updateGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>(`/groups/${group.id}`, 'PUT', group); };
+// Added missing exports for Chat Groups to resolve errors in ChatRoom
 export const deleteGroup = async (id: string): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>(`/groups/${id}`, 'DELETE'); };
+export const updateGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>(`/groups/${group.id}`, 'PUT', group); };
 
-// Fix: Added missing task management exports for Group Tasks feature
 export const getTasks = async (): Promise<GroupTask[]> => { return safeArray(await apiCall<GroupTask[]>('/tasks')); };
 export const createTask = async (task: GroupTask): Promise<GroupTask[]> => { return await apiCall<GroupTask[]>('/tasks', 'POST', task); };
 export const updateTask = async (task: GroupTask): Promise<GroupTask[]> => { return await apiCall<GroupTask[]>(`/tasks/${task.id}`, 'PUT', task); };
