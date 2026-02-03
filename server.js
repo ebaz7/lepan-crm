@@ -104,9 +104,17 @@ const calculateNextNumber = (db, type, companyName = null) => {
         const activeYear = activeYearId ? db.settings.fiscalYears?.find(y => y.id === activeYearId) : null;
         
         if (type === 'exit') {
+            // Find max in existing permits
             db.exitPermits.forEach(p => { if (parseInt(p.permitNumber) > maxFoundInDb) maxFoundInDb = parseInt(p.permitNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
+            
+            // Check fiscal year config
+            if (activeYear?.companySequences?.[safeCompany]) {
+                fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
+            }
+            
+            // Fallback to global setting
             if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
+
         } else if (type === 'payment') {
             db.orders.forEach(o => { if (parseInt(o.trackingNumber) > maxFoundInDb) maxFoundInDb = parseInt(o.trackingNumber); });
             if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
@@ -116,6 +124,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
         }
     } catch (e) {}
     
+    // Logic: If max found is greater than start, increment. Else start at start.
     let nextNum = maxFoundInDb >= fiscalStart ? maxFoundInDb + 1 : (fiscalStart > 0 ? fiscalStart : 1001);
     if (!nextNum || nextNum < 1000) nextNum = 1001;
     return nextNum;
@@ -139,40 +148,45 @@ app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
 // ==========================================
-// *** ROBUST EXIT PERMIT ROUTES ***
+// *** FIX: EXIT PERMIT ROUTES (THIS FIXES 404) ***
 // ==========================================
 
-// GET ALL
+// 1. GET ALL
 app.get('/api/exit-permits', (req, res) => {
     const db = getDb();
     res.json(db.exitPermits || []);
 });
 
-// CREATE (POST)
+// 2. CREATE (POST)
 app.post('/api/exit-permits', (req, res) => {
     try {
         const db = getDb();
         const permit = req.body;
         permit.id = permit.id || Date.now().toString();
-        permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
+        
+        // Auto-calculate number if not provided or 0
+        if (!permit.permitNumber || permit.permitNumber === 0) {
+            permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
+        }
         
         if (!Array.isArray(db.exitPermits)) db.exitPermits = [];
         db.exitPermits.push(permit);
         
         saveDb(db);
-        logToFile(`New Permit: ${permit.permitNumber}`);
+        logToFile(`New Permit Created: ${permit.permitNumber}`);
         res.json(db.exitPermits);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// UPDATE (PUT) - Covers Status Changes and Edits
+// 3. UPDATE / APPROVE (PUT)
 app.put('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
         const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
         if (idx > -1) {
+            // Merge existing with new data
             db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
             saveDb(db);
             logToFile(`Updated Permit: ${db.exitPermits[idx].permitNumber}`);
@@ -185,7 +199,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
     }
 });
 
-// DELETE
+// 4. DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id);
@@ -193,12 +207,13 @@ app.delete('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
+// 5. NEXT NUMBER
 app.get('/api/next-exit-permit-number', (req, res) => {
     const nextNum = calculateNextNumber(getDb(), 'exit', req.query.company);
     res.json({ nextNumber: nextNum });
 });
 
-// --- MULTI-CHANNEL MESSAGING ---
+// --- MULTI-CHANNEL MESSAGING (Universal) ---
 app.post('/api/send-multichannel', async (req, res) => {
     const { targets, message, mediaData } = req.body;
     // targets: [{ type: 'whatsapp', id: '...' }, { type: 'telegram', id: '...' }, { type: 'bale', id: '...' }]

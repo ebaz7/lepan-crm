@@ -18,6 +18,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     // --- STATE ---
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
+    
+    // Tabs: 
+    // MY_CARTABLE: Items waiting for MY action.
+    // ACTIVE_FLOW: Items in progress (someone else has them).
+    // ARCHIVE: Completed/Rejected.
     const [activeTab, setActiveTab] = useState<'MY_CARTABLE' | 'ACTIVE_FLOW' | 'ARCHIVE'>('MY_CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -89,7 +94,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         const elementId = `print-permit-autosend-${permit.id}`;
         const element = document.getElementById(elementId);
         if (!element || !settings) {
-            console.error("Print element not found or settings missing");
+            // Silently fail if element not found (e.g. rapid switching)
+            console.log("Print element not ready for notification");
             return;
         }
 
@@ -127,21 +133,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 addRole(UserRole.FACTORY_MANAGER);
             } 
             // 2. Factory Approved -> Send to Group 2 + Warehouse Keeper
-            // Note: User asked for "Send to Group 2 and Warehouse" specifically
             else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
                 captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
                 addGroup(group2); // Group 2
                 addRole(UserRole.WAREHOUSE_KEEPER);
             }
-            // 3. Warehouse Approved (Weights Entered) -> Send to Group 2 + Everywhere + Security
-            // "Everywhere" implies Group 1 as well? User said "Everywhere and Group 2 and Security".
+            // 3. Warehouse Approved -> Send to Group 2 + Security
             else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
                 captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
-                addGroup(group1); // Everywhere (G1)
-                addGroup(group2); // Group 2
+                addGroup(group1); 
+                addGroup(group2); 
                 addRole(UserRole.SECURITY_HEAD);
             }
-            // 4. Security Approved (Exit) -> Send to Both Groups + Everywhere
+            // 4. Security Approved -> Send to Both Groups
             else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
                 captionTitle = '👋 خروج نهایی از کارخانه';
                 addGroup(group1);
@@ -152,17 +156,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             
             // Add Item Details if Warehouse Step Just Finished
             if (permit.items.length > 0) {
-                 caption += `📦 اقلام: ${permit.items.map(i => `${i.cartonCount} کارتن ${i.goodsName} (${i.weight} kg)`).join('، ')}\n`;
+                 caption += `📦 اقلام: ${permit.items.map(i => `${i.cartonCount} کارتن ${i.goodsName}`).join('، ')}\n`;
             }
             
             if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
             
-            // Add approver name
-            if (prevStatus === ExitPermitStatus.PENDING_CEO) caption += `\nتایید کننده: ${permit.approverCeo}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) caption += `\nتایید کننده: ${permit.approverFactory}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `\nانباردار: ${permit.approverWarehouse}`;
-            else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) caption += `\nانتظامات: ${permit.approverSecurity}`;
-
             const uniqueTargets = targets.filter((v,i,a)=>a.findIndex(t=>(t.id===v.id && t.type===v.type))===i);
             
             if (uniqueTargets.length > 0) {
@@ -216,7 +214,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 updatedPermit.exitTime = exitTimeStr;
             }
 
-            // Corrected: use PUT for status update
+            // Corrected: use PUT for status update (Calls API correctly now)
             await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: exitTimeStr });
             
             // Notification
@@ -289,7 +287,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         setProcessingId(p.id);
 
         // Prepare Mock Deleted Permit for Screenshot
-        const deletedPermit = { ...p, status: 'REJECTED' as any }; // Use rejected status just to render the watermark
+        const deletedPermit = { ...p, status: 'REJECTED' as any }; 
         setAutoSendPermit(deletedPermit);
 
         setTimeout(async () => {
@@ -307,11 +305,13 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     if (settings?.exitPermitGroup1Id) targets.push({ type: 'whatsapp', id: settings.exitPermitGroup1Id });
                     if (settings?.exitPermitGroup2Id) targets.push({ type: 'whatsapp', id: settings.exitPermitGroup2Id });
                     
-                    await apiCall('/send-multichannel', 'POST', { 
-                        targets, 
-                        message: caption, 
-                        mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_DELETED_${p.permitNumber}.png` } 
-                    });
+                    if (targets.length > 0) {
+                        await apiCall('/send-multichannel', 'POST', { 
+                            targets, 
+                            message: caption, 
+                            mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_DELETED_${p.permitNumber}.png` } 
+                        });
+                    }
 
                 } catch(e) { console.error("Delete notification failed", e); }
             }
@@ -354,48 +354,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const displayPermits = getFilteredPermits();
-
-    const WorkflowTimeline = ({ status }: { status: ExitPermitStatus }) => {
-        const steps = [
-            { id: 'ceo', label: 'مدیرعامل', activeStatuses: [ExitPermitStatus.PENDING_CEO] },
-            { id: 'factory', label: 'کارخانه', activeStatuses: [ExitPermitStatus.PENDING_FACTORY] },
-            { id: 'warehouse', label: 'انبار', activeStatuses: [ExitPermitStatus.PENDING_WAREHOUSE] },
-            { id: 'security', label: 'انتظامات', activeStatuses: [ExitPermitStatus.PENDING_SECURITY] },
-            { id: 'done', label: 'خروج', activeStatuses: [ExitPermitStatus.EXITED] }
-        ];
-
-        let currentIndex = -1;
-        if (status === ExitPermitStatus.REJECTED) currentIndex = -2;
-        else if (status === ExitPermitStatus.EXITED) currentIndex = 4;
-        else if (status === ExitPermitStatus.PENDING_SECURITY) currentIndex = 3;
-        else if (status === ExitPermitStatus.PENDING_WAREHOUSE) currentIndex = 2;
-        else if (status === ExitPermitStatus.PENDING_FACTORY) currentIndex = 1;
-        else if (status === ExitPermitStatus.PENDING_CEO) currentIndex = 0;
-
-        return (
-            <div className="flex items-center w-full mt-4 relative">
-                <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-100 -z-10 rounded"></div>
-                <div className={`absolute top-1/2 right-0 h-1 bg-green-500 -z-10 rounded transition-all duration-500`} style={{ width: currentIndex >= 0 ? `${(currentIndex / 4) * 100}%` : '0%' }}></div>
-                <div className="flex justify-between w-full">
-                    {steps.map((step, idx) => {
-                        let stateClass = 'bg-gray-100 text-gray-400 border-gray-200';
-                        if (idx < currentIndex) stateClass = 'bg-green-500 text-white border-green-500';
-                        else if (idx === currentIndex) stateClass = 'bg-blue-600 text-white border-blue-600 ring-4 ring-blue-100';
-                        if (status === ExitPermitStatus.REJECTED && idx === 0) stateClass = 'bg-red-500 text-white';
-
-                        return (
-                            <div key={step.id} className="flex flex-col items-center gap-1">
-                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 transition-all duration-300 ${stateClass}`}>
-                                    {idx === 0 ? <UserIcon size={14}/> : idx === 1 ? <Building2 size={14}/> : idx === 2 ? <Warehouse size={14}/> : idx === 3 ? <ShieldCheck size={14}/> : <Truck size={14}/>}
-                                </div>
-                                <span className={`text-[9px] font-bold ${idx === currentIndex ? 'text-blue-700' : 'text-gray-400'}`}>{step.label}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="space-y-6 pb-24 animate-fade-in relative min-h-screen bg-gray-50/50">
@@ -460,7 +418,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-4 border-t border-slate-50"><WorkflowTimeline status={permit.status} /></div>
+                                
+                                {/* Status Flow Indicator */}
+                                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] font-bold text-gray-400">
+                                    <div className={`flex items-center gap-1 ${permit.status === ExitPermitStatus.PENDING_CEO ? 'text-blue-600' : 'text-green-500'}`}><UserIcon size={12}/> مدیرعامل</div>
+                                    <div className="h-px bg-gray-200 w-8"></div>
+                                    <div className={`flex items-center gap-1 ${permit.status === ExitPermitStatus.PENDING_FACTORY ? 'text-blue-600' : permit.status !== ExitPermitStatus.PENDING_CEO ? 'text-green-500' : ''}`}><Building2 size={12}/> کارخانه</div>
+                                    <div className="h-px bg-gray-200 w-8"></div>
+                                    <div className={`flex items-center gap-1 ${permit.status === ExitPermitStatus.PENDING_WAREHOUSE ? 'text-blue-600' : permit.status === ExitPermitStatus.PENDING_SECURITY || permit.status === ExitPermitStatus.EXITED ? 'text-green-500' : ''}`}><Warehouse size={12}/> انبار</div>
+                                    <div className="h-px bg-gray-200 w-8"></div>
+                                    <div className={`flex items-center gap-1 ${permit.status === ExitPermitStatus.PENDING_SECURITY ? 'text-blue-600' : permit.status === ExitPermitStatus.EXITED ? 'text-green-500' : ''}`}><ShieldCheck size={12}/> انتظامات</div>
+                                </div>
+
                                 {processingId === permit.id && <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center z-50"><Loader2 className="animate-spin text-blue-600 mb-2" size={40}/><span className="text-xs font-bold text-blue-800 animate-pulse">در حال پردازش و ارسال پیام...</span></div>}
                             </div>
                         );
