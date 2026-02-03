@@ -16,6 +16,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
     const [items, setItems] = useState<BrokerageItem[]>([]);
     const [transactions, setTransactions] = useState<BrokerageTransaction[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     
     // Modals
     const [showPrintStock, setShowPrintStock] = useState(false);
@@ -34,13 +35,19 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
 
     useEffect(() => { loadData(); }, []);
 
+    // Sync selected company if settings load later
+    useEffect(() => {
+        if (!selectedCompany && settings?.defaultCompany) {
+            setSelectedCompany(settings.defaultCompany);
+        }
+    }, [settings]);
+
     const loadData = async () => {
         setLoading(true);
         try {
             const itemsData = await apiCall<BrokerageItem[]>('/brokerage/items');
             const txData = await apiCall<BrokerageTransaction[]>('/brokerage/transactions');
             
-            // SECURITY CHECK: Ensure we always work with arrays to prevent .map errors
             setItems(Array.isArray(itemsData) ? itemsData : []);
             setTransactions(Array.isArray(txData) ? txData : []);
         } catch (e) { 
@@ -51,7 +58,6 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
         finally { setLoading(false); }
     };
 
-    // Safe items and transactions for calculations
     const safeItems = Array.isArray(items) ? items : [];
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
@@ -81,60 +87,99 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
     }, [safeItems, safeTransactions]);
 
     const handleCreateItem = async () => {
-        if (!selectedCompany || !newItem.name) return;
-        const item: BrokerageItem = {
-            id: generateUUID(),
-            companyName: selectedCompany,
-            ...newItem
-        };
-        await apiCall('/brokerage/items', 'POST', item);
-        setNewItem({ name: '', color: '', unit: 'عدد', initialQuantity: 0, initialWeight: 0, code: '' });
-        loadData();
+        // Validation with User Feedback
+        if (!selectedCompany) {
+            alert('لطفاً ابتدا یک شرکت را از نوار بالا انتخاب کنید.');
+            return;
+        }
+        if (!newItem.name.trim()) {
+            alert('نام کالا الزامی است.');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const item: BrokerageItem = {
+                id: generateUUID(),
+                companyName: selectedCompany,
+                ...newItem
+            };
+            await apiCall('/brokerage/items', 'POST', item);
+            
+            // Reset Form & Refresh
+            setNewItem({ name: '', color: '', unit: 'عدد', initialQuantity: 0, initialWeight: 0, code: '' });
+            await loadData();
+            alert('کالا با موفقیت در انبار ' + selectedCompany + ' ثبت شد.');
+        } catch (error: any) {
+            console.error("Save Item Error:", error);
+            alert('خطا در ثبت کالا: ' + (error.message || 'ارتباط با سرور برقرار نشد.'));
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleCreateTx = async () => {
-        if (!selectedCompany || newTx.items.length === 0) return;
-        
-        const nextSerial = await apiCall<{next: number}>(`/brokerage/next-serial?company=${selectedCompany}`);
-        const tx: BrokerageTransaction = {
-            id: generateUUID(),
-            type: newTx.type as 'IN' | 'OUT',
-            companyName: selectedCompany,
-            serialNumber: nextSerial.next,
-            date: new Date().toISOString(),
-            items: newTx.items,
-            recipientName: newTx.recipient,
-            driverName: newTx.driver,
-            plateNumber: newTx.plate,
-            destination: newTx.destination,
-            description: newTx.description,
-            status: newTx.type === 'OUT' ? 'PENDING' : 'APPROVED',
-            createdBy: currentUser.fullName,
-            createdAt: Date.now()
-        };
-
-        await apiCall<BrokerageTransaction[]>('/brokerage/transactions', 'POST', tx);
-        loadData();
-        
-        if (newTx.type === 'OUT') {
-            alert('بیجک خروج ثبت شد. تصویر و کپشن برای مدیرعامل ارسال گردید.');
-        } else {
-            alert('رسید ورود با موفقیت ثبت شد.');
+        if (!selectedCompany) {
+            alert('لطفاً ابتدا شرکت را انتخاب کنید.');
+            return;
         }
-        
-        setNewTx({ type: 'OUT', recipient: '', driver: '', plate: '', destination: '', items: [], description: '' });
+        if (newTx.items.length === 0) {
+            alert('لطفاً حداقل یک کالا به لیست اضافه کنید.');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const nextSerialRes = await apiCall<{next: number}>(`/brokerage/next-serial?company=${selectedCompany}`);
+            const tx: BrokerageTransaction = {
+                id: generateUUID(),
+                type: newTx.type as 'IN' | 'OUT',
+                companyName: selectedCompany,
+                serialNumber: nextSerialRes.next,
+                date: new Date().toISOString(),
+                items: newTx.items,
+                recipientName: newTx.recipient,
+                driverName: newTx.driver,
+                plateNumber: newTx.plate,
+                destination: newTx.destination,
+                description: newTx.description,
+                status: newTx.type === 'OUT' ? 'PENDING' : 'APPROVED',
+                createdBy: currentUser.fullName,
+                createdAt: Date.now()
+            };
+
+            await apiCall<BrokerageTransaction[]>('/brokerage/transactions', 'POST', tx);
+            await loadData();
+            
+            if (newTx.type === 'OUT') {
+                alert('بیجک خروج با شماره ' + tx.serialNumber + ' ثبت و جهت تایید مدیر ارسال شد.');
+            } else {
+                alert('رسید ورود کالا با موفقیت ثبت شد.');
+            }
+            
+            setNewTx({ type: 'OUT', recipient: '', driver: '', plate: '', destination: '', items: [], description: '' });
+        } catch (error: any) {
+            console.error("Transaction Error:", error);
+            alert('خطا در ثبت تراکنش: ' + (error.message || 'ارتباط با سرور قطع شده است.'));
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleApprove = async (tx: BrokerageTransaction) => {
-        if (!confirm('آیا این بیجک را تایید می‌کنید؟ پس از تایید، اعلان به "گروه بنگاه" ارسال خواهد شد.')) return;
-        await apiCall(`/brokerage/transactions/${tx.id}`, 'PUT', { 
-            status: 'APPROVED', 
-            approvedBy: currentUser.fullName,
-            updatedAt: Date.now()
-        });
-        alert('تایید شد و پیام به گروه بنگاه ارسال گردید.');
-        loadData();
-        setViewBijak(null);
+        if (!confirm('آیا این بیجک را تایید می‌کنید؟ پس از تایید، اعلان به گروه انبار ارسال خواهد شد.')) return;
+        try {
+            await apiCall(`/brokerage/transactions/${tx.id}`, 'PUT', { 
+                status: 'APPROVED', 
+                approvedBy: currentUser.fullName,
+                updatedAt: Date.now()
+            });
+            alert('بیجک تایید شد و پیام اطلاع‌رسانی ارسال گردید.');
+            loadData();
+            setViewBijak(null);
+        } catch (error: any) {
+            alert('خطا در تایید: ' + error.message);
+        }
     };
 
     const addTxItemRow = (itemId: string) => {
@@ -146,10 +191,8 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
         });
     };
 
-    // Safe settings companies access
     const safeCompanies = Array.isArray(settings?.companies) ? settings.companies : [];
 
-    // --- RENDER ---
     return (
         <div className="flex flex-col h-full gap-4 animate-fade-in pb-20 md:pb-0">
             {/* Header Area */}
@@ -160,7 +203,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-gray-800">انبار بارهای بنگاه</h1>
-                        <p className="text-sm text-gray-500 font-medium">سیستم یکپارچه مدیریت موجودی و بیجک‌های خروج</p>
+                        <p className="text-sm text-gray-500 font-medium">مدیریت موجودی و بیجک‌های خروج شرکت‌ها</p>
                     </div>
                 </div>
                 <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl">
@@ -201,7 +244,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                 {activeTab === 'dashboard' && (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-indigo-200 transition-all">
-                            <div><div className="text-3xl font-black text-gray-800">{safeItems.filter(i => i.companyName === selectedCompany).length}</div><div className="text-xs text-gray-400 font-bold uppercase tracking-wider">کالاهای {selectedCompany}</div></div>
+                            <div><div className="text-3xl font-black text-gray-800">{safeItems.filter(i => i.companyName === selectedCompany).length}</div><div className="text-xs text-gray-400 font-bold uppercase tracking-wider">کالاهای {selectedCompany || '---'}</div></div>
                             <Package className="text-indigo-100 group-hover:text-indigo-500 transition-colors" size={48}/>
                         </div>
                         <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 flex items-center justify-between">
@@ -218,14 +261,14 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                         </button>
                         
                         <div className="md:col-span-4 bg-white rounded-3xl border border-gray-100 p-6">
-                            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><History className="text-indigo-500"/> آخرین فعالیت‌های {selectedCompany}</h3>
+                            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><History className="text-indigo-500"/> آخرین فعالیت‌های {selectedCompany || 'شرکت‌ها'}</h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-right">
                                     <thead className="text-xs text-gray-400 uppercase bg-gray-50 rounded-xl">
                                         <tr><th className="p-4">نوع</th><th className="p-4">شماره سریال</th><th className="p-4">تاریخ</th><th className="p-4">تحویل‌گیرنده</th><th className="p-4">وضعیت</th><th className="p-4">عملیات</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                        {safeTransactions.filter(t => t.companyName === selectedCompany).slice(0, 10).map(t => (
+                                        {safeTransactions.filter(t => !selectedCompany || t.companyName === selectedCompany).slice(0, 10).map(t => (
                                             <tr key={t.id} className="hover:bg-gray-50 transition-colors group">
                                                 <td className="p-4">{t.type === 'IN' ? <span className="text-emerald-600 font-bold">ورود</span> : <span className="text-rose-600 font-bold">خروج</span>}</td>
                                                 <td className="p-4 font-mono font-bold text-gray-500">{t.serialNumber}</td>
@@ -251,21 +294,31 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                 {activeTab === 'items' && (
                     <div className="max-w-4xl mx-auto space-y-6">
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Plus className="text-indigo-600"/> تعریف کالای جدید برای {selectedCompany}</h3>
+                            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                <Plus className="text-indigo-600"/> 
+                                تعریف کالای جدید {selectedCompany ? `برای ${selectedCompany}` : '(لطفاً شرکت را انتخاب کنید)'}
+                            </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">نام کالا</label><input className="w-full border rounded-xl p-3" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})}/></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">رنگ</label><input className="w-full border rounded-xl p-3" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})}/></div>
-                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded-xl p-3 bg-white" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option></select></div>
+                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">نام کالا</label><input className="w-full border rounded-xl p-3 focus:ring-2 focus:ring-indigo-200 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="مثال: لوله پنج لایه"/></div>
+                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">رنگ</label><input className="w-full border rounded-xl p-3" value={newItem.color} onChange={e => setNewItem({...newItem, color: e.target.value})} placeholder="سفید / آبی..."/></div>
+                                <div className="space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded-xl p-3 bg-white" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>شاخه</option><option>رول</option></select></div>
                                 <div className="space-y-1"><label className="text-xs font-bold text-gray-500">موجودی اولیه (تعداد)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialQuantity} onChange={e => setNewItem({...newItem, initialQuantity: Number(e.target.value)})}/></div>
                                 <div className="space-y-1"><label className="text-xs font-bold text-gray-500">وزن اولیه (KG)</label><input type="number" className="w-full border rounded-xl p-3" value={newItem.initialWeight} onChange={e => setNewItem({...newItem, initialWeight: Number(e.target.value)})}/></div>
-                                <button onClick={handleCreateItem} className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700 flex items-center justify-center gap-2 h-[48px]"><Save size={20}/> ثبت کالا</button>
+                                <button 
+                                    onClick={handleCreateItem} 
+                                    disabled={isSaving || !selectedCompany}
+                                    className={`text-white p-3 rounded-xl font-bold flex items-center justify-center gap-2 h-[48px] transition-all shadow-lg ${isSaving ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                                >
+                                    {isSaving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20}/>} 
+                                    ثبت کالا
+                                </button>
                             </div>
                         </div>
                         <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
                             <table className="w-full text-right">
                                 <thead className="bg-gray-50"><tr><th className="p-4">نام کالا</th><th className="p-4">رنگ</th><th className="p-4">واحد</th><th className="p-4">موجودی اولیه</th><th className="p-4">عملیات</th></tr></thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {safeItems.filter(i => i.companyName === selectedCompany).map(i => (
+                                    {safeItems.filter(i => !selectedCompany || i.companyName === selectedCompany).map(i => (
                                         <tr key={i.id} className="hover:bg-gray-50">
                                             <td className="p-4 font-black">{i.name}</td>
                                             <td className="p-4"><span className="flex items-center gap-1"><Palette size={12} style={{color: i.color}}/> {i.color || '-'}</span></td>
@@ -274,6 +327,9 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                             <td className="p-4"><button className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-xl"><Trash2 size={18}/></button></td>
                                         </tr>
                                     ))}
+                                    {safeItems.filter(i => !selectedCompany || i.companyName === selectedCompany).length === 0 && (
+                                        <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">کالایی یافت نشد.</td></tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -284,7 +340,7 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                     <div className="max-w-5xl mx-auto space-y-6">
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                             <div className="flex justify-between items-center mb-6 border-b pb-4">
-                                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Send size={20} className="text-indigo-600"/> ثبت تراکنش جدید ({selectedCompany})</h3>
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Send size={20} className="text-indigo-600"/> ثبت تراکنش جدید ({selectedCompany || 'بدون شرکت'})</h3>
                                 <div className="flex bg-gray-100 p-1 rounded-xl">
                                     <button onClick={() => setNewTx({...newTx, type: 'OUT'})} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${newTx.type === 'OUT' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-500'}`}>خروج کالا</button>
                                     <button onClick={() => setNewTx({...newTx, type: 'IN'})} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${newTx.type === 'IN' ? 'bg-emerald-500 text-white shadow-md' : 'text-gray-500'}`}>ورود کالا</button>
@@ -338,8 +394,8 @@ const BrokerageWarehouse: React.FC<{ currentUser: User, settings?: SystemSetting
                                 </table>
                             </div>
 
-                            <button onClick={handleCreateTx} disabled={newTx.items.length === 0} className={`w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-3 ${newTx.type === 'OUT' ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}>
-                                <Check size={24}/>
+                            <button onClick={handleCreateTx} disabled={isSaving || newTx.items.length === 0 || !selectedCompany} className={`w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-3 ${newTx.type === 'OUT' ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}>
+                                {isSaving ? <Loader2 className="animate-spin" size={24}/> : <Check size={24}/>}
                                 ثبت نهایی و صدور {newTx.type === 'OUT' ? 'بیجک خروج' : 'رسید ورود'}
                             </button>
                         </div>

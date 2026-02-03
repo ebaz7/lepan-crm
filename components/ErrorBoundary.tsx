@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,9 +12,9 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fix: Use React.Component explicitly instead of destructured import to ensure proper type inheritance.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Initialize state using property initializer for better compatibility with modern TypeScript.
+// Fix: Use named Component import to ensure proper inheritance in TypeScript and resolve missing setState/props errors.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fix: Initialize state using property initializer.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -26,14 +26,15 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fix: setState is now correctly inherited from React.Component.
+  // Fix: componentDidCatch properly uses the inherited setState method.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
+    // Properly access inherited setState
     this.setState({ errorInfo });
   }
 
   public render() {
-    // Fix: state property is now correctly inherited from React.Component.
+    // Properly access inherited state
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
@@ -65,7 +66,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: props property is now correctly inherited from React.Component.
+    // Fix: Properly return the inherited props.children.
     return this.props.children;
   }
 }
