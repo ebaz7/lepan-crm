@@ -45,6 +45,17 @@ export const getLocalData = <T>(key: string, defaultData: T): T => {
     }
 };
 
+/**
+ * Robust path joining to ensure exactly one slash between segments.
+ * Fixed to handle absolute vs relative paths correctly.
+ */
+const joinPaths = (...segments: string[]) => {
+    return segments
+        .map(s => s ? s.toString().replace(/(^\/+|\/+$)/g, '') : '') 
+        .filter(s => s.length > 0)
+        .join('/');
+};
+
 export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> => {
     try {
         const controller = new AbortController();
@@ -53,26 +64,32 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         let baseUrl = '';
         const host = getServerHost();
 
-        // Robust Base URL Construction
-        if (isNativeApp) {
-            if (!host) throw new Error("SERVER_URL_MISSING");
-            // Prevent double /api if user entered it in host
-            const cleanHost = host.replace(/\/api$/, '');
+        // 1. Determine Base URL Context
+        if (host) {
+            // Re-normalize host to remove any /api suffix before re-adding it
+            const cleanHost = host.replace(/\/api\/?$/, '');
             baseUrl = `${cleanHost}/api`;
         } else {
-            if (host) {
-                const cleanHost = host.replace(/\/api$/, '');
-                baseUrl = `${cleanHost}/api`;
-            } else {
-                baseUrl = '/api';
-            }
+            // Web browser context with local proxy
+            baseUrl = '/api';
         }
 
-        // Ensure endpoint starts with / and construction doesn't double it
-        const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-        const finalUrl = `${baseUrl}${cleanEndpoint}`;
+        // 2. Build Absolute URL if needed, else relative for proxy
+        let finalUrl = '';
+        if (baseUrl.startsWith('http')) {
+            try {
+                const urlObj = new URL(baseUrl);
+                urlObj.pathname = '/' + joinPaths(urlObj.pathname, endpoint);
+                finalUrl = urlObj.toString();
+            } catch (urlErr) {
+                // Fallback for non-standard URL formats
+                finalUrl = `${baseUrl}/${joinPaths('', endpoint)}`;
+            }
+        } else {
+            finalUrl = '/' + joinPaths(baseUrl, endpoint);
+        }
 
-        console.log(`[API] ${method} ${finalUrl}`); 
+        console.debug(`[STABLE API] ${method} ${finalUrl}`); 
 
         const response = await fetch(finalUrl, {
             method,
@@ -90,18 +107,23 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             return { success: true } as unknown as T;
         }
 
-        // If not ok, try to get error message
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server Error: ${response.status}`);
+        // Detailed Error Extraction
+        let errorMsg = `Server Error: ${response.status}`;
+        try {
+            const errorJson = await response.json();
+            errorMsg = errorJson.message || errorJson.error || errorMsg;
+        } catch (e) { /* ignore parse error */ }
+        
+        throw new Error(errorMsg);
         
     } catch (error: any) {
-        if (error.message === "SERVER_URL_MISSING") throw error;
-        console.warn(`[API ERROR] ${endpoint}:`, error);
+        if (error.name === 'AbortError') throw new Error("Timeout: ارتباط با سرور برقرار نشد.");
+        console.error(`[API FAIL] ${endpoint}:`, error);
 
+        // Fail-safe logic: Don't block UI if it's just a listing error on an empty restored DB
         if (method === 'GET') {
             if (endpoint === '/orders') return getLocalData<any>(LS_KEYS.ORDERS, INITIAL_ORDERS);
             if (endpoint === '/settings') return getLocalData<any>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 });
-            if (endpoint === '/users') return getLocalData<any>(LS_KEYS.USERS, MOCK_USERS);
         }
         
         throw error;

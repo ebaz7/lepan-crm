@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -12,9 +11,9 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// Fix: Explicitly using React.Component to ensure the class correctly inherits properties and methods like setState and props.
+// Fix: Explicitly use React.Component to ensure setState and props are inherited correctly from the base component class
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Declaring and initializing state using the ErrorBoundaryState interface.
+  // Fix: Explicitly initialize state using ErrorBoundaryState interface.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -27,7 +26,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Critical Application Error:", error, errorInfo);
-    // Fix: Using the inherited setState method to store error info in the component state.
+    // Fix: Explicitly access the inherited setState method to update error info in state.
     this.setState({ errorInfo });
   }
 
@@ -63,7 +62,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: Accessing the inherited props object to render children components.
+    // Fix: Correctly access this.props to render nested children from the React.Component base class.
     return this.props.children;
   }
 }
