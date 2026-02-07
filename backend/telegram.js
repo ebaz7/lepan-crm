@@ -58,10 +58,6 @@ const safeAnswerCallback = async (queryId, options = {}) => {
     }
 };
 
-// ... (Rest of your PDF and Helper functions, kept as is, truncated for brevity) ...
-// Since I must output the full file if I change it, I'll include the relevant parts below.
-// I will include the full file content to ensure no code is lost.
-
 const createHtmlReport = (title, headers, rows) => {
     const trs = rows.map(row => `<tr>${row.map(cell => `<td>${cell || '-'}</td>`).join('')}</tr>`).join('');
     return `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet"/><style>body{font-family:'Vazirmatn';padding:20px;direction:rtl}h1{text-align:center;border-bottom:2px solid #333}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:10px}th,td{border:1px solid #ddd;padding:6px;text-align:center}th{background:#f2f2f2}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>${title}</h1><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${trs}</tbody></table></body></html>`;
@@ -94,8 +90,6 @@ const createVoucherHtml = (order) => `<!DOCTYPE html><html lang="fa" dir="rtl"><
 const createAllocationReportHtml = (records) => { return createHtmlReport("گزارش تخصیص ارز", ["پرونده", "کالا", "مبلغ", "وضعیت"], records.map(r => [r.fileNumber, r.goodsName, fmt(r.items.reduce((a,b)=>a+b.totalPrice,0)), r.status])); }; 
 
 const calculateCurrencyReportData = (records) => {
-    // ... (Keep existing implementation) ...
-    // Placeholder to avoid huge XML block, assuming content is same as before
     const rates = { eurToUsd: 1.08, aedToUsd: 0.272, cnyToUsd: 0.14, tryToUsd: 0.03 };
     const currentYear = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric' }).format(new Date()).split(' ')[0];
     const selectedYear = parseInt(currentYear); 
@@ -186,8 +180,6 @@ const calculateCurrencyReportData = (records) => {
 };
 
 const createCurrencyReportHtml = (data) => {
-    // ... (Keep existing implementation) ...
-    // Placeholder to avoid huge XML block
      const trs = data.processedGroups.map((group, gIndex) => {
         return group.tranches.map((t, tIndex) => `
             <tr style="border-bottom: 1px solid #ccc; background: ${tIndex % 2 === 0 ? '#fff' : '#f9f9f9'};">
@@ -288,8 +280,6 @@ const createCurrencyReportHtml = (data) => {
 };
 
 const calculatePerformanceData = (records) => {
-    // ... (Keep existing implementation) ...
-    // Placeholder
      const rates = { eurToUsd: 1.08, aedToUsd: 0.272, cnyToUsd: 0.14, tryToUsd: 0.03 };
     const currentYear = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric' }).format(new Date()).split(' ')[0];
     const selectedYear = parseInt(currentYear);
@@ -346,8 +336,6 @@ const calculatePerformanceData = (records) => {
 };
 
 const createPerformanceReportHtml = (data) => {
-    // ... (Keep existing implementation) ...
-    // Placeholder
      const trs = data.details.map(item => `
         <tr style="border-bottom: 1px solid #e5e7eb;">
             <td style="border-left: 1px solid black; border-bottom: 1px solid black; padding: 10px; font-weight: bold; font-size: 14px;">${item.name}</td>
@@ -471,9 +459,6 @@ const performSaveBijak = (db, data, user) => {
     return nextSeq;
 };
 
-// ... (Rest of your cartable functions, keep them identical) ...
-// Truncated to avoid repetition, assume full content of helpers and cartable functions follows
-
 // --- INIT ---
 export const initTelegram = (token) => {
     if (!token) return;
@@ -514,11 +499,7 @@ export const initTelegram = (token) => {
         
         console.log(">>> Telegram Bot Module Loaded & Polling ✅");
 
-        // ... (Keep your message handler identical) ...
         bot.on('message', async (msg) => {
-             // ... Your existing logic ...
-             // (Copy-paste your full message handler here)
-             // I am preserving the existing logic structure, ensuring nothing is lost
              const chatId = msg.chat.id;
             const text = msg.text ? msg.text.trim() : '';
             if (!text) return;
@@ -529,17 +510,73 @@ export const initTelegram = (token) => {
                 if (!user) return bot.sendMessage(chatId, "⛔ عدم دسترسی. شناسه شما در سیستم ثبت نشده است. ID: " + chatId);
                 return bot.sendMessage(chatId, `سلام ${user.fullName} 👋\nمنوی اصلی:`, { reply_markup: getMainMenu(user) });
             }
-            // ... (Rest of message handler)
+
+            // Command Handling
+            if (userSessions.has(chatId)) {
+                return handleWizardStep(bot, msg, user, db);
+            }
+
+            if (text === '💰 ثبت پرداخت جدید') {
+                userSessions.set(chatId, { step: 'PAYMENT_AMOUNT', data: {} });
+                return bot.sendMessage(chatId, "مبلغ را وارد کنید (به ریال):", { reply_markup: { remove_keyboard: true } });
+            }
+            if (text === '🚛 ثبت خروج بار') {
+                userSessions.set(chatId, { step: 'EXIT_GOODS', data: {} });
+                return bot.sendMessage(chatId, "نام کالا را وارد کنید:", { reply_markup: { remove_keyboard: true } });
+            }
+            if (text === '📦 صدور بیجک') {
+                userSessions.set(chatId, { step: 'BIJAK_COMPANY', data: {} });
+                const keyboard = db.settings.companyNames.map(c => [c]);
+                return bot.sendMessage(chatId, "شرکت صادرکننده را انتخاب کنید:", { reply_markup: { keyboard, one_time_keyboard: true } });
+            }
+
+            if (text === '📊 گزارش موجودی') {
+                const html = createStockReportHtml(calculateStock(db));
+                const pdfBuffer = await generatePdf(html);
+                return bot.sendDocument(chatId, pdfBuffer, { caption: `گزارش موجودی انبار - ${formatDate(new Date())}`, filename: 'Stock.pdf' });
+            }
+
+            // Callback Query Handling via Text (Fallback)
         });
 
         bot.on('callback_query', async (query) => {
-            // ... Your existing callback handler ...
+            const chatId = query.message.chat.id;
+            const data = query.data;
+            const db = getDb();
+            const user = getUserByTelegramId(db, chatId);
+
+            if (!user) return safeAnswerCallback(query.id, { text: 'عدم دسترسی' });
+
+            try {
+                if (data.startsWith('approve_pay_')) {
+                    const id = data.split('_')[2];
+                    const order = db.orders.find(o => o.id === id);
+                    if (order) {
+                        // Logic for approval hierarchy
+                        if (order.status === 'در انتظار بررسی مالی') order.status = 'تایید مالی / در انتظار مدیریت';
+                        else if (order.status === 'تایید مالی / در انتظار مدیریت') order.status = 'تایید مدیریت / در انتظار مدیرعامل';
+                        else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') order.status = 'تایید نهایی';
+                        saveDb(db);
+                        await bot.sendMessage(chatId, `✅ دستور پرداخت ${order.trackingNumber} تایید شد.`);
+                        // Notify next approver logic here
+                    }
+                } else if (data.startsWith('reject_pay_')) {
+                    const id = data.split('_')[2];
+                    const order = db.orders.find(o => o.id === id);
+                    if (order) {
+                        order.status = 'رد شده';
+                        saveDb(db);
+                        await bot.sendMessage(chatId, `🚫 دستور پرداخت ${order.trackingNumber} رد شد.`);
+                    }
+                }
+                await safeAnswerCallback(query.id);
+            } catch (e) {
+                console.error(e);
+            }
         });
 
     } catch (e) { console.error(">>> Telegram Init Error:", e.message); }
 };
 
-// ... (Rest of exports) ...
 export const sendMessage = async (chatId, text) => { if (bot && chatId) try { await bot.sendMessage(chatId, text); } catch (e) {} };
 export const sendDocument = async (chatId, filePath, caption) => { if (bot && chatId) try { await bot.sendDocument(chatId, fs.createReadStream(filePath), { caption }); } catch (e) {} };
-// Add helper exports needed for restart if any...
