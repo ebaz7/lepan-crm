@@ -182,6 +182,7 @@ export interface SystemSettings {
   smsSenderNumber?: string;
   googleCalendarId?: string;
   whatsappNumber?: string;
+  geminiApiKey?: string;
   warehouseSequences?: Record<string, number>;
   companyNotifications?: Record<string, CompanyNotificationConfig>;
   defaultWarehouseGroup?: string;
