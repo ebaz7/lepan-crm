@@ -318,49 +318,56 @@ app.post('/api/render-pdf', async (req, res) => {
 
 app.post('/api/subscribe', (req, res) => res.json({ success: true }));
 
-// --- NEW API: RESTART BOTS ---
+// --- NEW API: RESTART BOTS (ROBUST) ---
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
-    const db = getDb();
-    
     console.log(`🔄 Restart Request Received for: ${type}`);
 
     try {
-        if (!db || !db.settings) {
-            throw new Error("Database settings not available");
-        }
+        const db = getDb(); // Fresh DB read
+        
+        // Validate Settings First
+        if (!db || !db.settings) throw new Error("Database settings are missing.");
 
         if (type === 'telegram') {
+            const token = db.settings.telegramBotToken;
+            if (!token) throw new Error("Telegram Token is not set in settings.");
+            
             const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            // Use pathToFileURL to ensure Windows paths work with import()
             const m = await import(pathToFileURL(modulePath).href);
-            if (db.settings.telegramBotToken) {
-                m.initTelegram(db.settings.telegramBotToken);
-            } else {
-                throw new Error("Telegram token not set");
+            
+            // Telegram init is sync usually, but let's wrap
+            try {
+                // Check if exported function exists
+                if (typeof m.initTelegram !== 'function') throw new Error("initTelegram not exported");
+                await m.initTelegram(token); 
+            } catch(err) {
+                throw new Error(`Telegram Init Failed: ${err.message}`);
             }
+
         } else if (type === 'bale') {
+            const token = db.settings.baleBotToken;
+            if (!token) throw new Error("Bale Token is not set in settings.");
+
             const modulePath = path.join(__dirname, 'backend', 'bale.js');
             const m = await import(pathToFileURL(modulePath).href);
-            if (db.settings.baleBotToken) {
-                m.restartBaleBot(db.settings.baleBotToken);
-            } else {
-                 throw new Error("Bale token not set");
-            }
+            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot not exported");
+            await m.restartBaleBot(token); // Add await just in case
+
         } else if (type === 'whatsapp') {
             const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
             const m = await import(pathToFileURL(modulePath).href);
-            // Force restart session
             const authPath = path.join(ROOT_DIR, 'wauth');
-            m.restartSession(authPath);
+            if (typeof m.restartSession !== 'function') throw new Error("restartSession not exported");
+            await m.restartSession(authPath); // Critical AWAIT
         } else {
-            throw new Error(`Unknown bot type: ${type}`);
+            throw new Error("Invalid bot type.");
         }
+
         res.json({ success: true });
     } catch (e) { 
         console.error(`❌ Restart Failed for ${type}:`, e);
-        // Send actual error message to client
-        res.status(500).json({ error: e.message || "Internal Server Error" }); 
+        res.status(500).json({ error: e.message || "Unknown Server Error" }); 
     }
 });
 

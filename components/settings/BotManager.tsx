@@ -17,8 +17,10 @@ const BotManager: React.FC = () => {
             await apiCall('/restart-bot', 'POST', { type });
             setSuccessMsg(`${type === 'telegram' ? 'تلگرام' : type === 'bale' ? 'بله' : 'واتساپ'} با موفقیت بازنشانی شد.`);
             setTimeout(() => setSuccessMsg(null), 3000);
-        } catch (e) {
-            alert('خطا در عملیات بازنشانی');
+        } catch (e: any) {
+            // Extract meaningful message from API error
+            const errMsg = e.message || 'خطا در عملیات بازنشانی';
+            alert(`خطا: ${errMsg}`);
         } finally {
             setLoading(null);
         }
