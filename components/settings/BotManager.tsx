@@ -18,9 +18,13 @@ const BotManager: React.FC = () => {
             setSuccessMsg(`${type === 'telegram' ? 'تلگرام' : type === 'bale' ? 'بله' : 'واتساپ'} با موفقیت بازنشانی شد.`);
             setTimeout(() => setSuccessMsg(null), 3000);
         } catch (e: any) {
-            // Extract meaningful message from API error
-            const errMsg = e.message || 'خطا در عملیات بازنشانی';
-            alert(`خطا: ${errMsg}`);
+            // Check for 404 specifically
+            if (e.message && e.message.includes('404')) {
+                alert('⚠️ خطا: دستور بازنشانی پیدا نشد (404).\n\nعلت: کدهای سرور آپدیت شده‌اند اما سرور هنوز ریستارت نشده است.\n\nراه حل: لطفاً برنامه سرور (node server.js) را ببندید و دوباره اجرا کنید.');
+            } else {
+                const errMsg = e.message || 'خطا در عملیات بازنشانی';
+                alert(`خطا: ${errMsg}`);
+            }
         } finally {
             setLoading(null);
         }

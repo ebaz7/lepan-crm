@@ -68,8 +68,10 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             }
         }
 
-        // endpoint should start with /
-        const finalUrl = `${baseUrl}${endpoint}`;
+        // Ensure endpoint starts with /
+        const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        // Prevent double //api/api if someone passes full path erroneously, though baseUrl handles prefix
+        const finalUrl = `${baseUrl}${safeEndpoint}`;
 
         console.log(`API calling: ${method} ${finalUrl}`); 
 

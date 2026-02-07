@@ -30,6 +30,12 @@ if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// LOGGING MIDDLEWARE (Debug 404s)
+app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+});
+
 app.use(cors()); 
 app.use(compression()); 
 app.use(express.json({ limit: '50mb' })); 
@@ -167,6 +173,55 @@ app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() 
 app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
+
+// --- NEW API: RESTART BOTS (Registered EARLY) ---
+app.post('/api/restart-bot', async (req, res) => {
+    const { type } = req.body;
+    console.log(`🔄 Restart Request Received for: ${type}`);
+
+    try {
+        const db = getDb(); // Fresh DB read
+        if (!db || !db.settings) throw new Error("Database settings are missing.");
+
+        if (type === 'telegram') {
+            const token = db.settings.telegramBotToken;
+            if (!token) throw new Error("Telegram Token is not set in settings.");
+            
+            const modulePath = path.join(__dirname, 'backend', 'telegram.js');
+            const m = await import(pathToFileURL(modulePath).href);
+            
+            try {
+                if (typeof m.initTelegram !== 'function') throw new Error("initTelegram not exported");
+                await m.initTelegram(token); 
+            } catch(err) {
+                throw new Error(`Telegram Init Failed: ${err.message}`);
+            }
+
+        } else if (type === 'bale') {
+            const token = db.settings.baleBotToken;
+            if (!token) throw new Error("Bale Token is not set in settings.");
+
+            const modulePath = path.join(__dirname, 'backend', 'bale.js');
+            const m = await import(pathToFileURL(modulePath).href);
+            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot not exported");
+            await m.restartBaleBot(token); 
+
+        } else if (type === 'whatsapp') {
+            const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
+            const m = await import(pathToFileURL(modulePath).href);
+            const authPath = path.join(ROOT_DIR, 'wauth');
+            if (typeof m.restartSession !== 'function') throw new Error("restartSession not exported");
+            await m.restartSession(authPath); 
+        } else {
+            throw new Error("Invalid bot type.");
+        }
+
+        res.json({ success: true });
+    } catch (e) { 
+        console.error(`❌ Restart Failed for ${type}:`, e);
+        res.status(500).json({ error: e.message || "Unknown Server Error" }); 
+    }
+});
 
 // 2. Users
 app.get('/api/users', (req, res) => res.json(getDb().users));
@@ -317,59 +372,6 @@ app.post('/api/render-pdf', async (req, res) => {
 });
 
 app.post('/api/subscribe', (req, res) => res.json({ success: true }));
-
-// --- NEW API: RESTART BOTS (ROBUST) ---
-app.post('/api/restart-bot', async (req, res) => {
-    const { type } = req.body;
-    console.log(`🔄 Restart Request Received for: ${type}`);
-
-    try {
-        const db = getDb(); // Fresh DB read
-        
-        // Validate Settings First
-        if (!db || !db.settings) throw new Error("Database settings are missing.");
-
-        if (type === 'telegram') {
-            const token = db.settings.telegramBotToken;
-            if (!token) throw new Error("Telegram Token is not set in settings.");
-            
-            const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            
-            // Telegram init is sync usually, but let's wrap
-            try {
-                // Check if exported function exists
-                if (typeof m.initTelegram !== 'function') throw new Error("initTelegram not exported");
-                await m.initTelegram(token); 
-            } catch(err) {
-                throw new Error(`Telegram Init Failed: ${err.message}`);
-            }
-
-        } else if (type === 'bale') {
-            const token = db.settings.baleBotToken;
-            if (!token) throw new Error("Bale Token is not set in settings.");
-
-            const modulePath = path.join(__dirname, 'backend', 'bale.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot not exported");
-            await m.restartBaleBot(token); // Add await just in case
-
-        } else if (type === 'whatsapp') {
-            const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            const authPath = path.join(ROOT_DIR, 'wauth');
-            if (typeof m.restartSession !== 'function') throw new Error("restartSession not exported");
-            await m.restartSession(authPath); // Critical AWAIT
-        } else {
-            throw new Error("Invalid bot type.");
-        }
-
-        res.json({ success: true });
-    } catch (e) { 
-        console.error(`❌ Restart Failed for ${type}:`, e);
-        res.status(500).json({ error: e.message || "Unknown Server Error" }); 
-    }
-});
 
 // --- SERVE FRONTEND (Catch-all must be LAST) ---
 app.use(express.static(DIST_DIR));
