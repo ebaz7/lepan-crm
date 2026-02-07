@@ -238,3 +238,14 @@ export const initBaleBot = (token) => {
     pollingActive = true;
     poll(token);
 };
+
+// --- NEW: RESTART FUNCTION ---
+export const restartBaleBot = (token) => {
+    console.log(">>> Restarting Bale Bot...");
+    pollingActive = false; // Stop current polling loop
+    
+    // Wait for any pending poll request to potentially fail or finish
+    setTimeout(() => {
+        initBaleBot(token);
+    }, 2000);
+};

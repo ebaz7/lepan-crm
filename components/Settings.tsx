@@ -11,7 +11,8 @@ import PrintTemplateDesigner from './PrintTemplateDesigner';
 import { FiscalYearManager } from './FiscalModule'; 
 import SecondExitGroupSettings from './settings/SecondExitGroupSettings';
 import RolePermissionsEditor from './settings/RolePermissionsEditor';
-import BackupManager from './settings/BackupManager'; // NEW IMPORT
+import BackupManager from './settings/BackupManager'; 
+import BotManager from './settings/BotManager'; // NEW IMPORT
 
 // Internal QRCode Component with Error Handling
 const QRCode = ({ value, size }: { value: string, size: number }) => { 
@@ -118,7 +119,7 @@ const Settings: React.FC = () => {
 
   const [whatsappStatus, setWhatsappStatus] = useState<{ready: boolean, qr: string | null, user: string | null} | null>(null);
   const [refreshingWA, setRefreshingWA] = useState(false);
-  const [restartingWA, setRestartingWA] = useState(false); // NEW
+  const [restartingWA, setRestartingWA] = useState(false); 
   
   // Contact States
   const [contactName, setContactName] = useState('');
@@ -130,9 +131,8 @@ const Settings: React.FC = () => {
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [newOperatingBank, setNewOperatingBank] = useState('');
   const [newCommodity, setNewCommodity] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const iconInputRef = useRef<HTMLInputElement>(null);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const iconInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const isSecure = window.isSecureContext;
   
@@ -198,7 +198,7 @@ const Settings: React.FC = () => {
       try { await apiCall('/whatsapp/logout', 'POST'); setTimeout(checkWhatsappStatus, 2000); } catch (e) { alert('خطا'); }
   };
   
-  // NEW FORCE RESTART HANDLER
+  // FORCE RESTART HANDLER
   const handleWhatsappRestart = async () => {
       if (!confirm('آیا می‌خواهید سرویس واتساپ را بازنشانی کنید؟ این کار اتصال فعلی را قطع و یک QR کد جدید تولید می‌کند.')) return;
       setRestartingWA(true);
@@ -364,9 +364,6 @@ const Settings: React.FC = () => {
   const handleIconChange = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setUploadingIcon(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const res = await uploadFile(file.name, ev.target?.result as string); setSettings({ ...settings, pwaIcon: res.url }); } catch (error) { alert('خطا'); } finally { setUploadingIcon(false); } }; reader.readAsDataURL(file); };
   const handleToggleNotifications = async () => { if (!isSecure && window.location.hostname !== 'localhost') { alert("برای فعال‌سازی نوتیفیکیشن نیاز به HTTPS است."); return; } const granted = await requestNotificationPermission(); if (granted) { setNotificationPreference(true); setNotificationsEnabled(true); alert("نوتیفیکیشن فعال شد. اتصال به سرور بروزرسانی شد."); } else { alert("دسترسی به نوتیفیکیشن مسدود است یا پشتیبانی نمی‌شود."); } };
   const handleTestNotification = async () => { try { const userStr = localStorage.getItem('app_current_user'); const username = userStr ? JSON.parse(userStr).username : 'test'; await apiCall('/send-test-push', 'POST', { username }); alert("درخواست تست ارسال شد."); } catch (e: any) { let msg = "خطا در ارسال تست"; if (e.message && e.message.includes('404')) { if (confirm("اشتراک نوتیفیکیشن شما در سرور یافت نشد. آیا می‌خواهید مجدداً فعال‌سازی کنید؟")) { handleToggleNotifications(); return; } msg = "اشتراک یافت نشد."; } else if (e.message) { msg += `: ${e.message}`; } alert(msg); } };
-  const handleDownloadBackup = (includeFiles: boolean) => { window.location.href = `/api/full-backup?includeFiles=${includeFiles}`; };
-  const handleRestoreClick = () => { if (confirm('بازگردانی اطلاعات کامل (شامل عکس‌ها)؟ همه اطلاعات فعلی پاک می‌شود.')) fileInputRef.current?.click(); };
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setRestoring(true); const reader = new FileReader(); reader.onload = async (ev) => { const base64 = ev.target?.result as string; try { const response = await apiCall<{success: boolean}>('/full-restore', 'POST', { fileData: base64 }); if (response.success) { alert('بازگردانی کامل با موفقیت انجام شد. سیستم رفرش می‌شود.'); window.location.reload(); } } catch (error) { alert('خطا در بازگردانی فایل Zip'); } finally { setRestoring(false); } }; reader.readAsDataURL(file); };
   const handleSaveTemplate = (template: PrintTemplate) => { const existing = settings.printTemplates || []; const updated = editingTemplate ? existing.map(t => t.id === template.id ? template : t) : [...existing, template]; setSettings({ ...settings, printTemplates: updated }); setShowDesigner(false); setEditingTemplate(null); };
   const handleEditTemplate = (t: PrintTemplate) => { setEditingTemplate(t); setShowDesigner(true); };
   const handleDeleteTemplate = (id: string) => { if(!confirm('حذف قالب؟')) return; const updated = (settings.printTemplates || []).filter(t => t.id !== id); setSettings({ ...settings, printTemplates: updated }); };
@@ -481,7 +478,7 @@ const Settings: React.FC = () => {
                                             <div className="flex gap-2 mt-4">
                                                 <button type="button" onClick={checkWhatsappStatus} className="text-blue-600 text-xs font-bold hover:underline">بروزرسانی وضعیت</button>
                                                 
-                                                {/* NEW FORCE RESTART BUTTON */}
+                                                {/* FORCE RESTART BUTTON */}
                                                 <button 
                                                     type="button" 
                                                     onClick={handleWhatsappRestart} 
@@ -524,6 +521,9 @@ const Settings: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* --- NEW BOT MANAGER COMPONENT --- */}
+                            <BotManager />
 
                             <div className="space-y-4">
                                 <h3 className="font-bold text-gray-800 border-b pb-2">دفترچه تلفن هوشمند (گروه‌ها و اشخاص)</h3>

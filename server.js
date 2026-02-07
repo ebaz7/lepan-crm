@@ -339,6 +339,32 @@ app.post('/api/render-pdf', async (req, res) => {
 
 app.post('/api/subscribe', (req, res) => res.json({ success: true }));
 
+// --- NEW API: RESTART BOTS ---
+app.post('/api/restart-bot', async (req, res) => {
+    const { type } = req.body;
+    const db = getDb();
+    
+    console.log(`🔄 Restart Request Received for: ${type}`);
+
+    try {
+        if (type === 'telegram') {
+            const m = await import('./backend/telegram.js');
+            m.initTelegram(db.settings.telegramBotToken);
+        } else if (type === 'bale') {
+            const m = await import('./backend/bale.js');
+            m.restartBaleBot(db.settings.baleBotToken);
+        } else if (type === 'whatsapp') {
+            const m = await import('./backend/whatsapp.js');
+            // Force restart session
+            m.restartSession(path.join(ROOT_DIR, 'wauth'));
+        }
+        res.json({ success: true });
+    } catch (e) { 
+        console.error(`Restart Failed for ${type}:`, e);
+        res.status(500).json({ error: e.message }); 
+    }
+});
+
 // --- SERVE FRONTEND (Catch-all must be LAST) ---
 app.use(express.static(DIST_DIR));
 app.get('*', (req, res) => { 
@@ -352,6 +378,7 @@ try {
     const db = getDb();
     import('./backend/telegram.js').then(m => { if(db.settings.telegramBotToken) m.initTelegram(db.settings.telegramBotToken); }).catch(e=>{});
     import('./backend/whatsapp.js').then(m => { m.initWhatsApp(path.join(ROOT_DIR, 'wauth')); }).catch(e=>{});
+    import('./backend/bale.js').then(m => { if(db.settings.baleBotToken) m.initBaleBot(db.settings.baleBotToken); }).catch(e=>{});
 } catch(e) {}
 
 app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on ${PORT}`));
