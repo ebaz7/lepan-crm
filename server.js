@@ -7,7 +7,12 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
-import cron from 'node-cron'; // Import cron for scheduling
+import cron from 'node-cron'; 
+
+// Import Backend Modules
+import * as TelegramBotModule from './backend/telegram.js';
+import * as WhatsAppBotModule from './backend/whatsapp.js';
+import * as BaleBotModule from './backend/bale.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,8 +21,9 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = process.cwd();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
-const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); // New Backups Directory
+const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
+const WAUTH_DIR = path.join(ROOT_DIR, 'wauth');
 
 console.log("------------------------------------------------");
 console.log("🚀 STARTING SERVER (AUTO-BACKUP & SMART RESTORE)");
@@ -26,6 +32,7 @@ console.log("------------------------------------------------");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+if (!fs.existsSync(WAUTH_DIR)) fs.mkdirSync(WAUTH_DIR, { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,7 +43,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- 1. DEFAULT DB STRUCTURE (The Blueprint for Consistency) ---
+// --- 1. DEFAULT DB STRUCTURE ---
 const DEFAULT_DB = { 
     settings: { 
         currentTrackingNumber: 1000, 
@@ -56,7 +63,6 @@ const DEFAULT_DB = {
         savedContacts: [], 
         bankNames: [] 
     }, 
-    // ALL MODULES MUST BE LISTED HERE
     orders: [], 
     exitPermits: [], 
     warehouseItems: [], 
@@ -72,22 +78,11 @@ const DEFAULT_DB = {
 };
 
 // --- 2. SELF-HEALING & SMART MERGE LOGIC ---
-// This function ensures that even if an old backup is loaded, 
-// the new app structure remains intact (preventing crashes).
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
-    
-    // Start with a fresh, perfect structure
     const cleanData = { ...DEFAULT_DB };
-    
-    // 1. Restore Settings (Deep Merge to keep defaults)
-    if (data.settings) {
-        cleanData.settings = { ...DEFAULT_DB.settings, ...data.settings };
-    }
+    if (data.settings) cleanData.settings = { ...DEFAULT_DB.settings, ...data.settings };
 
-    // 2. Restore Arrays (Safe Copy)
-    // We iterate over the REQUIRED keys. If the backup has data, we take it.
-    // If the backup is missing a key (e.g. from an old version), we keep the empty array from DEFAULT_DB.
     const arrayKeys = [
         'orders', 'exitPermits', 'warehouseItems', 'warehouseTransactions', 
         'tradeRecords', 'messages', 'groups', 'tasks', 
@@ -98,7 +93,6 @@ const sanitizeDb = (data) => {
         if (Array.isArray(data[key])) {
             cleanData[key] = data[key];
         } else {
-            console.log(`⚠️ Smart Restore: Auto-creating missing table '${key}' to prevent crash.`);
             cleanData[key] = [];
         }
     });
@@ -115,8 +109,6 @@ const getDb = () => {
         }
         const data = fs.readFileSync(DB_FILE, 'utf8');
         if (!data.trim()) return { ...DEFAULT_DB };
-        
-        // Always sanitize on read to auto-fix any corruption
         return sanitizeDb(JSON.parse(data));
     } catch (e) { 
         console.error("❌ DB Read Failed, using default:", e.message);
@@ -126,7 +118,6 @@ const getDb = () => {
 
 const saveDb = (data) => {
     try {
-        // Always sanitize before saving to ensure consistency
         const safeData = sanitizeDb(data);
         const tempFile = `${DB_FILE}.tmp`;
         fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
@@ -135,45 +126,27 @@ const saveDb = (data) => {
 };
 
 // --- 3. AUTOMATIC BACKUP SYSTEM ---
-// Schedule: Every hour at minute 0 (0 * * * *)
 cron.schedule('0 * * * *', () => {
-    console.log('⏰ Running Automatic Backup...');
     try {
         const db = getDb();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const backupFile = path.join(BACKUPS_DIR, `auto_backup_${timestamp}.json`);
         fs.writeFileSync(backupFile, JSON.stringify(db, null, 2));
-        console.log(`✅ Backup created: ${backupFile}`);
-
-        // Cleanup: Keep only last 48 backups (48 hours)
+        
         const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('auto_backup_'));
         if (files.length > 48) {
-            files.sort(); // Sorts by name (timestamp), so oldest first
+            files.sort();
             const toDelete = files.slice(0, files.length - 48);
-            toDelete.forEach(f => {
-                fs.unlinkSync(path.join(BACKUPS_DIR, f));
-                console.log(`🗑️ Auto-Clean: Deleted old backup ${f}`);
-            });
+            toDelete.forEach(f => fs.unlinkSync(path.join(BACKUPS_DIR, f)));
         }
-    } catch (e) {
-        console.error('❌ Backup Failed:', e.message);
-    }
+    } catch (e) { console.error('❌ Backup Failed:', e.message); }
 });
 
 const calculateNextNumber = (db, type, companyName = null) => {
-    let max = 0;
     const safeCompany = companyName ? companyName.trim() : (db.settings.defaultCompany || '');
-    
-    if (type === 'payment') {
-        max = db.settings.currentTrackingNumber || 1000;
-        return max + 1;
-    } else if (type === 'exit') {
-        max = db.settings.currentExitPermitNumber || 1000;
-        return max + 1;
-    } else if (type === 'bijak') {
-        const seq = db.settings.warehouseSequences?.[safeCompany] || 1000;
-        return seq; 
-    }
+    if (type === 'payment') return (db.settings.currentTrackingNumber || 1000) + 1;
+    if (type === 'exit') return (db.settings.currentExitPermitNumber || 1000) + 1;
+    if (type === 'bijak') return (db.settings.warehouseSequences?.[safeCompany] || 1000);
     return 1001;
 };
 
@@ -288,7 +261,7 @@ app.post('/api/security/incidents', (req, res) => { const db = getDb(); db.secur
 app.put('/api/security/incidents/:id', (req, res) => { const db = getDb(); const idx = db.securityIncidents.findIndex(i => i.id === req.params.id); if(idx > -1) { db.securityIncidents[idx] = { ...db.securityIncidents[idx], ...req.body }; saveDb(db); res.json(db.securityIncidents); } else res.status(404).send('Not Found'); });
 app.delete('/api/security/incidents/:id', (req, res) => { const db = getDb(); db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.securityIncidents); });
 
-// 9. Tools
+// 9. Tools & Integrations
 app.post('/api/upload', (req, res) => {
     try {
         const { fileName, fileData } = req.body;
@@ -307,18 +280,13 @@ app.get('/api/full-backup', (req, res) => {
     res.send(JSON.stringify(db, null, 2));
 });
 
-// SMART RESTORE: The logic that makes it version-independent
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
         const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
         const parsed = JSON.parse(jsonStr);
-        
-        // This ensures old backups work on new versions without crashing
-        // It merges the backup data into the LATEST default structure
         saveDb(sanitizeDb(parsed)); 
-        
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -326,7 +294,10 @@ app.post('/api/emergency-restore', (req, res) => {
 app.post('/api/render-pdf', async (req, res) => {
     try {
         const { html, landscape, format, width, height } = req.body;
-        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+        const browser = await puppeteer.launch({ 
+            headless: 'new', 
+            args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+        });
         const page = await browser.newPage();
         if(width && height) await page.setViewport({ width: 1200, height: 800 });
         await page.setContent(html, { waitUntil: 'networkidle0' });
@@ -339,7 +310,75 @@ app.post('/api/render-pdf', async (req, res) => {
 
 app.post('/api/subscribe', (req, res) => res.json({ success: true }));
 
-// --- SERVE FRONTEND (Catch-all must be LAST) ---
+// --- WHATSAPP API ROUTES ---
+app.get('/api/whatsapp/status', (req, res) => res.json(WhatsAppBotModule.getStatus()));
+app.post('/api/whatsapp/logout', async (req, res) => { 
+    await WhatsAppBotModule.logout(); 
+    res.json({ success: true }); 
+});
+app.post('/api/whatsapp/restart', async (req, res) => { 
+    await WhatsAppBotModule.restartSession(WAUTH_DIR); 
+    res.json({ success: true }); 
+});
+app.get('/api/whatsapp/groups', async (req, res) => { 
+    try {
+        const g = await WhatsAppBotModule.getGroups(); 
+        res.json({ success: true, groups: g });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+app.post('/api/send-whatsapp', async (req, res) => {
+    try {
+        const { number, message, mediaData } = req.body;
+        await WhatsAppBotModule.sendMessage(number, message, mediaData);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// --- TELEGRAM API ROUTES (NEW) ---
+app.get('/api/telegram/status', (req, res) => {
+    res.json({ ready: true }); 
+});
+
+app.post('/api/telegram/restart', (req, res) => {
+    try {
+        TelegramBotModule.stopTelegram();
+        const db = getDb();
+        if (db.settings.telegramBotToken) {
+            TelegramBotModule.initTelegram(db.settings.telegramBotToken);
+            res.json({ success: true, message: 'Telegram Bot Restarted' });
+        } else {
+            res.json({ success: false, message: 'No Token' });
+        }
+    } catch(e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// --- BALE API ROUTES (NEW) ---
+app.get('/api/bale/status', (req, res) => {
+    res.json({ ready: true }); 
+});
+
+app.post('/api/bale/restart', (req, res) => {
+    try {
+        BaleBotModule.stopBale();
+        const db = getDb();
+        if (db.settings.baleBotToken) {
+            BaleBotModule.initBaleBot(db.settings.baleBotToken);
+            res.json({ success: true, message: 'Bale Bot Restarted' });
+        } else {
+            res.json({ success: false, message: 'No Token' });
+        }
+    } catch(e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// --- SERVE FRONTEND ---
 app.use(express.static(DIST_DIR));
 app.get('*', (req, res) => { 
     if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API not found' });
@@ -347,11 +386,21 @@ app.get('*', (req, res) => {
     if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Build frontend!');
 });
 
-// Integrations (Lazy Load)
-try {
-    const db = getDb();
-    import('./backend/telegram.js').then(m => { if(db.settings.telegramBotToken) m.initTelegram(db.settings.telegramBotToken); }).catch(e=>{});
-    import('./backend/whatsapp.js').then(m => { m.initWhatsApp(path.join(ROOT_DIR, 'wauth')); }).catch(e=>{});
-} catch(e) {}
+// --- INITIALIZE BOTS ---
+const initBots = () => {
+    try {
+        const db = getDb();
+        if (db.settings.telegramBotToken) TelegramBotModule.initTelegram(db.settings.telegramBotToken);
+        if (db.settings.baleBotToken) BaleBotModule.initBaleBot(db.settings.baleBotToken);
+        
+        // Init WhatsApp
+        WhatsAppBotModule.initWhatsApp(WAUTH_DIR);
+    } catch (e) {
+        console.error("Bot Initialization Error:", e);
+    }
+};
 
-app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on ${PORT}`);
+    initBots();
+});
