@@ -107,10 +107,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (editingMessageId) {
             const msgToUpdate = messages.find(m => m.id === editingMessageId);
             if (msgToUpdate) {
-                await updateMessage({ ...msgToUpdate, message: inputText, isEdited: true });
-                setEditingMessageId(null);
-                setInputText('');
-                onRefresh();
+                try {
+                    await updateMessage({ ...msgToUpdate, message: inputText, isEdited: true });
+                    setEditingMessageId(null);
+                    setInputText('');
+                    onRefresh();
+                } catch(e) { alert("خطا در ویرایش پیام"); }
             }
             return;
         }
@@ -131,11 +133,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             } : undefined
         };
 
-        await sendMessage(newMsg);
-        setInputText('');
-        setReplyingTo(null);
-        onRefresh();
-        scrollToBottom();
+        try {
+            await sendMessage(newMsg);
+            setInputText('');
+            setReplyingTo(null);
+            onRefresh();
+            scrollToBottom();
+        } catch (e: any) {
+            console.error("Send Error:", e);
+            alert(`خطا در ارسال پیام: ${e.message || 'ارور سرور'}. لطفاً اتصال به سرور را بررسی کنید.`);
+        }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

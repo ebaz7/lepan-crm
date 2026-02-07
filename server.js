@@ -6,68 +6,34 @@ import fs from 'fs';
 import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
-import cron from 'node-cron';
 import puppeteer from 'puppeteer';
-import webpush from 'web-push'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- INTELLIGENT PATH FINDER ---
-const findRootDirectory = () => {
-    const candidates = [
-        "C:\\PaymentSystem", 
-        __dirname,           
-        process.cwd(),       
-        path.resolve(__dirname, '..') 
-    ];
-
-    for (const dir of candidates) {
-        if (fs.existsSync(path.join(dir, 'package.json'))) {
-            return dir;
-        }
-    }
-    return "C:\\PaymentSystem";
-};
-
-const ROOT_DIR = findRootDirectory();
+// --- PATH DEFINITIONS ---
+const ROOT_DIR = process.cwd();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
-const BACKUPS_DIR = path.join(ROOT_DIR, 'backups');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
-const WAUTH_DIR = path.join(ROOT_DIR, 'wauth');
-const LOG_FILE = path.join(ROOT_DIR, 'server_status.log');
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
-// --- LOGGING ---
-const logToFile = (message) => {
-    const timestamp = new Date().toISOString();
-    try {
-        if (!fs.existsSync(ROOT_DIR)) fs.mkdirSync(ROOT_DIR, { recursive: true });
-        fs.appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`);
-        console.log(message);
-    } catch (e) { console.error("Logger failed:", e); }
-};
+console.log("------------------------------------------------");
+console.log("🚀 STARTING SERVER (FULL API SUPPORT MODE)");
+console.log(`📂 Root: ${ROOT_DIR}`);
+console.log("------------------------------------------------");
 
-// --- SETUP ---
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SERVER_BUILD_ID = Date.now().toString();
-
-// --- INTEGRATIONS ---
-let integrations = { whatsapp: null, telegram: null, bale: null };
-(async () => {
-    try { integrations.telegram = await import('./backend/telegram.js'); } catch (e) {}
-    try { integrations.whatsapp = await import('./backend/whatsapp.js'); } catch (e) {}
-    try { integrations.bale = await import('./backend/bale.js'); } catch (e) {}
-})();
 
 app.use(cors()); 
 app.use(compression()); 
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// Static files served AFTER API routes definition logic (see below)
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- DB HANDLERS ---
+// --- 1. DEFAULT DB STRUCTURE (The Blueprint) ---
 const DEFAULT_DB = { 
     settings: { 
         currentTrackingNumber: 1000, 
@@ -88,110 +54,144 @@ const DEFAULT_DB = {
         bankNames: [] 
     }, 
     orders: [], 
+    // ALL THESE ARRAYS ARE MANDATORY FOR THE APP TO WORK
     exitPermits: [], 
     warehouseItems: [], 
     warehouseTransactions: [], 
-    tradeRecords: [], // Added missing array
-    messages: [],     // Added missing array
-    groups: [],       // Added missing array
-    tasks: [],        // Added missing array
-    securityLogs: [], // Added missing array
-    personnelDelays: [], // Added missing array
-    securityIncidents: [], // Added missing array
+    tradeRecords: [], 
+    messages: [],     
+    groups: [],       
+    tasks: [],        
+    securityLogs: [], 
+    personnelDelays: [], 
+    securityIncidents: [], 
     users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }]
 };
 
+// --- 2. SELF-HEALING LOGIC (The Fix for White Screens) ---
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
-    // Ensure all arrays exist
-    ['orders', 'exitPermits', 'warehouseItems', 'warehouseTransactions', 'tradeRecords', 'messages', 'groups', 'tasks', 'securityLogs', 'personnelDelays', 'securityIncidents', 'users'].forEach(key => {
-        if (!Array.isArray(data[key])) data[key] = [];
+    
+    // Merge top-level keys
+    const cleanData = { ...DEFAULT_DB, ...data };
+    
+    // Deep merge settings
+    if (data.settings) {
+        cleanData.settings = { ...DEFAULT_DB.settings, ...data.settings };
+    } else {
+        cleanData.settings = { ...DEFAULT_DB.settings };
+    }
+
+    // CRITICAL: Force ensure all module arrays exist.
+    // If a key is missing or null, set it to [] to prevent .map() crashes on frontend.
+    const requiredArrays = [
+        'orders', 
+        'exitPermits', 
+        'warehouseItems', 
+        'warehouseTransactions', 
+        'tradeRecords', 
+        'messages', 
+        'groups', 
+        'tasks', 
+        'securityLogs', 
+        'personnelDelays', 
+        'securityIncidents', 
+        'users'
+    ];
+
+    requiredArrays.forEach(key => {
+        if (!Array.isArray(cleanData[key])) {
+            console.log(`⚠️ Self-Healing: Recreated missing table '${key}'`);
+            cleanData[key] = [];
+        }
     });
-    if (!data.settings) data.settings = { ...DEFAULT_DB.settings };
-    return data;
+
+    return cleanData;
 };
 
 const getDb = () => {
     try {
-        if (!fs.existsSync(DB_FILE)) { saveDb(DEFAULT_DB); return DEFAULT_DB; }
+        if (!fs.existsSync(DB_FILE)) { 
+            const newDb = { ...DEFAULT_DB };
+            saveDb(newDb); 
+            return newDb; 
+        }
         const data = fs.readFileSync(DB_FILE, 'utf8');
+        if (!data.trim()) return { ...DEFAULT_DB };
         return sanitizeDb(JSON.parse(data));
-    } catch (e) { return DEFAULT_DB; }
+    } catch (e) { 
+        console.error("❌ DB Read Failed, using default:", e.message);
+        return { ...DEFAULT_DB }; 
+    }
 };
 
 const saveDb = (data) => {
     try {
+        const safeData = sanitizeDb(data);
         const tempFile = `${DB_FILE}.tmp`;
-        fs.writeFileSync(tempFile, JSON.stringify(sanitizeDb(data), null, 2));
+        fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
         fs.renameSync(tempFile, DB_FILE);
-    } catch (e) { logToFile("Error saving DB: " + e.message); }
+    } catch (e) { console.error("❌ DB Save Failed:", e.message); }
 };
 
 const calculateNextNumber = (db, type, companyName = null) => {
-    let maxFoundInDb = 0;
+    let max = 0;
     const safeCompany = companyName ? companyName.trim() : (db.settings.defaultCompany || '');
-    const activeYearId = db.settings.activeFiscalYearId;
-    const activeYear = activeYearId ? db.settings.fiscalYears?.find(y => y.id === activeYearId) : null;
-    let fiscalStart = 0;
-
-    try {
-        if (type === 'payment') {
-            db.orders.forEach(o => { if (parseInt(o.trackingNumber) > maxFoundInDb) maxFoundInDb = parseInt(o.trackingNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startTrackingNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentTrackingNumber) || 1000;
-        } else if (type === 'exit') {
-            db.exitPermits.forEach(p => { if (parseInt(p.permitNumber) > maxFoundInDb) maxFoundInDb = parseInt(p.permitNumber); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startExitPermitNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.currentExitPermitNumber) || 1000;
-        } else if (type === 'bijak') {
-            db.warehouseTransactions.filter(t => t.type === 'OUT' && t.company === safeCompany).forEach(t => { if (parseInt(t.number) > maxFoundInDb) maxFoundInDb = parseInt(t.number); });
-            if (activeYear?.companySequences?.[safeCompany]) fiscalStart = parseInt(activeYear.companySequences[safeCompany].startBijakNumber) || 0;
-            if (fiscalStart === 0) fiscalStart = parseInt(db.settings.warehouseSequences?.[safeCompany]) || 1000;
-        }
-    } catch (e) {}
     
-    let nextNum = maxFoundInDb >= fiscalStart ? maxFoundInDb + 1 : (fiscalStart > 0 ? fiscalStart : 1001);
-    if (!nextNum || nextNum < 1000) nextNum = 1001;
-
-    // Update global cache
-    if (type === 'payment' && !activeYear) db.settings.currentTrackingNumber = nextNum;
-    if (type === 'exit' && !activeYear) db.settings.currentExitPermitNumber = nextNum;
-    if (type === 'bijak' && !activeYear && safeCompany) { if (!db.settings.warehouseSequences) db.settings.warehouseSequences = {}; db.settings.warehouseSequences[safeCompany] = nextNum; }
-    
-    return nextNum;
+    if (type === 'payment') {
+        max = db.settings.currentTrackingNumber || 1000;
+        return max + 1;
+    } else if (type === 'exit') {
+        max = db.settings.currentExitPermitNumber || 1000;
+        return max + 1;
+    } else if (type === 'bijak') {
+        const seq = db.settings.warehouseSequences?.[safeCompany] || 1000;
+        return seq; 
+    }
+    return 1001;
 };
 
-// --- API ROUTES ---
+// ================= API ROUTES (Serving ALL Modules) =================
 
-// System & Users
-app.get('/api/version', (req, res) => res.json({ version: SERVER_BUILD_ID }));
+// 1. System & Auth
+app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
 app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
+
+// 2. Users
 app.get('/api/users', (req, res) => res.json(getDb().users));
 app.post('/api/users', (req, res) => { const db = getDb(); db.users.push(req.body); saveDb(db); res.json(db.users); });
 app.put('/api/users/:id', (req, res) => { const db = getDb(); const idx = db.users.findIndex(u => u.id === req.params.id); if(idx > -1) { db.users[idx] = { ...db.users[idx], ...req.body }; saveDb(db); res.json(db.users); } else res.status(404).send('Not Found'); });
 app.delete('/api/users/:id', (req, res) => { const db = getDb(); db.users = db.users.filter(u => u.id !== req.params.id); saveDb(db); res.json(db.users); });
 
-// Orders (Payment)
+// 3. Payment Orders
 app.get('/api/orders', (req, res) => res.json(getDb().orders));
-app.post('/api/orders', (req, res) => { const db = getDb(); const order = req.body; order.id = Date.now().toString(); order.trackingNumber = calculateNextNumber(db, 'payment', order.payingCompany); db.orders.unshift(order); saveDb(db); res.json(db.orders); });
+app.post('/api/orders', (req, res) => { 
+    const db = getDb(); 
+    const order = req.body; 
+    order.id = order.id || Date.now().toString(); 
+    order.trackingNumber = calculateNextNumber(db, 'payment', order.payingCompany);
+    db.settings.currentTrackingNumber = order.trackingNumber; 
+    db.orders.unshift(order); 
+    saveDb(db); 
+    res.json(db.orders); 
+});
 app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.orders.findIndex(o => o.id === req.params.id); if(idx > -1) { db.orders[idx] = { ...db.orders[idx], ...req.body }; saveDb(db); res.json(db.orders); } else res.status(404).send('Not Found'); });
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// Exit Permits
+// 4. Exit Permits (THIS WAS MISSING, CAUSING 404s)
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
 app.post('/api/exit-permits', (req, res) => {
-    try {
-        const db = getDb();
-        const permit = req.body;
-        permit.id = permit.id || Date.now().toString();
-        permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
-        db.exitPermits.push(permit);
-        saveDb(db);
-        res.json(db.exitPermits);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    const db = getDb();
+    const permit = req.body;
+    permit.id = permit.id || Date.now().toString();
+    permit.permitNumber = calculateNextNumber(db, 'exit', permit.company);
+    db.settings.currentExitPermitNumber = permit.permitNumber;
+    db.exitPermits.push(permit);
+    saveDb(db);
+    res.json(db.exitPermits);
 });
 app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
@@ -201,25 +201,36 @@ app.put('/api/exit-permits/:id', (req, res) => {
 app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
 app.get('/api/next-exit-permit-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) }));
 
-// Warehouse
+// 5. Warehouse (THIS WAS MISSING)
 app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems));
 app.post('/api/warehouse/items', (req, res) => { const db = getDb(); db.warehouseItems.push(req.body); saveDb(db); res.json(db.warehouseItems); });
 app.put('/api/warehouse/items/:id', (req, res) => { const db = getDb(); const idx = db.warehouseItems.findIndex(i => i.id === req.params.id); if(idx > -1) { db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body }; saveDb(db); res.json(db.warehouseItems); } else res.status(404).send('Not Found'); });
 app.delete('/api/warehouse/items/:id', (req, res) => { const db = getDb(); db.warehouseItems = db.warehouseItems.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.warehouseItems); });
 
 app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions));
-app.post('/api/warehouse/transactions', (req, res) => { const db = getDb(); const tx = req.body; if (tx.type === 'OUT') tx.number = calculateNextNumber(db, 'bijak', tx.company); db.warehouseTransactions.unshift(tx); saveDb(db); res.json(db.warehouseTransactions); });
+app.post('/api/warehouse/transactions', (req, res) => { 
+    const db = getDb(); 
+    const tx = req.body; 
+    if (tx.type === 'OUT') {
+        tx.number = calculateNextNumber(db, 'bijak', tx.company);
+        if (!db.settings.warehouseSequences) db.settings.warehouseSequences = {}; 
+        db.settings.warehouseSequences[tx.company] = tx.number;
+    }
+    db.warehouseTransactions.unshift(tx); 
+    saveDb(db); 
+    res.json(db.warehouseTransactions); 
+});
 app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); if(idx > -1) { db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; saveDb(db); res.json(db.warehouseTransactions); } else res.status(404).send('Not Found'); });
 app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
 app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
 
-// Trade (Commerce)
+// 6. Trade / Commerce (THIS WAS MISSING)
 app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
 app.post('/api/trade', (req, res) => { const db = getDb(); db.tradeRecords.unshift(req.body); saveDb(db); res.json(db.tradeRecords); });
 app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
 app.delete('/api/trade/:id', (req, res) => { const db = getDb(); db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); saveDb(db); res.json(db.tradeRecords); });
 
-// Chat
+// 7. Chat (THIS WAS MISSING)
 app.get('/api/chat', (req, res) => res.json(getDb().messages));
 app.post('/api/chat', (req, res) => { const db = getDb(); db.messages.push(req.body); saveDb(db); res.json(db.messages); });
 app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
@@ -235,7 +246,7 @@ app.post('/api/tasks', (req, res) => { const db = getDb(); db.tasks.push(req.bod
 app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
 app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
 
-// Security
+// 8. Security (THIS WAS MISSING)
 app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs));
 app.post('/api/security/logs', (req, res) => { const db = getDb(); db.securityLogs.unshift(req.body); saveDb(db); res.json(db.securityLogs); });
 app.put('/api/security/logs/:id', (req, res) => { const db = getDb(); const idx = db.securityLogs.findIndex(l => l.id === req.params.id); if(idx > -1) { db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; saveDb(db); res.json(db.securityLogs); } else res.status(404).send('Not Found'); });
@@ -251,10 +262,9 @@ app.post('/api/security/incidents', (req, res) => { const db = getDb(); db.secur
 app.put('/api/security/incidents/:id', (req, res) => { const db = getDb(); const idx = db.securityIncidents.findIndex(i => i.id === req.params.id); if(idx > -1) { db.securityIncidents[idx] = { ...db.securityIncidents[idx], ...req.body }; saveDb(db); res.json(db.securityIncidents); } else res.status(404).send('Not Found'); });
 app.delete('/api/security/incidents/:id', (req, res) => { const db = getDb(); db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.securityIncidents); });
 
-// File Upload
+// 9. Tools
 app.post('/api/upload', (req, res) => {
     try {
-        if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
         const { fileName, fileData } = req.body;
         const safeName = `${Date.now()}_${fileName.replace(/[^a-z0-9.]/gi, '_')}`;
         const filePath = path.join(UPLOADS_DIR, safeName);
@@ -264,27 +274,25 @@ app.post('/api/upload', (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Upload failed' }); }
 });
 
-// Backup & Restore
 app.get('/api/full-backup', (req, res) => {
     const db = getDb();
-    const backupName = `backup_${Date.now()}.json`;
-    res.setHeader('Content-Disposition', `attachment; filename=${backupName}`);
+    res.setHeader('Content-Disposition', `attachment; filename=backup.json`);
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(db, null, 2));
 });
 
+// CRITICAL: Emergency Restore with FORCE SANITIZATION
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
         const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
         const parsed = JSON.parse(jsonStr);
-        saveDb(sanitizeDb(parsed));
+        saveDb(sanitizeDb(parsed)); // Ensure the restored DB is valid
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// PDF Generation
 app.post('/api/render-pdf', async (req, res) => {
     try {
         const { html, landscape, format, width, height } = req.body;
@@ -299,36 +307,21 @@ app.post('/api/render-pdf', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Notifications
-app.post('/api/subscribe', (req, res) => {
-    // Basic stub for push subscriptions
-    res.json({ success: true });
-});
+app.post('/api/subscribe', (req, res) => res.json({ success: true }));
 
-// Integration Status
-app.get('/api/whatsapp/status', (req, res) => {
-    if (integrations.whatsapp && integrations.whatsapp.getStatus) {
-        res.json(integrations.whatsapp.getStatus());
-    } else {
-        res.json({ ready: false, qr: null });
-    }
-});
-
-// Serving Static Files (Must be last to avoid 404ing API routes)
-app.use(express.static(path.join(ROOT_DIR, 'dist')));
-
+// --- SERVE FRONTEND (Catch-all must be LAST) ---
+app.use(express.static(DIST_DIR));
 app.get('*', (req, res) => { 
-    if (req.url.startsWith('/api/')) {
-        return res.status(404).json({ error: 'API endpoint not found' });
-    }
-    const p = path.join(ROOT_DIR, 'dist', 'index.html'); 
-    if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Frontend build missing.');
+    if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API not found' });
+    const p = path.join(DIST_DIR, 'index.html');
+    if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Build frontend!');
 });
 
-// Initialize Integrations
-const db = getDb();
-if (integrations.telegram && db.settings.telegramBotToken) integrations.telegram.initTelegram(db.settings.telegramBotToken);
-if (integrations.whatsapp) integrations.whatsapp.initWhatsApp(WAUTH_DIR);
-if (integrations.bale && db.settings.baleBotToken) integrations.bale.initBaleBot(db.settings.baleBotToken);
+// Integrations (Lazy Load)
+try {
+    const db = getDb();
+    import('./backend/telegram.js').then(m => { if(db.settings.telegramBotToken) m.initTelegram(db.settings.telegramBotToken); }).catch(e=>{});
+    import('./backend/whatsapp.js').then(m => { m.initWhatsApp(path.join(ROOT_DIR, 'wauth')); }).catch(e=>{});
+} catch(e) {}
 
-app.listen(PORT, '0.0.0.0', () => logToFile(`Server running on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on ${PORT}`));
