@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson } from 'lucide-react';
 import { apiCall } from '../../services/apiService';
 
 const BackupManager: React.FC = () => {
@@ -9,11 +9,11 @@ const BackupManager: React.FC = () => {
     const [downloading, setDownloading] = useState(false);
     const [message, setMessage] = useState('');
 
-    const handleDownloadBackup = async (includeFiles: boolean) => {
+    const handleDownloadBackup = async () => {
         setDownloading(true);
         try {
-            // Using FETCH instead of window.location for better reliability and control
-            const response = await fetch(`/api/full-backup?includeFiles=${includeFiles}`);
+            // Call the robust full-backup endpoint
+            const response = await fetch(`/api/full-backup`);
             
             if (!response.ok) throw new Error("Download failed");
             
@@ -21,7 +21,9 @@ const BackupManager: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `payment_system_backup_${new Date().toISOString().slice(0,10)}.json`;
+            // Generate a detailed filename
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            a.download = `Full_System_Backup_${dateStr}.json`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -53,13 +55,13 @@ const BackupManager: React.FC = () => {
             try {
                 const response = await apiCall<{success: boolean}>('/emergency-restore', 'POST', { fileData: base64 });
                 if (response.success) {
-                    alert('✅ بازگردانی هوشمند با موفقیت انجام شد.\nسیستم رفرش می‌شود.');
+                    alert('✅ بازگردانی هوشمند با موفقیت انجام شد.\nسیستم جهت اعمال تغییرات رفرش می‌شود.');
                     window.location.reload();
                 } else {
                     throw new Error("Restore failed on server");
                 }
             } catch (error) {
-                setMessage('❌ خطا در بازگردانی فایل. لطفاً فایل صحیح را انتخاب کنید.');
+                setMessage('❌ خطا در بازگردانی فایل. لطفاً فایل صحیح (JSON) را انتخاب کنید.');
                 setRestoring(false);
             }
         };
@@ -75,7 +77,7 @@ const BackupManager: React.FC = () => {
             
             <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2 relative z-10 text-lg border-b pb-2">
                 <Database size={24} className="text-blue-600"/> 
-                مدیریت پشتیبان‌گیری و بازیابی (سیستم هوشمند)
+                مدیریت پشتیبان‌گیری و بازیابی (فول سیستم)
             </h3>
             
             {/* Auto-Backup Status */}
@@ -86,10 +88,12 @@ const BackupManager: React.FC = () => {
                 <div>
                     <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار فعال است</span>
                     <p className="text-xs text-green-700 leading-relaxed">
-                        سیستم به صورت خودکار <strong>هر ۱ ساعت</strong> یک نسخه پشتیبان تهیه می‌کند. 
-                        همچنین بکاپ‌های قدیمی‌تر از ۴۸ ساعت به طور خودکار حذف می‌شوند.
+                        سیستم به صورت خودکار <strong>هر ۱ ساعت</strong> یک نسخه کامل از دیتابیس می‌گیرد.
                         <br/>
-                        <span className="font-bold mt-1 block text-green-900">بک‌آپ‌ها مستقل از آپدیت هستند. با خیال راحت آپدیت کنید.</span>
+                        <span className="font-bold mt-1 block text-green-900 flex items-center gap-1">
+                            <ShieldCheck size={12}/>
+                            ضد خرابی: فایل‌های بکاپ مستقل از ورژن نرم‌افزار هستند.
+                        </span>
                     </p>
                 </div>
             </div>
@@ -97,31 +101,29 @@ const BackupManager: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                 {/* Download Section */}
                 <div className="space-y-3">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2">دریافت نسخه پشتیبان</h4>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2">تهیه نسخه پشتیبان (دستی)</h4>
                     <button 
                         type="button" 
-                        onClick={() => handleDownloadBackup(false)} 
+                        onClick={handleDownloadBackup} 
                         disabled={downloading}
-                        className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-sm font-bold transition-colors border border-gray-200"
+                        className="w-full flex items-center justify-between bg-blue-50 hover:bg-blue-100 text-blue-800 px-4 py-4 rounded-xl text-sm font-bold transition-colors border border-blue-200 shadow-sm"
                     >
                         <span className="flex items-center gap-2">
-                            {downloading ? <Loader2 size={18} className="animate-spin"/> : <DownloadCloud size={18} className="text-blue-600"/>} 
-                            دانلود کامل دیتابیس (JSON)
+                            {downloading ? <Loader2 size={20} className="animate-spin"/> : <DownloadCloud size={20}/>} 
+                            دانلود فایل کامل دیتابیس
                         </span>
-                        <span className="text-[10px] bg-white px-2 py-0.5 rounded border">شامل تمام منوها</span>
+                        <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600">JSON</span>
                     </button>
                     
-                    <div className="text-[10px] text-gray-500 leading-relaxed bg-gray-50 p-2 rounded border">
-                        <strong>اطلاعات موجود در فایل بک‌آپ:</strong>
-                        <ul className="list-disc list-inside mt-1 grid grid-cols-2 gap-1">
-                            <li className="font-bold text-blue-700">مجوزهای خروج کارخانه</li>
+                    <div className="text-[10px] text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-lg border">
+                        <div className="flex items-center gap-1 font-bold text-gray-700 mb-1"><FileJson size={12}/> محتویات فایل بکاپ:</div>
+                        <ul className="list-disc list-inside grid grid-cols-2 gap-x-2 gap-y-1">
+                            <li>تمام منوها و زیرمجموعه‌ها</li>
+                            <li>مجوزهای خروج و بیجک‌ها</li>
                             <li>دستور پرداخت‌ها</li>
-                            <li>بیجک‌ها و رسیدهای انبار</li>
-                            <li>کالاهای انبار</li>
-                            <li>پرونده‌های بازرگانی</li>
+                            <li>کاربران و تنظیمات</li>
+                            <li>اطلاعات انبار و بازرگانی</li>
                             <li>گزارشات انتظامات</li>
-                            <li>کاربران و نقش‌ها</li>
-                            <li>تنظیمات سیستم</li>
                         </ul>
                     </div>
                 </div>
@@ -135,15 +137,15 @@ const BackupManager: React.FC = () => {
                         type="button" 
                         onClick={handleRestoreClick} 
                         disabled={restoring} 
-                        className="w-full h-[106px] flex flex-col items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border-2 border-dashed border-amber-300 px-4 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full h-[120px] flex flex-col items-center justify-center gap-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border-2 border-dashed border-amber-300 px-4 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
                     >
-                        {restoring ? <Loader2 size={32} className="animate-spin"/> : <UploadCloud size={32}/>}
+                        {restoring ? <Loader2 size={36} className="animate-spin"/> : <UploadCloud size={36} className="group-hover:scale-110 transition-transform"/>}
                         {restoring ? 'در حال بازگردانی هوشمند...' : 'آپلود فایل بکاپ برای بازگردانی'}
-                        {!restoring && <span className="text-[10px] opacity-70 font-normal">سازگار با تمام نسخه‌های قبلی و بعدی</span>}
+                        {!restoring && <span className="text-[10px] opacity-70 font-normal bg-white/50 px-2 py-0.5 rounded">سازگار با تمام نسخه‌ها</span>}
                     </button>
                     
                     {message && (
-                        <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded text-center font-bold">
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded text-center font-bold border border-red-100">
                             {message}
                         </div>
                     )}

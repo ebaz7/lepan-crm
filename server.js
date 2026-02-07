@@ -7,6 +7,7 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
+import cron from 'node-cron'; // Import cron for scheduling
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,14 +16,16 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = process.cwd();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
+const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); // New Backups Directory
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
 console.log("------------------------------------------------");
-console.log("🚀 STARTING SERVER (FULL API SUPPORT MODE)");
+console.log("🚀 STARTING SERVER (AUTO-BACKUP & SMART RESTORE)");
 console.log(`📂 Root: ${ROOT_DIR}`);
 console.log("------------------------------------------------");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +36,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- 1. DEFAULT DB STRUCTURE (The Blueprint) ---
+// --- 1. DEFAULT DB STRUCTURE (The Blueprint for Consistency) ---
 const DEFAULT_DB = { 
     settings: { 
         currentTrackingNumber: 1000, 
@@ -53,8 +56,8 @@ const DEFAULT_DB = {
         savedContacts: [], 
         bankNames: [] 
     }, 
+    // ALL MODULES MUST BE LISTED HERE
     orders: [], 
-    // ALL THESE ARRAYS ARE MANDATORY FOR THE APP TO WORK
     exitPermits: [], 
     warehouseItems: [], 
     warehouseTransactions: [], 
@@ -68,40 +71,34 @@ const DEFAULT_DB = {
     users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }]
 };
 
-// --- 2. SELF-HEALING LOGIC (The Fix for White Screens) ---
+// --- 2. SELF-HEALING & SMART MERGE LOGIC ---
+// This function ensures that even if an old backup is loaded, 
+// the new app structure remains intact (preventing crashes).
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
     
-    // Merge top-level keys
-    const cleanData = { ...DEFAULT_DB, ...data };
+    // Start with a fresh, perfect structure
+    const cleanData = { ...DEFAULT_DB };
     
-    // Deep merge settings
+    // 1. Restore Settings (Deep Merge to keep defaults)
     if (data.settings) {
         cleanData.settings = { ...DEFAULT_DB.settings, ...data.settings };
-    } else {
-        cleanData.settings = { ...DEFAULT_DB.settings };
     }
 
-    // CRITICAL: Force ensure all module arrays exist.
-    // If a key is missing or null, set it to [] to prevent .map() crashes on frontend.
-    const requiredArrays = [
-        'orders', 
-        'exitPermits', 
-        'warehouseItems', 
-        'warehouseTransactions', 
-        'tradeRecords', 
-        'messages', 
-        'groups', 
-        'tasks', 
-        'securityLogs', 
-        'personnelDelays', 
-        'securityIncidents', 
-        'users'
+    // 2. Restore Arrays (Safe Copy)
+    // We iterate over the REQUIRED keys. If the backup has data, we take it.
+    // If the backup is missing a key (e.g. from an old version), we keep the empty array from DEFAULT_DB.
+    const arrayKeys = [
+        'orders', 'exitPermits', 'warehouseItems', 'warehouseTransactions', 
+        'tradeRecords', 'messages', 'groups', 'tasks', 
+        'securityLogs', 'personnelDelays', 'securityIncidents', 'users'
     ];
 
-    requiredArrays.forEach(key => {
-        if (!Array.isArray(cleanData[key])) {
-            console.log(`⚠️ Self-Healing: Recreated missing table '${key}'`);
+    arrayKeys.forEach(key => {
+        if (Array.isArray(data[key])) {
+            cleanData[key] = data[key];
+        } else {
+            console.log(`⚠️ Smart Restore: Auto-creating missing table '${key}' to prevent crash.`);
             cleanData[key] = [];
         }
     });
@@ -118,6 +115,8 @@ const getDb = () => {
         }
         const data = fs.readFileSync(DB_FILE, 'utf8');
         if (!data.trim()) return { ...DEFAULT_DB };
+        
+        // Always sanitize on read to auto-fix any corruption
         return sanitizeDb(JSON.parse(data));
     } catch (e) { 
         console.error("❌ DB Read Failed, using default:", e.message);
@@ -127,12 +126,39 @@ const getDb = () => {
 
 const saveDb = (data) => {
     try {
+        // Always sanitize before saving to ensure consistency
         const safeData = sanitizeDb(data);
         const tempFile = `${DB_FILE}.tmp`;
         fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
         fs.renameSync(tempFile, DB_FILE);
     } catch (e) { console.error("❌ DB Save Failed:", e.message); }
 };
+
+// --- 3. AUTOMATIC BACKUP SYSTEM ---
+// Schedule: Every hour at minute 0 (0 * * * *)
+cron.schedule('0 * * * *', () => {
+    console.log('⏰ Running Automatic Backup...');
+    try {
+        const db = getDb();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const backupFile = path.join(BACKUPS_DIR, `auto_backup_${timestamp}.json`);
+        fs.writeFileSync(backupFile, JSON.stringify(db, null, 2));
+        console.log(`✅ Backup created: ${backupFile}`);
+
+        // Cleanup: Keep only last 48 backups (48 hours)
+        const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('auto_backup_'));
+        if (files.length > 48) {
+            files.sort(); // Sorts by name (timestamp), so oldest first
+            const toDelete = files.slice(0, files.length - 48);
+            toDelete.forEach(f => {
+                fs.unlinkSync(path.join(BACKUPS_DIR, f));
+                console.log(`🗑️ Auto-Clean: Deleted old backup ${f}`);
+            });
+        }
+    } catch (e) {
+        console.error('❌ Backup Failed:', e.message);
+    }
+});
 
 const calculateNextNumber = (db, type, companyName = null) => {
     let max = 0;
@@ -151,7 +177,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
     return 1001;
 };
 
-// ================= API ROUTES (Serving ALL Modules) =================
+// ================= API ROUTES =================
 
 // 1. System & Auth
 app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
@@ -181,7 +207,7 @@ app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.or
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// 4. Exit Permits (THIS WAS MISSING, CAUSING 404s)
+// 4. Exit Permits
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
 app.post('/api/exit-permits', (req, res) => {
     const db = getDb();
@@ -201,7 +227,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
 app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
 app.get('/api/next-exit-permit-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) }));
 
-// 5. Warehouse (THIS WAS MISSING)
+// 5. Warehouse
 app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems));
 app.post('/api/warehouse/items', (req, res) => { const db = getDb(); db.warehouseItems.push(req.body); saveDb(db); res.json(db.warehouseItems); });
 app.put('/api/warehouse/items/:id', (req, res) => { const db = getDb(); const idx = db.warehouseItems.findIndex(i => i.id === req.params.id); if(idx > -1) { db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body }; saveDb(db); res.json(db.warehouseItems); } else res.status(404).send('Not Found'); });
@@ -224,13 +250,13 @@ app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); c
 app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
 app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
 
-// 6. Trade / Commerce (THIS WAS MISSING)
+// 6. Trade
 app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
 app.post('/api/trade', (req, res) => { const db = getDb(); db.tradeRecords.unshift(req.body); saveDb(db); res.json(db.tradeRecords); });
 app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
 app.delete('/api/trade/:id', (req, res) => { const db = getDb(); db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); saveDb(db); res.json(db.tradeRecords); });
 
-// 7. Chat (THIS WAS MISSING)
+// 7. Chat
 app.get('/api/chat', (req, res) => res.json(getDb().messages));
 app.post('/api/chat', (req, res) => { const db = getDb(); db.messages.push(req.body); saveDb(db); res.json(db.messages); });
 app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
@@ -246,7 +272,7 @@ app.post('/api/tasks', (req, res) => { const db = getDb(); db.tasks.push(req.bod
 app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
 app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
 
-// 8. Security (THIS WAS MISSING)
+// 8. Security
 app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs));
 app.post('/api/security/logs', (req, res) => { const db = getDb(); db.securityLogs.unshift(req.body); saveDb(db); res.json(db.securityLogs); });
 app.put('/api/security/logs/:id', (req, res) => { const db = getDb(); const idx = db.securityLogs.findIndex(l => l.id === req.params.id); if(idx > -1) { db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; saveDb(db); res.json(db.securityLogs); } else res.status(404).send('Not Found'); });
@@ -276,19 +302,23 @@ app.post('/api/upload', (req, res) => {
 
 app.get('/api/full-backup', (req, res) => {
     const db = getDb();
-    res.setHeader('Content-Disposition', `attachment; filename=backup.json`);
+    res.setHeader('Content-Disposition', `attachment; filename=backup_${Date.now()}.json`);
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(db, null, 2));
 });
 
-// CRITICAL: Emergency Restore with FORCE SANITIZATION
+// SMART RESTORE: The logic that makes it version-independent
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
         const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
         const parsed = JSON.parse(jsonStr);
-        saveDb(sanitizeDb(parsed)); // Ensure the restored DB is valid
+        
+        // This ensures old backups work on new versions without crashing
+        // It merges the backup data into the LATEST default structure
+        saveDb(sanitizeDb(parsed)); 
+        
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
