@@ -5,7 +5,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import compression from 'compression'; 
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import puppeteer from 'puppeteer';
 import cron from 'node-cron'; // Import cron for scheduling
 
@@ -348,13 +348,25 @@ app.post('/api/restart-bot', async (req, res) => {
 
     try {
         if (type === 'telegram') {
-            const m = await import('./backend/telegram.js');
-            m.initTelegram(db.settings.telegramBotToken);
+            const modulePath = path.join(__dirname, 'backend', 'telegram.js');
+            // Use file:// URL for absolute paths in ESM import
+            const m = await import(pathToFileURL(modulePath).href);
+            if (db.settings?.telegramBotToken) {
+                m.initTelegram(db.settings.telegramBotToken);
+            } else {
+                throw new Error("Telegram token not set");
+            }
         } else if (type === 'bale') {
-            const m = await import('./backend/bale.js');
-            m.restartBaleBot(db.settings.baleBotToken);
+            const modulePath = path.join(__dirname, 'backend', 'bale.js');
+            const m = await import(pathToFileURL(modulePath).href);
+            if (db.settings?.baleBotToken) {
+                m.restartBaleBot(db.settings.baleBotToken);
+            } else {
+                 throw new Error("Bale token not set");
+            }
         } else if (type === 'whatsapp') {
-            const m = await import('./backend/whatsapp.js');
+            const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
+            const m = await import(pathToFileURL(modulePath).href);
             // Force restart session
             m.restartSession(path.join(ROOT_DIR, 'wauth'));
         }

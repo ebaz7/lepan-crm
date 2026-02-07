@@ -194,7 +194,7 @@ export const restartSession = async (authDir) => {
         
     } catch (e) {
         console.error("Restart Critical Failure:", e);
-        // Force re-init as last resort
+        // Force re-init as last resort even if destroy failed
         setTimeout(() => initWhatsApp(authDir), 3000);
     }
 };
