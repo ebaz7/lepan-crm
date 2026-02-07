@@ -338,12 +338,12 @@ app.post('/api/send-whatsapp', async (req, res) => {
     }
 });
 
-// --- TELEGRAM API ROUTES ---
+// --- TELEGRAM API ROUTES (NEW) ---
 app.get('/api/telegram/status', (req, res) => {
-    // Basic status check: Is bot instance active?
-    // We can expand this in telegram.js to return more info
+    // Basic status check
     res.json({ ready: true }); 
 });
+
 app.post('/api/telegram/restart', (req, res) => {
     try {
         TelegramBotModule.stopTelegram();
@@ -359,10 +359,11 @@ app.post('/api/telegram/restart', (req, res) => {
     }
 });
 
-// --- BALE API ROUTES ---
+// --- BALE API ROUTES (NEW) ---
 app.get('/api/bale/status', (req, res) => {
-    res.json({ ready: true }); // Simplistic status
+    res.json({ ready: true }); 
 });
+
 app.post('/api/bale/restart', (req, res) => {
     try {
         BaleBotModule.stopBale();
