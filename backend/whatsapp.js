@@ -172,29 +172,27 @@ export const sendMessage = async (number, text, mediaData) => {
 // --- NEW RESTART FUNCTION (HARDENED) ---
 export const restartSession = async (authDir) => {
     console.log(">>> FORCE RESTARTING WHATSAPP SESSION...");
-    try {
-        if (client) {
-            // Add try catch to destroy as it might fail if already destroyed or initializing
-            try {
-                await client.destroy();
-            } catch (destErr) {
-                console.warn("Client destroy warning:", destErr.message);
-            }
-            client = null;
+    
+    if (client) {
+        // Add try catch to destroy as it might fail if already destroyed or initializing
+        try {
+            // Race condition check: If destroy hangs, force continue after 5s
+            await Promise.race([
+                client.destroy(),
+                new Promise((resolve) => setTimeout(resolve, 5000))
+            ]);
+        } catch (destErr) {
+            console.warn("Client destroy warning (ignored):", destErr.message);
         }
-        
-        isReady = false;
-        qrCode = null;
-        clientInfo = null;
-        
-        // Wait a bit for filesystem locks to release
-        setTimeout(() => {
-            initWhatsApp(authDir);
-        }, 2000);
-        
-    } catch (e) {
-        console.error("Restart Critical Failure:", e);
-        // Force re-init as last resort even if destroy failed
-        setTimeout(() => initWhatsApp(authDir), 3000);
+        client = null;
     }
+    
+    isReady = false;
+    qrCode = null;
+    clientInfo = null;
+    
+    // Wait a bit for filesystem locks to release
+    setTimeout(() => {
+        initWhatsApp(authDir);
+    }, 2000);
 };

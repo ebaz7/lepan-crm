@@ -72,28 +72,17 @@ const DEFAULT_DB = {
 };
 
 // --- 2. SELF-HEALING & SMART MERGE LOGIC ---
-// This function ensures that even if an old backup is loaded, 
-// the new app structure remains intact (preventing crashes).
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
-    
-    // Start with a fresh, perfect structure
     const cleanData = { ...DEFAULT_DB };
-    
-    // 1. Restore Settings (Deep Merge to keep defaults)
     if (data.settings) {
         cleanData.settings = { ...DEFAULT_DB.settings, ...data.settings };
     }
-
-    // 2. Restore Arrays (Safe Copy)
-    // We iterate over the REQUIRED keys. If the backup has data, we take it.
-    // If the backup is missing a key (e.g. from an old version), we keep the empty array from DEFAULT_DB.
     const arrayKeys = [
         'orders', 'exitPermits', 'warehouseItems', 'warehouseTransactions', 
         'tradeRecords', 'messages', 'groups', 'tasks', 
         'securityLogs', 'personnelDelays', 'securityIncidents', 'users'
     ];
-
     arrayKeys.forEach(key => {
         if (Array.isArray(data[key])) {
             cleanData[key] = data[key];
@@ -102,7 +91,6 @@ const sanitizeDb = (data) => {
             cleanData[key] = [];
         }
     });
-
     return cleanData;
 };
 
@@ -115,8 +103,6 @@ const getDb = () => {
         }
         const data = fs.readFileSync(DB_FILE, 'utf8');
         if (!data.trim()) return { ...DEFAULT_DB };
-        
-        // Always sanitize on read to auto-fix any corruption
         return sanitizeDb(JSON.parse(data));
     } catch (e) { 
         console.error("❌ DB Read Failed, using default:", e.message);
@@ -126,7 +112,6 @@ const getDb = () => {
 
 const saveDb = (data) => {
     try {
-        // Always sanitize before saving to ensure consistency
         const safeData = sanitizeDb(data);
         const tempFile = `${DB_FILE}.tmp`;
         fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
@@ -135,7 +120,6 @@ const saveDb = (data) => {
 };
 
 // --- 3. AUTOMATIC BACKUP SYSTEM ---
-// Schedule: Every hour at minute 0 (0 * * * *)
 cron.schedule('0 * * * *', () => {
     console.log('⏰ Running Automatic Backup...');
     try {
@@ -145,10 +129,9 @@ cron.schedule('0 * * * *', () => {
         fs.writeFileSync(backupFile, JSON.stringify(db, null, 2));
         console.log(`✅ Backup created: ${backupFile}`);
 
-        // Cleanup: Keep only last 48 backups (48 hours)
         const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('auto_backup_'));
         if (files.length > 48) {
-            files.sort(); // Sorts by name (timestamp), so oldest first
+            files.sort();
             const toDelete = files.slice(0, files.length - 48);
             toDelete.forEach(f => {
                 fs.unlinkSync(path.join(BACKUPS_DIR, f));
@@ -307,18 +290,14 @@ app.get('/api/full-backup', (req, res) => {
     res.send(JSON.stringify(db, null, 2));
 });
 
-// SMART RESTORE: The logic that makes it version-independent
+// SMART RESTORE
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
         const base64 = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         const jsonStr = Buffer.from(base64, 'base64').toString('utf-8');
         const parsed = JSON.parse(jsonStr);
-        
-        // This ensures old backups work on new versions without crashing
-        // It merges the backup data into the LATEST default structure
         saveDb(sanitizeDb(parsed)); 
-        
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -347,11 +326,15 @@ app.post('/api/restart-bot', async (req, res) => {
     console.log(`🔄 Restart Request Received for: ${type}`);
 
     try {
+        if (!db || !db.settings) {
+            throw new Error("Database settings not available");
+        }
+
         if (type === 'telegram') {
             const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            // Use file:// URL for absolute paths in ESM import
+            // Use pathToFileURL to ensure Windows paths work with import()
             const m = await import(pathToFileURL(modulePath).href);
-            if (db.settings?.telegramBotToken) {
+            if (db.settings.telegramBotToken) {
                 m.initTelegram(db.settings.telegramBotToken);
             } else {
                 throw new Error("Telegram token not set");
@@ -359,7 +342,7 @@ app.post('/api/restart-bot', async (req, res) => {
         } else if (type === 'bale') {
             const modulePath = path.join(__dirname, 'backend', 'bale.js');
             const m = await import(pathToFileURL(modulePath).href);
-            if (db.settings?.baleBotToken) {
+            if (db.settings.baleBotToken) {
                 m.restartBaleBot(db.settings.baleBotToken);
             } else {
                  throw new Error("Bale token not set");
@@ -368,12 +351,16 @@ app.post('/api/restart-bot', async (req, res) => {
             const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
             const m = await import(pathToFileURL(modulePath).href);
             // Force restart session
-            m.restartSession(path.join(ROOT_DIR, 'wauth'));
+            const authPath = path.join(ROOT_DIR, 'wauth');
+            m.restartSession(authPath);
+        } else {
+            throw new Error(`Unknown bot type: ${type}`);
         }
         res.json({ success: true });
     } catch (e) { 
-        console.error(`Restart Failed for ${type}:`, e);
-        res.status(500).json({ error: e.message }); 
+        console.error(`❌ Restart Failed for ${type}:`, e);
+        // Send actual error message to client
+        res.status(500).json({ error: e.message || "Internal Server Error" }); 
     }
 });
 
