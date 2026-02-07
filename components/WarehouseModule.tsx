@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
 import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
-import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw } from 'lucide-react';
+import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff } from 'lucide-react';
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
@@ -385,6 +385,79 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
     const handlePrintStock = () => { setShowPrintStockReport(true); };
 
+    // --- EXCEL EXPORT FUNCTION (Formatted as HTML Table - OFFLINE) ---
+    const handleExportExcel = () => {
+        if (!allWarehousesStock || allWarehousesStock.length === 0) return alert("داده‌ای برای خروجی وجود ندارد.");
+
+        const tableStyle = `border-collapse: collapse; width: 100%; direction: rtl; font-family: Tahoma, sans-serif; text-align: center;`;
+        const cellStyle = `border: 1px solid black; padding: 5px;`;
+        const headerStyle = `background-color: #f3f4f6; font-weight: bold;`;
+        const colors = ['#d8b4fe', '#fdba74', '#93c5fd', '#86efac', '#fca5a5']; // Purple, Orange, Blue, Green, Red
+
+        let html = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+            <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>موجودی انبار</x:Name><x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        </head>
+        <body>
+            <table border="1" style="${tableStyle}">
+                <thead>
+                    <tr>
+                        ${allWarehousesStock.map((group, index) => {
+                            const bg = colors[index % colors.length];
+                            return `<th colspan="4" style="${cellStyle} background-color: ${bg}; font-size: 14px;">${group.company}</th>`;
+                        }).join('')}
+                    </tr>
+                    <tr>
+                        ${allWarehousesStock.map(() => `
+                            <th style="${cellStyle} ${headerStyle}">نخ / کالا</th>
+                            <th style="${cellStyle} ${headerStyle}">کارتن</th>
+                            <th style="${cellStyle} ${headerStyle}">وزن</th>
+                            <th style="${cellStyle} ${headerStyle}">کانتینر</th>
+                        `).join('')}
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        // Iterate rows (items)
+        const rowCount = allWarehousesStock[0]?.items.length || 0;
+        
+        for (let i = 0; i < rowCount; i++) {
+            html += `<tr>`;
+            allWarehousesStock.forEach(group => {
+                const item = group.items[i];
+                if (item) {
+                    html += `
+                        <td style="${cellStyle} font-weight: bold; text-align: right;">${item.name}</td>
+                        <td style="${cellStyle}">${item.quantity}</td>
+                        <td style="${cellStyle}">${item.weight > 0 ? item.weight : 0}</td>
+                        <td style="${cellStyle} color: #666;">${item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}</td>
+                    `;
+                } else {
+                    html += `<td colspan="4" style="${cellStyle}">-</td>`;
+                }
+            });
+            html += `</tr>`;
+        }
+
+        html += `
+                </tbody>
+            </table>
+        </body>
+        </html>`;
+
+        const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Stock_Report_${new Date().toISOString().slice(0, 10)}.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     if (!settings || loadingData) return <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 gap-2"><Loader2 className="animate-spin text-blue-600" size={32}/><span className="text-sm font-bold">در حال بارگذاری اطلاعات انبار...</span></div>;
     const companyList = settings.companies?.filter(c => c.showInWarehouse !== false).map(c => c.name) || [];
     if (companyList.length === 0) return (<div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 animate-fade-in"><div className="bg-amber-100 p-4 rounded-full text-amber-600 mb-4 shadow-sm"><AlertTriangle size={48}/></div><h2 className="text-xl font-bold text-gray-800 mb-2">هیچ شرکتی برای انبار فعال نشده است</h2><p className="text-gray-600 max-w-md mb-6 leading-relaxed">برای استفاده از سیستم انبار، لطفاً در تنظیمات سیستم به بخش "مدیریت شرکت‌ها" بروید و تیک "نمایش در انبار" را برای شرکت‌های مورد نظر فعال کنید.</p><div className="flex gap-2"><button onClick={() => window.location.hash = '#settings'} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg"><Settings size={20}/><span>رفتن به تنظیمات</span></button></div></div>);
@@ -515,6 +588,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         <div className="flex justify-between items-center mb-4 no-print">
                             <h2 className="text-xl font-bold">گزارش موجودی کلی انبارها (تفکیکی)</h2>
                             <div className="flex gap-2">
+                                <button onClick={handleExportExcel} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700"><FileSpreadsheet size={18}/> خروجی اکسل (آفلاین)</button>
                                 <button onClick={handlePrintStock} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700"><Printer size={18}/> چاپ / PDF</button>
                             </div>
                         </div>
@@ -551,6 +625,4 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     );
 };
 
-// Sub-forms for editing (keep same logic)
-// ...
 export default WarehouseModule;

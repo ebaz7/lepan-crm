@@ -1,7 +1,7 @@
 
 import React, { useRef, useState } from 'react';
-import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson } from 'lucide-react';
-import { apiCall } from '../../services/apiService';
+import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff } from 'lucide-react';
+import { apiCall, LS_KEYS } from '../../services/apiService';
 
 const BackupManager: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -9,35 +9,87 @@ const BackupManager: React.FC = () => {
     const [downloading, setDownloading] = useState(false);
     const [message, setMessage] = useState('');
 
+    // Helper to read local storage safely
+    const getLocalJSON = (key: string, defaultVal: any = []) => {
+        try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : defaultVal;
+        } catch (e) { return defaultVal; }
+    };
+
+    const downloadBlob = (blob: Blob, filename: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    };
+
     const handleDownloadBackup = async () => {
         setDownloading(true);
+        setMessage('');
+        
         try {
-            // Call the robust full-backup endpoint
-            const response = await fetch(`/api/full-backup`);
+            // 1. Try Server Backup (Best Quality - Complete DB)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for server check
+
+            const response = await fetch(`/api/full-backup`, { signal: controller.signal });
+            clearTimeout(timeoutId);
             
-            if (!response.ok) throw new Error("Download failed");
+            if (!response.ok) throw new Error("Server Download Failed");
             
             const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            // Generate a detailed filename
             const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            a.download = `Full_System_Backup_${dateStr}.json`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            downloadBlob(blob, `Full_System_Backup_${dateStr}.json`);
             
         } catch (e) {
-            alert("خطا در دانلود بکاپ. لطفا مجدد تلاش کنید.");
+            console.warn("Server unreachable, switching to Offline Mode...", e);
+            
+            // 2. Fallback: Offline Backup (From LocalStorage)
+            try {
+                const localData = {
+                    settings: getLocalJSON(LS_KEYS.SETTINGS, {}),
+                    orders: getLocalJSON(LS_KEYS.ORDERS, []),
+                    users: getLocalJSON(LS_KEYS.USERS, []),
+                    tradeRecords: getLocalJSON(LS_KEYS.TRADE, []),
+                    warehouseItems: getLocalJSON(LS_KEYS.WH_ITEMS, []),
+                    warehouseTransactions: getLocalJSON(LS_KEYS.WH_TX, []),
+                    messages: getLocalJSON(LS_KEYS.CHAT, []),
+                    groups: getLocalJSON(LS_KEYS.GROUPS, []),
+                    tasks: getLocalJSON(LS_KEYS.TASKS, []),
+                    // Initialize missing keys to empty arrays to ensure restore compatibility
+                    exitPermits: [], 
+                    securityLogs: [],
+                    personnelDelays: [],
+                    securityIncidents: [],
+                    meta: { 
+                        source: 'offline_browser_cache', 
+                        date: new Date().toISOString(),
+                        note: 'Created in Offline Mode'
+                    }
+                };
+
+                const jsonStr = JSON.stringify(localData, null, 2);
+                const blob = new Blob([jsonStr], { type: "application/json" });
+                const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                
+                downloadBlob(blob, `Offline_Cache_Backup_${dateStr}.json`);
+                
+                alert('⚠️ هشدار: ارتباط با سرور برقرار نشد.\n\n✅ فایل پشتیبان از «حافظه موقت مرورگر» (Offline Cache) تهیه و دانلود شد.\n\nتوجه: این فایل شامل اطلاعاتی است که آخرین بار روی این دستگاه مشاهده کرده‌اید.');
+            } catch (err) {
+                alert("خطا در ایجاد بکاپ آفلاین.");
+            }
         } finally {
             setDownloading(false);
         }
     };
 
     const handleRestoreClick = () => {
-        if (confirm('⚠️ هشدار بازگردانی هوشمند:\n\nآیا مطمئن هستید؟ این عملیات تمام اطلاعات فعلی را با فایل انتخاب شده جایگزین می‌کند.\n\nنکته: سیستم از «بازسازی هوشمند» استفاده می‌کند. این یعنی می‌توانید بکاپ نسخه قدیمی را روی نسخه جدید بریزید و همه چیز (پرونده‌ها، انبار، پرداخت و...) سالم می‌ماند.')) {
+        if (confirm('⚠️ هشدار بازگردانی هوشمند:\n\nآیا مطمئن هستید؟ این عملیات تمام اطلاعات فعلی را با فایل انتخاب شده جایگزین می‌کند.\n\nنکته: سیستم از «بازسازی هوشمند» استفاده می‌کند. این یعنی می‌توانید بکاپ نسخه قدیمی را روی نسخه جدید بریزید و همه چیز سالم می‌ماند.')) {
             fileInputRef.current?.click();
         }
     };
@@ -112,7 +164,9 @@ const BackupManager: React.FC = () => {
                             {downloading ? <Loader2 size={20} className="animate-spin"/> : <DownloadCloud size={20}/>} 
                             دانلود فایل کامل دیتابیس
                         </span>
-                        <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600">JSON</span>
+                        <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600 flex items-center gap-1">
+                            JSON <WifiOff size={10} className="ml-1 text-gray-400" title="پشتیبانی از حالت آفلاین"/>
+                        </span>
                     </button>
                     
                     <div className="text-[10px] text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-lg border">
@@ -125,6 +179,9 @@ const BackupManager: React.FC = () => {
                             <li>اطلاعات انبار و بازرگانی</li>
                             <li>گزارشات انتظامات</li>
                         </ul>
+                        <div className="mt-2 text-blue-600 font-bold border-t pt-1 border-gray-200">
+                            * در صورت قطعی اینترنت، فایل از حافظه مرورگر ساخته می‌شود.
+                        </div>
                     </div>
                 </div>
 
