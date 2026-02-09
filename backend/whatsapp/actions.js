@@ -153,7 +153,6 @@ export const handlePaymentReport = (db, filterRole) => {
         report += `👤 ذینفع: ${o.payee}\n`;
         report += `💵 مبلغ: ${formatCurrency(o.totalAmount)}\n`;
         report += `📊 وضعیت: ${o.status}\n`;
-        report += `⏳ اقدام: تایید ${o.trackingNumber}\n`;
         report += `------------------\n`;
     });
     return report;
@@ -170,7 +169,6 @@ export const handleExitReport = (db) => {
         report += `👤 گیرنده: ${p.recipientName}\n`;
         report += `📦 کالا: ${p.goodsName}\n`;
         report += `📊 وضعیت: ${p.status}\n`;
-        report += `⏳ اقدام: تایید ${p.permitNumber}\n`;
         report += `------------------\n`;
     });
     return report;

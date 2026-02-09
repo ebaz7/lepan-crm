@@ -126,10 +126,10 @@ export const initTelegram = async (token) => {
                             replyText = Actions.handlePaymentReport(db, filterRole);
                             break;
                         case 'REPORT_EXIT':
-                            replyText = Actions.handleExitReport(db); 
+                            replyText = Actions.handleExitReport(db); // Add logic in actions.js if needed
                             break;
                         case 'REPORT_BIJAK':
-                            replyText = Actions.handleBijakReport(db);
+                            replyText = Actions.handleBijakReport(db); // Add logic in actions.js if needed
                             break;
                         case 'REPORT_GENERAL':
                             replyText = Actions.handleReport(db);
