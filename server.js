@@ -9,8 +9,7 @@ import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
 import cron from 'node-cron'; 
 
-// --- STATIC IMPORTS FOR BOTS (CRITICAL FIX) ---
-// This ensures modules are loaded immediately on server start
+// --- STATIC IMPORTS FOR BOTS ---
 import * as TelegramBotModule from './backend/telegram.js';
 import * as BaleBotModule from './backend/bale.js';
 import * as WhatsAppModule from './backend/whatsapp.js';
@@ -18,18 +17,31 @@ import * as WhatsAppModule from './backend/whatsapp.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- PATH DEFINITIONS ---
-const ROOT_DIR = process.cwd();
+// --- CRITICAL FIX FOR SERVICE MODE ---
+// Use __dirname instead of process.cwd() to ensure paths are correct 
+// even when running as a background Windows Service.
+const ROOT_DIR = __dirname; 
+
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
 const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const WAUTH_DIR = path.join(ROOT_DIR, 'wauth');
 
-console.log("================================================");
-console.log("🚀 PAYMENT SYSTEM SERVER STARTING...");
-console.log(`📂 Root Directory: ${ROOT_DIR}`);
-console.log("================================================");
+// --- LOGGING SETUP FOR SERVICE ---
+// Redirect console logs to a file so user can see them even in Service mode
+const LOG_FILE = path.join(ROOT_DIR, 'service_debug.log');
+const logToFile = (msg) => {
+    const timestamp = new Date().toISOString();
+    const logMsg = `[${timestamp}] ${msg}\n`;
+    try { fs.appendFileSync(LOG_FILE, logMsg); } catch(e){}
+    process.stdout.write(logMsg); // Also print to console if visible
+};
+
+logToFile("================================================");
+logToFile("🚀 PAYMENT SYSTEM SERVER STARTING (SERVICE MODE SAFE)...");
+logToFile(`📂 Root Directory: ${ROOT_DIR}`);
+logToFile("================================================");
 
 // Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -115,7 +127,7 @@ const getDb = () => {
         if (!data.trim()) return { ...DEFAULT_DB };
         return sanitizeDb(JSON.parse(data));
     } catch (e) { 
-        console.error("❌ DB Read Failed:", e.message);
+        logToFile(`❌ DB Read Failed: ${e.message}`);
         return { ...DEFAULT_DB }; 
     }
 };
@@ -126,7 +138,7 @@ const saveDb = (data) => {
         const tempFile = `${DB_FILE}.tmp`;
         fs.writeFileSync(tempFile, JSON.stringify(safeData, null, 2));
         fs.renameSync(tempFile, DB_FILE);
-    } catch (e) { console.error("❌ DB Save Failed:", e.message); }
+    } catch (e) { logToFile(`❌ DB Save Failed: ${e.message}`); }
 };
 
 cron.schedule('0 * * * *', () => {
@@ -167,7 +179,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
 // --- BOT RESTART ENDPOINT ---
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
-    console.log(`🔄 Manual Restart Request: ${type}`);
+    logToFile(`🔄 Manual Restart Request: ${type}`);
 
     try {
         const db = getDb(); 
@@ -190,7 +202,7 @@ app.post('/api/restart-bot', async (req, res) => {
 
         res.json({ success: true });
     } catch (e) { 
-        console.error(`❌ Restart Error (${type}):`, e.message);
+        logToFile(`❌ Restart Error (${type}): ${e.message}`);
         res.status(500).json({ error: e.message }); 
     }
 });
@@ -387,9 +399,9 @@ app.get('*', (req, res) => {
 
 // INITIAL BOT STARTUP (Immediate)
 const startupBots = async () => {
-    console.log("------------------------------------------------");
-    console.log("🤖 STARTING BOTS...");
-    console.log("------------------------------------------------");
+    logToFile("------------------------------------------------");
+    logToFile("🤖 STARTING BOTS...");
+    logToFile("------------------------------------------------");
     
     const db = getDb();
 
@@ -397,28 +409,31 @@ const startupBots = async () => {
     if(db.settings.telegramBotToken) {
         try {
             await TelegramBotModule.initTelegram(db.settings.telegramBotToken);
-        } catch (e) { console.error("Telegram Init Fail:", e.message); }
+            logToFile("Telegram Init Requested");
+        } catch (e) { logToFile(`Telegram Init Fail: ${e.message}`); }
     } else {
-        console.log("⚠️ Telegram Bot Token missing.");
+        logToFile("⚠️ Telegram Bot Token missing.");
     }
 
     // 2. WhatsApp
     try {
         await WhatsAppModule.initWhatsApp(WAUTH_DIR);
-    } catch (e) { console.error("WhatsApp Init Fail:", e.message); }
+        logToFile("WhatsApp Init Requested");
+    } catch (e) { logToFile(`WhatsApp Init Fail: ${e.message}`); }
 
     // 3. Bale
     if(db.settings.baleBotToken) {
         try {
             await BaleBotModule.initBaleBot(db.settings.baleBotToken);
-        } catch (e) { console.error("Bale Init Fail:", e.message); }
+            logToFile("Bale Init Requested");
+        } catch (e) { logToFile(`Bale Init Fail: ${e.message}`); }
     } else {
-        console.log("⚠️ Bale Bot Token missing.");
+        logToFile("⚠️ Bale Bot Token missing.");
     }
 };
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server running on ${PORT}`);
+    logToFile(`✅ Server running on ${PORT}`);
     // Start bots immediately
     startupBots();
 });

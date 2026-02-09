@@ -8,8 +8,8 @@ import readline from 'readline';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- 1. HARDCODED INSTALL PATH ---
-const INSTALL_DIR = "C:\\PaymentSystem"; 
+// --- DYNAMIC INSTALL PATH (Uses Current Location) ---
+const INSTALL_DIR = __dirname; 
 
 // Create Readline interface
 const rl = readline.createInterface({
@@ -18,9 +18,9 @@ const rl = readline.createInterface({
 });
 
 console.log("---------------------------------------------------------");
-console.log("   Payment System - Windows Service Installer (Advanced) ");
+console.log("   Payment System - Windows Service Installer (Roboust)  ");
 console.log("---------------------------------------------------------");
-console.log(`> Target Installation Directory: ${INSTALL_DIR}`);
+console.log(`> Installing from: ${INSTALL_DIR}`);
 
 // 2. Ask for Port
 rl.question('Please enter the port number (Press Enter for 80): ', (inputPort) => {
@@ -30,12 +30,8 @@ rl.question('Please enter the port number (Press Enter for 80): ', (inputPort) =
   // 3. Create .env in the target directory
   const envContent = `PORT=${port}\n`;
   try {
-    if (!fs.existsSync(INSTALL_DIR)) {
-        console.error(`ERROR: Directory ${INSTALL_DIR} does not exist! Please create it first.`);
-        process.exit(1);
-    }
     fs.writeFileSync(path.join(INSTALL_DIR, '.env'), envContent);
-    console.log('> Saved configuration to .env file in C:\\PaymentSystem');
+    console.log('> Saved configuration to .env file');
   } catch (err) {
     console.error('> Error writing .env file:', err);
     rl.close();
@@ -48,9 +44,9 @@ rl.question('Please enter the port number (Press Enter for 80): ', (inputPort) =
   const svc = new Service({
     name: 'PaymentSystem',
     description: 'Payment Order Management System Web Server',
-    // Point to the script INSIDE C:\PaymentSystem
+    // Point to the script RELATIVE to the install dir
     script: path.join(INSTALL_DIR, 'server.js'), 
-    workingDirectory: INSTALL_DIR, // *** CRITICAL: Force Service to run in this dir ***
+    workingDirectory: INSTALL_DIR, // *** CRITICAL: Force Service to run in THIS dir ***
     env: [{
       name: "PORT",
       value: port
@@ -65,16 +61,18 @@ rl.question('Please enter the port number (Press Enter for 80): ', (inputPort) =
     console.log('> Service installed successfully!');
     console.log('> Starting service...');
     svc.start();
+    console.log('> Service started in BACKGROUND.');
+    console.log(`> IMPORTANT: Bot logs are now hidden. Check "service_debug.log" in this folder for output.`);
   });
 
   svc.on('alreadyinstalled', function() {
     console.log('Service already installed. Please run "node uninstall-service.js" first.');
+    // Try start anyway
     svc.start(); 
   });
 
   svc.on('start', function() {
     console.log(`> Service started! App is running on http://localhost:${port}`);
-    console.log(`> Logs are located at ${path.join(INSTALL_DIR, 'server_status.log')}`);
     rl.close();
   });
 
