@@ -19,37 +19,12 @@ const getDb = () => {
     return null;
 };
 
-const getUserByTelegramId = (db, chatId) => {
-    return db.users.find(u => u.telegramChatId && u.telegramChatId.toString() === chatId.toString());
+const saveDb = (data) => {
+    try { fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2)); } catch (e) { console.error("DB Write Error", e); }
 };
 
-// --- DYNAMIC KEYBOARD BUILDER ---
-const getKeyboardForUser = (role) => {
-    const keyboard = [];
-    
-    // Row 1: Payments
-    if (['admin', 'ceo', 'financial', 'manager'].includes(role)) {
-        keyboard.push([{ text: "💰 کارتابل پرداخت" }]);
-    }
-    
-    // Row 2: Logistics
-    const logisticsRow = [];
-    if (['admin', 'ceo', 'factory_manager', 'sales_manager'].includes(role)) {
-        logisticsRow.push({ text: "🚛 کارتابل خروج" });
-    }
-    if (['admin', 'ceo', 'warehouse_keeper'].includes(role)) {
-        logisticsRow.push({ text: "📦 کارتابل بیجک" });
-    }
-    if (logisticsRow.length > 0) keyboard.push(logisticsRow);
-
-    // Row 3: Utility
-    keyboard.push([{ text: "❓ راهنما" }, { text: "📊 گزارش کلی" }]);
-
-    return {
-        keyboard: keyboard,
-        resize_keyboard: true,
-        one_time_keyboard: false
-    };
+const getUserByTelegramId = (db, chatId) => {
+    return db.users.find(u => u.telegramChatId && u.telegramChatId.toString() === chatId.toString());
 };
 
 export const initTelegram = async (token) => {
@@ -61,11 +36,13 @@ export const initTelegram = async (token) => {
         bot = null;
     }
 
+    // --- PROXY CONFIGURATION ---
     const requestOptions = {
         agentOptions: { keepAlive: true, family: 4 },
         timeout: 30000 
     };
 
+    // Check for Proxy in Environment Variables
     if (process.env.PROXY_URL) {
         console.log(`>>> Telegram using Proxy: ${process.env.PROXY_URL}`);
         requestOptions.proxy = process.env.PROXY_URL;
@@ -93,48 +70,22 @@ export const initTelegram = async (token) => {
             const db = getDb();
             const user = getUserByTelegramId(db, chatId);
             
-            // Check Auth
-            if (!user) {
-                if (text === '/start') {
-                    return bot.sendMessage(chatId, `⛔ عدم دسترسی.\nشناسه تلگرام شما: ${chatId}\nاین شناسه را به مدیر سیستم بدهید.`);
-                }
-                return;
-            }
-
-            // Handle /start (Show Menu)
             if (text === '/start' || text === 'منو') {
-                return bot.sendMessage(chatId, `سلام ${user.fullName} 👋\nبه سیستم مدیریت خوش آمدید.`, {
-                    reply_markup: getKeyboardForUser(user.role)
-                });
+                if (!user) return bot.sendMessage(chatId, "⛔ عدم دسترسی. شناسه شما: " + chatId);
+                return bot.sendMessage(chatId, `سلام ${user.fullName} 👋\n\nدستوراتی مثل 'تایید 1001' یا 'گزارش' را ارسال کنید.`);
             }
+            
+            if (!user) return;
 
-            // --- PROCESS COMMANDS (Using Unified Parser) ---
+            // --- UNIFIED LOGIC ---
             try {
-                // Determine user specific cartable filter
-                let filterRole = null;
-                if (user.role === 'financial') filterRole = 'financial';
-                if (user.role === 'manager') filterRole = 'manager';
-                if (user.role === 'ceo') filterRole = 'ceo';
-
                 const result = await parseMessage(text, db);
                 if (result) {
                     const { intent, args } = result;
                     let replyText = '';
 
                     switch (intent) {
-                        case 'REPORT_PAYMENT':
-                            replyText = Actions.handlePaymentReport(db, filterRole);
-                            break;
-                        case 'REPORT_EXIT':
-                            replyText = Actions.handleExitReport(db); // Add logic in actions.js if needed
-                            break;
-                        case 'REPORT_BIJAK':
-                            replyText = Actions.handleBijakReport(db); // Add logic in actions.js if needed
-                            break;
-                        case 'REPORT_GENERAL':
-                            replyText = Actions.handleReport(db);
-                            break;
-                        case 'AMBIGUOUS': replyText = `⚠️ شماره تکراری است. دقیق‌تر بنویسید (تایید پرداخت... یا تایید خروج...)`; break;
+                        case 'AMBIGUOUS': replyText = `⚠️ شماره تکراری است. (تایید پرداخت... / تایید خروج...)`; break;
                         case 'NOT_FOUND': replyText = `❌ سندی با شماره ${args.number} یافت نشد.`; break;
                         case 'APPROVE_PAYMENT': replyText = Actions.handleApprovePayment(db, args.number); break;
                         case 'REJECT_PAYMENT': replyText = Actions.handleRejectPayment(db, args.number); break;
@@ -142,11 +93,12 @@ export const initTelegram = async (token) => {
                         case 'REJECT_EXIT': replyText = Actions.handleRejectExit(db, args.number); break;
                         case 'CREATE_PAYMENT': replyText = Actions.handleCreatePayment(db, args); break;
                         case 'CREATE_BIJAK': replyText = Actions.handleCreateBijak(db, args); break;
-                        case 'HELP': replyText = `دستورات متنی:\nتایید [شماره]\nرد [شماره]\nگزارش`; break;
+                        case 'REPORT': replyText = Actions.handleReport(db); break;
+                        case 'HELP': replyText = `دستورات:\nتایید [شماره]\nرد [شماره]\nگزارش`; break;
                     }
 
                     if (replyText) bot.sendMessage(chatId, replyText);
-                } 
+                }
             } catch (e) { console.error(e); }
         });
 
