@@ -82,7 +82,7 @@ export const notifyUser = async (db, userIdOrRole, message) => {
     }
 };
 
-// --- KEYBOARD BUILDER (GRID LAYOUT) ---
+// --- KEYBOARD BUILDER (GRID LAYOUT - MATCHING IMAGE) ---
 const getMainMenu = (role) => {
     const keyboard = [
         [
@@ -108,15 +108,16 @@ const getMainMenu = (role) => {
     };
 };
 
-// --- DETAILED REPORT GENERATORS ---
+// --- DETAILED REPORT GENERATORS (ITEM BY ITEM) ---
 const sendDetailedList = async (token, chatId, items, type) => {
     if (!items || items.length === 0) {
         await sendBaleMessage(token, chatId, "📂 کارتابل شما خالی است.");
         return;
     }
 
-    await sendBaleMessage(token, chatId, `🔎 تعداد ${items.length} مورد در کارتابل یافت شد:`);
+    await sendBaleMessage(token, chatId, `🔎 تعداد ${items.length} مورد یافت شد. در حال ارسال جزئیات...`);
 
+    // Loop through items and send one by one
     for (const item of items) {
         let msg = "";
         if (type === 'payment') {
@@ -129,7 +130,7 @@ const sendDetailedList = async (token, chatId, items, type) => {
                   `📅 تاریخ: ${item.date}\n` +
                   `📊 وضعیت: ${item.status}\n` +
                   `------------------------------\n` +
-                  `برای تایید یا رد، روی متن زیر بزنید:\n` +
+                  `👇 عملیات (روی متن بزنید):\n` +
                   `✅ تایید پرداخت ${item.trackingNumber}\n` +
                   `❌ رد پرداخت ${item.trackingNumber}`;
         } else if (type === 'exit') {
@@ -141,7 +142,7 @@ const sendDetailedList = async (token, chatId, items, type) => {
                   `🚚 راننده: ${item.driverName || '-'}\n` +
                   `📊 وضعیت: ${item.status}\n` +
                   `------------------------------\n` +
-                  `عملیات:\n` +
+                  `👇 عملیات (روی متن بزنید):\n` +
                   `✅ تایید خروج ${item.permitNumber}\n` +
                   `❌ رد خروج ${item.permitNumber}`;
         } else if (type === 'bijak') {
@@ -152,13 +153,13 @@ const sendDetailedList = async (token, chatId, items, type) => {
                   `📦 اقلام: ${item.items.map(i=>i.itemName).join('، ')}\n` +
                   `📊 وضعیت: ${item.status}\n` +
                   `------------------------------\n` +
-                  `عملیات:\n` +
-                  `✅ تایید بیجک ${item.number}`; // Assuming simple approval for now
+                  `👇 عملیات (روی متن بزنید):\n` +
+                  `✅ تایید بیجک ${item.number}`;
         }
 
         await sendBaleMessage(token, chatId, msg);
-        // Add a small delay to ensure order
-        await new Promise(r => setTimeout(r, 100)); 
+        // Small delay to ensure order in Bale client
+        await new Promise(r => setTimeout(r, 200)); 
     }
 };
 
@@ -174,52 +175,55 @@ const handleCommand = async (token, update) => {
     const db = getDb();
     if (!db) return;
 
-    // Auth Check
+    // Check if user exists in DB
     const user = db.users.find(u => u.baleChatId && u.baleChatId.toString() === userId.toString());
 
     if (!user) {
         if (text === '/start') {
-            await sendBaleMessage(token, chatId, `⛔ عدم دسترسی.\nشناسه بله شما: ${userId}\nاین شناسه را به مدیر سیستم بدهید.`);
+            await sendBaleMessage(token, chatId, `⛔ شما دسترسی ندارید.\nشناسه بله شما: ${userId}\nاین شناسه را به مدیر سیستم بدهید تا در تنظیمات کاربری وارد کند.`);
         }
         return;
     }
 
-    // Start Command (Show Menu)
+    // Start Command / Menu
     if (text === '/start' || text === 'منو') {
         await callBaleApi(token, 'sendMessage', { 
             chat_id: chatId, 
-            text: `سلام ${user.fullName} 👋\nبه سیستم جامع مدیریت خوش آمدید.\nیکی از گزینه‌های زیر را انتخاب کنید:`,
+            text: `سلام ${user.fullName} 👋\nبه سیستم جامع مدیریت خوش آمدید.\nلطفاً گزینه مورد نظر را انتخاب کنید:`,
             reply_markup: getMainMenu(user.role)
         });
         return;
     }
 
-    // --- BUTTON HANDLERS ---
+    // --- GRID MENU HANDLERS ---
+
+    // 1. Payment Cartable
     if (text.includes('کارتابل پرداخت')) {
         let orders = db.orders.filter(o => o.status !== 'رد شده' && o.status !== 'باطل شده' && o.status !== 'تایید نهایی');
-        // Filter based on role logic
+        
+        // Role-based filtering
         if (user.role === 'financial') orders = orders.filter(o => o.status === 'در انتظار بررسی مالی');
         else if (user.role === 'manager') orders = orders.filter(o => o.status === 'تایید مالی / در انتظار مدیریت');
         else if (user.role === 'ceo') orders = orders.filter(o => o.status === 'تایید مدیریت / در انتظار مدیرعامل');
-        else if (user.role === 'admin') { /* See all pending */ }
-        else orders = [];
+        // Admin sees all pending
+        else if (user.role !== 'admin') orders = [];
 
         await sendDetailedList(token, chatId, orders, 'payment');
         return;
     }
 
+    // 2. Exit Cartable
     if (text.includes('کارتابل خروج')) {
         let permits = db.exitPermits.filter(p => p.status !== 'خارج شده (بایگانی)' && p.status !== 'رد شده');
-        // Simple logic: show all pending for authorized roles
-        if (['admin', 'ceo', 'factory_manager', 'warehouse_keeper', 'security_head'].includes(user.role)) {
-             // Ideally filter by specific step, but showing all active flow is better for overview
-        } else {
+        // Simple logic: If authorized role, see pending permits. Refine as needed.
+        if (!['admin', 'ceo', 'factory_manager', 'warehouse_keeper', 'security_head'].includes(user.role)) {
             permits = [];
         }
         await sendDetailedList(token, chatId, permits, 'exit');
         return;
     }
 
+    // 3. Bijak Cartable
     if (text.includes('کارتابل بیجک')) {
         let bijaks = db.warehouseTransactions.filter(t => t.type === 'OUT' && t.status === 'PENDING');
         if (!['admin', 'ceo', 'warehouse_keeper'].includes(user.role)) bijaks = [];
@@ -227,13 +231,21 @@ const handleCommand = async (token, update) => {
         return;
     }
 
+    // 4. Archives
     if (text.includes('بایگانی دستورات')) {
-        const archived = db.orders.filter(o => o.status === 'تایید نهایی').slice(0, 5); // Last 5
+        const archived = db.orders.filter(o => o.status === 'تایید نهایی').slice(0, 10); // Last 10
         await sendDetailedList(token, chatId, archived, 'payment');
         return;
     }
 
-    // --- ACTION PARSING (Approve/Reject via text reply) ---
+    // 5. Reports
+    if (text.includes('گزارشات کلی')) {
+        const report = Actions.handleReport(db);
+        await sendBaleMessage(token, chatId, report);
+        return;
+    }
+
+    // --- ACTION PARSING (When user clicks "✅ تایید پرداخت 1001") ---
     try {
         const result = await parseMessage(text, db);
         if (result) {
@@ -247,15 +259,11 @@ const handleCommand = async (token, update) => {
                 case 'REJECT_EXIT': replyText = Actions.handleRejectExit(db, args.number); break;
                 case 'CREATE_PAYMENT': replyText = Actions.handleCreatePayment(db, args); break;
                 case 'CREATE_BIJAK': replyText = Actions.handleCreateBijak(db, args); break;
-                case 'REPORT_GENERAL': replyText = Actions.handleReport(db); break;
+                // Add more actions here if needed
             }
 
             if (replyText) {
                 await sendBaleMessage(token, chatId, replyText);
-                // Refresh list if it was an action
-                if (intent.includes('APPROVE') || intent.includes('REJECT')) {
-                    // Maybe auto-show next item? For now just confirm.
-                }
             }
         }
     } catch (e) {
@@ -263,7 +271,7 @@ const handleCommand = async (token, update) => {
     }
 };
 
-// --- POLLING ---
+// --- POLLING MECHANISM ---
 const poll = async (token, instanceId) => {
     if (!pollingActive || instanceId !== pollingInstanceId) return;
 
@@ -277,22 +285,21 @@ const poll = async (token, instanceId) => {
                 await handleCommand(token, update);
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        // Silent error on poll timeout/network glitch
+    }
 
     if (pollingActive && instanceId === pollingInstanceId) {
-        setTimeout(() => poll(token, instanceId), 3000);
+        setTimeout(() => poll(token, instanceId), 2000); // 2s poll interval
     }
 };
 
 export const initBaleBot = (token) => {
     if (!token) return;
-    pollingActive = false;
-    setTimeout(() => {
-        console.log(">>> Starting Bale Bot Polling...");
-        pollingActive = true;
-        pollingInstanceId++;
-        poll(token, pollingInstanceId);
-    }, 1000);
+    console.log(">>> Starting Bale Bot...");
+    pollingActive = true;
+    pollingInstanceId++;
+    poll(token, pollingInstanceId);
 };
 
 export const restartBaleBot = (token) => {
