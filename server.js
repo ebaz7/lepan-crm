@@ -30,9 +30,8 @@ if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// LOGGING MIDDLEWARE
 app.use((req, res, next) => {
-    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    // console.log(`[REQUEST] ${req.method} ${req.url}`); // Reduced noise
     next();
 });
 
@@ -157,7 +156,7 @@ const calculateNextNumber = (db, type, companyName = null) => {
 
 // ================= API ROUTES =================
 
-// --- CRITICAL: RESTART BOTS ROUTE (Placed first) ---
+// --- BOT RESTART ENDPOINT ---
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
     console.log(`🔄 Restart Request: ${type}`);
@@ -166,29 +165,36 @@ app.post('/api/restart-bot', async (req, res) => {
         const db = getDb(); 
         if (!db || !db.settings) throw new Error("Database settings missing.");
 
+        // Import Modules Dynamically (or rely on cached imports if already loaded)
+        // Note: Dynamic import caches the module, so we must call a function inside it to reset state.
+        
         if (type === 'telegram') {
             const token = db.settings.telegramBotToken;
             if (!token) throw new Error("Telegram Token not set.");
+            
             const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            // Import using pathToFileURL to handle Windows paths correctly
-            const m = await import(pathToFileURL(modulePath).href); 
-            if (typeof m.initTelegram !== 'function') throw new Error("initTelegram missing");
-            await m.initTelegram(token); 
+            const m = await import(pathToFileURL(modulePath).href);
+            // Must have initTelegram exposed which handles stop/start
+            if (m.initTelegram) await m.initTelegram(token);
+            else throw new Error("Telegram module missing initTelegram");
 
         } else if (type === 'bale') {
             const token = db.settings.baleBotToken;
             if (!token) throw new Error("Bale Token not set.");
+            
             const modulePath = path.join(__dirname, 'backend', 'bale.js');
             const m = await import(pathToFileURL(modulePath).href);
-            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot missing");
-            await m.restartBaleBot(token); 
+            // Must call restartBaleBot specifically
+            if (m.restartBaleBot) await m.restartBaleBot(token);
+            else throw new Error("Bale module missing restartBaleBot");
 
         } else if (type === 'whatsapp') {
             const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
             const m = await import(pathToFileURL(modulePath).href);
             const authPath = path.join(ROOT_DIR, 'wauth');
-            if (typeof m.restartSession !== 'function') throw new Error("restartSession missing");
-            await m.restartSession(authPath); 
+            // Must call restartSession specifically
+            if (m.restartSession) await m.restartSession(authPath);
+            else throw new Error("WhatsApp module missing restartSession");
         } else {
             throw new Error("Invalid type");
         }
@@ -200,6 +206,48 @@ app.post('/api/restart-bot', async (req, res) => {
     }
 });
 
+// --- WHATSAPP SPECIFIC ---
+app.get('/api/whatsapp/status', async (req, res) => {
+    try {
+        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
+        if (m.getStatus) res.json(m.getStatus());
+        else res.json({ ready: false });
+    } catch (e) { res.json({ ready: false }); }
+});
+
+app.post('/api/whatsapp/logout', async (req, res) => {
+    try {
+        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
+        if (m.logout) await m.logout();
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/whatsapp/groups', async (req, res) => {
+    try {
+        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
+        if (m.getGroups) {
+            const groups = await m.getGroups();
+            res.json({ success: true, groups });
+        } else res.status(500).json({ error: "Method not found" });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/send-whatsapp', async (req, res) => {
+    try {
+        const { number, message, mediaData } = req.body;
+        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
+        if (m.sendMessage) {
+            await m.sendMessage(number, message, mediaData);
+            res.json({ success: true });
+        } else res.status(500).json({ error: "Method not found" });
+    } catch (e) { 
+        console.error("WA Send Error:", e.message);
+        res.status(500).json({ error: e.message }); 
+    }
+});
+
+// --- BASIC ROUTES ---
 app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
 app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
@@ -270,7 +318,7 @@ app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); c
 app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
 app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
 
-// Other Modules (Trade, Chat, Security, etc.)
+// Other Modules
 app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
 app.post('/api/trade', (req, res) => { const db = getDb(); db.tradeRecords.unshift(req.body); saveDb(db); res.json(db.tradeRecords); });
 app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
@@ -359,12 +407,29 @@ app.get('*', (req, res) => {
     if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Build frontend!');
 });
 
-// Integrations (Startup)
-try {
-    const db = getDb();
-    import('./backend/telegram.js').then(m => { if(db.settings.telegramBotToken) m.initTelegram(db.settings.telegramBotToken); }).catch(e=>{});
-    import('./backend/whatsapp.js').then(m => { m.initWhatsApp(path.join(ROOT_DIR, 'wauth')); }).catch(e=>{});
-    import('./backend/bale.js').then(m => { if(db.settings.baleBotToken) m.initBaleBot(db.settings.baleBotToken); }).catch(e=>{});
-} catch(e) {}
+// INITIAL BOT STARTUP
+const startupBots = async () => {
+    try {
+        const db = getDb();
+        if(db.settings.telegramBotToken) {
+            const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'telegram.js')).href);
+            await m.initTelegram(db.settings.telegramBotToken);
+        }
+        
+        // Start WhatsApp
+        const wa = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
+        await wa.initWhatsApp(path.join(ROOT_DIR, 'wauth'));
 
-app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on ${PORT}`));
+        if(db.settings.baleBotToken) {
+            const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'bale.js')).href);
+            await m.initBaleBot(db.settings.baleBotToken);
+        }
+    } catch (e) {
+        console.error("Startup Bot Error:", e);
+    }
+};
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on ${PORT}`);
+    startupBots();
+});

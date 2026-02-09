@@ -16,12 +16,21 @@ const BotManager: React.FC = () => {
 
         try {
             await apiCall('/restart-bot', 'POST', { type });
-            setSuccessMsg(`${labels[type]} با موفقیت بازنشانی شد.`);
-            setTimeout(() => setSuccessMsg(null), 3000);
+            
+            // If WhatsApp, wait a moment then trigger status check to reveal QR
+            if (type === 'whatsapp') {
+                setTimeout(() => {
+                    // This api call triggers backend to check state, frontend Settings page polls this.
+                    // But to be sure, we can alert user.
+                    apiCall('/whatsapp/status'); 
+                }, 3000);
+            }
+
+            setSuccessMsg(`${labels[type]} با موفقیت بازنشانی شد. لطفاً چند لحظه صبر کنید.`);
+            setTimeout(() => setSuccessMsg(null), 5000);
         } catch (e: any) {
             console.error("Restart Error:", e);
             
-            // Explicitly check for 404 (Route not found = Server code old)
             if (e.message && e.message.includes('404')) {
                 alert(`⚠️ خطای 404: سرویس بازنشانی پیدا نشد.\n\nاین یعنی کدهای سرور آپدیت شده‌اند اما سرور هنوز ریستارت نشده است.\n\nلطفاً برنامه سرور (node server.js) را ببندید و دوباره اجرا کنید.`);
             } else {
