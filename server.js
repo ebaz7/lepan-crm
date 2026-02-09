@@ -5,9 +5,15 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import compression from 'compression'; 
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
 import cron from 'node-cron'; 
+
+// --- STATIC IMPORTS FOR BOTS (CRITICAL FIX) ---
+// This ensures modules are loaded immediately on server start
+import * as TelegramBotModule from './backend/telegram.js';
+import * as BaleBotModule from './backend/bale.js';
+import * as WhatsAppModule from './backend/whatsapp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,20 +24,22 @@ const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
 const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
+const WAUTH_DIR = path.join(ROOT_DIR, 'wauth');
 
-console.log("------------------------------------------------");
-console.log("🚀 STARTING SERVER (AUTO-BACKUP & SMART RESTORE)");
-console.log(`📂 Root: ${ROOT_DIR}`);
-console.log("------------------------------------------------");
+console.log("================================================");
+console.log("🚀 PAYMENT SYSTEM SERVER STARTING...");
+console.log(`📂 Root Directory: ${ROOT_DIR}`);
+console.log("================================================");
 
+// Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+if (!fs.existsSync(WAUTH_DIR)) fs.mkdirSync(WAUTH_DIR, { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use((req, res, next) => {
-    // console.log(`[REQUEST] ${req.method} ${req.url}`); // Reduced noise
     next();
 });
 
@@ -159,88 +167,58 @@ const calculateNextNumber = (db, type, companyName = null) => {
 // --- BOT RESTART ENDPOINT ---
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
-    console.log(`🔄 Restart Request: ${type}`);
+    console.log(`🔄 Manual Restart Request: ${type}`);
 
     try {
         const db = getDb(); 
-        if (!db || !db.settings) throw new Error("Database settings missing.");
-
-        // Import Modules Dynamically (or rely on cached imports if already loaded)
-        // Note: Dynamic import caches the module, so we must call a function inside it to reset state.
         
         if (type === 'telegram') {
             const token = db.settings.telegramBotToken;
-            if (!token) throw new Error("Telegram Token not set.");
-            
-            const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            // Must have initTelegram exposed which handles stop/start
-            if (m.initTelegram) await m.initTelegram(token);
-            else throw new Error("Telegram module missing initTelegram");
+            if (!token) throw new Error("Telegram Token not set in settings.");
+            await TelegramBotModule.initTelegram(token);
 
         } else if (type === 'bale') {
             const token = db.settings.baleBotToken;
-            if (!token) throw new Error("Bale Token not set.");
-            
-            const modulePath = path.join(__dirname, 'backend', 'bale.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            // Must call restartBaleBot specifically
-            if (m.restartBaleBot) await m.restartBaleBot(token);
-            else throw new Error("Bale module missing restartBaleBot");
+            if (!token) throw new Error("Bale Token not set in settings.");
+            await BaleBotModule.restartBaleBot(token);
 
         } else if (type === 'whatsapp') {
-            const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            const authPath = path.join(ROOT_DIR, 'wauth');
-            // Must call restartSession specifically
-            if (m.restartSession) await m.restartSession(authPath);
-            else throw new Error("WhatsApp module missing restartSession");
+            await WhatsAppModule.restartSession(WAUTH_DIR);
         } else {
-            throw new Error("Invalid type");
+            throw new Error("Invalid bot type");
         }
 
         res.json({ success: true });
     } catch (e) { 
-        console.error(`❌ Restart Error (${type}):`, e);
+        console.error(`❌ Restart Error (${type}):`, e.message);
         res.status(500).json({ error: e.message }); 
     }
 });
 
-// --- WHATSAPP SPECIFIC ---
+// --- WHATSAPP ROUTES ---
 app.get('/api/whatsapp/status', async (req, res) => {
-    try {
-        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
-        if (m.getStatus) res.json(m.getStatus());
-        else res.json({ ready: false });
-    } catch (e) { res.json({ ready: false }); }
+    res.json(WhatsAppModule.getStatus());
 });
 
 app.post('/api/whatsapp/logout', async (req, res) => {
     try {
-        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
-        if (m.logout) await m.logout();
+        await WhatsAppModule.logout();
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/whatsapp/groups', async (req, res) => {
     try {
-        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
-        if (m.getGroups) {
-            const groups = await m.getGroups();
-            res.json({ success: true, groups });
-        } else res.status(500).json({ error: "Method not found" });
+        const groups = await WhatsAppModule.getGroups();
+        res.json({ success: true, groups });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/send-whatsapp', async (req, res) => {
     try {
         const { number, message, mediaData } = req.body;
-        const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
-        if (m.sendMessage) {
-            await m.sendMessage(number, message, mediaData);
-            res.json({ success: true });
-        } else res.status(500).json({ error: "Method not found" });
+        await WhatsAppModule.sendMessage(number, message, mediaData);
+        res.json({ success: true });
     } catch (e) { 
         console.error("WA Send Error:", e.message);
         res.status(500).json({ error: e.message }); 
@@ -407,29 +385,40 @@ app.get('*', (req, res) => {
     if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Build frontend!');
 });
 
-// INITIAL BOT STARTUP
+// INITIAL BOT STARTUP (Immediate)
 const startupBots = async () => {
-    try {
-        const db = getDb();
-        if(db.settings.telegramBotToken) {
-            const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'telegram.js')).href);
-            await m.initTelegram(db.settings.telegramBotToken);
-        }
-        
-        // Start WhatsApp
-        const wa = await import(pathToFileURL(path.join(__dirname, 'backend', 'whatsapp.js')).href);
-        await wa.initWhatsApp(path.join(ROOT_DIR, 'wauth'));
+    console.log("------------------------------------------------");
+    console.log("🤖 STARTING BOTS...");
+    console.log("------------------------------------------------");
+    
+    const db = getDb();
 
-        if(db.settings.baleBotToken) {
-            const m = await import(pathToFileURL(path.join(__dirname, 'backend', 'bale.js')).href);
-            await m.initBaleBot(db.settings.baleBotToken);
-        }
-    } catch (e) {
-        console.error("Startup Bot Error:", e);
+    // 1. Telegram
+    if(db.settings.telegramBotToken) {
+        try {
+            await TelegramBotModule.initTelegram(db.settings.telegramBotToken);
+        } catch (e) { console.error("Telegram Init Fail:", e.message); }
+    } else {
+        console.log("⚠️ Telegram Bot Token missing.");
+    }
+
+    // 2. WhatsApp
+    try {
+        await WhatsAppModule.initWhatsApp(WAUTH_DIR);
+    } catch (e) { console.error("WhatsApp Init Fail:", e.message); }
+
+    // 3. Bale
+    if(db.settings.baleBotToken) {
+        try {
+            await BaleBotModule.initBaleBot(db.settings.baleBotToken);
+        } catch (e) { console.error("Bale Init Fail:", e.message); }
+    } else {
+        console.log("⚠️ Bale Bot Token missing.");
     }
 };
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on ${PORT}`);
+    // Start bots immediately
     startupBots();
 });
