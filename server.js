@@ -7,7 +7,7 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath, pathToFileURL } from 'url';
 import puppeteer from 'puppeteer';
-import cron from 'node-cron'; // Import cron for scheduling
+import cron from 'node-cron'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = process.cwd();
 const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
-const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); // New Backups Directory
+const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
 console.log("------------------------------------------------");
@@ -30,7 +30,7 @@ if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// LOGGING MIDDLEWARE (Debug 404s)
+// LOGGING MIDDLEWARE
 app.use((req, res, next) => {
     console.log(`[REQUEST] ${req.method} ${req.url}`);
     next();
@@ -42,7 +42,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- 1. DEFAULT DB STRUCTURE (The Blueprint for Consistency) ---
+// --- DB STRUCTURE ---
 const DEFAULT_DB = { 
     settings: { 
         currentTrackingNumber: 1000, 
@@ -62,7 +62,6 @@ const DEFAULT_DB = {
         savedContacts: [], 
         bankNames: [] 
     }, 
-    // ALL MODULES MUST BE LISTED HERE
     orders: [], 
     exitPermits: [], 
     warehouseItems: [], 
@@ -77,7 +76,6 @@ const DEFAULT_DB = {
     users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }]
 };
 
-// --- 2. SELF-HEALING & SMART MERGE LOGIC ---
 const sanitizeDb = (data) => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_DB };
     const cleanData = { ...DEFAULT_DB };
@@ -93,7 +91,6 @@ const sanitizeDb = (data) => {
         if (Array.isArray(data[key])) {
             cleanData[key] = data[key];
         } else {
-            console.log(`⚠️ Smart Restore: Auto-creating missing table '${key}' to prevent crash.`);
             cleanData[key] = [];
         }
     });
@@ -111,7 +108,7 @@ const getDb = () => {
         if (!data.trim()) return { ...DEFAULT_DB };
         return sanitizeDb(JSON.parse(data));
     } catch (e) { 
-        console.error("❌ DB Read Failed, using default:", e.message);
+        console.error("❌ DB Read Failed:", e.message);
         return { ...DEFAULT_DB }; 
     }
 };
@@ -125,28 +122,20 @@ const saveDb = (data) => {
     } catch (e) { console.error("❌ DB Save Failed:", e.message); }
 };
 
-// --- 3. AUTOMATIC BACKUP SYSTEM ---
 cron.schedule('0 * * * *', () => {
-    console.log('⏰ Running Automatic Backup...');
     try {
         const db = getDb();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const backupFile = path.join(BACKUPS_DIR, `auto_backup_${timestamp}.json`);
         fs.writeFileSync(backupFile, JSON.stringify(db, null, 2));
-        console.log(`✅ Backup created: ${backupFile}`);
-
+        
         const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('auto_backup_'));
         if (files.length > 48) {
             files.sort();
             const toDelete = files.slice(0, files.length - 48);
-            toDelete.forEach(f => {
-                fs.unlinkSync(path.join(BACKUPS_DIR, f));
-                console.log(`🗑️ Auto-Clean: Deleted old backup ${f}`);
-            });
+            toDelete.forEach(f => fs.unlinkSync(path.join(BACKUPS_DIR, f)));
         }
-    } catch (e) {
-        console.error('❌ Backup Failed:', e.message);
-    }
+    } catch (e) { console.error('❌ Backup Failed:', e.message); }
 });
 
 const calculateNextNumber = (db, type, companyName = null) => {
@@ -168,68 +157,61 @@ const calculateNextNumber = (db, type, companyName = null) => {
 
 // ================= API ROUTES =================
 
-// 1. System & Auth
-app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
-app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
-app.get('/api/settings', (req, res) => res.json(getDb().settings));
-app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
-
-// --- NEW API: RESTART BOTS (Registered EARLY) ---
+// --- CRITICAL: RESTART BOTS ROUTE (Placed first) ---
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
-    console.log(`🔄 Restart Request Received for: ${type}`);
+    console.log(`🔄 Restart Request: ${type}`);
 
     try {
-        const db = getDb(); // Fresh DB read
-        if (!db || !db.settings) throw new Error("Database settings are missing.");
+        const db = getDb(); 
+        if (!db || !db.settings) throw new Error("Database settings missing.");
 
         if (type === 'telegram') {
             const token = db.settings.telegramBotToken;
-            if (!token) throw new Error("Telegram Token is not set in settings.");
-            
+            if (!token) throw new Error("Telegram Token not set.");
             const modulePath = path.join(__dirname, 'backend', 'telegram.js');
-            const m = await import(pathToFileURL(modulePath).href);
-            
-            try {
-                if (typeof m.initTelegram !== 'function') throw new Error("initTelegram not exported");
-                await m.initTelegram(token); 
-            } catch(err) {
-                throw new Error(`Telegram Init Failed: ${err.message}`);
-            }
+            // Import using pathToFileURL to handle Windows paths correctly
+            const m = await import(pathToFileURL(modulePath).href); 
+            if (typeof m.initTelegram !== 'function') throw new Error("initTelegram missing");
+            await m.initTelegram(token); 
 
         } else if (type === 'bale') {
             const token = db.settings.baleBotToken;
-            if (!token) throw new Error("Bale Token is not set in settings.");
-
+            if (!token) throw new Error("Bale Token not set.");
             const modulePath = path.join(__dirname, 'backend', 'bale.js');
             const m = await import(pathToFileURL(modulePath).href);
-            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot not exported");
+            if (typeof m.restartBaleBot !== 'function') throw new Error("restartBaleBot missing");
             await m.restartBaleBot(token); 
 
         } else if (type === 'whatsapp') {
             const modulePath = path.join(__dirname, 'backend', 'whatsapp.js');
             const m = await import(pathToFileURL(modulePath).href);
             const authPath = path.join(ROOT_DIR, 'wauth');
-            if (typeof m.restartSession !== 'function') throw new Error("restartSession not exported");
+            if (typeof m.restartSession !== 'function') throw new Error("restartSession missing");
             await m.restartSession(authPath); 
         } else {
-            throw new Error("Invalid bot type.");
+            throw new Error("Invalid type");
         }
 
         res.json({ success: true });
     } catch (e) { 
-        console.error(`❌ Restart Failed for ${type}:`, e);
-        res.status(500).json({ error: e.message || "Unknown Server Error" }); 
+        console.error(`❌ Restart Error (${type}):`, e);
+        res.status(500).json({ error: e.message }); 
     }
 });
 
-// 2. Users
+app.get('/api/version', (req, res) => res.json({ version: Date.now().toString() }));
+app.post('/api/login', (req, res) => { const db = getDb(); const u = db.users.find(x => x.username === req.body.username && x.password === req.body.password); u ? res.json(u) : res.status(401).send('Invalid'); });
+app.get('/api/settings', (req, res) => res.json(getDb().settings));
+app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
+
+// Users
 app.get('/api/users', (req, res) => res.json(getDb().users));
 app.post('/api/users', (req, res) => { const db = getDb(); db.users.push(req.body); saveDb(db); res.json(db.users); });
 app.put('/api/users/:id', (req, res) => { const db = getDb(); const idx = db.users.findIndex(u => u.id === req.params.id); if(idx > -1) { db.users[idx] = { ...db.users[idx], ...req.body }; saveDb(db); res.json(db.users); } else res.status(404).send('Not Found'); });
 app.delete('/api/users/:id', (req, res) => { const db = getDb(); db.users = db.users.filter(u => u.id !== req.params.id); saveDb(db); res.json(db.users); });
 
-// 3. Payment Orders
+// Orders
 app.get('/api/orders', (req, res) => res.json(getDb().orders));
 app.post('/api/orders', (req, res) => { 
     const db = getDb(); 
@@ -245,7 +227,7 @@ app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.or
 app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
 app.get('/api/next-tracking-number', (req, res) => res.json({ nextTrackingNumber: calculateNextNumber(getDb(), 'payment', req.query.company) }));
 
-// 4. Exit Permits
+// Exit Permits
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits));
 app.post('/api/exit-permits', (req, res) => {
     const db = getDb();
@@ -265,7 +247,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
 app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
 app.get('/api/next-exit-permit-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'exit', req.query.company) }));
 
-// 5. Warehouse
+// Warehouse
 app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems));
 app.post('/api/warehouse/items', (req, res) => { const db = getDb(); db.warehouseItems.push(req.body); saveDb(db); res.json(db.warehouseItems); });
 app.put('/api/warehouse/items/:id', (req, res) => { const db = getDb(); const idx = db.warehouseItems.findIndex(i => i.id === req.params.id); if(idx > -1) { db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body }; saveDb(db); res.json(db.warehouseItems); } else res.status(404).send('Not Found'); });
@@ -288,13 +270,12 @@ app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); c
 app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
 app.get('/api/next-bijak-number', (req, res) => res.json({ nextNumber: calculateNextNumber(getDb(), 'bijak', req.query.company) }));
 
-// 6. Trade
+// Other Modules (Trade, Chat, Security, etc.)
 app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords));
 app.post('/api/trade', (req, res) => { const db = getDb(); db.tradeRecords.unshift(req.body); saveDb(db); res.json(db.tradeRecords); });
 app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
 app.delete('/api/trade/:id', (req, res) => { const db = getDb(); db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); saveDb(db); res.json(db.tradeRecords); });
 
-// 7. Chat
 app.get('/api/chat', (req, res) => res.json(getDb().messages));
 app.post('/api/chat', (req, res) => { const db = getDb(); db.messages.push(req.body); saveDb(db); res.json(db.messages); });
 app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
@@ -310,7 +291,6 @@ app.post('/api/tasks', (req, res) => { const db = getDb(); db.tasks.push(req.bod
 app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
 app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
 
-// 8. Security
 app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs));
 app.post('/api/security/logs', (req, res) => { const db = getDb(); db.securityLogs.unshift(req.body); saveDb(db); res.json(db.securityLogs); });
 app.put('/api/security/logs/:id', (req, res) => { const db = getDb(); const idx = db.securityLogs.findIndex(l => l.id === req.params.id); if(idx > -1) { db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; saveDb(db); res.json(db.securityLogs); } else res.status(404).send('Not Found'); });
@@ -326,7 +306,6 @@ app.post('/api/security/incidents', (req, res) => { const db = getDb(); db.secur
 app.put('/api/security/incidents/:id', (req, res) => { const db = getDb(); const idx = db.securityIncidents.findIndex(i => i.id === req.params.id); if(idx > -1) { db.securityIncidents[idx] = { ...db.securityIncidents[idx], ...req.body }; saveDb(db); res.json(db.securityIncidents); } else res.status(404).send('Not Found'); });
 app.delete('/api/security/incidents/:id', (req, res) => { const db = getDb(); db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.securityIncidents); });
 
-// 9. Tools
 app.post('/api/upload', (req, res) => {
     try {
         const { fileName, fileData } = req.body;
@@ -345,7 +324,6 @@ app.get('/api/full-backup', (req, res) => {
     res.send(JSON.stringify(db, null, 2));
 });
 
-// SMART RESTORE
 app.post('/api/emergency-restore', (req, res) => {
     try {
         const { fileData } = req.body;
@@ -373,7 +351,7 @@ app.post('/api/render-pdf', async (req, res) => {
 
 app.post('/api/subscribe', (req, res) => res.json({ success: true }));
 
-// --- SERVE FRONTEND (Catch-all must be LAST) ---
+// --- SERVE FRONTEND ---
 app.use(express.static(DIST_DIR));
 app.get('*', (req, res) => { 
     if (req.url.startsWith('/api/')) return res.status(404).json({ error: 'API not found' });
@@ -381,7 +359,7 @@ app.get('*', (req, res) => {
     if(fs.existsSync(p)) res.sendFile(p); else res.send('Server Running. Build frontend!');
 });
 
-// Integrations (Lazy Load)
+// Integrations (Startup)
 try {
     const db = getDb();
     import('./backend/telegram.js').then(m => { if(db.settings.telegramBotToken) m.initTelegram(db.settings.telegramBotToken); }).catch(e=>{});

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Send, MessageCircle, RefreshCcw, Power, Loader2, CheckCircle2 } from 'lucide-react';
+import { Send, MessageCircle, RefreshCcw, Power, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiCall } from '../../services/apiService';
 
 const BotManager: React.FC = () => {
@@ -8,19 +8,22 @@ const BotManager: React.FC = () => {
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
     const handleRestart = async (type: 'telegram' | 'bale' | 'whatsapp') => {
-        if (!confirm(`آیا از راه‌اندازی مجدد ربات ${type === 'telegram' ? 'تلگرام' : type === 'bale' ? 'بله' : 'واتساپ'} اطمینان دارید؟`)) return;
+        const labels = { telegram: 'تلگرام', bale: 'بله', whatsapp: 'واتساپ' };
+        if (!confirm(`آیا از راه‌اندازی مجدد ربات ${labels[type]} اطمینان دارید؟`)) return;
         
         setLoading(type);
         setSuccessMsg(null);
 
         try {
             await apiCall('/restart-bot', 'POST', { type });
-            setSuccessMsg(`${type === 'telegram' ? 'تلگرام' : type === 'bale' ? 'بله' : 'واتساپ'} با موفقیت بازنشانی شد.`);
+            setSuccessMsg(`${labels[type]} با موفقیت بازنشانی شد.`);
             setTimeout(() => setSuccessMsg(null), 3000);
         } catch (e: any) {
-            // Check for 404 specifically
+            console.error("Restart Error:", e);
+            
+            // Explicitly check for 404 (Route not found = Server code old)
             if (e.message && e.message.includes('404')) {
-                alert('⚠️ خطا: دستور بازنشانی پیدا نشد (404).\n\nعلت: کدهای سرور آپدیت شده‌اند اما سرور هنوز ریستارت نشده است.\n\nراه حل: لطفاً برنامه سرور (node server.js) را ببندید و دوباره اجرا کنید.');
+                alert(`⚠️ خطای 404: سرویس بازنشانی پیدا نشد.\n\nاین یعنی کدهای سرور آپدیت شده‌اند اما سرور هنوز ریستارت نشده است.\n\nلطفاً برنامه سرور (node server.js) را ببندید و دوباره اجرا کنید.`);
             } else {
                 const errMsg = e.message || 'خطا در عملیات بازنشانی';
                 alert(`خطا: ${errMsg}`);
@@ -31,7 +34,7 @@ const BotManager: React.FC = () => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mt-6">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mt-6 animate-fade-in">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
                 <Power size={20} className="text-red-500"/>
                 مدیریت سرویس‌های پیام‌رسان (Restart Bots)
@@ -97,7 +100,7 @@ const BotManager: React.FC = () => {
             </div>
 
             {successMsg && (
-                <div className="mt-4 bg-green-100 text-green-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold animate-fade-in">
+                <div className="mt-4 bg-green-100 text-green-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold animate-fade-in border border-green-200">
                     <CheckCircle2 size={16}/> {successMsg}
                 </div>
             )}
