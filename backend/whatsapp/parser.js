@@ -2,24 +2,38 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const parseMessage = async (text, db) => {
-    // Clean text: Normalize Persian numbers to English
-    const cleanText = text.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).trim();
-
-    // --- 1. APPROVAL / REJECTION LOGIC ---
+    if (!text) return null;
     
-    // Payment Approval: "تایید پرداخت 1001"
+    // Clean text: Normalize Persian numbers to English and remove emojis for easier parsing if needed, 
+    // but keep emojis for button matching if strict match is required.
+    // For button matching, we use 'includes' or normalized text.
+    
+    const cleanText = text.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).trim();
+    const lowerText = cleanText.toLowerCase();
+
+    // --- 1. MENU BUTTON HANDLERS ---
+    // These match the exact text sent by Telegram/Bale Keyboards
+    if (cleanText.includes('کارتابل پرداخت') || cleanText.includes('لیست پرداخت')) return { intent: 'REPORT_PAYMENT' };
+    if (cleanText.includes('کارتابل خروج') || cleanText.includes('لیست خروج')) return { intent: 'REPORT_EXIT' };
+    if (cleanText.includes('کارتابل بیجک') || cleanText.includes('لیست انبار')) return { intent: 'REPORT_BIJAK' };
+    if (cleanText.includes('راهنما') || lowerText === 'help' || lowerText === 'menu') return { intent: 'HELP' };
+    if (cleanText.includes('گزارش کلی') || lowerText === 'report') return { intent: 'REPORT_GENERAL' };
+
+    // --- 2. APPROVAL / REJECTION LOGIC ---
+    
+    // Payment Approval: "تایید پرداخت 1001" or "Approve 1001"
     const payApproveMatch = cleanText.match(/^(?:تایید|ok|yes)\s+(?:پرداخت|سند|واریز|هزینه|p)\s*(\d+)$/i);
     if (payApproveMatch) return { intent: 'APPROVE_PAYMENT', args: { number: payApproveMatch[1] } };
 
-    // Payment Rejection: "رد پرداخت 1001"
+    // Payment Rejection
     const payRejectMatch = cleanText.match(/^(?:رد|کنسل|no|reject)\s+(?:پرداخت|سند|واریز|هزینه|p)\s*(\d+)$/i);
     if (payRejectMatch) return { intent: 'REJECT_PAYMENT', args: { number: payRejectMatch[1] } };
 
-    // Exit Approval: "تایید خروج 2001"
+    // Exit Approval
     const exitApproveMatch = cleanText.match(/^(?:تایید|ok|yes)\s+(?:خروج|بیجک|حواله|بار|مجوز|b)\s*(\d+)$/i);
     if (exitApproveMatch) return { intent: 'APPROVE_EXIT', args: { number: exitApproveMatch[1] } };
 
-    // Exit Rejection: "رد خروج 2001"
+    // Exit Rejection
     const exitRejectMatch = cleanText.match(/^(?:رد|کنسل|no|reject)\s+(?:خروج|بیجک|حواله|بار|مجوز|b)\s*(\d+)$/i);
     if (exitRejectMatch) return { intent: 'REJECT_EXIT', args: { number: exitRejectMatch[1] } };
 
@@ -39,9 +53,9 @@ export const parseMessage = async (text, db) => {
         return { intent: 'NOT_FOUND', args: { number } };
     }
 
-    // --- 2. CREATION LOGIC (DETAILED) ---
+    // --- 3. CREATION LOGIC ---
 
-    // Payment: "دستور پرداخت [مبلغ] به [نام] بابت [شرح] (بانک [نام])"
+    // Payment: "دستور پرداخت [مبلغ] به [نام]..."
     const payMatch = cleanText.match(/(?:دستور پرداخت|ثبت پرداخت|واریز)\s+(\d+(?:[.,]\d+)?)\s*(?:ریال|تومان)?\s*(?:به|برای|در وجه)\s+(.+?)\s+(?:بابت|شرح)\s+(.+?)(?:\s+(?:از|بانک)\s+(.+))?$/);
     if (payMatch) {
         return { 
@@ -55,8 +69,7 @@ export const parseMessage = async (text, db) => {
         };
     }
     
-    // Bijak: "بیجک [تعداد] [کالا] برای [گیرنده] (راننده [نام]) (پلاک [شماره])"
-    // Supports optional driver and plate
+    // Bijak/Exit
     const bijakMatch = cleanText.match(/(?:بیجک|خروج|حواله)\s+(\d+)\s*(?:کارتن|عدد|شاخه)?\s+(.+?)\s+(?:برای|به)\s+(.+?)(?:\s+(?:راننده)\s+(.+?))?(?:\s+(?:پلاک)\s+(.+))?$/);
     if (bijakMatch) {
         return { 
@@ -71,16 +84,12 @@ export const parseMessage = async (text, db) => {
         };
     }
 
-    // --- 3. REPORTING ---
-    if (cleanText.includes('گزارش') || cleanText.includes('کارتابل')) return { intent: 'REPORT' };
-    if (cleanText.includes('راهنما') || cleanText === 'help') return { intent: 'HELP' };
-
     // --- 4. AI FALLBACK ---
     if (db.settings.geminiApiKey && !cleanText.startsWith('!')) {
         try {
             const ai = new GoogleGenAI({ apiKey: db.settings.geminiApiKey });
             const prompt = `Extract entities from this Persian command. Output JSON ONLY: { "intent": "...", "args": { ... } }. 
-            Intents: CREATE_PAYMENT (args: amount, payee, description, bank), CREATE_BIJAK (args: count, itemName, recipient, driver, plate), REPORT. 
+            Intents: CREATE_PAYMENT (args: amount, payee, description, bank), CREATE_BIJAK (args: count, itemName, recipient, driver, plate), REPORT_GENERAL. 
             Input: "${cleanText}"`;
             
             const response = await ai.models.generateContent({ 
