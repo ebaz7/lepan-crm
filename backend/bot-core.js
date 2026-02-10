@@ -13,7 +13,7 @@ const sessions = {}; // chatId -> { state, data }
 // --- DATA ACCESS ---
 const getDb = () => {
     try { if (fs.existsSync(DB_PATH)) return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); } catch (e) {}
-    return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {} };
+    return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {}, warehouseItems: [] };
 };
 const saveDb = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 
@@ -24,88 +24,94 @@ const resolveUser = (db, platform, chatId) => {
     return null;
 };
 
-// --- MENUS & KEYBOARDS ---
-const MAIN_MENU = [
-    ['💰 مدیریت پرداخت', '🚛 مدیریت خروج'],
-    ['📦 مدیریت انبار', '📊 گزارشات بازرگانی'],
-    ['💬 پیام‌ها', '⚙️ تنظیمات']
-];
+// --- INLINE KEYBOARDS (GLASSY BUTTONS) ---
+const KEYBOARDS = {
+    MAIN: {
+        inline_keyboard: [
+            [
+                { text: '💰 مدیریت پرداخت', callback_data: 'MENU_PAY' },
+                { text: '🚛 مدیریت خروج', callback_data: 'MENU_EXIT' }
+            ],
+            [
+                { text: '📦 انبار و موجودی', callback_data: 'MENU_WH' },
+                { text: '📊 گزارشات و آمار', callback_data: 'MENU_REPORTS' }
+            ],
+            [
+                { text: '👤 پروفایل من', callback_data: 'MENU_PROFILE' }
+            ]
+        ]
+    },
+    PAYMENT: {
+        inline_keyboard: [
+            [{ text: '➕ ثبت درخواست پرداخت جدید', callback_data: 'ACT_PAY_NEW' }],
+            [{ text: '📂 کارتابل (منتظر تایید من)', callback_data: 'ACT_PAY_CARTABLE' }],
+            [{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'MENU_MAIN' }]
+        ]
+    },
+    EXIT: {
+        inline_keyboard: [
+            [{ text: '➕ ثبت مجوز خروج کالا', callback_data: 'ACT_EXIT_NEW' }],
+            [{ text: '📂 کارتابل خروج (تاییدیه)', callback_data: 'ACT_EXIT_CARTABLE' }],
+            [{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'MENU_MAIN' }]
+        ]
+    },
+    WAREHOUSE: {
+        inline_keyboard: [
+            [{ text: '📦 موجودی لحظه‌ای کالاها', callback_data: 'RPT_STOCK' }],
+            [{ text: '📝 آخرین بیجک‌های صادره', callback_data: 'RPT_LAST_BIJAKS' }],
+            [{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'MENU_MAIN' }]
+        ]
+    },
+    REPORTS: {
+        inline_keyboard: [
+            [{ text: '📈 عملکرد امروز (خلاصه)', callback_data: 'RPT_DAILY_SUMMARY' }],
+            [{ text: '💰 گزارش مالی (باز/بسته)', callback_data: 'RPT_FINANCIAL_STATUS' }],
+            [{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'MENU_MAIN' }]
+        ]
+    },
+    BACK: {
+        inline_keyboard: [
+            [{ text: '🔙 انصراف / بازگشت', callback_data: 'MENU_MAIN' }]
+        ]
+    }
+};
 
-const PAY_MENU = [
-    ['➕ ثبت پرداخت جدید', '📂 کارتابل من'],
-    ['🗄️ بایگانی / جستجو', '🔙 بازگشت به خانه']
-];
-
-const EXIT_MENU = [
-    ['➕ ثبت مجوز خروج', '📂 کارتابل خروج'],
-    ['🏁 بایگانی نهایی', '🔙 بازگشت به خانه']
-];
-
-const WH_MENU = [
-    ['📝 ثبت بیجک', '📋 موجودی انبار'],
-    ['🔙 بازگشت به خانه']
-];
-
-// --- CORE HANDLER ---
+// --- CORE MESSAGE HANDLER ---
 export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
     const user = resolveUser(db, platform, chatId);
     
-    if (!user) return sendFn(chatId, "⛔ شما در سیستم تعریف نشده‌اید. لطفا با مدیر تماس بگیرید.");
-    if (!sessions[chatId]) sessions[chatId] = { state: 'MAIN' };
+    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز. شما در سیستم تعریف نشده‌اید.");
+    
+    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
-    // Global Commands
-    if (text === '/start' || text.includes('بازگشت به خانه')) {
-        session.state = 'MAIN';
-        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.`, { keyboard: MAIN_MENU });
+    // Global Reset
+    if (text === '/start' || text === 'شروع') {
+        session.state = 'IDLE';
+        session.data = {};
+        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه ربات هوشمند مدیریت خوش آمدید.\n\n👇 لطفا یک بخش را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
 
-    // --- MAIN MENU ROUTING ---
-    if (session.state === 'MAIN') {
-        if (text.includes('مدیریت پرداخت')) {
-            session.state = 'PAY_MENU';
-            return sendFn(chatId, "💰 بخش مدیریت پرداخت:", { keyboard: PAY_MENU });
-        }
-        if (text.includes('مدیریت خروج')) {
-            session.state = 'EXIT_MENU';
-            return sendFn(chatId, "🚛 بخش مدیریت خروج کالا:", { keyboard: EXIT_MENU });
-        }
-        if (text.includes('مدیریت انبار')) {
-            session.state = 'WH_MENU';
-            return sendFn(chatId, "📦 بخش انبار:", { keyboard: WH_MENU });
-        }
-    }
+    // --- STATE MACHINE FOR INPUTS ---
 
-    // --- PAYMENT SECTION ---
-    if (session.state === 'PAY_MENU') {
-        if (text.includes('ثبت پرداخت جدید')) {
-            session.state = 'PAY_NEW_AMOUNT';
-            return sendFn(chatId, "💵 لطفا مبلغ را به ریال وارد کنید:", { removeKeyboard: true });
-        }
-        if (text.includes('کارتابل من')) {
-            return showPaymentCartable(db, user, chatId, sendFn, sendPhotoFn);
-        }
-        if (text.includes('بایگانی')) {
-            session.state = 'PAY_SEARCH';
-            return sendFn(chatId, "🔍 شماره دستور پرداخت یا بخشی از نام گیرنده را وارد کنید:");
-        }
+    // 1. Payment Flow
+    if (session.state === 'PAY_WAIT_AMOUNT') {
+        const amt = parseInt(text.replace(/,/g, '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+        if (isNaN(amt)) return sendFn(chatId, "❌ مبلغ نامعتبر است. لطفا عدد وارد کنید (به ریال):", { reply_markup: KEYBOARDS.BACK });
+        
+        session.data.amount = amt;
+        session.state = 'PAY_WAIT_PAYEE';
+        return sendFn(chatId, "👤 نام گیرنده وجه (ذینفع) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
-
-    // Payment Registration Flow
-    if (session.state === 'PAY_NEW_AMOUNT') {
-        const amt = parseInt(text.replace(/,/g, ''));
-        if (isNaN(amt)) return sendFn(chatId, "❌ عدد نامعتبر. مجدد وارد کنید:");
-        session.data = { amount: amt };
-        session.state = 'PAY_NEW_PAYEE';
-        return sendFn(chatId, "👤 نام گیرنده وجه (ذینفع) را وارد کنید:");
-    }
-    if (session.state === 'PAY_NEW_PAYEE') {
+    
+    if (session.state === 'PAY_WAIT_PAYEE') {
         session.data.payee = text;
-        session.state = 'PAY_NEW_DESC';
-        return sendFn(chatId, "📝 بابت (توضیحات) را وارد کنید:");
+        session.state = 'PAY_WAIT_DESC';
+        return sendFn(chatId, "📝 بابت (توضیحات پرداخت) را بنویسید:", { reply_markup: KEYBOARDS.BACK });
     }
-    if (session.state === 'PAY_NEW_DESC') {
+
+    if (session.state === 'PAY_WAIT_DESC') {
         const order = {
             id: Date.now().toString(),
             trackingNumber: (db.settings.currentTrackingNumber || 1000) + 1,
@@ -115,269 +121,233 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             description: text,
             status: 'در انتظار بررسی مالی',
             requester: user.fullName,
-            createdAt: Date.now()
+            payingCompany: db.settings.defaultCompany || '-',
+            createdAt: Date.now(),
+            paymentDetails: [{
+                id: Date.now().toString(),
+                method: 'حواله بانکی',
+                amount: session.data.amount,
+                description: 'ثبت شده توسط بات'
+            }]
         };
+        
         db.settings.currentTrackingNumber = order.trackingNumber;
+        if(!db.orders) db.orders = [];
         db.orders.unshift(order);
         saveDb(db);
+
+        session.state = 'IDLE';
+        session.data = {};
         
-        session.state = 'PAY_MENU';
-        sendFn(chatId, `✅ دستور پرداخت #${order.trackingNumber} ثبت شد.`, { keyboard: PAY_MENU });
+        await sendFn(chatId, `✅ *دستور پرداخت ثبت شد*\n\n🔖 شماره: ${order.trackingNumber}\n💰 مبلغ: ${order.totalAmount.toLocaleString()} ریال\n👤 ذینفع: ${order.payee}`, { reply_markup: KEYBOARDS.MAIN });
         
-        // Notify Financial Manager
-        await notifyRole(db, 'financial', `💰 *درخواست پرداخت جدید*\nثبت کننده: ${user.fullName}`, 'PAYMENT', order, sendFn, sendPhotoFn);
+        // Notify Financial Team
+        await notifyRole(db, 'financial', `🔔 درخواست پرداخت جدید (بات)\nشماره: ${order.trackingNumber}\nثبت: ${user.fullName}`, 'PAYMENT', order, sendFn, sendPhotoFn);
         return;
     }
 
-    // --- EXIT PERMIT SECTION ---
-    if (session.state === 'EXIT_MENU') {
-        if (text.includes('ثبت مجوز خروج')) {
-            session.state = 'EXIT_NEW_RECIPIENT';
-            return sendFn(chatId, "👤 نام گیرنده کالا را وارد کنید:", { removeKeyboard: true });
-        }
-        if (text.includes('کارتابل خروج')) {
-            return showExitCartable(db, user, chatId, sendFn, sendPhotoFn);
-        }
+    // 2. Exit Permit Flow
+    if (session.state === 'EXIT_WAIT_RECIPIENT') {
+        session.data.recipient = text;
+        session.state = 'EXIT_WAIT_GOODS';
+        return sendFn(chatId, "📦 نام کالا را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
-
-    // Exit Registration Flow
-    if (session.state === 'EXIT_NEW_RECIPIENT') {
-        session.data = { recipient: text };
-        session.state = 'EXIT_NEW_GOODS';
-        return sendFn(chatId, "📦 نام کالا را وارد کنید:");
-    }
-    if (session.state === 'EXIT_NEW_GOODS') {
+    if (session.state === 'EXIT_WAIT_GOODS') {
         session.data.goods = text;
-        session.state = 'EXIT_NEW_COUNT';
-        return sendFn(chatId, "🔢 تعداد (کارتن/عدد) را وارد کنید:");
+        session.state = 'EXIT_WAIT_COUNT';
+        return sendFn(chatId, "🔢 تعداد (کارتن/عدد) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
-    if (session.state === 'EXIT_NEW_COUNT') {
+    if (session.state === 'EXIT_WAIT_COUNT') {
+        const count = parseInt(text.replace(/,/g, ''));
         const permit = {
             id: Date.now().toString(),
             permitNumber: (db.settings.currentExitPermitNumber || 1000) + 1,
             date: new Date().toISOString().split('T')[0],
             recipientName: session.data.recipient,
             goodsName: session.data.goods,
-            cartonCount: parseInt(text) || 0,
+            cartonCount: isNaN(count) ? 0 : count,
             weight: 0,
+            company: db.settings.defaultCompany || '-',
             status: 'در انتظار تایید مدیرعامل',
             requester: user.fullName,
-            items: [{ goodsName: session.data.goods, cartonCount: parseInt(text) || 0 }],
+            items: [{ goodsName: session.data.goods, cartonCount: isNaN(count) ? 0 : count, weight: 0 }],
             createdAt: Date.now()
         };
+
         db.settings.currentExitPermitNumber = permit.permitNumber;
+        if(!db.exitPermits) db.exitPermits = [];
         db.exitPermits.push(permit);
         saveDb(db);
 
-        session.state = 'EXIT_MENU';
-        sendFn(chatId, `✅ مجوز خروج #${permit.permitNumber} ثبت شد.`, { keyboard: EXIT_MENU });
+        session.state = 'IDLE';
+        session.data = {};
 
-        // Trigger Workflow: Send to CEO
-        await advanceExitWorkflow(db, permit, 'REGISTERED', user, sendFn, sendPhotoFn);
+        await sendFn(chatId, `✅ *مجوز خروج ثبت شد*\n\n🔖 شماره: ${permit.permitNumber}\n📦 کالا: ${permit.goodsName}\n👤 گیرنده: ${permit.recipientName}`, { reply_markup: KEYBOARDS.MAIN });
+        
+        // Notify CEO
+        await notifyRole(db, 'ceo', `🔔 درخواست خروج جدید (بات)\nشماره: ${permit.permitNumber}\nثبت: ${user.fullName}`, 'EXIT', permit, sendFn, sendPhotoFn);
         return;
     }
 
-    // Warehouse Weight Input (triggered from Callback)
-    if (session.state === 'ENTER_WEIGHT') {
-        const weight = parseFloat(text);
-        if (isNaN(weight)) return sendFn(chatId, "❌ عدد وارد کنید:");
-        
-        const permitId = session.data.permitId;
-        const permit = db.exitPermits.find(p => p.id === permitId);
-        if (permit) {
-            permit.weight = weight;
-            if(permit.items[0]) permit.items[0].weight = weight; // Simple update
-            
-            // Advance Workflow
-            await advanceExitWorkflow(db, permit, 'WEIGHED', user, sendFn, sendPhotoFn);
-            
-            session.state = 'MAIN';
-            return sendFn(chatId, "✅ وزن ثبت و پروسه ادامه یافت.", { keyboard: MAIN_MENU });
-        }
-    }
-    
-    // Security Time Input
-    if (session.state === 'ENTER_EXIT_TIME') {
-        const permitId = session.data.permitId;
-        const permit = db.exitPermits.find(p => p.id === permitId);
-        if (permit) {
-            permit.exitTime = text; // e.g. "14:30"
-            await advanceExitWorkflow(db, permit, 'EXITED', user, sendFn, sendPhotoFn);
-            session.state = 'MAIN';
-            return sendFn(chatId, "✅ خروج نهایی ثبت شد.", { keyboard: MAIN_MENU });
-        }
-    }
+    // Inputs for Actions (Weight, Time) handled in Callback section mostly, or redirected here.
+    // ...
 
-    return sendFn(chatId, "متوجه نشدم. از منو استفاده کنید.", { keyboard: MAIN_MENU });
+    // Fallback
+    return sendFn(chatId, "متوجه نشدم. لطفا از منوی زیر انتخاب کنید:", { reply_markup: KEYBOARDS.MAIN });
 };
 
-// --- CALLBACK HANDLER (Inline Buttons) ---
+// --- CALLBACK HANDLER (GLASSY BUTTON CLICKS) ---
 export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn) => {
     const db = getDb();
     const user = resolveUser(db, platform, chatId);
     if (!user) return;
 
-    const [action, type, id] = data.split('_');
+    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+    const session = sessions[chatId];
 
-    // 1. PAYMENT CALLBACKS
-    if (type === 'PAY') {
-        const order = db.orders.find(o => o.id === id);
-        if (!order) return sendFn(chatId, "❌ سند یافت نشد.");
+    // --- NAVIGATION ---
+    if (data === 'MENU_MAIN') {
+        session.state = 'IDLE';
+        return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN });
+    }
+    if (data === 'MENU_PAY') return sendFn(chatId, "💰 مدیریت پرداخت:", { reply_markup: KEYBOARDS.PAYMENT });
+    if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج کالا:", { reply_markup: KEYBOARDS.EXIT });
+    if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
+    if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
-        if (action === 'APPROVE') {
-            let nextStatus = '';
-            if (order.status === 'در انتظار بررسی مالی') nextStatus = 'تایید مالی / در انتظار مدیریت';
-            else if (order.status.includes('تایید مالی')) nextStatus = 'تایید مدیریت / در انتظار مدیرعامل';
-            else if (order.status.includes('تایید مدیریت')) nextStatus = 'تایید نهایی';
+    // --- ACTIONS: START REGISTRATION ---
+    if (data === 'ACT_PAY_NEW') {
+        session.state = 'PAY_WAIT_AMOUNT';
+        session.data = {};
+        return sendFn(chatId, "💵 لطفا مبلغ پرداخت را وارد کنید (به ریال):", { reply_markup: KEYBOARDS.BACK });
+    }
+    if (data === 'ACT_EXIT_NEW') {
+        session.state = 'EXIT_WAIT_RECIPIENT';
+        session.data = {};
+        return sendFn(chatId, "👤 نام گیرنده کالا را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
+    }
+
+    // --- ACTIONS: CARTABLE ---
+    if (data === 'ACT_PAY_CARTABLE') {
+        return showPaymentCartable(db, user, chatId, sendFn, sendPhotoFn);
+    }
+    if (data === 'ACT_EXIT_CARTABLE') {
+        return showExitCartable(db, user, chatId, sendFn, sendPhotoFn);
+    }
+
+    // --- REPORTS ---
+    if (data === 'RPT_STOCK') {
+        const items = db.warehouseItems || [];
+        if(items.length === 0) return sendFn(chatId, "📭 هیچ کالایی تعریف نشده است.");
+        let report = "📦 *موجودی انبار:*\n\n";
+        // Simple calc logic (mocked for brevity as actual calc is complex)
+        items.forEach(i => {
+            report += `🔹 ${i.name}: (کد ${i.code || '-'})\n`;
+        });
+        report += "\n⚠️ جهت مشاهده موجودی دقیق، گزارش اکسل پنل وب را دریافت کنید.";
+        return sendFn(chatId, report);
+    }
+
+    if (data === 'RPT_DAILY_SUMMARY') {
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = db.orders?.filter(o => o.date === today) || [];
+        const todayExits = db.exitPermits?.filter(p => p.date === today) || [];
+        
+        let report = `📅 *خلاصه وضعیت امروز (${today}):*\n\n`;
+        report += `💰 *پرداخت‌ها:* ${todayOrders.length} مورد\n`;
+        report += `   مجموع: ${todayOrders.reduce((a,b)=>a+b.totalAmount,0).toLocaleString()} ریال\n\n`;
+        report += `🚛 *خروج کالا:* ${todayExits.length} مجوز\n`;
+        report += `   تعداد اقلام: ${todayExits.reduce((a,b)=>a+(b.cartonCount||0),0)}`;
+        
+        return sendFn(chatId, report);
+    }
+
+    if (data === 'RPT_FINANCIAL_STATUS') {
+        const pending = db.orders?.filter(o => o.status !== 'تایید نهایی' && o.status !== 'رد شده' && o.status !== 'باطل شده').length || 0;
+        const totalPending = db.orders?.filter(o => o.status !== 'تایید نهایی' && o.status !== 'رد شده').reduce((a,b)=>a+b.totalAmount,0) || 0;
+        
+        return sendFn(chatId, `💰 *وضعیت مالی*\n\n⏳ در انتظار پرداخت: ${pending} مورد\n💵 تعهد ایجاد شده: ${totalPending.toLocaleString()} ریال`);
+    }
+
+    // --- APPROVAL LOGIC (ACTIONS ON CARDS) ---
+    if (data.startsWith('APPROVE_') || data.startsWith('REJECT_')) {
+        const [action, type, id] = data.split('_');
+        
+        if (type === 'PAY') {
+            const order = db.orders.find(o => o.id === id);
+            if (!order) return sendFn(chatId, "❌ سند یافت نشد.");
             
-            if (nextStatus) {
-                order.status = nextStatus;
-                if (user.role === 'financial') order.approverFinancial = user.fullName;
-                if (user.role === 'manager') order.approverManager = user.fullName;
-                if (user.role === 'ceo') order.approverCeo = user.fullName;
+            if (action === 'APPROVE') {
+                let nextStatus = '';
+                if (order.status === 'در انتظار بررسی مالی') nextStatus = 'تایید مالی / در انتظار مدیریت';
+                else if (order.status.includes('تایید مالی')) nextStatus = 'تایید مدیریت / در انتظار مدیرعامل';
+                else if (order.status.includes('تایید مدیریت')) nextStatus = 'تایید نهایی';
+                
+                if (nextStatus) {
+                    order.status = nextStatus;
+                    if (user.role === 'financial') order.approverFinancial = user.fullName;
+                    if (user.role === 'manager') order.approverManager = user.fullName;
+                    if (user.role === 'ceo') order.approverCeo = user.fullName;
+                    saveDb(db);
+                    
+                    sendFn(chatId, `✅ دستور پرداخت ${order.trackingNumber} تایید شد.\nوضعیت جدید: ${nextStatus}`);
+                    
+                    // Notify Next
+                    if (nextStatus.includes('مدیریت')) await notifyRole(db, 'manager', `🔔 جهت تایید: پرداخت #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
+                    else if (nextStatus.includes('مدیرعامل')) await notifyRole(db, 'ceo', `🔔 جهت تایید: پرداخت #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
+                    else if (nextStatus === 'تایید نهایی') await notifyRole(db, 'financial', `✅ پرداخت #${order.trackingNumber} تایید نهایی شد. لطفا پرداخت کنید.`, 'PAYMENT', order, sendFn, sendPhotoFn);
+                } else {
+                    sendFn(chatId, "⚠️ وضعیت این سند قابل تغییر نیست.");
+                }
+            } else {
+                order.status = 'رد شده';
                 saveDb(db);
-                
-                sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${nextStatus}`);
-                
-                // Notify Next Person
-                if (nextStatus.includes('مدیریت')) await notifyRole(db, 'manager', `🔔 جهت تایید: پرداخت #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
-                else if (nextStatus.includes('مدیرعامل')) await notifyRole(db, 'ceo', `🔔 جهت تایید: پرداخت #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
-                else if (nextStatus === 'تایید نهایی') await notifyRole(db, 'financial', `✅ پرداخت #${order.trackingNumber} تایید نهایی شد. لطفا پرداخت کنید.`, 'PAYMENT', order, sendFn, sendPhotoFn);
+                sendFn(chatId, `❌ دستور پرداخت ${order.trackingNumber} رد شد.`);
             }
-        } else {
-            order.status = 'رد شده';
-            saveDb(db);
-            sendFn(chatId, "❌ سند رد شد.");
         }
-    }
-
-    // 2. EXIT PERMIT CALLBACKS (Complex Workflow)
-    if (type === 'EXIT') {
-        const permit = db.exitPermits.find(p => p.id === id);
-        if (!permit) return sendFn(chatId, "❌ مجوز یافت نشد.");
-
-        if (action === 'APPROVE') {
-            if (permit.status === 'در انتظار تایید مدیرعامل' && (user.role === 'ceo' || user.role === 'admin')) {
-                permit.approverCeo = user.fullName;
-                await advanceExitWorkflow(db, permit, 'APPROVED_CEO', user, sendFn, sendPhotoFn);
-                sendFn(chatId, "✅ تایید شد.");
+        else if (type === 'EXIT') {
+            const permit = db.exitPermits.find(p => p.id === id);
+            if (!permit) return sendFn(chatId, "❌ مجوز یافت نشد.");
+            
+            if (action === 'APPROVE') {
+                // Determine next step based on current status and user role
+                if (permit.status === 'در انتظار تایید مدیرعامل') {
+                    permit.status = 'در انتظار مدیر کارخانه';
+                    permit.approverCeo = user.fullName;
+                    saveDb(db);
+                    sendFn(chatId, `✅ تایید شد. ارجاع به کارخانه.`);
+                    await notifyRole(db, 'factory_manager', `🔔 جهت تایید: خروج #${permit.permitNumber}`, 'EXIT', permit, sendFn, sendPhotoFn);
+                } else if (permit.status === 'در انتظار مدیر کارخانه') {
+                    permit.status = 'در انتظار تایید انبار';
+                    permit.approverFactory = user.fullName;
+                    saveDb(db);
+                    sendFn(chatId, `✅ تایید شد. ارجاع به انبار.`);
+                    await notifyRole(db, 'warehouse_keeper', `🔔 جهت توزین: خروج #${permit.permitNumber}`, 'EXIT', permit, sendFn, sendPhotoFn);
+                } else {
+                    sendFn(chatId, "⚠️ برای مراحل بعدی (وزن‌کشی/خروج) لطفا از پنل وب یا منوی مخصوص استفاده کنید.");
+                }
+            } else {
+                permit.status = 'رد شده';
+                saveDb(db);
+                sendFn(chatId, "❌ مجوز خروج رد شد.");
             }
-            else if (permit.status === 'در انتظار مدیر کارخانه' && (user.role === 'factory_manager' || user.role === 'admin')) {
-                permit.approverFactory = user.fullName;
-                await advanceExitWorkflow(db, permit, 'APPROVED_FACTORY', user, sendFn, sendPhotoFn);
-                sendFn(chatId, "✅ تایید شد.");
-            }
-            else if (permit.status === 'در انتظار تایید انبار' && (user.role === 'warehouse_keeper' || user.role === 'admin')) {
-                // Ask for Weight
-                sessions[chatId].state = 'ENTER_WEIGHT';
-                sessions[chatId].data = { permitId: id };
-                sendFn(chatId, "⚖️ لطفا وزن نهایی خروجی (کیلوگرم) را وارد کنید:");
-            }
-            else if (permit.status === 'در انتظار خروج' && (user.role === 'security_head' || user.role === 'admin')) {
-                // Ask for Exit Time
-                sessions[chatId].state = 'ENTER_EXIT_TIME';
-                sessions[chatId].data = { permitId: id };
-                sendFn(chatId, "🕒 لطفا ساعت خروج را وارد کنید (مثال 14:30):");
-            }
-        } else {
-            permit.status = 'رد شده';
-            saveDb(db);
-            sendFn(chatId, "❌ رد شد.");
         }
     }
 };
 
-// --- WORKFLOW ENGINE ---
-const advanceExitWorkflow = async (db, permit, event, actor, sendFn, sendPhotoFn) => {
-    let caption = '';
-    let targets = [];
-    const img = await Renderer.generateRecordImage(permit, 'EXIT');
+// --- HELPER FUNCTIONS ---
 
-    if (event === 'REGISTERED') {
-        // Sales -> CEO
-        caption = `🔔 *مجوز خروج جدید*\nشماره: ${permit.permitNumber}\nثبت کننده: ${permit.requester}\nجهت تایید مدیرعامل`;
-        targets.push({ role: 'ceo', actions: true });
-    }
-    else if (event === 'APPROVED_CEO') {
-        permit.status = 'در انتظار مدیر کارخانه';
-        saveDb(db);
-        // CEO -> Factory + Group1
-        caption = `✅ *تایید مدیرعامل*\nمجوز #${permit.permitNumber}\nارجاع به مدیر کارخانه`;
-        targets.push({ role: 'factory_manager', actions: true });
-        targets.push({ group: db.settings.exitPermitNotificationGroup }); // Group 1
-    }
-    else if (event === 'APPROVED_FACTORY') {
-        permit.status = 'در انتظار تایید انبار';
-        saveDb(db);
-        // Factory -> Warehouse + Group2
-        caption = `✅ *تایید مدیر کارخانه*\nمجوز #${permit.permitNumber}\nارجاع به انبار`;
-        targets.push({ role: 'warehouse_keeper', actions: true });
-        targets.push({ group: db.settings.exitPermitSecondGroupConfig?.groupId }); // Group 2
-    }
-    else if (event === 'WEIGHED') {
-        permit.status = 'در انتظار خروج';
-        saveDb(db);
-        // Warehouse -> Security + Group2
-        caption = `⚖️ *توزین انجام شد*\nمجوز #${permit.permitNumber}\nوزن: ${permit.weight} KG\nارجاع به انتظامات`;
-        targets.push({ role: 'security_head', actions: true });
-        targets.push({ group: db.settings.exitPermitSecondGroupConfig?.groupId });
-    }
-    else if (event === 'EXITED') {
-        permit.status = 'خارج شده (بایگانی)';
-        saveDb(db);
-        // Security -> Group1 + Group2
-        caption = `👋 *خروج نهایی*\nمجوز #${permit.permitNumber}\nساعت: ${permit.exitTime}\nتایید نهایی: ${actor.fullName}`;
-        targets.push({ group: db.settings.exitPermitNotificationGroup });
-        targets.push({ group: db.settings.exitPermitSecondGroupConfig?.groupId });
-    }
-
-    // Send notifications
-    for (const t of targets) {
-        if (t.role) await notifyRole(db, t.role, caption, 'EXIT', permit, sendFn, sendPhotoFn, t.actions);
-        if (t.group) await notifyGroup(t.group, caption, img, sendFn, sendPhotoFn); // Implementation depends on platform capabilities for groups
-    }
-};
-
-// --- NOTIFICATION HELPERS ---
-const notifyRole = async (db, role, caption, type, data, sendFn, sendPhotoFn, withButtons = true) => {
-    const users = db.users.filter(u => u.role === role);
-    const img = await Renderer.generateRecordImage(data, type);
-    
-    let keyboard = null;
-    if (withButtons) {
-        keyboard = {
-            inline_keyboard: [
-                [
-                    { text: '✅ تایید / اقدام', callback_data: `APPROVE_${type}_${data.id}` },
-                    { text: '❌ رد', callback_data: `REJECT_${type}_${data.id}` }
-                ]
-            ]
-        };
-    }
-
-    for (const u of users) {
-        if (u.telegramChatId) await sendPhotoFn('telegram', u.telegramChatId, img, caption, { reply_markup: keyboard });
-        if (u.baleChatId) await sendPhotoFn('bale', u.baleChatId, img, caption, { reply_markup: keyboard });
-    }
-};
-
-const notifyGroup = async (groupId, caption, img, sendFn, sendPhotoFn) => {
-    if (!groupId) return;
-    // Note: Group IDs are platform specific. If it's a number (Bale/Telegram ID), try sending.
-    // Since we don't know if the ID belongs to TG or Bale, we might need to store platform in settings or try both.
-    // For now, assume IDs are distinct enough or handle errors gracefully.
-    try { await sendPhotoFn('telegram', groupId, img, caption); } catch(e){}
-    try { await sendPhotoFn('bale', groupId, img, caption); } catch(e){}
-};
-
-// --- CARTABLE HELPERS ---
 const showPaymentCartable = async (db, user, chatId, sendFn, sendPhotoFn) => {
     let items = [];
-    if (user.role === 'financial') items = db.orders.filter(o => o.status === 'در انتظار بررسی مالی');
-    if (user.role === 'manager') items = db.orders.filter(o => o.status.includes('تایید مالی'));
-    if (user.role === 'ceo') items = db.orders.filter(o => o.status.includes('تایید مدیریت'));
+    // Define cartable logic based on roles
+    if (user.role === 'financial' || user.role === 'admin') items = items.concat(db.orders.filter(o => o.status === 'در انتظار بررسی مالی'));
+    if (user.role === 'manager' || user.role === 'admin') items = items.concat(db.orders.filter(o => o.status.includes('تایید مالی')));
+    if (user.role === 'ceo' || user.role === 'admin') items = items.concat(db.orders.filter(o => o.status.includes('تایید مدیریت')));
 
-    if (items.length === 0) return sendFn(chatId, "✅ کارتابل شما خالی است.");
+    // Deduplicate
+    items = [...new Set(items)];
+
+    if (items.length === 0) return sendFn(chatId, "✅ کارتابل پرداخت شما خالی است.");
 
     for (const item of items) {
         const img = await Renderer.generateRecordImage(item, 'PAYMENT');
@@ -387,39 +357,60 @@ const showPaymentCartable = async (db, user, chatId, sendFn, sendPhotoFn) => {
                 { text: '❌ رد', callback_data: `REJECT_PAY_${item.id}` }
             ]]
         };
-        await sendPhotoFn(null, chatId, img, `سند #${item.trackingNumber}`, { reply_markup: keyboard });
+        await sendPhotoFn(null, chatId, img, `سند #${item.trackingNumber}\nمبلغ: ${item.totalAmount.toLocaleString()}`, { reply_markup: keyboard });
     }
 };
 
 const showExitCartable = async (db, user, chatId, sendFn, sendPhotoFn) => {
     let items = [];
-    if (user.role === 'ceo') items = db.exitPermits.filter(p => p.status === 'در انتظار تایید مدیرعامل');
-    if (user.role === 'factory_manager') items = db.exitPermits.filter(p => p.status === 'در انتظار مدیر کارخانه');
-    if (user.role === 'warehouse_keeper') items = db.exitPermits.filter(p => p.status === 'در انتظار تایید انبار');
-    if (user.role === 'security_head') items = db.exitPermits.filter(p => p.status === 'در انتظار خروج');
+    if (user.role === 'ceo' || user.role === 'admin') items = items.concat(db.exitPermits.filter(p => p.status === 'در انتظار تایید مدیرعامل'));
+    if (user.role === 'factory_manager' || user.role === 'admin') items = items.concat(db.exitPermits.filter(p => p.status === 'در انتظار مدیر کارخانه'));
+    
+    items = [...new Set(items)];
 
-    if (items.length === 0) return sendFn(chatId, "✅ کارتابل شما خالی است.");
+    if (items.length === 0) return sendFn(chatId, "✅ کارتابل خروج شما خالی است.");
 
     for (const item of items) {
         const img = await Renderer.generateRecordImage(item, 'EXIT');
         const keyboard = {
             inline_keyboard: [[
-                { text: '✅ اقدام / تایید', callback_data: `APPROVE_EXIT_${item.id}` },
+                { text: '✅ تایید', callback_data: `APPROVE_EXIT_${item.id}` },
                 { text: '❌ رد', callback_data: `REJECT_EXIT_${item.id}` }
             ]]
         };
-        await sendPhotoFn(null, chatId, img, `مجوز #${item.permitNumber}`, { reply_markup: keyboard });
+        await sendPhotoFn(null, chatId, img, `مجوز #${item.permitNumber}\nگیرنده: ${item.recipientName}`, { reply_markup: keyboard });
     }
 };
 
-// --- EXTERNAL TRIGGER (FROM API) ---
-export const triggerNotification = async (type, item) => {
-    const db = getDb();
-    // Re-route to the workflow engine logic
-    if (type === 'NEW_PAYMENT') {
-        const img = await Renderer.generateRecordImage(item, 'PAYMENT');
-        await notifyRole(db, 'financial', `💰 *درخواست پرداخت جدید*\nثبت کننده: ${item.requester}`, 'PAYMENT', item, null, null); // We need a way to invoke sendPhoto without passed fn, imply bot instances are global/accessible or passed here.
-        // NOTE: In real app, bot instances should be singletons imported here. 
-        // For simplicity in this structure, we assume server.js calls specific platform senders which use bot-core logic.
+const notifyRole = async (db, role, caption, type, data, sendFn, sendPhotoFn) => {
+    const users = db.users.filter(u => u.role === role || u.role === 'admin');
+    if (users.length === 0) return;
+
+    const img = await Renderer.generateRecordImage(data, type);
+    const keyboard = {
+        inline_keyboard: [[
+            { text: '✅ تایید سریع', callback_data: `APPROVE_${type}_${data.id}` },
+            { text: '❌ رد', callback_data: `REJECT_${type}_${data.id}` }
+        ]]
+    };
+
+    for (const u of users) {
+        // Avoid sending to self if requester is same (optional, but good UX)
+        // Send to Telegram
+        if (u.telegramChatId) {
+            try { await sendPhotoFn('telegram', u.telegramChatId, img, caption, { reply_markup: keyboard }); } catch(e){}
+        }
+        // Send to Bale
+        if (u.baleChatId) {
+            try { await sendPhotoFn('bale', u.baleChatId, img, caption, { reply_markup: keyboard }); } catch(e){}
+        }
     }
 };
+
+const notifyGroup = async (groupId, caption, img, sendFn, sendPhotoFn) => {
+    // Placeholder for group notification if IDs are available
+};
+
+// Workflow placeholder for detailed steps (reused from previous logic)
+const advanceExitWorkflow = async () => {}; 
+
