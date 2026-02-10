@@ -1,49 +1,27 @@
 
 import puppeteer from 'puppeteer';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let browser = null;
 
-// --- FONT LOADER (OFFLINE SUPPORT) ---
-// Attempts to load the local font file to embed it in the PDF/Image
-const getFontBase64 = () => {
-    try {
-        // Paths to check for the font file (Development vs Production)
-        const pathsToCheck = [
-            path.join(__dirname, '..', 'public', 'fonts', 'Vazirmatn-Regular.woff2'),
-            path.join(__dirname, '..', 'dist', 'fonts', 'Vazirmatn-Regular.woff2'),
-            path.join(process.cwd(), 'public', 'fonts', 'Vazirmatn-Regular.woff2')
-        ];
-
-        for (const fontPath of pathsToCheck) {
-            if (fs.existsSync(fontPath)) {
-                const fontBuffer = fs.readFileSync(fontPath);
-                return fontBuffer.toString('base64');
-            }
+const getBrowser = async () => {
+    if (!browser) {
+        try {
+            browser = await puppeteer.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
+            });
+        } catch (e) {
+            console.error("⚠️ Puppeteer Launch Failed.", e.message);
+            return null;
         }
-        console.warn("⚠️ Font file (Vazirmatn-Regular.woff2) not found in expected paths. PDF may not render Persian text correctly in offline mode.");
-    } catch (e) {
-        console.warn("⚠️ Error loading local font:", e.message);
     }
-    return null;
+    return browser;
 };
 
-const fontBase64 = getFontBase64();
-
-// --- STYLES (OFFLINE READY) ---
-// If font is found, inject it as a data URI. Otherwise, fallback to system fonts.
-const fontFaceRule = fontBase64 
-    ? `@font-face { font-family: 'Vazirmatn'; src: url(data:font/woff2;base64,${fontBase64}) format('woff2'); font-weight: normal; font-style: normal; }`
-    : `/* No Local Font Found - Using System Fonts */`;
-
+// --- STYLES ---
 const BASE_STYLE = `
-    ${fontFaceRule}
-    body { font-family: 'Vazirmatn', Tahoma, Arial, sans-serif; background: #fff; padding: 40px; direction: rtl; }
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700;900&display=swap');
+    body { font-family: 'Vazirmatn', sans-serif; background: #fff; padding: 40px; direction: rtl; }
     .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
     .title { font-size: 24px; font-weight: 900; color: #1e3a8a; }
     .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; color: #555; font-weight: bold; }
@@ -59,27 +37,6 @@ const BASE_STYLE = `
     .badge-gray { background: #6b7280; }
     .amount { font-family: monospace; font-weight: bold; font-size: 14px; direction: ltr; }
 `;
-
-const getBrowser = async () => {
-    if (!browser) {
-        try {
-            browser = await puppeteer.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox', 
-                    '--disable-dev-shm-usage', 
-                    '--font-render-hinting=none',
-                    '--disable-web-security'
-                ]
-            });
-        } catch (e) {
-            console.error("⚠️ Puppeteer Launch Failed.", e.message);
-            return null;
-        }
-    }
-    return browser;
-};
 
 // --- TEMPLATES ---
 
@@ -179,7 +136,7 @@ export const generateRecordImage = async (record, type) => {
             `;
         }
 
-        await page.setContent(generateRecordCardHTML(title, htmlData, type), { waitUntil: 'networkidle0' });
+        await page.setContent(generateRecordCardHTML(title, htmlData, type));
         const card = await page.$('.card');
         const buffer = await card.screenshot({ type: 'png' });
         await page.close();
@@ -216,20 +173,9 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
 export const generatePdfBuffer = async (html) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
-    
-    try {
-        const page = await browser.newPage();
-        // Inject offline font into the provided HTML if it doesn't already have it
-        // We prepend the font style to the head
-        const fontStyle = `<style>${fontFaceRule}</style>`;
-        const modifiedHtml = html.replace('</head>', `${fontStyle}</head>`);
-        
-        await page.setContent(modifiedHtml, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A4', printBackground: true });
-        await page.close();
-        return pdf;
-    } catch (e) {
-        console.error("Renderer Buffer Error:", e);
-        return Buffer.from("");
-    }
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({ format: 'A4', printBackground: true });
+    await page.close();
+    return pdf;
 };
