@@ -7,14 +7,15 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 
-import * as TelegramBotModule from './backend/telegram.js';
-import * as BaleBotModule from './backend/bale.js';
-// We import BotCore indirectly via the specific modules now, 
-// but for triggering from API, we need access to the send functions.
-// To keep it simple, we re-use the init functions to establish connection, 
-// and we'll create a manual trigger helper in bot-core that we call here.
-// However, since bot-core is platform agnostic, we need to pass the send functions.
-// REVISION: We will expose a 'broadcast' method in Telegram/Bale modules to be called from here.
+// Safe Import Helper
+const safeImport = async (modulePath) => {
+    try {
+        return await import(modulePath);
+    } catch (e) {
+        console.error(`⚠️ Failed to load module ${modulePath}:`, e.message);
+        return null;
+    }
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,13 +53,6 @@ app.post('/api/orders', (req, res) => {
     if(!db.orders) db.orders = [];
     db.orders.unshift(order); 
     saveDb(db); 
-    
-    // Notify Financial Manager via Bots (if configured)
-    // NOTE: This is a simplified trigger. Real integration requires re-instantiating 
-    // the bot send functions or exposing them from the modules.
-    // For now, we rely on the bots picking up changes via user interaction or polling if implemented.
-    // Ideally, we would call: BotCore.triggerNewPayment(order);
-    
     res.json(db.orders); 
 });
 
@@ -93,35 +87,57 @@ app.put('/api/exit-permits/:id', (req, res) => {
     } else res.status(404).send('Not Found');
 });
 
-// Standard Settings & User Routes
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
 app.get('/api/users', (req, res) => res.json(getDb().users));
 app.post('/api/users', (req, res) => { const db = getDb(); db.users.push(req.body); saveDb(db); res.json(db.users); });
 
 // Bot Restart Endpoint
-app.post('/api/restart-bot', (req, res) => {
+app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
     const db = getDb();
-    if (type === 'telegram' && db.settings.telegramBotToken) TelegramBotModule.initTelegram(db.settings.telegramBotToken);
-    if (type === 'bale' && db.settings.baleBotToken) BaleBotModule.initBaleBot(db.settings.baleBotToken);
+    
+    if (type === 'telegram' && db.settings.telegramBotToken) {
+        const mod = await safeImport('./backend/telegram.js');
+        if(mod) mod.initTelegram(db.settings.telegramBotToken);
+    }
+    if (type === 'bale' && db.settings.baleBotToken) {
+        const mod = await safeImport('./backend/bale.js');
+        if(mod) mod.initBaleBot(db.settings.baleBotToken);
+    }
     res.json({ success: true });
 });
 
 // PDF Rendering
-import * as Renderer from './backend/renderer.js';
 app.post('/api/render-pdf', async (req, res) => {
     try {
+        const Renderer = await safeImport('./backend/renderer.js');
+        if (!Renderer) throw new Error("Renderer module failed to load.");
+        
         const { html } = req.body;
         const pdf = await Renderer.generatePdfBuffer(html);
         res.contentType("application/pdf");
         res.send(pdf);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("PDF Render Error:", e);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// Start Server
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on ${PORT}`);
+    
+    // Initialize Bots Safely
     const db = getDb();
-    if(db.settings?.telegramBotToken) TelegramBotModule.initTelegram(db.settings.telegramBotToken);
-    if(db.settings?.baleBotToken) BaleBotModule.initBaleBot(db.settings.baleBotToken);
+    
+    if(db.settings?.telegramBotToken) {
+        const tgModule = await safeImport('./backend/telegram.js');
+        if(tgModule) tgModule.initTelegram(db.settings.telegramBotToken);
+    }
+    
+    if(db.settings?.baleBotToken) {
+        const baleModule = await safeImport('./backend/bale.js');
+        if(baleModule) baleModule.initBaleBot(db.settings.baleBotToken);
+    }
 });

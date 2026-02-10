@@ -5,10 +5,15 @@ let browser = null;
 
 const getBrowser = async () => {
     if (!browser) {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
-        });
+        try {
+            browser = await puppeteer.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
+            });
+        } catch (e) {
+            console.error("⚠️ Puppeteer Launch Failed. Image generation will not work.", e.message);
+            return null;
+        }
     }
     return browser;
 };
@@ -54,65 +59,74 @@ const generateHtml = (title, data, type) => `
 
 export const generateRecordImage = async (record, type) => {
     const browser = await getBrowser();
-    const page = await browser.newPage();
-    await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 2 });
+    if (!browser) return Buffer.from(""); // Return empty buffer if puppeteer failed
 
-    let htmlData = '';
-    let title = '';
+    try {
+        const page = await browser.newPage();
+        await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 2 });
 
-    if (type === 'PAYMENT') {
-        title = 'دستور پرداخت وجه';
-        htmlData = `
-            <div class="row"><span class="label">شماره سند:</span><span class="value" style="font-family:monospace; font-size: 24px;">#${record.trackingNumber}</span></div>
-            <div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div>
-            <div class="row"><span class="label">ذینفع (گیرنده):</span><span class="value">${record.payee}</span></div>
-            <div class="row"><span class="label">مبلغ:</span><span class="value highlight" style="font-size: 28px;">${parseInt(record.totalAmount).toLocaleString('fa-IR')} ریال</span></div>
-            <div class="row"><span class="label">بابت:</span><span class="value">${record.description}</span></div>
-            <div class="row"><span class="label">وضعیت فعلی:</span><span class="value">${record.status}</span></div>
-        `;
-    } 
-    else if (type === 'EXIT') {
-        title = 'مجوز خروج کالا';
-        let itemsHtml = `<table class="items-table"><thead><tr><th>کالا</th><th>تعداد</th><th>وزن (KG)</th></tr></thead><tbody>`;
-        if (record.items && record.items.length > 0) {
-            record.items.forEach(i => {
-                itemsHtml += `<tr><td>${i.goodsName}</td><td>${i.cartonCount || i.deliveredCartonCount || 0}</td><td>${i.weight || i.deliveredWeight || 0}</td></tr>`;
-            });
-        } else {
-            itemsHtml += `<tr><td>${record.goodsName}</td><td>${record.cartonCount}</td><td>${record.weight}</td></tr>`;
+        let htmlData = '';
+        let title = '';
+
+        if (type === 'PAYMENT') {
+            title = 'دستور پرداخت وجه';
+            htmlData = `
+                <div class="row"><span class="label">شماره سند:</span><span class="value" style="font-family:monospace; font-size: 24px;">#${record.trackingNumber}</span></div>
+                <div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div>
+                <div class="row"><span class="label">ذینفع (گیرنده):</span><span class="value">${record.payee}</span></div>
+                <div class="row"><span class="label">مبلغ:</span><span class="value highlight" style="font-size: 28px;">${parseInt(record.totalAmount).toLocaleString('fa-IR')} ریال</span></div>
+                <div class="row"><span class="label">بابت:</span><span class="value">${record.description}</span></div>
+                <div class="row"><span class="label">وضعیت فعلی:</span><span class="value">${record.status}</span></div>
+            `;
+        } 
+        else if (type === 'EXIT') {
+            title = 'مجوز خروج کالا';
+            let itemsHtml = `<table class="items-table"><thead><tr><th>کالا</th><th>تعداد</th><th>وزن (KG)</th></tr></thead><tbody>`;
+            if (record.items && record.items.length > 0) {
+                record.items.forEach(i => {
+                    itemsHtml += `<tr><td>${i.goodsName}</td><td>${i.cartonCount || i.deliveredCartonCount || 0}</td><td>${i.weight || i.deliveredWeight || 0}</td></tr>`;
+                });
+            } else {
+                itemsHtml += `<tr><td>${record.goodsName}</td><td>${record.cartonCount}</td><td>${record.weight}</td></tr>`;
+            }
+            itemsHtml += `</tbody></table>`;
+
+            htmlData = `
+                <div class="row"><span class="label">شماره مجوز:</span><span class="value" style="font-family:monospace; font-size: 24px;">#${record.permitNumber}</span></div>
+                <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
+                <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
+                <div class="row"><span class="label">راننده / پلاک:</span><span class="value">${record.driverName || '-'} | ${record.plateNumber || '-'}</span></div>
+                ${itemsHtml}
+                ${record.exitTime ? `<div class="row" style="background:#ecfccb; border:none; margin-top:10px;"><span class="label" style="color:#365314">ساعت خروج:</span><span class="value" style="font-size:24px; color:#365314">${record.exitTime}</span></div>` : ''}
+                <div class="status" style="background:${record.status.includes('رد')?'#ef4444':'#f59e0b'}">${record.status}</div>
+            `;
         }
-        itemsHtml += `</tbody></table>`;
+        else if (type === 'BIJAK') {
+            title = 'بیجک انبار';
+            htmlData = `
+                <div class="row"><span class="label">شماره بیجک:</span><span class="value">#${record.number}</span></div>
+                <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
+                <div class="row"><span class="label">صادر کننده:</span><span class="value">${record.createdBy}</span></div>
+                <div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length}</span></div>
+            `;
+        }
 
-        htmlData = `
-            <div class="row"><span class="label">شماره مجوز:</span><span class="value" style="font-family:monospace; font-size: 24px;">#${record.permitNumber}</span></div>
-            <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
-            <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
-            <div class="row"><span class="label">راننده / پلاک:</span><span class="value">${record.driverName || '-'} | ${record.plateNumber || '-'}</span></div>
-            ${itemsHtml}
-            ${record.exitTime ? `<div class="row" style="background:#ecfccb; border:none; margin-top:10px;"><span class="label" style="color:#365314">ساعت خروج:</span><span class="value" style="font-size:24px; color:#365314">${record.exitTime}</span></div>` : ''}
-            <div class="status" style="background:${record.status.includes('رد')?'#ef4444':'#f59e0b'}">${record.status}</div>
-        `;
+        await page.setContent(generateHtml(title, htmlData, type));
+        const card = await page.$('.card');
+        const buffer = await card.screenshot({ type: 'png' });
+        await page.close();
+        return buffer;
+    } catch (e) {
+        console.error("Renderer Error:", e);
+        return Buffer.from("");
     }
-    else if (type === 'BIJAK') {
-        title = 'بیجک انبار';
-        htmlData = `
-            <div class="row"><span class="label">شماره بیجک:</span><span class="value">#${record.number}</span></div>
-            <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
-            <div class="row"><span class="label">صادر کننده:</span><span class="value">${record.createdBy}</span></div>
-            <div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length}</span></div>
-        `;
-    }
-
-    await page.setContent(generateHtml(title, htmlData, type));
-    const card = await page.$('.card');
-    const buffer = await card.screenshot({ type: 'png' });
-    await page.close();
-    return buffer;
 };
 
 // PDF Generation for Reports
 export const generatePdfBuffer = async (html) => {
     const browser = await getBrowser();
+    if (!browser) throw new Error("Browser not available");
+    
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '1cm', bottom: '1cm' } });
