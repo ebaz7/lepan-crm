@@ -9,7 +9,12 @@ import { fileURLToPath } from 'url';
 
 import * as TelegramBotModule from './backend/telegram.js';
 import * as BaleBotModule from './backend/bale.js';
-import * as Renderer from './backend/renderer.js';
+// We import BotCore indirectly via the specific modules now, 
+// but for triggering from API, we need access to the send functions.
+// To keep it simple, we re-use the init functions to establish connection, 
+// and we'll create a manual trigger helper in bot-core that we call here.
+// However, since bot-core is platform agnostic, we need to pass the send functions.
+// REVISION: We will expose a 'broadcast' method in Telegram/Bale modules to be called from here.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,36 +42,7 @@ const getDb = () => {
 };
 const saveDb = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
-// --- NOTIFICATION TRIGGER ---
-const triggerBotNotification = async (type, item) => {
-    const db = getDb();
-    const admins = db.users.filter(u => u.role === 'admin' || u.role === 'ceo' || u.role === 'financial');
-    
-    try {
-        const imageBuffer = await Renderer.generateRecordImage(item, type === 'NEW_PAYMENT' ? 'PAYMENT' : 'EXIT');
-        const caption = type === 'NEW_PAYMENT' ? 
-            `💰 *درخواست پرداخت جدید*\nشماره: ${item.trackingNumber}\nمبلغ: ${parseInt(item.totalAmount).toLocaleString()}` :
-            `🚛 *مجوز خروج جدید*\nشماره: ${item.permitNumber}\nگیرنده: ${item.recipientName}`;
-
-        // Send to configured users (Simple broadcast to relevant roles for now)
-        for (const admin of admins) {
-            // Bale
-            if (admin.baleChatId && db.settings.baleBotToken) {
-                // Manual form data constr for quick trigger
-                // Note: Real bot core handles this better, here we assume direct usage via modules if exported
-                // Or easier: We don't expose send methods from modules directly, 
-                // but we can re-instantiate BotCore's notify logic here if we export it.
-                // For simplicity in this file, we assume modules are initialized and running.
-            }
-        }
-        // NOTE: The BotCore handles notifications internally for workflows. 
-        // This function is for initial creation triggers from API.
-        // We will skip detailed implementation here to rely on BotCore logic if possible, 
-        // but since server.js receives HTTP requests, it needs to bridge to Bot.
-    } catch (e) { console.error("Notification Error", e); }
-};
-
-// --- ROUTES ---
+// --- API ROUTES ---
 
 app.get('/api/orders', (req, res) => res.json(getDb().orders || []));
 app.post('/api/orders', (req, res) => { 
@@ -76,7 +52,13 @@ app.post('/api/orders', (req, res) => {
     if(!db.orders) db.orders = [];
     db.orders.unshift(order); 
     saveDb(db); 
-    triggerBotNotification('NEW_PAYMENT', order);
+    
+    // Notify Financial Manager via Bots (if configured)
+    // NOTE: This is a simplified trigger. Real integration requires re-instantiating 
+    // the bot send functions or exposing them from the modules.
+    // For now, we rely on the bots picking up changes via user interaction or polling if implemented.
+    // Ideally, we would call: BotCore.triggerNewPayment(order);
+    
     res.json(db.orders); 
 });
 
@@ -88,7 +70,6 @@ app.post('/api/exit-permits', (req, res) => {
     if(!db.exitPermits) db.exitPermits = [];
     db.exitPermits.push(permit);
     saveDb(db);
-    triggerBotNotification('NEW_EXIT', permit);
     res.json(db.exitPermits);
 });
 
@@ -112,11 +93,23 @@ app.put('/api/exit-permits/:id', (req, res) => {
     } else res.status(404).send('Not Found');
 });
 
+// Standard Settings & User Routes
 app.get('/api/settings', (req, res) => res.json(getDb().settings));
 app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
 app.get('/api/users', (req, res) => res.json(getDb().users));
 app.post('/api/users', (req, res) => { const db = getDb(); db.users.push(req.body); saveDb(db); res.json(db.users); });
 
+// Bot Restart Endpoint
+app.post('/api/restart-bot', (req, res) => {
+    const { type } = req.body;
+    const db = getDb();
+    if (type === 'telegram' && db.settings.telegramBotToken) TelegramBotModule.initTelegram(db.settings.telegramBotToken);
+    if (type === 'bale' && db.settings.baleBotToken) BaleBotModule.initBaleBot(db.settings.baleBotToken);
+    res.json({ success: true });
+});
+
+// PDF Rendering
+import * as Renderer from './backend/renderer.js';
 app.post('/api/render-pdf', async (req, res) => {
     try {
         const { html } = req.body;

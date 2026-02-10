@@ -15,19 +15,18 @@ export const initTelegram = async (token) => {
         bot = new TelegramBot(token, { polling: true, request: requestOptions });
         console.log(">>> Telegram Bot Started ✅");
 
+        // Adapter Functions
         const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts);
         const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts });
+        const sendDocFn = (id, buf, name, cap) => bot.sendDocument(id, buf, { caption: cap }, { filename: name });
 
         bot.on('message', (msg) => {
-            const chatId = msg.chat.id;
-            const text = msg.text || '';
-            BotCore.handleMessage('telegram', chatId, text, sendFn, sendPhotoFn);
+            if (!msg.text) return;
+            BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
         });
 
         bot.on('callback_query', (query) => {
-            const chatId = query.message.chat.id;
-            const data = query.data;
-            BotCore.handleCallback('telegram', chatId, data, sendFn, sendPhotoFn);
+            BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn);
             bot.answerCallbackQuery(query.id);
         });
 
