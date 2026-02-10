@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
 import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
-import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff } from 'lucide-react';
+import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter } from 'lucide-react';
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
@@ -15,6 +15,81 @@ interface Props {
     settings?: SystemSettings; 
     initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals';
 }
+
+// Internal Edit Modal Component
+const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTransaction, onClose: () => void, onSave: (tx: WarehouseTransaction) => void, items: WarehouseItem[] }) => {
+    const [formData, setFormData] = useState({ ...tx });
+    const [txItems, setTxItems] = useState<WarehouseTransactionItem[]>(tx.items || []);
+
+    const handleItemChange = (idx: number, field: keyof WarehouseTransactionItem, value: any) => {
+        const newItems = [...txItems];
+        newItems[idx] = { ...newItems[idx], [field]: value };
+        if (field === 'itemId') {
+            const selected = items.find(i => i.id === value);
+            if (selected) newItems[idx].itemName = selected.name;
+        }
+        setTxItems(newItems);
+    };
+
+    const addItem = () => setTxItems([...txItems, { itemId: '', itemName: '', quantity: 0, weight: 0, unitPrice: 0 }]);
+    const removeItem = (idx: number) => setTxItems(txItems.filter((_, i) => i !== idx));
+
+    const handleSave = () => {
+        onSave({ ...formData, items: txItems });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <h3 className="font-bold text-gray-800">ویرایش {tx.type === 'IN' ? 'رسید انبار' : 'بیجک خروج'}</h3>
+                    <button onClick={onClose}><X size={20} className="text-gray-500 hover:text-red-500"/></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {tx.type === 'OUT' && (
+                            <>
+                                <div><label className="text-xs font-bold block mb-1">شماره بیجک</label><input className="w-full border rounded p-2 bg-gray-100" value={formData.number} readOnly /></div>
+                                <div><label className="text-xs font-bold block mb-1">گیرنده</label><input className="w-full border rounded p-2" value={formData.recipientName || ''} onChange={e => setFormData({...formData, recipientName: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold block mb-1">راننده</label><input className="w-full border rounded p-2" value={formData.driverName || ''} onChange={e => setFormData({...formData, driverName: e.target.value})} /></div>
+                                <div><label className="text-xs font-bold block mb-1">پلاک</label><input className="w-full border rounded p-2" value={formData.plateNumber || ''} onChange={e => setFormData({...formData, plateNumber: e.target.value})} /></div>
+                            </>
+                        )}
+                        {tx.type === 'IN' && (
+                            <>
+                                <div><label className="text-xs font-bold block mb-1">شماره پروفرما</label><input className="w-full border rounded p-2" value={formData.proformaNumber || ''} onChange={e => setFormData({...formData, proformaNumber: e.target.value})} /></div>
+                            </>
+                        )}
+                        <div><label className="text-xs font-bold block mb-1">تاریخ</label><input className="w-full border rounded p-2 dir-ltr" value={formData.date.split('T')[0]} readOnly /></div>
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-xl border">
+                        <label className="text-xs font-bold block mb-2">اقلام</label>
+                        <div className="space-y-2">
+                            {txItems.map((item, idx) => (
+                                <div key={idx} className="flex gap-2 items-end">
+                                    <select className="flex-1 border rounded p-2 text-sm" value={item.itemId} onChange={e => handleItemChange(idx, 'itemId', e.target.value)}>
+                                        <option value="">انتخاب کالا...</option>
+                                        {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                    </select>
+                                    <input className="w-20 border rounded p-2 text-sm text-center" placeholder="تعداد" type="number" value={item.quantity} onChange={e => handleItemChange(idx, 'quantity', Number(e.target.value))} />
+                                    <input className="w-20 border rounded p-2 text-sm text-center" placeholder="وزن" type="number" value={item.weight} onChange={e => handleItemChange(idx, 'weight', Number(e.target.value))} />
+                                    <button onClick={() => removeItem(idx)} className="text-red-500 p-2"><Trash2 size={16}/></button>
+                                </div>
+                            ))}
+                            <button onClick={addItem} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-2"><Plus size={14}/> افزودن سطر</button>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4 gap-2">
+                        <button onClick={onClose} className="px-4 py-2 border rounded-lg text-gray-600">انصراف</button>
+                        <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">ذخیره تغییرات</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 'dashboard' }) => {
     const [loadingData, setLoadingData] = useState(true);
@@ -377,8 +452,8 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
     const recentBijaks = useMemo(() => safeTransactions.filter(t => t.type === 'OUT').slice(0, 5), [safeTransactions]);
     
-    const filteredArchiveBijaks = useMemo(() => safeTransactions.filter(t => t.type === 'OUT' && (!archiveFilterCompany || t.company === archiveFilterCompany) && (String(t.number).includes(reportSearch) || t.recipientName?.includes(reportSearch))), [safeTransactions, archiveFilterCompany, reportSearch]);
-    
+    // Updated Filtering logic using reportSearch
+    const filteredArchiveBijaks = useMemo(() => safeTransactions.filter(t => t.type === 'OUT' && (!archiveFilterCompany || t.company === archiveFilterCompany) && (String(t.number).includes(reportSearch) || (t.recipientName && t.recipientName.includes(reportSearch)))), [safeTransactions, archiveFilterCompany, reportSearch]);
     const filteredArchiveReceipts = useMemo(() => safeTransactions.filter(t => t.type === 'IN' && (!archiveFilterCompany || t.company === archiveFilterCompany) && (String(t.proformaNumber).includes(reportSearch))), [safeTransactions, archiveFilterCompany, reportSearch]);
     
     const pendingBijaks = useMemo(() => safeTransactions.filter(t => t.type === 'OUT' && t.status === 'PENDING'), [safeTransactions]);
@@ -468,6 +543,46 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border h-[calc(100vh-100px)] flex flex-col overflow-hidden animate-fade-in relative">
+            
+            {/* Hidden Print Elements for Auto-Send (Approved/Edited/Deleted) */}
+            {approvedTxForAutoSend && (
+                <>
+                    <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                        <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}>
+                            <PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} />
+                        </div>
+                    </div>
+                    <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                        <div id={`print-bijak-${approvedTxForAutoSend.id}-noprice`}>
+                            <PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} />
+                        </div>
+                    </div>
+                </>
+            )}
+            
+            {deletedTxForAutoSend && (
+                <>
+                    <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                        <div id={`print-bijak-del-${deletedTxForAutoSend.id}-price`}>
+                            <PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} />
+                        </div>
+                    </div>
+                    <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                        <div id={`print-bijak-del-${deletedTxForAutoSend.id}-noprice`}>
+                            <PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} />
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {editedBijakForAutoSend && (
+                <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                    <div id={`print-bijak-edit-${editedBijakForAutoSend.id}`}>
+                        <PrintBijak tx={editedBijakForAutoSend} onClose={()=>{}} embed forceHidePrices={false} />
+                    </div>
+                </div>
+            )}
+
             {showPrintStockReport && (<PrintStockReport data={allWarehousesStock} onClose={() => setShowPrintStockReport(false)} />)}
 
             <div className="bg-gray-100 p-2 flex gap-2 border-b overflow-x-auto no-print">
@@ -477,6 +592,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 <button onClick={() => setActiveTab('entry_archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry_archive' ? 'bg-white text-emerald-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>مدیریت رسیدها</button>
                 <button onClick={() => setActiveTab('exit')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'exit' ? 'bg-white text-red-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>خروج کالا (بیجک)</button>
                 <button onClick={() => setActiveTab('archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'archive' ? 'bg-white text-gray-800 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>مدیریت بیجک‌ها</button>
+                <button onClick={() => setActiveTab('approvals')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'approvals' ? 'bg-white text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>کارتابل تایید</button>
                 <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-purple-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>گزارش کاردکس</button>
                 <button onClick={() => setActiveTab('stock_report')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stock_report' ? 'bg-white text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>موجودی کل</button>
             </div>
@@ -582,7 +698,76 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     </div>
                 )}
                 
-                {/* ... [Rest of the tabs remain same] ... */}
+                {/* --- ARCHIVE TAB (BIJAKS) --- */}
+                {activeTab === 'archive' && (
+                    <div className="space-y-4 animate-fade-in">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Archive size={20}/> آرشیو حواله‌های خروج (بیجک)</h3>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <select className="border rounded-lg p-2 text-sm" value={archiveFilterCompany} onChange={e => setArchiveFilterCompany(e.target.value)}><option value="">همه شرکت‌ها</option>{companyList.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <input className="border rounded-lg p-2 text-sm" placeholder="جستجو (گیرنده/شماره)..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                            <table className="w-full text-sm text-right">
+                                <thead className="bg-gray-100 text-gray-600"><tr><th className="p-4">شماره</th><th className="p-4">تاریخ</th><th className="p-4">شرکت</th><th className="p-4">گیرنده</th><th className="p-4">وضعیت</th><th className="p-4 text-center">عملیات</th></tr></thead>
+                                <tbody className="divide-y">
+                                    {filteredArchiveBijaks.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-gray-400">موردی یافت نشد.</td></tr> : filteredArchiveBijaks.map(tx => (
+                                        <tr key={tx.id} className="hover:bg-gray-50">
+                                            <td className="p-4 font-mono font-bold text-red-600">#{tx.number}</td>
+                                            <td className="p-4 text-xs">{formatDate(tx.date)}</td>
+                                            <td className="p-4 text-xs font-bold">{tx.company}</td>
+                                            <td className="p-4 text-xs">{tx.recipientName}</td>
+                                            <td className="p-4"><span className={`text-[10px] px-2 py-1 rounded font-bold w-fit ${tx.status === 'APPROVED' ? 'bg-green-100 text-green-700' : tx.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-800'}`}>{tx.status === 'APPROVED' ? 'تایید شده' : tx.status === 'REJECTED' ? 'رد شده' : 'در انتظار تایید'}</span></td>
+                                            <td className="p-4 text-center flex justify-center gap-2">
+                                                <button onClick={() => setViewBijak(tx)} className="text-blue-600 hover:text-blue-800 p-1"><Eye size={16}/></button>
+                                                {(currentUser.role === UserRole.ADMIN || (tx.status === 'PENDING' && currentUser.role === UserRole.WAREHOUSE_KEEPER)) && <button onClick={() => setEditingBijak(tx)} className="text-amber-600 hover:text-amber-800 p-1"><Edit size={16}/></button>}
+                                                {(currentUser.role === UserRole.ADMIN) && <button onClick={() => handleDeleteTx(tx.id)} className="text-red-600 hover:text-red-800 p-1"><Trash2 size={16}/></button>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- ENTRY ARCHIVE TAB (RECEIPTS) --- */}
+                {activeTab === 'entry_archive' && (
+                    <div className="space-y-4 animate-fade-in">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><ArrowDownCircle size={20} className="text-green-600"/> آرشیو رسیدهای انبار (ورودی)</h3>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <select className="border rounded-lg p-2 text-sm" value={archiveFilterCompany} onChange={e => setArchiveFilterCompany(e.target.value)}><option value="">همه شرکت‌ها</option>{companyList.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <input className="border rounded-lg p-2 text-sm" placeholder="جستجو (پروفرما)..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                            <table className="w-full text-sm text-right">
+                                <thead className="bg-gray-100 text-gray-600"><tr><th className="p-4">پروفرما</th><th className="p-4">تاریخ</th><th className="p-4">شرکت</th><th className="p-4">تعداد اقلام</th><th className="p-4 text-center">عملیات</th></tr></thead>
+                                <tbody className="divide-y">
+                                    {filteredArchiveReceipts.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-gray-400">موردی یافت نشد.</td></tr> : filteredArchiveReceipts.map(tx => (
+                                        <tr key={tx.id} className="hover:bg-gray-50">
+                                            <td className="p-4 font-mono font-bold">{tx.proformaNumber || '-'}</td>
+                                            <td className="p-4 text-xs">{formatDate(tx.date)}</td>
+                                            <td className="p-4 text-xs font-bold">{tx.company}</td>
+                                            <td className="p-4 text-xs">{tx.items.length} قلم</td>
+                                            <td className="p-4 text-center flex justify-center gap-2">
+                                                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.WAREHOUSE_KEEPER) && (
+                                                    <>
+                                                        <button onClick={() => setEditingReceipt(tx)} className="text-amber-600 hover:text-amber-800 p-1"><Edit size={16}/></button>
+                                                        <button onClick={() => handleDeleteTx(tx.id)} className="text-red-600 hover:text-red-800 p-1"><Trash2 size={16}/></button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+                
                 {activeTab === 'stock_report' && (
                     <div className="flex flex-col h-full">
                         <div className="flex justify-between items-center mb-4 no-print">
@@ -619,6 +804,25 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     settings={settings}
                     onApprove={canApprove && viewBijak.status === 'PENDING' ? () => handleApproveBijak(viewBijak) : undefined}
                     onReject={canApprove && viewBijak.status === 'PENDING' ? () => handleRejectBijak(viewBijak) : undefined} 
+                />
+            )}
+
+            {/* Edit Modals */}
+            {editingBijak && (
+                <TransactionEditModal 
+                    tx={editingBijak} 
+                    onClose={() => setEditingBijak(null)} 
+                    onSave={handleEditBijakSave} 
+                    items={items} 
+                />
+            )}
+            
+            {editingReceipt && (
+                <TransactionEditModal 
+                    tx={editingReceipt} 
+                    onClose={() => setEditingReceipt(null)} 
+                    onSave={handleEditReceiptSave} 
+                    items={items} 
                 />
             )}
         </div>
