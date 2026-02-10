@@ -15,28 +15,21 @@ export const initTelegram = async (token) => {
         bot = new TelegramBot(token, { polling: true, request: requestOptions });
         console.log(">>> Telegram Bot Started ✅");
 
+        const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts);
+        const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts });
+
         bot.on('message', (msg) => {
             const chatId = msg.chat.id;
             const text = msg.text || '';
-            
-            // Standard Send Function Wrapper
-            const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts);
-            const sendPhotoFn = (p, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, reply_markup: opts });
-
             BotCore.handleMessage('telegram', chatId, text, sendFn, sendPhotoFn);
         });
 
         bot.on('callback_query', (query) => {
             const chatId = query.message.chat.id;
             const data = query.data;
-            const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts);
-            
-            BotCore.handleCallback('telegram', chatId, data, sendFn);
+            BotCore.handleCallback('telegram', chatId, data, sendFn, sendPhotoFn);
             bot.answerCallbackQuery(query.id);
         });
 
     } catch (e) { console.error("Telegram Error", e); }
 };
-
-export const sendTelegramMessage = (chatId, text, opts) => { if(bot) bot.sendMessage(chatId, text, opts); };
-export const sendTelegramPhoto = (chatId, buffer, caption, opts) => { if(bot) bot.sendPhoto(chatId, buffer, { caption, ...opts }); };
