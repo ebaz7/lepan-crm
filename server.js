@@ -124,6 +124,34 @@ app.post('/api/render-pdf', async (req, res) => {
     }
 });
 
+// --- SERVE FRONTEND (STATIC FILES) ---
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
+
+if (fs.existsSync(DIST_DIR)) {
+    // Serve static files from the dist directory
+    app.use(express.static(DIST_DIR));
+
+    // Handle React routing, return all requests to React app
+    app.get('*', (req, res) => {
+        // Skip API requests
+        if (req.path.startsWith('/api')) {
+            return res.status(404).json({ error: 'API endpoint not found' });
+        }
+        res.sendFile(path.join(DIST_DIR, 'index.html'));
+    });
+} else {
+    // Fallback if build is missing
+    app.get('/', (req, res) => {
+        res.send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+                <h1>Frontend Not Built</h1>
+                <p>Please run <code>npm run build</code> to generate the frontend assets.</p>
+                <p>Ensure the <b>dist</b> folder exists in the project root.</p>
+            </div>
+        `);
+    });
+}
+
 // Start Server
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on ${PORT}`);
