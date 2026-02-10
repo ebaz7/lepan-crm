@@ -15,20 +15,33 @@ export const initTelegram = async (token) => {
         bot = new TelegramBot(token, { polling: true, request: requestOptions });
         console.log(">>> Telegram Bot Started ✅");
 
-        // Adapter Functions
-        const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts);
-        const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts });
-        const sendDocFn = (id, buf, name, cap) => bot.sendDocument(id, buf, { caption: cap }, { filename: name });
+        const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts).catch(e => console.error("TG Send Err:", e.message));
+        const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts }).catch(e => console.error("TG Photo Err:", e.message));
+        const sendDocFn = (id, buf, name, cap) => bot.sendDocument(id, buf, { caption: cap }, { filename: name }).catch(e => console.error("TG Doc Err:", e.message));
 
-        bot.on('message', (msg) => {
-            if (!msg.text) return;
-            BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
+        bot.on('message', async (msg) => {
+            try {
+                if (!msg.text) return;
+                await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
+            } catch (e) {
+                console.error("TG Msg Handle Error:", e);
+                bot.sendMessage(msg.chat.id, "⚠️ خطا در پردازش درخواست.").catch(()=>{});
+            }
         });
 
-        bot.on('callback_query', (query) => {
-            BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn);
-            bot.answerCallbackQuery(query.id);
+        bot.on('callback_query', async (query) => {
+            try {
+                await BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn);
+                await bot.answerCallbackQuery(query.id);
+            } catch (e) {
+                console.error("TG Callback Handle Error:", e);
+                bot.answerCallbackQuery(query.id).catch(()=>{});
+            }
+        });
+        
+        bot.on('polling_error', (error) => {
+            console.error(`[Telegram Polling Error] ${error.code}: ${error.message}`);
         });
 
-    } catch (e) { console.error("Telegram Error", e); }
+    } catch (e) { console.error("Telegram Init Error", e); }
 };

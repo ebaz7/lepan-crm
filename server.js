@@ -7,6 +7,17 @@ import path from 'path';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 
+// --- GLOBAL ERROR HANDLERS (PREVENT CRASH) ---
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL ERROR (Uncaught Exception):', err);
+    // Do not exit the process, just log it.
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL ERROR (Unhandled Rejection):', reason);
+    // Do not exit the process.
+});
+
 // Safe Import Helper
 const safeImport = async (modulePath) => {
     try {
@@ -128,27 +139,16 @@ app.post('/api/render-pdf', async (req, res) => {
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
 if (fs.existsSync(DIST_DIR)) {
-    // Serve static files from the dist directory
     app.use(express.static(DIST_DIR));
-
-    // Handle React routing, return all requests to React app
     app.get('*', (req, res) => {
-        // Skip API requests
         if (req.path.startsWith('/api')) {
             return res.status(404).json({ error: 'API endpoint not found' });
         }
         res.sendFile(path.join(DIST_DIR, 'index.html'));
     });
 } else {
-    // Fallback if build is missing
     app.get('/', (req, res) => {
-        res.send(`
-            <div style="font-family: sans-serif; text-align: center; padding: 50px;">
-                <h1>Frontend Not Built</h1>
-                <p>Please run <code>npm run build</code> to generate the frontend assets.</p>
-                <p>Ensure the <b>dist</b> folder exists in the project root.</p>
-            </div>
-        `);
+        res.send(`<h1>Frontend Not Built</h1><p>Run npm run build</p>`);
     });
 }
 
@@ -156,14 +156,11 @@ if (fs.existsSync(DIST_DIR)) {
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on ${PORT}`);
     
-    // Initialize Bots Safely
     const db = getDb();
-    
     if(db.settings?.telegramBotToken) {
         const tgModule = await safeImport('./backend/telegram.js');
         if(tgModule) tgModule.initTelegram(db.settings.telegramBotToken);
     }
-    
     if(db.settings?.baleBotToken) {
         const baleModule = await safeImport('./backend/bale.js');
         if(baleModule) baleModule.initBaleBot(db.settings.baleBotToken);

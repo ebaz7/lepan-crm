@@ -9,6 +9,7 @@ let botToken = null;
 
 const callApi = (method, data, isMultipart = false) => {
     return new Promise((resolve, reject) => {
+        if (!botToken) return reject("No Token");
         const options = {
             hostname: 'tapi.bale.ai',
             path: `/bot${botToken}/${method}`,
@@ -48,8 +49,7 @@ const poll = async () => {
             for (const u of res.result) {
                 lastOffset = u.update_id;
                 
-                // Adapter Functions
-                const sendFn = (id, txt, opts) => callApi('sendMessage', { chat_id: id, text: txt, ...opts });
+                const sendFn = (id, txt, opts) => callApi('sendMessage', { chat_id: id, text: txt, ...opts }).catch(e => console.error("Bale Send Err", e.message));
                 
                 const sendPhotoFn = (platform, id, buffer, caption, opts) => {
                     const form = new FormData();
@@ -57,7 +57,7 @@ const poll = async () => {
                     form.append('photo', buffer, { filename: 'image.png' });
                     form.append('caption', caption);
                     if (opts && opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
-                    return callApi('sendPhoto', form, true);
+                    return callApi('sendPhoto', form, true).catch(e => console.error("Bale Photo Err", e.message));
                 };
 
                 const sendDocFn = (id, buffer, name, caption) => {
@@ -65,13 +65,17 @@ const poll = async () => {
                     form.append('chat_id', id);
                     form.append('document', buffer, { filename: name });
                     form.append('caption', caption);
-                    return callApi('sendDocument', form, true);
+                    return callApi('sendDocument', form, true).catch(e => console.error("Bale Doc Err", e.message));
                 }
 
-                if (u.message && u.message.text) {
-                    BotCore.handleMessage('bale', u.message.chat.id, u.message.text, sendFn, sendPhotoFn, sendDocFn);
-                } else if (u.callback_query) {
-                    BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn);
+                try {
+                    if (u.message && u.message.text) {
+                        await BotCore.handleMessage('bale', u.message.chat.id, u.message.text, sendFn, sendPhotoFn, sendDocFn);
+                    } else if (u.callback_query) {
+                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn);
+                    }
+                } catch (err) {
+                    console.error("Bale Message Handler Error:", err);
                 }
             }
         }
