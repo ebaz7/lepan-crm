@@ -69,6 +69,11 @@ const KEYBOARDS = {
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
+    REPORTS: {
+        inline_keyboard: [
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
+        ]
+    },
     BACK: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_MAIN' }]] }
 };
 
@@ -77,29 +82,29 @@ const KEYBOARDS = {
 export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
     const user = resolveUser(db, platform, chatId);
-    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز.");
+    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز. شما در سیستم تعریف نشده‌اید.");
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
     if (text === '/start' || text === 'شروع') {
         session.state = 'IDLE';
-        return sendFn(chatId, `👋 سلام ${user.fullName}\nخوش آمدید.`, { reply_markup: KEYBOARDS.MAIN });
+        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سامانه یکپارچه مدیریت خوش آمدید.\nلطفاً یکی از بخش‌های زیر را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
 
     // --- FORMS ---
-    // 1. Payment
+    // 1. Payment Registration
     if (session.state === 'PAY_AMOUNT') {
         const amt = parseInt(text.replace(/,/g, '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-        if (isNaN(amt)) return sendFn(chatId, "❌ مبلغ نامعتبر.");
+        if (isNaN(amt)) return sendFn(chatId, "❌ مبلغ نامعتبر است. لطفاً عدد وارد کنید:", { reply_markup: KEYBOARDS.BACK });
         session.data.amount = amt;
         session.state = 'PAY_PAYEE';
-        return sendFn(chatId, "👤 نام ذینفع:", { reply_markup: KEYBOARDS.BACK });
+        return sendFn(chatId, "👤 نام گیرنده وجه (ذینفع) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'PAY_PAYEE') {
         session.data.payee = text;
         session.state = 'PAY_DESC';
-        return sendFn(chatId, "📝 بابت:", { reply_markup: KEYBOARDS.BACK });
+        return sendFn(chatId, "📝 بابت (شرح پرداخت) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'PAY_DESC') {
         const order = {
@@ -120,21 +125,21 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         db.orders.unshift(order);
         saveDb(db);
         session.state = 'IDLE';
-        await sendFn(chatId, `✅ سند #${order.trackingNumber} ثبت شد.`);
-        await notifyRole(db, 'financial', `🔔 پرداخت جدید #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
+        await sendFn(chatId, `✅ سند #${order.trackingNumber} با موفقیت ثبت شد.`);
+        await notifyRole(db, 'financial', `🔔 پرداخت جدید #${order.trackingNumber}\nمبلغ: ${order.totalAmount}\nدرخواست: ${user.fullName}`, 'PAYMENT', order, sendFn, sendPhotoFn);
         return;
     }
 
-    // 2. Exit
+    // 2. Exit Registration
     if (session.state === 'EXIT_RECIPIENT') {
         session.data.recipient = text;
         session.state = 'EXIT_GOODS';
-        return sendFn(chatId, "📦 نام کالا:", { reply_markup: KEYBOARDS.BACK });
+        return sendFn(chatId, "📦 نام کالا را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'EXIT_GOODS') {
         session.data.goods = text;
         session.state = 'EXIT_COUNT';
-        return sendFn(chatId, "🔢 تعداد:", { reply_markup: KEYBOARDS.BACK });
+        return sendFn(chatId, "🔢 تعداد (کارتن) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'EXIT_COUNT') {
         const permit = {
@@ -157,14 +162,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         saveDb(db);
         session.state = 'IDLE';
         await sendFn(chatId, `✅ خروج #${permit.permitNumber} ثبت شد.`);
-        await notifyRole(db, 'ceo', `🔔 خروج جدید #${permit.permitNumber}`, 'EXIT', permit, sendFn, sendPhotoFn);
+        await notifyRole(db, 'ceo', `🔔 خروج جدید #${permit.permitNumber}\nگیرنده: ${permit.recipientName}`, 'EXIT', permit, sendFn, sendPhotoFn);
         return;
     }
 
-    return sendFn(chatId, "دستور نامعتبر.", { reply_markup: KEYBOARDS.MAIN });
+    return sendFn(chatId, "دستور نامعتبر. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
 
-export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn) => {
+export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
     const user = resolveUser(db, platform, chatId);
     if (!user) return;
@@ -178,15 +183,16 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
     if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
     if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
+    if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
     // Actions
     if (data === 'ACT_PAY_NEW') {
         session.state = 'PAY_AMOUNT';
-        return sendFn(chatId, "💵 مبلغ (ریال):");
+        return sendFn(chatId, "💵 مبلغ پرداخت (ریال):");
     }
     if (data === 'ACT_EXIT_NEW') {
         session.state = 'EXIT_RECIPIENT';
-        return sendFn(chatId, "👤 گیرنده:");
+        return sendFn(chatId, "👤 نام گیرنده کالا:");
     }
 
     // --- CARTABLES (SMART ADMIN CHECK) ---
@@ -212,7 +218,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         for (const item of items) {
             const img = await Renderer.generateRecordImage(item, 'PAYMENT');
             const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] };
-            await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}`, { reply_markup: kb });
+            await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}\nوضعیت: ${item.status}`, { reply_markup: kb });
         }
         return;
     }
@@ -238,7 +244,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         for (const item of items) {
             const img = await Renderer.generateRecordImage(item, 'EXIT');
             const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_EXIT_${item.id}` }, { text: '❌ رد', callback_data: `REJ_EXIT_${item.id}` }]] };
-            await sendPhotoFn(platform, chatId, img, `مجوز #${item.permitNumber}`, { reply_markup: kb });
+            await sendPhotoFn(platform, chatId, img, `مجوز #${item.permitNumber}\nگیرنده: ${item.recipientName}\nوضعیت: ${item.status}`, { reply_markup: kb });
         }
         return;
     }
@@ -257,7 +263,24 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
                 order.status = next;
                 saveDb(db);
                 sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${next}`);
-                // Notify logic here (omitted for brevity)
+            }
+        }
+    }
+    
+    if (data.startsWith('APP_EXIT_')) {
+        const id = data.replace('APP_EXIT_', '');
+        const permit = db.exitPermits.find(p => p.id === id);
+        if (permit) {
+            let next = '';
+            if (permit.status === 'در انتظار تایید مدیرعامل') next = 'در انتظار مدیر کارخانه';
+            else if (permit.status === 'در انتظار مدیر کارخانه') next = 'در انتظار تایید انبار';
+            else if (permit.status === 'در انتظار تایید انبار') next = 'در انتظار خروج';
+            else if (permit.status === 'در انتظار خروج') next = 'خارج شده (بایگانی)';
+            
+            if (next) {
+                permit.status = next;
+                saveDb(db);
+                sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${next}`);
             }
         }
     }
@@ -266,11 +289,11 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     
     // 1. WAREHOUSE STOCK PDF
     if (data === 'WH_RPT_STOCK') {
-        sendFn(chatId, "⏳ در حال تولید گزارش موجودی انبار...");
+        sendFn(chatId, "⏳ در حال تولید گزارش موجودی انبار (Stock)...");
         const items = db.warehouseItems || [];
         const txs = db.warehouseTransactions || [];
         
-        // Calculate Stock
+        // Calculate Stock per Item
         const stockData = items.map(item => {
             let qty = 0;
             txs.forEach(tx => {
@@ -285,17 +308,41 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             return [item.name, item.code || '-', item.unit, qty];
         });
 
-        const pdf = await Renderer.generateReportPDF('گزارش موجودی انبار', ['نام کالا', 'کد', 'واحد', 'موجودی'], stockData);
-        // Using generic sendDoc if platform supports buffer
-        // Note: For Bale/Telegram node libs, Buffer is supported.
-        // We assume sendPhotoFn handles logic, but let's assume we pass a generic sendDocFn in server.js
+        const pdf = await Renderer.generateReportPDF('گزارش موجودی انبار', ['نام کالا', 'کد کالا', 'واحد', 'موجودی فعلی'], stockData);
         if(sendDocFn) await sendDocFn(chatId, pdf, 'Stock_Report.pdf', 'گزارش موجودی انبار');
-        else sendFn(chatId, "PDF Created (Mock)");
     }
 
-    // 2. TRADE REPORTS
+    // 2. WAREHOUSE KARDEX (Simple Recent Flow)
+    if (data === 'WH_RPT_KARDEX') {
+        sendFn(chatId, "⏳ در حال تولید گزارش گردش کالا (۲۰ گردش آخر)...");
+        const txs = (db.warehouseTransactions || [])
+            .sort((a,b) => new Date(b.date) - new Date(a.date)) // Sort Descending
+            .slice(0, 20); // Last 20
+
+        const rows = txs.map(tx => [
+            tx.type === 'IN' ? 'ورود' : 'خروج',
+            tx.number || tx.proformaNumber || '-',
+            new Date(tx.date).toLocaleDateString('fa-IR'),
+            tx.items.length,
+            tx.company
+        ]);
+
+        const pdf = await Renderer.generateReportPDF('گزارش گردش انبار (کاردکس کلی)', ['نوع', 'شماره سند', 'تاریخ', 'تعداد اقلام', 'شرکت'], rows);
+        if(sendDocFn) await sendDocFn(chatId, pdf, 'Kardex_Report.pdf', 'گزارش گردش انبار');
+    }
+
+    // 3. WAREHOUSE BIJAKS/RECEIPTS
+    if (data === 'WH_RPT_BIJAKS') {
+        sendFn(chatId, "⏳ در حال تولید لیست بیجک‌های خروجی...");
+        const txs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT').slice(0, 20);
+        const rows = txs.map(tx => [tx.number, new Date(tx.date).toLocaleDateString('fa-IR'), tx.recipientName, tx.driverName || '-', tx.status]);
+        const pdf = await Renderer.generateReportPDF('لیست بیجک‌های خروجی اخیر', ['شماره', 'تاریخ', 'گیرنده', 'راننده', 'وضعیت'], rows);
+        if(sendDocFn) await sendDocFn(chatId, pdf, 'Bijaks_Report.pdf', 'بیجک‌های خروجی');
+    }
+
+    // 4. TRADE REPORTS
     if (data === 'TRD_RPT_ALLOCATION') {
-        sendFn(chatId, "⏳ در حال تولید گزارش صف تخصیص...");
+        sendFn(chatId, "⏳ در حال تولید گزارش صف تخصیص ارز...");
         const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
         const rows = records.map(r => [
             r.fileNumber, 
@@ -304,31 +351,45 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             (r.stages['ALLOCATION_QUEUE']?.isCompleted ? 'در صف' : 'تخصیص یافته'),
             `${r.mainCurrency} ${r.freightCost}`
         ]);
-        const pdf = await Renderer.generateReportPDF('گزارش صف تخصیص ارز', ['پرونده', 'کالا', 'شرکت', 'وضعیت', 'مبلغ'], rows, true);
+        const pdf = await Renderer.generateReportPDF('گزارش صف تخصیص ارز', ['شماره پرونده', 'کالا', 'شرکت', 'وضعیت', 'مبلغ'], rows, true);
         if(sendDocFn) await sendDocFn(chatId, pdf, 'Allocation_Report.pdf', 'گزارش صف تخصیص');
     }
 
     if (data === 'TRD_RPT_ACTIVE') {
-        sendFn(chatId, "⏳ در حال تولید لیست پرونده‌ها...");
+        sendFn(chatId, "⏳ در حال تولید لیست پرونده‌های فعال...");
         const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
         const rows = records.map(r => [r.fileNumber, r.goodsName, r.sellerName, r.company]);
-        const pdf = await Renderer.generateReportPDF('لیست پرونده‌های فعال', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows);
+        const pdf = await Renderer.generateReportPDF('لیست پرونده‌های فعال بازرگانی', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows);
         if(sendDocFn) await sendDocFn(chatId, pdf, 'Active_Files.pdf', 'لیست پرونده‌ها');
     }
 
-    // 3. PAYMENT RECENT
+    if (data === 'TRD_RPT_CURRENCY') {
+        sendFn(chatId, "⏳ در حال تولید گزارش خرید ارز...");
+        const records = db.tradeRecords || [];
+        const rows = [];
+        records.forEach(r => {
+            const tranches = r.currencyPurchaseData?.tranches || [];
+            tranches.forEach(t => {
+                rows.push([r.fileNumber, t.amount, t.currencyType, t.exchangeName, t.isDelivered ? 'تحویل' : 'منتظر']);
+            });
+        });
+        const pdf = await Renderer.generateReportPDF('گزارش خرید ارز', ['پرونده', 'مبلغ', 'ارز', 'صرافی', 'وضعیت'], rows);
+        if(sendDocFn) await sendDocFn(chatId, pdf, 'Currency_Report.pdf', 'گزارش خرید ارز');
+    }
+
+    // 5. PAYMENT RECENT
     if (data === 'RPT_PDF_PAY_RECENT') {
-        sendFn(chatId, "⏳ در حال تولید گزارش...");
+        sendFn(chatId, "⏳ در حال تولید گزارش پرداخت...");
         const recents = (db.orders || []).slice(0, 20).map(o => [o.trackingNumber, o.payee, o.totalAmount.toLocaleString(), o.date, o.status]);
         const pdf = await Renderer.generateReportPDF('لیست ۲۰ پرداخت اخیر', ['شماره', 'ذینفع', 'مبلغ', 'تاریخ', 'وضعیت'], recents);
         if(sendDocFn) await sendDocFn(chatId, pdf, 'Recent_Payments.pdf', 'گزارش پرداخت');
     }
 
-    // 4. EXIT RECENT
+    // 6. EXIT RECENT
     if (data === 'RPT_PDF_EXIT_RECENT') {
-        sendFn(chatId, "⏳ در حال تولید گزارش...");
+        sendFn(chatId, "⏳ در حال تولید گزارش خروج...");
         const recents = (db.exitPermits || []).slice(0, 20).map(p => [p.permitNumber, p.recipientName, p.goodsName, p.date, p.status]);
-        const pdf = await Renderer.generateReportPDF('لیست ۲۰ خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents);
+        const pdf = await Renderer.generateReportPDF('لیست ۲۰ مجوز خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents);
         if(sendDocFn) await sendDocFn(chatId, pdf, 'Recent_Exits.pdf', 'گزارش خروج');
     }
 };

@@ -1,7 +1,37 @@
 
 import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let browser = null;
+
+// --- FONT LOADER (OFFLINE SUPPORT) ---
+const getFontBase64 = () => {
+    try {
+        // Try to find the font in public/fonts
+        const fontPath = path.join(__dirname, '..', 'public', 'fonts', 'Vazirmatn-Regular.woff2');
+        if (fs.existsSync(fontPath)) {
+            return fs.readFileSync(fontPath).toString('base64');
+        }
+        // Fallback or development path
+        const devFontPath = path.join(process.cwd(), 'public', 'fonts', 'Vazirmatn-Regular.woff2');
+        if (fs.existsSync(devFontPath)) {
+            return fs.readFileSync(devFontPath).toString('base64');
+        }
+    } catch (e) {
+        console.warn("Font file not found for offline PDF. Using system fonts.");
+    }
+    return null;
+};
+
+const fontBase64 = getFontBase64();
+const fontFaceRule = fontBase64 
+    ? `@font-face { font-family: 'Vazirmatn'; src: url(data:font/woff2;base64,${fontBase64}) format('woff2'); }`
+    : `/* No Local Font */`;
 
 const getBrowser = async () => {
     if (!browser) {
@@ -20,8 +50,8 @@ const getBrowser = async () => {
 
 // --- STYLES ---
 const BASE_STYLE = `
-    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700;900&display=swap');
-    body { font-family: 'Vazirmatn', sans-serif; background: #fff; padding: 40px; direction: rtl; }
+    ${fontFaceRule}
+    body { font-family: 'Vazirmatn', Tahoma, sans-serif; background: #fff; padding: 40px; direction: rtl; }
     .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
     .title { font-size: 24px; font-weight: 900; color: #1e3a8a; }
     .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; color: #555; font-weight: bold; }
@@ -34,7 +64,6 @@ const BASE_STYLE = `
     .badge-green { background: #16a34a; }
     .badge-red { background: #dc2626; }
     .badge-blue { background: #2563eb; }
-    .badge-gray { background: #6b7280; }
     .amount { font-family: monospace; font-weight: bold; font-size: 14px; direction: ltr; }
 `;
 
@@ -63,7 +92,7 @@ const generateReportHTML = (title, columns, rows) => `
             ${rows.map((row, idx) => `
                 <tr>
                     <td>${idx + 1}</td>
-                    ${row.map(cell => `<td>${cell}</td>`).join('')}
+                    ${row.map(cell => `<td>${cell || '-'}</td>`).join('')}
                 </tr>
             `).join('')}
         </tbody>
@@ -174,6 +203,10 @@ export const generatePdfBuffer = async (html) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
     const page = await browser.newPage();
+    // Inject font style if missing
+    if (!html.includes('@font-face')) {
+        html = html.replace('<head>', `<head><style>${fontFaceRule}</style>`);
+    }
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({ format: 'A4', printBackground: true });
     await page.close();
