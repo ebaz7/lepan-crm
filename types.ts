@@ -144,15 +144,17 @@ export interface FiscalYear {
 }
 
 export interface ExitPermitGroupConfig {
-    groupId: string;
+    groupId: string; // WhatsApp
+    baleId?: string; // NEW: Bale Channel/Group ID
+    telegramId?: string; // NEW: Telegram Chat ID
     activeStatuses: string[];
 }
 
 export interface CompanyNotificationConfig {
     salesManager?: string;
     warehouseGroup?: string;
-    baleChannelId?: string; // NEW
-    telegramChannelId?: string; // NEW
+    baleChannelId?: string;
+    telegramChannelId?: string;
 }
 
 export interface DailySecurityMeta {
@@ -187,10 +189,12 @@ export interface SystemSettings {
   geminiApiKey?: string;
   warehouseSequences?: Record<string, number>;
   companyNotifications?: Record<string, CompanyNotificationConfig>;
-  defaultWarehouseGroup?: string;
+  defaultWarehouseGroup?: string; // WhatsApp Group 1
+  exitPermitNotificationBaleId?: string; // NEW: Group 1 Bale
+  exitPermitNotificationTelegramId?: string; // NEW: Group 1 Telegram
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
-  exitPermitNotificationGroup?: string;
+  exitPermitNotificationGroup?: string; // Legacy/Same as defaultWarehouseGroup usually
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
@@ -669,7 +673,7 @@ export interface GreenLeafTax {
     part: string;
     bank: string;
     date: string;
-}
+    }
 
 export interface GreenLeafRoadToll {
     id: string;
