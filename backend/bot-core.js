@@ -38,8 +38,8 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت دستور پرداخت', callback_data: 'ACT_PAY_NEW' }],
             [{ text: '📂 کارتابل پرداخت', callback_data: 'ACT_PAY_CARTABLE' }],
-            [{ text: '🗄️ آرشیو و جستجو', callback_data: 'ACT_PAY_ARCHIVE' }],
-            [{ text: '📄 گزارش PDF پرداخت‌های اخیر', callback_data: 'RPT_PDF_PAY_RECENT' }],
+            // UPDATED: Changed from Recent PDF to Archive Report
+            [{ text: '🗄️ گزارش بایگانی (جستجو)', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -92,29 +92,57 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سامانه یکپارچه مدیریت خوش آمدید.\nلطفاً یکی از بخش‌های زیر را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
 
-    // --- SEARCH HANDLER (Fix for Bug 2) ---
-    if (session.state === 'SEARCH_PAYMENT') {
-        const term = text.trim().toLowerCase();
-        const results = (db.orders || []).filter(o => 
-            String(o.trackingNumber).includes(term) || 
-            (o.payee && o.payee.includes(term)) ||
-            (o.description && o.description.includes(term))
-        ).slice(0, 10); // Limit to 10
+    // --- ARCHIVE DATE INPUT HANDLER (New Feature) ---
+    if (session.state === 'ARCHIVE_WAIT_DATE') {
+        const dateInput = text.trim(); // e.g. "1403/05" or "1403"
+        session.data.dateQuery = dateInput;
+        
+        await sendFn(chatId, `⏳ در حال جستجو برای شرکت "${session.data.company}" و تاریخ "${dateInput}"...`);
+        
+        // Filter Orders
+        const results = (db.orders || []).filter(o => {
+            const matchesCompany = o.payingCompany === session.data.company;
+            // Fuzzy date match (starts with input)
+            const matchesDate = o.date && o.date.includes('-') 
+                ? new Date(o.date).toLocaleDateString('fa-IR').startsWith(dateInput) // Convert ISO to Shamsi check
+                : (o.date || '').startsWith(dateInput); // Fallback if already shamsi string (rare)
+            
+            return matchesCompany && matchesDate;
+        });
 
         if (results.length === 0) {
-            return sendFn(chatId, "❌ موردی یافت نشد. مجدد تلاش کنید یا انصراف دهید:", { reply_markup: KEYBOARDS.BACK });
+            session.state = 'IDLE';
+            return sendFn(chatId, "❌ هیچ سندی با این مشخصات یافت نشد.", { reply_markup: KEYBOARDS.PAYMENT });
         }
 
-        await sendFn(chatId, `🔎 نتایج جستجو برای "${term}":`);
+        // 1. Send Images (Like Cartable)
         for (const item of results) {
-            // Send brief text instead of image for search results to be faster
-            const statusIcon = item.status.includes('تایید نهایی') ? '✅' : item.status.includes('رد') ? '❌' : '⏳';
-            const msg = `${statusIcon} *سند #${item.trackingNumber}*\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📅 تاریخ: ${item.date}\n📝 وضعیت: ${item.status}`;
-            // Optional: Add buttons if actionable? For archive usually just view.
-            await sendFn(chatId, msg);
+            try {
+                const img = await Renderer.generateRecordImage(item, 'PAYMENT');
+                const caption = `سند #${item.trackingNumber}\nمبلغ: ${parseInt(item.totalAmount).toLocaleString()}\nوضعیت: ${item.status}`;
+                
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, caption);
+                } else {
+                    await sendFn(chatId, `📋 ${caption}`);
+                }
+            } catch (e) { console.error(e); }
         }
-        session.state = 'IDLE';
-        return sendFn(chatId, "پایان جستجو.", { reply_markup: KEYBOARDS.PAYMENT });
+
+        // 2. Offer PDF Download
+        // Store IDs in session to generate PDF on callback
+        session.data.foundIds = results.map(r => r.id);
+        
+        await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد.\nبرای دریافت فایل PDF کامل روی دکمه زیر بزنید:`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '📄 دانلود فایل PDF گزارش', callback_data: 'GEN_ARCHIVE_PDF' }],
+                    [{ text: '🔙 بازگشت به منو', callback_data: 'MENU_PAY' }]
+                ]
+            }
+        });
+        
+        return;
     }
 
     // --- FORMS ---
@@ -220,13 +248,53 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         return sendFn(chatId, "👤 نام گیرنده کالا:");
     }
 
-    // --- ARCHIVE HANDLER (Fix for Bug 2) ---
-    if (data === 'ACT_PAY_ARCHIVE') {
-        session.state = 'SEARCH_PAYMENT';
-        return sendFn(chatId, "🔍 لطفاً قسمتی از نام ذینفع، شماره سند یا توضیحات را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
+    // --- ARCHIVE FLOW ---
+    if (data === 'ACT_PAY_ARCHIVE_REPORT') {
+        const companies = [...new Set((db.orders || []).map(o => o.payingCompany).filter(Boolean))];
+        if (companies.length === 0) return sendFn(chatId, "❌ هیچ شرکتی در سیستم یافت نشد.");
+        
+        const buttons = companies.map(c => [{ text: c, callback_data: `ARCHIVE_COMP_${c}` }]);
+        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_PAY' }]);
+        
+        return sendFn(chatId, "🏢 لطفاً شرکت مورد نظر را انتخاب کنید:", { reply_markup: { inline_keyboard: buttons } });
     }
 
-    // --- CARTABLES (Fix for Bug 1) ---
+    if (data.startsWith('ARCHIVE_COMP_')) {
+        const company = data.replace('ARCHIVE_COMP_', '');
+        session.data.company = company;
+        session.state = 'ARCHIVE_WAIT_DATE';
+        return sendFn(chatId, `📅 شرکت: ${company}\nلطفاً سال یا ماه مورد نظر را وارد کنید:\n(مثال: 1403 یا 1403/05)`);
+    }
+
+    // --- GENERATE ARCHIVE PDF ---
+    if (data === 'GEN_ARCHIVE_PDF') {
+        if (!session.data.foundIds || session.data.foundIds.length === 0) {
+            return sendFn(chatId, "❌ لیست منقضی شده است. لطفا مجدد جستجو کنید.");
+        }
+        
+        const records = db.orders.filter(o => session.data.foundIds.includes(o.id));
+        const rows = records.map(o => [
+            o.trackingNumber, 
+            o.payee, 
+            o.totalAmount.toLocaleString(), 
+            o.date, 
+            o.description, 
+            o.status
+        ]);
+        
+        await sendPdfSafe(
+            Renderer.generateReportPDF(
+                `گزارش بایگانی پرداخت - ${session.data.company} (${session.data.dateQuery})`, 
+                ['شماره', 'ذینفع', 'مبلغ', 'تاریخ', 'شرح', 'وضعیت'], 
+                rows
+            ), 
+            'Archive_Report.pdf', 
+            'گزارش بایگانی پرداخت'
+        );
+        return;
+    }
+
+    // --- CARTABLES ---
     if (data === 'ACT_PAY_CARTABLE') {
         await sendFn(chatId, "⏳ در حال دریافت کارتابل...");
         let items = [];
@@ -257,13 +325,11 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
                 if (img && img.length > 0) {
                     await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}\nوضعیت: ${item.status}`, { reply_markup: kb });
                 } else {
-                    // Fallback to text if image generation fails (Fix for Bug 1)
                     const txt = `📋 *دستور پرداخت #${item.trackingNumber}*\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📝 بابت: ${item.description}\n⏳ وضعیت: ${item.status}`;
                     await sendFn(chatId, txt, { reply_markup: kb });
                 }
             } catch (e) {
                 console.error("Error sending item:", e);
-                // Last resort fallback
                 await sendFn(chatId, `خطا در نمایش سند #${item.trackingNumber}. اما می‌توانید اقدام کنید.`, { 
                     reply_markup: { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] } 
                 });
@@ -354,21 +420,23 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         }
     }
 
-    // --- PDF REPORTS (Fix for Bug 3) ---
-    // Added try-catch blocks and checks for buffer validity
+    // --- PDF REPORTS (SAFE MODE) ---
     
     const sendPdfSafe = async (generatePromise, filename, caption) => {
         try {
             sendFn(chatId, "⏳ در حال تولید گزارش PDF...");
             const pdf = await generatePromise;
-            if (pdf && pdf.length > 0) {
+            
+            // CRITICAL FIX: Check buffer validity before sending
+            if (pdf && Buffer.isBuffer(pdf) && pdf.length > 100) {
                 await sendDocFn(chatId, pdf, filename, caption);
             } else {
-                sendFn(chatId, "⚠️ خطا در تولید فایل PDF. لطفاً لاگ سرور را بررسی کنید.");
+                console.error("PDF Generation Failed: Empty or invalid buffer returned");
+                sendFn(chatId, "⚠️ خطا در تولید فایل PDF (فایل خالی است). لطفاً لاگ سرور را بررسی کنید.");
             }
         } catch (e) {
             console.error("PDF Send Error:", e);
-            sendFn(chatId, "❌ خطا در ارسال گزارش.");
+            sendFn(chatId, `❌ خطا در ارسال گزارش: ${e.message}`);
         }
     };
 
@@ -419,13 +487,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         await sendPdfSafe(Renderer.generateReportPDF('لیست پرونده‌های فعال بازرگانی', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows), 'Active_Files.pdf', 'لیست پرونده‌ها');
     }
 
-    // 5. PAYMENT RECENT
-    if (data === 'RPT_PDF_PAY_RECENT') {
-        const recents = (db.orders || []).slice(0, 20).map(o => [o.trackingNumber, o.payee, o.totalAmount.toLocaleString(), o.date, o.status]);
-        await sendPdfSafe(Renderer.generateReportPDF('لیست ۲۰ پرداخت اخیر', ['شماره', 'ذینفع', 'مبلغ', 'تاریخ', 'وضعیت'], recents), 'Recent_Payments.pdf', 'گزارش پرداخت');
-    }
-
-    // 6. EXIT RECENT
+    // 5. EXIT RECENT
     if (data === 'RPT_PDF_EXIT_RECENT') {
         const recents = (db.exitPermits || []).slice(0, 20).map(p => [p.permitNumber, p.recipientName, p.goodsName, p.date, p.status]);
         await sendPdfSafe(Renderer.generateReportPDF('لیست ۲۰ مجوز خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents), 'Recent_Exits.pdf', 'گزارش خروج');
