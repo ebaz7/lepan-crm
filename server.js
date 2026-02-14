@@ -132,6 +132,16 @@ app.post('/api/orders', (req, res) => {
     const order = req.body; 
     order.id = order.id || Date.now().toString(); 
     
+    // --- VALIDATE DUPLICATE (Orders) ---
+    const isDuplicate = (db.orders || []).some(o => 
+        String(o.trackingNumber) === String(order.trackingNumber) && 
+        o.payingCompany === order.payingCompany
+    );
+
+    if (isDuplicate) {
+        return res.status(400).json({ error: `خطا: شماره سند ${order.trackingNumber} برای شرکت ${order.payingCompany} قبلاً ثبت شده است.` });
+    }
+
     // UPDATE SEQUENCE LOGIC (CRITICAL FIX)
     const trackNum = parseInt(order.trackingNumber);
     if (!isNaN(trackNum)) {
@@ -171,6 +181,16 @@ app.post('/api/exit-permits', (req, res) => {
     const permit = req.body;
     permit.id = permit.id || Date.now().toString();
     
+    // --- VALIDATE DUPLICATE (Exit Permits) ---
+    const isDuplicate = (db.exitPermits || []).some(p => 
+        String(p.permitNumber) === String(permit.permitNumber) && 
+        p.company === permit.company
+    );
+
+    if (isDuplicate) {
+        return res.status(400).json({ error: `خطا: شماره حواله ${permit.permitNumber} برای شرکت ${permit.company} قبلاً ثبت شده است.` });
+    }
+
     // Update Sequence Logic for Exit Permit
     const permitNum = parseInt(permit.permitNumber);
     if (!isNaN(permitNum)) {
@@ -203,6 +223,13 @@ app.put('/api/orders/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.orders.findIndex(o => o.id === req.params.id); 
     if(idx > -1) { 
+        // Check duplicate on edit only if number/company changed
+        const order = req.body;
+        if (order.trackingNumber !== db.orders[idx].trackingNumber || order.payingCompany !== db.orders[idx].payingCompany) {
+             const isDuplicate = db.orders.some(o => o.id !== req.params.id && String(o.trackingNumber) === String(order.trackingNumber) && o.payingCompany === order.payingCompany);
+             if (isDuplicate) return res.status(400).json({ error: "شماره سند تکراری است." });
+        }
+
         db.orders[idx] = { ...db.orders[idx], ...req.body }; 
         saveDb(db); 
         res.json(db.orders); 
@@ -213,6 +240,12 @@ app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id);
     if (idx > -1) { 
+        const permit = req.body;
+        if (permit.permitNumber !== db.exitPermits[idx].permitNumber || permit.company !== db.exitPermits[idx].company) {
+             const isDuplicate = db.exitPermits.some(p => p.id !== req.params.id && String(p.permitNumber) === String(permit.permitNumber) && p.company === permit.company);
+             if (isDuplicate) return res.status(400).json({ error: "شماره حواله تکراری است." });
+        }
+
         db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
         saveDb(db); 
         res.json(db.exitPermits); 
@@ -230,6 +263,19 @@ app.post('/api/warehouse/transactions', (req, res) => {
     const db = getDb(); 
     const tx = req.body;
     
+    // --- VALIDATE DUPLICATE (Bijaks - OUT only) ---
+    if (tx.type === 'OUT') {
+        const isDuplicate = (db.warehouseTransactions || []).some(t => 
+            t.type === 'OUT' &&
+            String(t.number) === String(tx.number) && 
+            t.company === tx.company
+        );
+
+        if (isDuplicate) {
+            return res.status(400).json({ error: `خطا: شماره بیجک ${tx.number} برای شرکت ${tx.company} قبلاً ثبت شده است.` });
+        }
+    }
+
     // Update Bijak Number Sequence
     if (tx.type === 'OUT' && tx.number) {
         const bijakNum = parseInt(tx.number);
