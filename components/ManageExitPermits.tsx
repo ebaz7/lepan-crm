@@ -233,6 +233,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const group1 = settings?.exitPermitNotificationGroup;
             const group2 = settings?.exitPermitSecondGroupConfig?.groupId;
 
+            // --- NEW: Check for Company-Specific Config (Bale/Telegram) ---
+            const companyName = permit.company;
+            const companyConfig = settings?.companyNotifications?.[companyName];
+            
+            const baleId = companyConfig?.baleChannelId;
+            const telegramId = companyConfig?.telegramChannelId;
+
+            if (baleId) targets.push({ platform: 'bale', id: baleId });
+            if (telegramId) targets.push({ platform: 'telegram', id: telegramId });
+
             let captionTitle = '';
             // Determine Caption & Targets based on Transition
             if (prevStatus === ExitPermitStatus.PENDING_CEO) {
@@ -260,13 +270,25 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             caption += `\nتایید کننده: ${currentUser.fullName}`;
 
             const allUsers = await getUsers();
+            
             for (const t of targets) {
+                // Send to WhatsApp Role/Group
                 if (t.role) {
                     const u = allUsers.find(x => x.role === t.role);
                     if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
                 }
                 if (t.group) {
                     await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                }
+
+                // Send to Bots (Bale/Telegram)
+                if (t.platform) {
+                    await apiCall('/send-bot-message', 'POST', { 
+                        platform: t.platform, 
+                        chatId: t.id, 
+                        caption: caption, 
+                        mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } 
+                    });
                 }
             }
         } catch (e) { console.error("Notif Error", e); }

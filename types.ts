@@ -151,6 +151,8 @@ export interface ExitPermitGroupConfig {
 export interface CompanyNotificationConfig {
     salesManager?: string;
     warehouseGroup?: string;
+    baleChannelId?: string; // NEW
+    telegramChannelId?: string; // NEW
 }
 
 export interface DailySecurityMeta {

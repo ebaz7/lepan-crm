@@ -12,7 +12,7 @@ import { FiscalYearManager } from './FiscalModule';
 import SecondExitGroupSettings from './settings/SecondExitGroupSettings';
 import RolePermissionsEditor from './settings/RolePermissionsEditor';
 import BackupManager from './settings/BackupManager'; 
-import BotManager from './settings/BotManager'; // NEW IMPORT
+import BotManager from './settings/BotManager'; 
 
 // Internal QRCode Component with Error Handling
 const QRCode = ({ value, size }: { value: string, size: number }) => { 
@@ -590,36 +590,81 @@ const Settings: React.FC = () => {
                             </div>
 
                             <div className="mt-6">
-                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">تنظیمات اختصاصی شرکت‌ها (اختیاری)</h4>
+                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">تنظیمات اطلاع‌رسانی خروج (شرکت‌ها)</h4>
                                 <div className="space-y-3">
                                     {settings.companies?.filter(c => c.showInWarehouse !== false).map(c => {
                                         const conf = settings.companyNotifications?.[c.name] || {};
                                         return (
-                                            <div key={c.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                                <h5 className="font-bold text-sm text-blue-800 mb-2">{c.name}</h5>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div key={c.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                                <h5 className="font-bold text-sm text-blue-800 mb-3 border-b border-gray-200 pb-1">{c.name}</h5>
+                                                
+                                                <div className="space-y-3">
                                                     <div>
-                                                        <label className="text-xs block mb-1">شماره مدیر:</label>
-                                                        <input className="w-full border rounded p-2 text-xs dir-ltr" value={conf.salesManager || ''} onChange={e => {
-                                                            const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManager: e.target.value } };
-                                                            setSettings({ ...settings, companyNotifications: newConf });
-                                                        }} placeholder="پیش‌فرض" />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs block mb-1">گروه انبار:</label>
-                                                        <select 
-                                                            className="w-full border rounded p-2 text-xs dir-ltr bg-white" 
-                                                            value={conf.warehouseGroup || ''} 
+                                                        <label className="text-xs block mb-1 font-bold text-gray-600">مدیر فروش (واتساپ):</label>
+                                                        <input 
+                                                            className="w-full border rounded p-2 text-xs dir-ltr" 
+                                                            value={conf.salesManager || ''} 
                                                             onChange={e => {
-                                                                const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, warehouseGroup: e.target.value } };
+                                                                const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManager: e.target.value } };
                                                                 setSettings({ ...settings, companyNotifications: newConf });
-                                                            }}
-                                                        >
-                                                            <option value="">-- پیش‌فرض سیستم --</option>
-                                                            {settings.savedContacts?.filter(c => c.isGroup).map(grp => (
-                                                                <option key={grp.id} value={grp.number}>{grp.name} {grp.baleId ? '(+B)' : ''}</option>
-                                                            ))}
-                                                        </select>
+                                                            }} 
+                                                            placeholder="98912..." 
+                                                        />
+                                                    </div>
+
+                                                    {/* NEW: Unified Group Config (WhatsApp, Bale, Telegram) */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                        {/* WhatsApp */}
+                                                        <div className="bg-green-50 p-2 rounded border border-green-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-green-700 font-bold text-[10px]">
+                                                                <MessageCircle size={12}/> واتساپ (گروه)
+                                                            </div>
+                                                            <select 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                value={conf.warehouseGroup || ''} 
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, warehouseGroup: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }}
+                                                            >
+                                                                <option value="">-- انتخاب --</option>
+                                                                {settings.savedContacts?.filter(c => c.isGroup).map(grp => (
+                                                                    <option key={grp.id} value={grp.number}>{grp.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        {/* Bale */}
+                                                        <div className="bg-cyan-50 p-2 rounded border border-cyan-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-cyan-700 font-bold text-[10px]">
+                                                                <Send size={12}/> بله (شناسه گروه/کانال)
+                                                            </div>
+                                                            <input 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                placeholder="ID..." 
+                                                                value={conf.baleChannelId || ''}
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, baleChannelId: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }}
+                                                            />
+                                                        </div>
+
+                                                        {/* Telegram */}
+                                                        <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-blue-700 font-bold text-[10px]">
+                                                                <Send size={12}/> تلگرام (Chat ID)
+                                                            </div>
+                                                            <input 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                placeholder="-100..." 
+                                                                value={conf.telegramChannelId || ''}
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, telegramChannelId: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -636,6 +681,7 @@ const Settings: React.FC = () => {
                         </div>
                     )}
                     
+                    {/* ... (Other categories unchanged) ... */}
                     {activeCategory === 'data' && (
                          <div className="space-y-8 animate-fade-in">
                             {/* Insert New Backup Manager Component Here - Cleanly Separated */}
@@ -777,6 +823,7 @@ const Settings: React.FC = () => {
                         </div>
                     )}
                     
+                    {/* ... Rest remains unchanged ... */}
                     {activeCategory === 'templates' && (
                         <div className="space-y-6 animate-fade-in">
                             <div className="flex justify-between items-center border-b pb-2">

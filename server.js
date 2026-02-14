@@ -431,6 +431,83 @@ app.post('/api/restart-bot', async (req, res) => {
     res.json({ success: true });
 });
 
+// NEW ENDPOINT: Send Message via Bot (Telegram/Bale)
+app.post('/api/send-bot-message', async (req, res) => {
+    const { platform, chatId, caption, mediaData } = req.body;
+    const db = getDb();
+
+    // 1. Validate Access
+    if (platform === 'telegram' && !db.settings.telegramBotToken) return res.status(400).json({ error: "Telegram bot not configured" });
+    if (platform === 'bale' && !db.settings.baleBotToken) return res.status(400).json({ error: "Bale bot not configured" });
+
+    // 2. Prepare Buffer if media present
+    let buffer = null;
+    let fileName = 'image.png';
+    if (mediaData && mediaData.data) {
+        buffer = Buffer.from(mediaData.data, 'base64');
+        fileName = mediaData.filename || 'image.png';
+    }
+
+    try {
+        if (platform === 'telegram') {
+            // Import Telegram Module and use its internal 'bot' instance if possible, 
+            // BUT since we can't easily access the closure variable 'bot' from outside,
+            // we will re-init or expose a sender.
+            // BETTER WAY: The initTelegram function sets up listeners. 
+            // We need a way to just SEND.
+            // Let's assume we re-import and use a helper or re-instantiate for a single send (inefficient but safe)
+            // OR better: we export 'bot' from telegram.js? No, let's use the core pattern.
+            
+            // Re-instantiating TelegramBot for a single send is okay-ish for low volume
+            const TelegramBot = (await import('node-telegram-bot-api')).default;
+            const tg = new TelegramBot(db.settings.telegramBotToken, { polling: false }); // No polling here
+            
+            if (buffer) {
+                await tg.sendPhoto(chatId, buffer, { caption });
+            } else {
+                await tg.sendMessage(chatId, caption);
+            }
+        } 
+        else if (platform === 'bale') {
+            // Use the HTTP request method similar to bale.js
+            const https = (await import('https')).default;
+            const FormData = (await import('form-data')).default;
+            
+            const callBale = (method, data, isMultipart) => {
+                return new Promise((resolve, reject) => {
+                    const options = {
+                        hostname: 'tapi.bale.ai',
+                        path: `/bot${db.settings.baleBotToken}/${method}`,
+                        method: 'POST',
+                        headers: isMultipart ? data.getHeaders() : { 'Content-Type': 'application/json' }
+                    };
+                    const req = https.request(options, (res) => {
+                        res.on('data', () => {});
+                        res.on('end', () => resolve());
+                    });
+                    req.on('error', reject);
+                    if (isMultipart) data.pipe(req);
+                    else { req.write(JSON.stringify(data)); req.end(); }
+                });
+            };
+
+            if (buffer) {
+                const form = new FormData();
+                form.append('chat_id', chatId);
+                form.append('photo', buffer, { filename: fileName });
+                form.append('caption', caption);
+                await callBale('sendPhoto', form, true);
+            } else {
+                await callBale('sendMessage', { chat_id: chatId, text: caption }, false);
+            }
+        }
+        res.json({ success: true });
+    } catch (e) {
+        console.error(`Send Bot Message Error (${platform}):`, e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // PDF Rendering
 app.post('/api/render-pdf', async (req, res) => {
     try {
