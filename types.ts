@@ -194,7 +194,7 @@ export interface SystemSettings {
   exitPermitNotificationTelegramId?: string; // NEW: Default Group 1 Telegram
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
-  exitPermitNotificationGroup?: string; // Legacy field (same as defaultWarehouseGroup)
+  exitPermitNotificationGroup?: string; // Legacy field
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];

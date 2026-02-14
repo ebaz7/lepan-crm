@@ -403,10 +403,8 @@ const Settings: React.FC = () => {
             ) : (
                 <form onSubmit={handleSave} className="space-y-8 max-w-4xl mx-auto">
                     
-                    {/* ... (System and other tabs omitted for brevity) ... */}
                     {activeCategory === 'system' && (
                         <div className="space-y-8 animate-fade-in">
-                             {/* ... */}
                              <div className="space-y-4">
                                 <h3 className="font-bold text-gray-800 border-b pb-2">تنظیمات ظاهری و اعلان‌ها</h3>
                                 <div className="flex items-center gap-4">
@@ -439,10 +437,8 @@ const Settings: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* ... (Whatsapp tab omitted) ... */}
                     {activeCategory === 'whatsapp' && (
                         <div className="space-y-6 animate-fade-in">
-                            {/* ... Content from previous step ... */}
                             <div className="flex justify-between items-center border-b pb-2">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><MessageCircle size={20}/> مدیریت پیام‌رسان‌ها (واتساپ و بله)</h3>
                                 <div className="flex gap-2">
@@ -451,9 +447,94 @@ const Settings: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                            {/* ... Rest of whatsapp tab content ... */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <h4 className="font-bold text-sm text-gray-600">اتصال واتساپ (Web JS)</h4>
+                                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[250px] bg-gray-50 relative">
+                                        {whatsappStatus?.ready ? (
+                                            <div className="text-center animate-fade-in">
+                                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600"><Check size={32}/></div>
+                                                <h4 className="font-bold text-green-700 mb-1">متصل است</h4>
+                                                <p className="text-xs text-gray-500">{whatsappStatus.user}</p>
+                                                <button type="button" onClick={handleWhatsappLogout} className="mt-4 text-xs text-red-600 hover:underline">خروج از حساب</button>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center w-full">
+                                                {refreshingWA ? (
+                                                    <div className="flex flex-col items-center gap-2"><Loader2 className="animate-spin text-gray-400" size={32}/><span className="text-xs text-gray-500">در حال بررسی وضعیت...</span></div>
+                                                ) : whatsappStatus?.qr ? (
+                                                    <div className="flex flex-col items-center animate-scale-in">
+                                                        <div className="bg-white p-2 rounded-lg shadow-sm mb-3"><QRCode value={whatsappStatus.qr} size={180} /></div>
+                                                        <p className="text-xs text-gray-600 font-bold mb-1">اسکن کنید</p>
+                                                        <p className="text-[10px] text-gray-400">QR کد هر 30 ثانیه منقضی می‌شود</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center">
+                                                        <p className="text-sm text-gray-500 mb-3">QR کد یافت نشد. سرویس را بررسی کنید.</p>
+                                                        <button type="button" onClick={checkWhatsappStatus} className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded">تلاش مجدد</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {restartingWA && (
+                                            <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center z-10">
+                                                <Loader2 className="animate-spin text-purple-600 mb-2" size={32}/>
+                                                <span className="text-xs font-bold text-purple-700">در حال بازنشانی سرویس...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500">وضعیت سرویس: {whatsappStatus ? 'آنلاین' : 'آفلاین'}</span>
+                                        <button type="button" onClick={handleWhatsappRestart} className="text-orange-600 hover:underline font-bold" disabled={restartingWA}>بازنشانی کامل سرویس (Restart)</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <h4 className="font-bold text-sm text-gray-600">تنظیمات ربات‌ها (Token)</h4>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات تلگرام</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramBotToken || ''} onChange={e => setSettings({...settings, telegramBotToken: e.target.value})} placeholder="123456:ABC-..." type="password"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">شناسه عددی مدیر (تلگرام)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramAdminId || ''} onChange={e => setSettings({...settings, telegramAdminId: e.target.value})} placeholder="12345678"/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات بله</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.baleBotToken || ''} onChange={e => setSettings({...settings, baleBotToken: e.target.value})} placeholder="Token..." type="password"/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (اختیاری)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
+                                        </div>
+                                    </div>
+                                    <div className="bg-blue-50 p-3 rounded-lg text-[10px] text-blue-800 leading-relaxed">
+                                        نکته: برای دریافت پیام‌های سیستم در تلگرام/بله، ابتدا ربات را استارت کنید. شناسه عددی خود را می‌توانید از ربات‌های userinfobot بگیرید.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="border-t pt-6">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20}/> دفترچه تلفن (مخاطبین و گروه‌ها)</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 items-end bg-gray-50 p-4 rounded-xl">
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">نام مخاطب / گروه</label><input className="w-full border rounded-lg p-2 text-sm" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="مثال: مدیر مالی"/></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شماره / شناسه گروه (واتساپ)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="98912... / 123@g.us"/></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">آیدی بله (اختیاری)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactBaleId} onChange={e => setContactBaleId(e.target.value)} placeholder="@id"/></div>
+                                    <div className="flex items-center gap-2 mb-2"><input type="checkbox" id="isGroup" checked={isGroupContact} onChange={e => setIsGroupContact(e.target.checked)} className="w-4 h-4"/><label htmlFor="isGroup" className="text-xs font-bold text-gray-600">این یک گروه است</label></div>
+                                    <div className="flex gap-2 w-full md:w-auto">{editingContactId && <button type="button" onClick={resetContactForm} className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={18}/></button>}<button type="button" onClick={handleAddOrUpdateContact} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex-1">{editingContactId ? 'ویرایش' : 'افزودن'}</button></div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
+                                    {settings.savedContacts?.map(c => (
+                                        <div key={c.id} className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm group hover:border-blue-300 transition-colors">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className={`p-2 rounded-full shrink-0 ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={16}/> : <Smartphone size={16}/>}</div>
+                                                <div className="truncate"><div className="font-bold text-xs text-gray-800 truncate">{c.name}</div><div className="text-[10px] text-gray-400 font-mono truncate">{c.number}</div></div>
+                                            </div>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button type="button" onClick={() => handleEditContact(c)} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><Pencil size={14}/></button><button type="button" onClick={() => handleDeleteContact(c.id)} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 size={14}/></button></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                             <BotManager />
-                            {/* ... */}
                         </div>
                     )}
                     
@@ -461,6 +542,7 @@ const Settings: React.FC = () => {
                         <div className="space-y-6 animate-fade-in">
                             <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Warehouse size={20}/> تنظیمات انبار</h3>
                             
+                            {/* UPDATED: Default Group Settings with 3 Columns */}
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">گروه اطلاع‌رسانی پیش‌فرض (عمومی)</h4>
                                 <p className="text-xs text-gray-500 mb-3">اگر برای شرکتی گروه اختصاصی تنظیم نشود، پیام‌ها به این مقصدها ارسال خواهند شد.</p>
@@ -541,7 +623,7 @@ const Settings: React.FC = () => {
                                                         />
                                                     </div>
 
-                                                    {/* Unified Group Config (WhatsApp, Bale, Telegram) */}
+                                                    {/* UPDATED: Unified Group Config (WhatsApp, Bale, Telegram) */}
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                         {/* WhatsApp */}
                                                         <div className="bg-green-50 p-2 rounded border border-green-200">
@@ -610,23 +692,58 @@ const Settings: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* ... (Other categories unchanged) ... */}
                     {activeCategory === 'data' && (
                          <div className="space-y-8 animate-fade-in">
                             <BackupManager />
                             <div className="space-y-4">
                             <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Building size={20}/> مدیریت شرکت‌ها و بانک‌ها</h3>
                             
-                            {/* Company Form Omitted for brevity - same as before */}
+                            {/* Company Form */}
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                {/* ... company form fields ... */}
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-sm text-gray-700">{editingCompanyId ? 'ویرایش شرکت' : 'افزودن شرکت جدید'}</h4>
+                                    {editingCompanyId && <button type="button" onClick={resetCompanyForm} className="text-xs text-red-500 bg-white border border-red-100 px-2 py-1 rounded">انصراف</button>}
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                     <div><label className="text-xs font-bold block mb-1 text-gray-500">نام شرکت</label><input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="نام شرکت..." value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} /></div>
-                                    {/* ... */}
+                                    <div className="flex gap-2 items-end">
+                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">لوگو</label><div className="flex items-center gap-2 border rounded-lg p-1 bg-white h-[42px]"><input type="file" ref={companyLogoInputRef} className="hidden" onChange={handleLogoUpload} accept="image/*"/><button type="button" onClick={() => companyLogoInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLogo}>{isUploadingLogo ? '...' : 'انتخاب'}</button>{newCompanyLogo && <img src={newCompanyLogo} className="h-8 w-8 object-contain"/>}</div></div>
+                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">سربرگ (A4)</label><div className="flex items-center gap-2 border rounded-lg p-1 bg-white h-[42px]"><input type="file" ref={companyLetterheadInputRef} className="hidden" onChange={handleLetterheadUpload} accept="image/*"/><button type="button" onClick={() => companyLetterheadInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLetterhead}>{isUploadingLetterhead ? '...' : 'انتخاب'}</button>{newCompanyLetterhead && <span className="text-[10px] text-green-600 truncate">دارد</span>}</div></div>
+                                    </div>
                                     <div className={`flex items-center gap-2 bg-white px-2 py-2 rounded border cursor-pointer flex-1 h-[42px] ${newCompanyShowInWarehouse ? 'border-green-200 bg-green-50 text-green-700' : ''}`} onClick={() => setNewCompanyShowInWarehouse(!newCompanyShowInWarehouse)}><input type="checkbox" checked={newCompanyShowInWarehouse} onChange={e => setNewCompanyShowInWarehouse(e.target.checked)} className="w-4 h-4"/><span className="text-xs font-bold select-none">نمایش در انبار</span></div>
-                                    {/* ... */}
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">شناسه ملی</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyNatId} onChange={e => setNewCompanyNatId(e.target.value)}/></div>
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">شماره ثبت</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyRegNum} onChange={e => setNewCompanyRegNum(e.target.value)}/></div>
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">کد اقتصادی</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyEcoCode} onChange={e => setNewCompanyEcoCode(e.target.value)}/></div>
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">تلفن</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyPhone} onChange={e => setNewCompanyPhone(e.target.value)}/></div>
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">فکس</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyFax} onChange={e => setNewCompanyFax(e.target.value)}/></div>
+                                    <div><label className="text-xs font-bold block mb-1 text-gray-500">کد پستی</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyPostalCode} onChange={e => setNewCompanyPostalCode(e.target.value)}/></div>
+                                    <div className="md:col-span-2"><label className="text-xs font-bold block mb-1 text-gray-500">آدرس</label><input className="w-full border rounded-lg p-2 text-sm" value={newCompanyAddress} onChange={e => setNewCompanyAddress(e.target.value)}/></div>
                                 </div>
-                                {/* ... */}
+                                
+                                {/* Company Banks Management */}
+                                <div className="bg-white p-3 rounded-lg border border-gray-100 mb-4">
+                                    <h5 className="font-bold text-xs text-gray-600 mb-2">حساب‌های بانکی شرکت</h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2 items-end">
+                                        <div className="flex-1"><input className="w-full border rounded p-1.5 text-xs" placeholder="نام بانک" value={tempBankName} onChange={e=>setTempBankName(e.target.value)}/></div>
+                                        <div className="flex-1"><input className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="شماره حساب" value={tempAccountNum} onChange={e=>setTempAccountNum(e.target.value)}/></div>
+                                        <div className="flex-1"><input className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="شبا (IR...)" value={tempBankSheba} onChange={e=>setTempBankSheba(e.target.value)}/></div>
+                                        <div><select className="w-full border rounded p-1.5 text-xs" value={tempBankLayout} onChange={e=>setTempBankLayout(e.target.value)}><option value="">قالب چاپ چک</option>{settings.printTemplates?.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+                                        <div className="flex-1"><select className="w-full border rounded p-1.5 text-xs" value={tempInternalLayout} onChange={e=>setTempInternalLayout(e.target.value)}><option value="">قالب رسید داخلی</option>{settings.printTemplates?.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+                                        <div className="flex items-center gap-1 border rounded p-1"><input type="checkbox" checked={tempDualPrint} onChange={e=>setTempDualPrint(e.target.checked)} className="w-3 h-3"/><span className="text-[10px]">چاپ دوگانه (واریز/برداشت)</span></div>
+                                        {tempDualPrint && (<><div className="flex-1"><select className="w-full border rounded p-1.5 text-[10px]" value={tempInternalWithdrawalLayout} onChange={e=>setTempInternalWithdrawalLayout(e.target.value)}><option value="">قالب برداشت</option>{settings.printTemplates?.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div><div className="flex-1"><select className="w-full border rounded p-1.5 text-[10px]" value={tempInternalDepositLayout} onChange={e=>setTempInternalDepositLayout(e.target.value)}><option value="">قالب واریز</option>{settings.printTemplates?.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></div></>)}
+                                        <button type="button" onClick={addOrUpdateCompanyBank} className="bg-green-100 text-green-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-green-200">{editingBankId ? 'ویرایش بانک' : 'افزودن بانک'}</button>
+                                        {editingBankId && <button type="button" onClick={resetBankForm} className="bg-gray-100 text-gray-600 px-2 py-1.5 rounded text-xs">لغو</button>}
+                                    </div>
+                                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                                        {newCompanyBanks.map((b, i) => (
+                                            <div key={b.id} className="flex justify-between items-center bg-gray-50 p-2 rounded text-xs border border-gray-100">
+                                                <span>{b.bankName} - {b.accountNumber}</span>
+                                                <div className="flex gap-1"><button type="button" onClick={()=>editCompanyBank(b)} className="text-blue-500"><Pencil size={12}/></button><button type="button" onClick={()=>removeCompanyBank(b.id)} className="text-red-500"><Trash2 size={12}/></button></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <button type="button" onClick={handleSaveCompany} className={`w-full text-white px-4 py-2 rounded-lg text-sm h-10 font-bold shadow-sm ${editingCompanyId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{editingCompanyId ? 'ذخیره تغییرات شرکت' : 'افزودن شرکت'}</button>
                                 <div className="space-y-2 mt-6 max-h-64 overflow-y-auto border-t pt-4">
                                     {settings.companies?.map(c => (
@@ -642,13 +759,74 @@ const Settings: React.FC = () => {
                             
                             <div className="bg-white p-4 rounded-xl border border-gray-200">
                                 <h3 className="font-bold text-gray-800 border-b pb-2 mb-3">بانک‌های عامل (عمومی)</h3>
-                                {/* ... */}
+                                <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام بانک..." value={newOperatingBank} onChange={e=>setNewOperatingBank(e.target.value)}/><button type="button" onClick={handleAddOperatingBank} className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
+                                <div className="flex flex-wrap gap-2">{settings.operatingBankNames?.map(b => <span key={b} className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-1">{b} <button onClick={()=>handleRemoveOperatingBank(b)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
                             </div>
                             </div>
                         </div>
                     )}
                     
-                    {/* ... (Other categories unchanged) ... */}
+                    {activeCategory === 'commerce' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Container size={20}/> تنظیمات بازرگانی</h3>
+                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                                <h4 className="font-bold text-sm text-gray-700 mb-2">گروه‌های کالایی</h4>
+                                <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام گروه..." value={newCommodity} onChange={e=>setNewCommodity(e.target.value)}/><button type="button" onClick={handleAddCommodity} className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
+                                <div className="flex flex-wrap gap-2">{settings.commodityGroups?.map(c => <span key={c} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">{c} <button onClick={()=>handleRemoveCommodity(c)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                                <h4 className="font-bold text-sm text-gray-700 mb-2">شرکت‌های بیمه</h4>
+                                <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام شرکت بیمه..." value={newInsuranceCompany} onChange={e=>setNewInsuranceCompany(e.target.value)}/><button type="button" onClick={handleAddInsuranceCompany} className="bg-green-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
+                                <div className="flex flex-wrap gap-2">{settings.insuranceCompanies?.map(c => <span key={c} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">{c} <button onClick={()=>handleRemoveInsuranceCompany(c)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {activeCategory === 'permissions' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <RolePermissionsEditor settings={settings} onUpdateSettings={handleUpdateSettings} />
+                        </div>
+                    )}
+
+                    {activeCategory === 'templates' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2"><LayoutTemplate size={20}/> مدیریت قالب‌های چاپ (چک / فیش)</h3>
+                                <button type="button" onClick={() => setShowDesigner(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 flex items-center gap-1"><Plus size={16}/> طراحی قالب جدید</button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {settings.printTemplates?.map(t => (
+                                    <div key={t.id} className="bg-white p-4 rounded-xl border hover:shadow-md transition-all group relative overflow-hidden">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h4 className="font-bold text-gray-800">{t.name}</h4>
+                                                <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{t.pageSize} - {t.orientation}</span>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button type="button" onClick={() => handleEditTemplate(t)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Pencil size={16}/></button>
+                                                <button type="button" onClick={() => handleDeleteTemplate(t.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16}/></button>
+                                            </div>
+                                        </div>
+                                        <div className="text-[10px] text-gray-400 mt-2">{t.fields.length} فیلد تعریف شده</div>
+                                    </div>
+                                ))}
+                                {(!settings.printTemplates || settings.printTemplates.length === 0) && <div className="col-span-full text-center text-gray-400 py-10">قالبی یافت نشد.</div>}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {activeCategory === 'integrations' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                                <h3 className="font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><Link size={20}/> تنظیمات اتصال (SMS / تقویم)</h3>
+                                <div className="space-y-4">
+                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">API Key سامانه پیامک</label><input type="password" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.smsApiKey} onChange={(e) => setSettings({...settings, smsApiKey: e.target.value})} /></div>
+                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">شماره فرستنده پیامک</label><input type="text" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.smsSenderNumber} onChange={(e) => setSettings({...settings, smsSenderNumber: e.target.value})} /></div>
+                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">Google Calendar ID</label><input type="text" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.googleCalendarId} onChange={(e) => setSettings({...settings, googleCalendarId: e.target.value})} /></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex justify-end pt-4 border-t sticky bottom-0 bg-white p-4 shadow-inner md:shadow-none md:static">
                         <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70">
