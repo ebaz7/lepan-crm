@@ -28,13 +28,34 @@ const resolveUser = (db, platform, chatId) => {
 // --- HELPERS ---
 const toShamsiYearMonth = (isoDate) => {
     try {
-        const d = new Date(isoDate);
-        // Format to "1403/05"
-        return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+        if (!isoDate) return '';
+        // Fix for pure date strings (YYYY-MM-DD) to prevent timezone shifts (defaulting to midnight)
+        // We set it to Noon UTC to be safe across all timezones
+        let safeDate = isoDate;
+        if (typeof isoDate === 'string' && isoDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+             safeDate = `${isoDate}T12:00:00.000Z`;
+        }
+
+        const d = new Date(safeDate);
+        if (isNaN(d.getTime())) return '';
+
+        // Use en-US to get English digits directly
+        // Use Asia/Tehran to ensure correct date conversion
+        const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', {
             year: 'numeric',
-            month: '2-digit'
-        }).format(d).replace(/[۰-۹]/g, d => '0123456789'.indexOf(d)); // Ensure English digits for comparison
+            month: '2-digit',
+            timeZone: 'Asia/Tehran'
+        });
+        
+        const parts = formatter.formatToParts(d);
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        
+        if (!year || !month) return '';
+        
+        return `${year}/${month.padStart(2, '0')}`;
     } catch (e) {
+        console.error("Date Conversion Error:", e);
         return '';
     }
 };
