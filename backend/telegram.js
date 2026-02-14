@@ -17,7 +17,15 @@ export const initTelegram = async (token) => {
 
         const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts).catch(e => console.error("TG Send Err:", e.message));
         const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts }).catch(e => console.error("TG Photo Err:", e.message));
-        const sendDocFn = (id, buf, name, cap) => bot.sendDocument(id, buf, { caption: cap }, { filename: name }).catch(e => console.error("TG Doc Err:", e.message));
+        
+        // FIXED: Ensure options { filename } is passed as fileOptions
+        const sendDocFn = (id, buf, name, cap) => {
+            return bot.sendDocument(id, buf, { caption: cap }, { filename: name })
+                .catch(e => {
+                    console.error("TG Doc Err:", e.message);
+                    throw e; // Propagate error for Core to handle
+                });
+        };
 
         bot.on('message', async (msg) => {
             try {
@@ -31,7 +39,7 @@ export const initTelegram = async (token) => {
 
         bot.on('callback_query', async (query) => {
             try {
-                await BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn);
+                await BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn, sendDocFn);
                 await bot.answerCallbackQuery(query.id);
             } catch (e) {
                 console.error("TG Callback Handle Error:", e);

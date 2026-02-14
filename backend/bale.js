@@ -60,11 +60,12 @@ const poll = async () => {
                     return callApi('sendPhoto', form, true).catch(e => console.error("Bale Photo Err", e.message));
                 };
 
+                // FIXED: Ensure buffer is appended correctly with filename
                 const sendDocFn = (id, buffer, name, caption) => {
                     const form = new FormData();
                     form.append('chat_id', id);
-                    form.append('document', buffer, { filename: name });
-                    form.append('caption', caption);
+                    form.append('document', buffer, { filename: name || 'document.pdf' });
+                    form.append('caption', caption || '');
                     return callApi('sendDocument', form, true).catch(e => console.error("Bale Doc Err", e.message));
                 }
 
@@ -72,7 +73,7 @@ const poll = async () => {
                     if (u.message && u.message.text) {
                         await BotCore.handleMessage('bale', u.message.chat.id, u.message.text, sendFn, sendPhotoFn, sendDocFn);
                     } else if (u.callback_query) {
-                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn);
+                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
                     }
                 } catch (err) {
                     console.error("Bale Message Handler Error:", err);

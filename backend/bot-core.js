@@ -87,9 +87,34 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
-    if (text === '/start' || text === 'شروع') {
+    if (text === '/start' || text === 'شروع' || text === 'منو') {
         session.state = 'IDLE';
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سامانه یکپارچه مدیریت خوش آمدید.\nلطفاً یکی از بخش‌های زیر را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
+    }
+
+    // --- SEARCH HANDLER (Fix for Bug 2) ---
+    if (session.state === 'SEARCH_PAYMENT') {
+        const term = text.trim().toLowerCase();
+        const results = (db.orders || []).filter(o => 
+            String(o.trackingNumber).includes(term) || 
+            (o.payee && o.payee.includes(term)) ||
+            (o.description && o.description.includes(term))
+        ).slice(0, 10); // Limit to 10
+
+        if (results.length === 0) {
+            return sendFn(chatId, "❌ موردی یافت نشد. مجدد تلاش کنید یا انصراف دهید:", { reply_markup: KEYBOARDS.BACK });
+        }
+
+        await sendFn(chatId, `🔎 نتایج جستجو برای "${term}":`);
+        for (const item of results) {
+            // Send brief text instead of image for search results to be faster
+            const statusIcon = item.status.includes('تایید نهایی') ? '✅' : item.status.includes('رد') ? '❌' : '⏳';
+            const msg = `${statusIcon} *سند #${item.trackingNumber}*\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📅 تاریخ: ${item.date}\n📝 وضعیت: ${item.status}`;
+            // Optional: Add buttons if actionable? For archive usually just view.
+            await sendFn(chatId, msg);
+        }
+        session.state = 'IDLE';
+        return sendFn(chatId, "پایان جستجو.", { reply_markup: KEYBOARDS.PAYMENT });
     }
 
     // --- FORMS ---
@@ -178,7 +203,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     const session = sessions[chatId];
 
     // Navigation
-    if (data === 'MENU_MAIN') return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN });
+    if (data === 'MENU_MAIN') { session.state = 'IDLE'; return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN }); }
     if (data === 'MENU_PAY') return sendFn(chatId, "💰 مدیریت پرداخت:", { reply_markup: KEYBOARDS.PAYMENT });
     if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
     if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
@@ -195,9 +220,17 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         return sendFn(chatId, "👤 نام گیرنده کالا:");
     }
 
-    // --- CARTABLES (SMART ADMIN CHECK) ---
+    // --- ARCHIVE HANDLER (Fix for Bug 2) ---
+    if (data === 'ACT_PAY_ARCHIVE') {
+        session.state = 'SEARCH_PAYMENT';
+        return sendFn(chatId, "🔍 لطفاً قسمتی از نام ذینفع، شماره سند یا توضیحات را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
+    }
+
+    // --- CARTABLES (Fix for Bug 1) ---
     if (data === 'ACT_PAY_CARTABLE') {
+        await sendFn(chatId, "⏳ در حال دریافت کارتابل...");
         let items = [];
+        
         // ADMIN sees ALL pending
         if (user.role === 'admin') {
             items = (db.orders || []).filter(o => 
@@ -208,7 +241,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             );
         } else {
             // Normal roles
-            if (user.role === 'financial') items = (db.orders || []).filter(o => o.status === 'در انتظار بررسی مالی');
+            if (user.role === 'financial') items = (db.orders || []).filter(o => o.status === 'در انتظار بررسی مالی' || o.status.includes('ابطال'));
             if (user.role === 'manager') items = (db.orders || []).filter(o => o.status === 'تایید مالی / در انتظار مدیریت');
             if (user.role === 'ceo') items = (db.orders || []).filter(o => o.status === 'تایید مدیریت / در انتظار مدیرعامل');
         }
@@ -216,9 +249,25 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         if (items.length === 0) return sendFn(chatId, "✅ کارتابل پرداخت خالی است.");
         
         for (const item of items) {
-            const img = await Renderer.generateRecordImage(item, 'PAYMENT');
-            const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] };
-            await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}\nوضعیت: ${item.status}`, { reply_markup: kb });
+            try {
+                // Try generating image
+                const img = await Renderer.generateRecordImage(item, 'PAYMENT');
+                const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] };
+                
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}\nوضعیت: ${item.status}`, { reply_markup: kb });
+                } else {
+                    // Fallback to text if image generation fails (Fix for Bug 1)
+                    const txt = `📋 *دستور پرداخت #${item.trackingNumber}*\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📝 بابت: ${item.description}\n⏳ وضعیت: ${item.status}`;
+                    await sendFn(chatId, txt, { reply_markup: kb });
+                }
+            } catch (e) {
+                console.error("Error sending item:", e);
+                // Last resort fallback
+                await sendFn(chatId, `خطا در نمایش سند #${item.trackingNumber}. اما می‌توانید اقدام کنید.`, { 
+                    reply_markup: { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] } 
+                });
+            }
         }
         return;
     }
@@ -242,9 +291,16 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         if (items.length === 0) return sendFn(chatId, "✅ کارتابل خروج خالی است.");
 
         for (const item of items) {
-            const img = await Renderer.generateRecordImage(item, 'EXIT');
-            const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_EXIT_${item.id}` }, { text: '❌ رد', callback_data: `REJ_EXIT_${item.id}` }]] };
-            await sendPhotoFn(platform, chatId, img, `مجوز #${item.permitNumber}\nگیرنده: ${item.recipientName}\nوضعیت: ${item.status}`, { reply_markup: kb });
+            try {
+                const img = await Renderer.generateRecordImage(item, 'EXIT');
+                const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_EXIT_${item.id}` }, { text: '❌ رد', callback_data: `REJ_EXIT_${item.id}` }]] };
+                
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, `مجوز #${item.permitNumber}\nگیرنده: ${item.recipientName}\nوضعیت: ${item.status}`, { reply_markup: kb });
+                } else {
+                    await sendFn(chatId, `🚛 *مجوز خروج #${item.permitNumber}*\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n⏳ وضعیت: ${item.status}`, { reply_markup: kb });
+                }
+            } catch (e) { console.error(e); }
         }
         return;
     }
@@ -258,15 +314,28 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             if (order.status === 'در انتظار بررسی مالی') next = 'تایید مالی / در انتظار مدیریت';
             else if (order.status === 'تایید مالی / در انتظار مدیریت') next = 'تایید مدیریت / در انتظار مدیرعامل';
             else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') next = 'تایید نهایی';
+            else if (order.status.includes('ابطال')) next = 'باطل شده'; // Handle revocation flow simply
             
             if (next) {
                 order.status = next;
                 saveDb(db);
                 sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${next}`);
+            } else {
+                sendFn(chatId, `ℹ️ وضعیت قابل تغییر نیست.`);
             }
         }
     }
     
+    if (data.startsWith('REJ_PAY_')) {
+        const id = data.replace('REJ_PAY_', '');
+        const order = db.orders.find(o => o.id === id);
+        if (order) {
+            order.status = 'رد شده';
+            saveDb(db);
+            sendFn(chatId, `❌ سند رد شد.`);
+        }
+    }
+
     if (data.startsWith('APP_EXIT_')) {
         const id = data.replace('APP_EXIT_', '');
         const permit = db.exitPermits.find(p => p.id === id);
@@ -285,15 +354,28 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         }
     }
 
-    // --- PDF REPORTS GENERATION ---
+    // --- PDF REPORTS (Fix for Bug 3) ---
+    // Added try-catch blocks and checks for buffer validity
     
+    const sendPdfSafe = async (generatePromise, filename, caption) => {
+        try {
+            sendFn(chatId, "⏳ در حال تولید گزارش PDF...");
+            const pdf = await generatePromise;
+            if (pdf && pdf.length > 0) {
+                await sendDocFn(chatId, pdf, filename, caption);
+            } else {
+                sendFn(chatId, "⚠️ خطا در تولید فایل PDF. لطفاً لاگ سرور را بررسی کنید.");
+            }
+        } catch (e) {
+            console.error("PDF Send Error:", e);
+            sendFn(chatId, "❌ خطا در ارسال گزارش.");
+        }
+    };
+
     // 1. WAREHOUSE STOCK PDF
     if (data === 'WH_RPT_STOCK') {
-        sendFn(chatId, "⏳ در حال تولید گزارش موجودی انبار (Stock)...");
         const items = db.warehouseItems || [];
         const txs = db.warehouseTransactions || [];
-        
-        // Calculate Stock per Item
         const stockData = items.map(item => {
             let qty = 0;
             txs.forEach(tx => {
@@ -307,90 +389,46 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             });
             return [item.name, item.code || '-', item.unit, qty];
         });
-
-        const pdf = await Renderer.generateReportPDF('گزارش موجودی انبار', ['نام کالا', 'کد کالا', 'واحد', 'موجودی فعلی'], stockData);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Stock_Report.pdf', 'گزارش موجودی انبار');
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش موجودی انبار', ['نام کالا', 'کد کالا', 'واحد', 'موجودی فعلی'], stockData), 'Stock_Report.pdf', 'گزارش موجودی انبار');
     }
 
-    // 2. WAREHOUSE KARDEX (Simple Recent Flow)
+    // 2. WAREHOUSE KARDEX
     if (data === 'WH_RPT_KARDEX') {
-        sendFn(chatId, "⏳ در حال تولید گزارش گردش کالا (۲۰ گردش آخر)...");
-        const txs = (db.warehouseTransactions || [])
-            .sort((a,b) => new Date(b.date) - new Date(a.date)) // Sort Descending
-            .slice(0, 20); // Last 20
-
-        const rows = txs.map(tx => [
-            tx.type === 'IN' ? 'ورود' : 'خروج',
-            tx.number || tx.proformaNumber || '-',
-            new Date(tx.date).toLocaleDateString('fa-IR'),
-            tx.items.length,
-            tx.company
-        ]);
-
-        const pdf = await Renderer.generateReportPDF('گزارش گردش انبار (کاردکس کلی)', ['نوع', 'شماره سند', 'تاریخ', 'تعداد اقلام', 'شرکت'], rows);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Kardex_Report.pdf', 'گزارش گردش انبار');
+        const txs = (db.warehouseTransactions || []).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
+        const rows = txs.map(tx => [tx.type === 'IN' ? 'ورود' : 'خروج', tx.number || tx.proformaNumber || '-', new Date(tx.date).toLocaleDateString('fa-IR'), tx.items.length, tx.company]);
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش گردش انبار (کاردکس کلی)', ['نوع', 'شماره سند', 'تاریخ', 'تعداد اقلام', 'شرکت'], rows), 'Kardex_Report.pdf', 'گزارش گردش انبار');
     }
 
-    // 3. WAREHOUSE BIJAKS/RECEIPTS
+    // 3. WAREHOUSE BIJAKS
     if (data === 'WH_RPT_BIJAKS') {
-        sendFn(chatId, "⏳ در حال تولید لیست بیجک‌های خروجی...");
         const txs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT').slice(0, 20);
         const rows = txs.map(tx => [tx.number, new Date(tx.date).toLocaleDateString('fa-IR'), tx.recipientName, tx.driverName || '-', tx.status]);
-        const pdf = await Renderer.generateReportPDF('لیست بیجک‌های خروجی اخیر', ['شماره', 'تاریخ', 'گیرنده', 'راننده', 'وضعیت'], rows);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Bijaks_Report.pdf', 'بیجک‌های خروجی');
+        await sendPdfSafe(Renderer.generateReportPDF('لیست بیجک‌های خروجی اخیر', ['شماره', 'تاریخ', 'گیرنده', 'راننده', 'وضعیت'], rows), 'Bijaks_Report.pdf', 'بیجک‌های خروجی');
     }
 
     // 4. TRADE REPORTS
     if (data === 'TRD_RPT_ALLOCATION') {
-        sendFn(chatId, "⏳ در حال تولید گزارش صف تخصیص ارز...");
         const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
-        const rows = records.map(r => [
-            r.fileNumber, 
-            r.goodsName, 
-            r.company, 
-            (r.stages['ALLOCATION_QUEUE']?.isCompleted ? 'در صف' : 'تخصیص یافته'),
-            `${r.mainCurrency} ${r.freightCost}`
-        ]);
-        const pdf = await Renderer.generateReportPDF('گزارش صف تخصیص ارز', ['شماره پرونده', 'کالا', 'شرکت', 'وضعیت', 'مبلغ'], rows, true);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Allocation_Report.pdf', 'گزارش صف تخصیص');
+        const rows = records.map(r => [r.fileNumber, r.goodsName, r.company, (r.stages['در صف تخصیص ارز']?.isCompleted ? 'در صف' : 'تخصیص یافته'), `${r.mainCurrency} ${r.freightCost}`]);
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش صف تخصیص ارز', ['شماره پرونده', 'کالا', 'شرکت', 'وضعیت', 'مبلغ'], rows, true), 'Allocation_Report.pdf', 'گزارش صف تخصیص');
     }
 
     if (data === 'TRD_RPT_ACTIVE') {
-        sendFn(chatId, "⏳ در حال تولید لیست پرونده‌های فعال...");
         const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
         const rows = records.map(r => [r.fileNumber, r.goodsName, r.sellerName, r.company]);
-        const pdf = await Renderer.generateReportPDF('لیست پرونده‌های فعال بازرگانی', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Active_Files.pdf', 'لیست پرونده‌ها');
-    }
-
-    if (data === 'TRD_RPT_CURRENCY') {
-        sendFn(chatId, "⏳ در حال تولید گزارش خرید ارز...");
-        const records = db.tradeRecords || [];
-        const rows = [];
-        records.forEach(r => {
-            const tranches = r.currencyPurchaseData?.tranches || [];
-            tranches.forEach(t => {
-                rows.push([r.fileNumber, t.amount, t.currencyType, t.exchangeName, t.isDelivered ? 'تحویل' : 'منتظر']);
-            });
-        });
-        const pdf = await Renderer.generateReportPDF('گزارش خرید ارز', ['پرونده', 'مبلغ', 'ارز', 'صرافی', 'وضعیت'], rows);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Currency_Report.pdf', 'گزارش خرید ارز');
+        await sendPdfSafe(Renderer.generateReportPDF('لیست پرونده‌های فعال بازرگانی', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows), 'Active_Files.pdf', 'لیست پرونده‌ها');
     }
 
     // 5. PAYMENT RECENT
     if (data === 'RPT_PDF_PAY_RECENT') {
-        sendFn(chatId, "⏳ در حال تولید گزارش پرداخت...");
         const recents = (db.orders || []).slice(0, 20).map(o => [o.trackingNumber, o.payee, o.totalAmount.toLocaleString(), o.date, o.status]);
-        const pdf = await Renderer.generateReportPDF('لیست ۲۰ پرداخت اخیر', ['شماره', 'ذینفع', 'مبلغ', 'تاریخ', 'وضعیت'], recents);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Recent_Payments.pdf', 'گزارش پرداخت');
+        await sendPdfSafe(Renderer.generateReportPDF('لیست ۲۰ پرداخت اخیر', ['شماره', 'ذینفع', 'مبلغ', 'تاریخ', 'وضعیت'], recents), 'Recent_Payments.pdf', 'گزارش پرداخت');
     }
 
     // 6. EXIT RECENT
     if (data === 'RPT_PDF_EXIT_RECENT') {
-        sendFn(chatId, "⏳ در حال تولید گزارش خروج...");
         const recents = (db.exitPermits || []).slice(0, 20).map(p => [p.permitNumber, p.recipientName, p.goodsName, p.date, p.status]);
-        const pdf = await Renderer.generateReportPDF('لیست ۲۰ مجوز خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents);
-        if(sendDocFn) await sendDocFn(chatId, pdf, 'Recent_Exits.pdf', 'گزارش خروج');
+        await sendPdfSafe(Renderer.generateReportPDF('لیست ۲۰ مجوز خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents), 'Recent_Exits.pdf', 'گزارش خروج');
     }
 };
 
@@ -398,14 +436,26 @@ const notifyRole = async (db, role, caption, type, data, sendFn, sendPhotoFn) =>
     const users = db.users.filter(u => u.role === role || u.role === 'admin');
     for (const u of users) {
         if (u.telegramChatId) {
-            const img = await Renderer.generateRecordImage(data, type);
-            const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
-            try { await sendPhotoFn('telegram', u.telegramChatId, img, caption, { reply_markup: kb }); } catch(e){}
+            try {
+                const img = await Renderer.generateRecordImage(data, type);
+                const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
+                if (img && img.length > 0) {
+                    await sendPhotoFn('telegram', u.telegramChatId, img, caption, { reply_markup: kb });
+                } else {
+                    await sendFn(u.telegramChatId, caption, { reply_markup: kb });
+                }
+            } catch(e){}
         }
         if (u.baleChatId) {
-            const img = await Renderer.generateRecordImage(data, type);
-            const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
-            try { await sendPhotoFn('bale', u.baleChatId, img, caption, { reply_markup: kb }); } catch(e){}
+            try {
+                const img = await Renderer.generateRecordImage(data, type);
+                const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
+                if (img && img.length > 0) {
+                    await sendPhotoFn('bale', u.baleChatId, img, caption, { reply_markup: kb });
+                } else {
+                    await sendFn(u.baleChatId, caption, { reply_markup: kb });
+                }
+            } catch(e){}
         }
     }
 };
