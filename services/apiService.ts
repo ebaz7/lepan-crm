@@ -109,9 +109,20 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             }
             
             return data;
+        } else {
+            // Attempt to parse server error message
+            let serverErrorMsg = `Server Error: ${response.status}`;
+            try {
+                const errData = await response.json();
+                if (errData && errData.error) {
+                    serverErrorMsg = errData.error;
+                }
+            } catch (e) {
+                // Response was not JSON or failed to parse
+            }
+            throw new Error(serverErrorMsg);
         }
 
-        throw new Error(`Server Error: ${response.status}`);
     } catch (error: any) {
         
         if (error.message === "SERVER_URL_MISSING") {
@@ -121,6 +132,9 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         console.warn(`API Error for ${endpoint}:`, error);
 
         if (endpoint === '/login' && method === 'POST') {
+             // Let login handle specific connection errors if needed, but usually we just throw
+             // If we are here, it means fetch failed completely (network) or server returned error
+             if (error.message.includes("Server Error") || (error.message && error.message.includes("خطا"))) throw error; 
              throw new Error('اتصال به سرور برقرار نشد. آدرس سرور یا اینترنت را بررسی کنید.');
         }
 

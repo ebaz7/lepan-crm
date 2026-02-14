@@ -25,6 +25,29 @@ const resolveUser = (db, platform, chatId) => {
     return null;
 };
 
+// --- HELPERS ---
+const toShamsiYearMonth = (isoDate) => {
+    try {
+        const d = new Date(isoDate);
+        // Format to "1403/05"
+        return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+            year: 'numeric',
+            month: '2-digit'
+        }).format(d).replace(/[۰-۹]/g, d => '0123456789'.indexOf(d)); // Ensure English digits for comparison
+    } catch (e) {
+        return '';
+    }
+};
+
+const getAvailableYears = (orders) => {
+    const years = new Set();
+    orders.forEach(o => {
+        const sh = toShamsiYearMonth(o.date);
+        if (sh) years.add(sh.split('/')[0]);
+    });
+    return Array.from(years).sort().reverse();
+};
+
 // --- KEYBOARDS ---
 const KEYBOARDS = {
     MAIN: {
@@ -38,7 +61,6 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت دستور پرداخت', callback_data: 'ACT_PAY_NEW' }],
             [{ text: '📂 کارتابل پرداخت', callback_data: 'ACT_PAY_CARTABLE' }],
-            // UPDATED: Changed from Recent PDF to Archive Report
             [{ text: '🗄️ گزارش بایگانی (جستجو)', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
@@ -90,59 +112,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     if (text === '/start' || text === 'شروع' || text === 'منو') {
         session.state = 'IDLE';
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سامانه یکپارچه مدیریت خوش آمدید.\nلطفاً یکی از بخش‌های زیر را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
-    }
-
-    // --- ARCHIVE DATE INPUT HANDLER (New Feature) ---
-    if (session.state === 'ARCHIVE_WAIT_DATE') {
-        const dateInput = text.trim(); // e.g. "1403/05" or "1403"
-        session.data.dateQuery = dateInput;
-        
-        await sendFn(chatId, `⏳ در حال جستجو برای شرکت "${session.data.company}" و تاریخ "${dateInput}"...`);
-        
-        // Filter Orders
-        const results = (db.orders || []).filter(o => {
-            const matchesCompany = o.payingCompany === session.data.company;
-            // Fuzzy date match (starts with input)
-            const matchesDate = o.date && o.date.includes('-') 
-                ? new Date(o.date).toLocaleDateString('fa-IR').startsWith(dateInput) // Convert ISO to Shamsi check
-                : (o.date || '').startsWith(dateInput); // Fallback if already shamsi string (rare)
-            
-            return matchesCompany && matchesDate;
-        });
-
-        if (results.length === 0) {
-            session.state = 'IDLE';
-            return sendFn(chatId, "❌ هیچ سندی با این مشخصات یافت نشد.", { reply_markup: KEYBOARDS.PAYMENT });
-        }
-
-        // 1. Send Images (Like Cartable)
-        for (const item of results) {
-            try {
-                const img = await Renderer.generateRecordImage(item, 'PAYMENT');
-                const caption = `سند #${item.trackingNumber}\nمبلغ: ${parseInt(item.totalAmount).toLocaleString()}\nوضعیت: ${item.status}`;
-                
-                if (img && img.length > 0) {
-                    await sendPhotoFn(platform, chatId, img, caption);
-                } else {
-                    await sendFn(chatId, `📋 ${caption}`);
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        // 2. Offer PDF Download
-        // Store IDs in session to generate PDF on callback
-        session.data.foundIds = results.map(r => r.id);
-        
-        await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد.\nبرای دریافت فایل PDF کامل روی دکمه زیر بزنید:`, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '📄 دانلود فایل PDF گزارش', callback_data: 'GEN_ARCHIVE_PDF' }],
-                    [{ text: '🔙 بازگشت به منو', callback_data: 'MENU_PAY' }]
-                ]
-            }
-        });
-        
-        return;
     }
 
     // --- FORMS ---
@@ -248,7 +217,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         return sendFn(chatId, "👤 نام گیرنده کالا:");
     }
 
-    // --- ARCHIVE FLOW ---
+    // --- ARCHIVE FLOW (BUTTON BASED) ---
     if (data === 'ACT_PAY_ARCHIVE_REPORT') {
         const companies = [...new Set((db.orders || []).map(o => o.payingCompany).filter(Boolean))];
         if (companies.length === 0) return sendFn(chatId, "❌ هیچ شرکتی در سیستم یافت نشد.");
@@ -262,8 +231,95 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     if (data.startsWith('ARCHIVE_COMP_')) {
         const company = data.replace('ARCHIVE_COMP_', '');
         session.data.company = company;
-        session.state = 'ARCHIVE_WAIT_DATE';
-        return sendFn(chatId, `📅 شرکت: ${company}\nلطفاً سال یا ماه مورد نظر را وارد کنید:\n(مثال: 1403 یا 1403/05)`);
+        
+        // Find available years for this company
+        const companyOrders = (db.orders || []).filter(o => o.payingCompany === company);
+        const years = getAvailableYears(companyOrders);
+        
+        if (years.length === 0) {
+            // Add default current year if nothing found
+            years.push('1403');
+        }
+
+        const buttons = [];
+        // Group years 3 per row
+        for(let i=0; i<years.length; i+=3) {
+            const row = years.slice(i, i+3).map(y => ({ text: y, callback_data: `ARCHIVE_YEAR_${y}` }));
+            buttons.push(row);
+        }
+        buttons.push([{ text: '🔙 بازگشت', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }]);
+
+        return sendFn(chatId, `📅 شرکت: ${company}\nلطفاً سال مورد نظر را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('ARCHIVE_YEAR_')) {
+        const year = data.replace('ARCHIVE_YEAR_', '');
+        session.data.year = year;
+
+        // Month Buttons (3x4 grid)
+        const months = [
+            { text: 'فروردین', id: '01' }, { text: 'اردیبهشت', id: '02' }, { text: 'خرداد', id: '03' },
+            { text: 'تیر', id: '04' }, { text: 'مرداد', id: '05' }, { text: 'شهریور', id: '06' },
+            { text: 'مهر', id: '07' }, { text: 'آبان', id: '08' }, { text: 'آذر', id: '09' },
+            { text: 'دی', id: '10' }, { text: 'بهمن', id: '11' }, { text: 'اسفند', id: '12' }
+        ];
+
+        const buttons = [];
+        for(let i=0; i<months.length; i+=3) {
+            const row = months.slice(i, i+3).map(m => ({ text: m.text, callback_data: `ARCHIVE_EXEC_${m.id}` }));
+            buttons.push(row);
+        }
+        buttons.push([{ text: '🔙 بازگشت', callback_data: `ARCHIVE_COMP_${session.data.company}` }]);
+
+        return sendFn(chatId, `🗓 سال: ${year}\nلطفاً ماه مورد نظر را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('ARCHIVE_EXEC_')) {
+        const month = data.replace('ARCHIVE_EXEC_', '');
+        const targetDateStr = `${session.data.year}/${month}`;
+        
+        await sendFn(chatId, `⏳ در حال جستجوی اسناد برای ${targetDateStr} ...`);
+
+        const results = (db.orders || []).filter(o => {
+            if (o.payingCompany !== session.data.company) return false;
+            // Convert DB ISO date to Shamsi YYYY/MM
+            const shamsi = toShamsiYearMonth(o.date);
+            return shamsi === targetDateStr;
+        });
+
+        if (results.length === 0) {
+            return sendFn(chatId, `❌ هیچ سندی برای تاریخ ${targetDateStr} یافت نشد.`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 انتخاب مجدد ماه', callback_data: `ARCHIVE_YEAR_${session.data.year}` }]] }
+            });
+        }
+
+        // 1. Send Images
+        for (const item of results) {
+            try {
+                const img = await Renderer.generateRecordImage(item, 'PAYMENT');
+                const caption = `سند #${item.trackingNumber}\nمبلغ: ${parseInt(item.totalAmount).toLocaleString()}\nوضعیت: ${item.status}`;
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, caption);
+                } else {
+                    await sendFn(chatId, `📋 ${caption}`);
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // 2. PDF Download
+        session.data.foundIds = results.map(r => r.id);
+        session.data.dateQuery = targetDateStr; // For PDF Title
+
+        await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد.\nبرای دریافت فایل PDF کامل روی دکمه زیر بزنید:`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '📄 دانلود فایل PDF گزارش', callback_data: 'GEN_ARCHIVE_PDF' }],
+                    [{ text: '🔍 جستجوی جدید', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }],
+                    [{ text: '🏠 منوی اصلی', callback_data: 'MENU_MAIN' }]
+                ]
+            }
+        });
+        return;
     }
 
     // --- GENERATE ARCHIVE PDF ---

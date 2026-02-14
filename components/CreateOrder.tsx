@@ -311,8 +311,9 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
         onSuccess(); 
 
-    } catch (error) { 
-        alert("خطا در ثبت دستور پرداخت. لطفا اتصال شبکه را بررسی کنید."); 
+    } catch (error: any) { 
+        const msg = error?.message || "خطا در ثبت دستور پرداخت. لطفا اتصال شبکه را بررسی کنید.";
+        alert(msg);
         setIsSubmitting(false);
     }
   };

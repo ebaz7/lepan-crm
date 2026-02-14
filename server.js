@@ -52,76 +52,101 @@ const getDb = () => {
 };
 const saveDb = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
+// --- HELPER: Find True Max ID in DB to avoid duplicates ---
+const getTrueMax = (items, company, field, settingsStart) => {
+    let max = settingsStart || 1000;
+    if (items && Array.isArray(items)) {
+        // If company provided, filter by it. Else scan all (safer).
+        const relevantItems = company 
+            ? items.filter(i => (i.company === company) || (i.payingCompany === company))
+            : items;
+            
+        const numbers = relevantItems
+            .map(i => parseInt(i[field]))
+            .filter(n => !isNaN(n));
+            
+        if (numbers.length > 0) {
+            const dbMax = Math.max(...numbers);
+            if (dbMax > max) max = dbMax;
+        }
+    }
+    return max;
+};
+
 // --- API ROUTES ---
 
-// 1. GET NEXT TRACKING NUMBER (CRITICAL FIX)
+// 1. GET NEXT TRACKING NUMBER (Robust)
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     
-    let currentMax = 1000;
+    let currentMaxSetting = 1000;
 
-    // Check Fiscal Year Logic
+    // Check Fiscal Year / Settings Logic
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMax = year.companySequences[company].startTrackingNumber || 1000;
+            currentMaxSetting = year.companySequences[company].startTrackingNumber || 1000;
         } else {
-            // If no specific config for company in this year, fall back to global
-            currentMax = db.settings.currentTrackingNumber || 1000;
+            currentMaxSetting = db.settings.currentTrackingNumber || 1000;
         }
     } else {
-        // Global Sequence
-        currentMax = db.settings.currentTrackingNumber || 1000;
+        currentMaxSetting = db.settings.currentTrackingNumber || 1000;
     }
 
-    res.json({ nextTrackingNumber: currentMax + 1 });
+    // Safety Scan: Check if this number actually exists in DB
+    const safeMax = getTrueMax(db.orders, company, 'trackingNumber', currentMaxSetting);
+
+    res.json({ nextTrackingNumber: safeMax + 1 });
 });
 
-// 2. GET NEXT EXIT PERMIT NUMBER
+// 2. GET NEXT EXIT PERMIT NUMBER (Robust)
 app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
-    let currentMax = 1000;
+    let currentMaxSetting = 1000;
 
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMax = year.companySequences[company].startExitPermitNumber || 1000;
+            currentMaxSetting = year.companySequences[company].startExitPermitNumber || 1000;
         } else {
-            currentMax = db.settings.currentExitPermitNumber || 1000;
+            currentMaxSetting = db.settings.currentExitPermitNumber || 1000;
         }
     } else {
-        currentMax = db.settings.currentExitPermitNumber || 1000;
+        currentMaxSetting = db.settings.currentExitPermitNumber || 1000;
     }
 
-    res.json({ nextNumber: currentMax + 1 });
+    const safeMax = getTrueMax(db.exitPermits, company, 'permitNumber', currentMaxSetting);
+    res.json({ nextNumber: safeMax + 1 });
 });
 
-// 3. GET NEXT BIJAK NUMBER
+// 3. GET NEXT BIJAK NUMBER (Robust)
 app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
-    let currentMax = 1000;
+    let currentMaxSetting = 1000;
 
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMax = year.companySequences[company].startBijakNumber || 1000;
+            currentMaxSetting = year.companySequences[company].startBijakNumber || 1000;
         } else {
-            // Fallback to warehouse sequences in settings
-            currentMax = (db.settings.warehouseSequences && db.settings.warehouseSequences[company]) ? db.settings.warehouseSequences[company] : 1000;
+            currentMaxSetting = (db.settings.warehouseSequences && db.settings.warehouseSequences[company]) ? db.settings.warehouseSequences[company] : 1000;
         }
     } else {
-        // Use global warehouse sequence per company
         if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) {
-            currentMax = db.settings.warehouseSequences[company];
+            currentMaxSetting = db.settings.warehouseSequences[company];
         } else {
-            currentMax = 1000;
+            currentMaxSetting = 1000;
         }
     }
 
-    res.json({ nextNumber: currentMax + 1 });
+    // Only scan OUT transactions for max number
+    const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
+    const safeMax = getTrueMax(outTxs, company, 'number', currentMaxSetting);
+
+    res.json({ nextNumber: safeMax + 1 });
 });
 
 
@@ -132,21 +157,24 @@ app.post('/api/orders', (req, res) => {
     const order = req.body; 
     order.id = order.id || Date.now().toString(); 
     
-    // --- VALIDATE DUPLICATE (Orders) ---
+    let trackNum = parseInt(order.trackingNumber);
+
+    // --- AUTO-RESOLVE DUPLICATE ---
+    // Instead of throwing error, we find the next true available number
     const isDuplicate = (db.orders || []).some(o => 
-        String(o.trackingNumber) === String(order.trackingNumber) && 
+        String(o.trackingNumber) === String(trackNum) && 
         o.payingCompany === order.payingCompany
     );
 
     if (isDuplicate) {
-        return res.status(400).json({ error: `خطا: شماره سند ${order.trackingNumber} برای شرکت ${order.payingCompany} قبلاً ثبت شده است.` });
+        const safeMax = getTrueMax(db.orders, order.payingCompany, 'trackingNumber', 1000);
+        trackNum = safeMax + 1;
+        order.trackingNumber = trackNum;
+        console.log(`Duplicate detected. Auto-incremented to ${trackNum} for ${order.payingCompany}`);
     }
 
-    // UPDATE SEQUENCE LOGIC (CRITICAL FIX)
-    const trackNum = parseInt(order.trackingNumber);
+    // UPDATE SEQUENCE LOGIC
     if (!isNaN(trackNum)) {
-        let updated = false;
-
         // 1. Update Fiscal Year Sequence if active
         if (db.settings.activeFiscalYearId && order.payingCompany) {
             const yearIndex = (db.settings.fiscalYears || []).findIndex(y => y.id === db.settings.activeFiscalYearId);
@@ -157,7 +185,6 @@ app.post('/api/orders', (req, res) => {
                 const currentSeq = db.settings.fiscalYears[yearIndex].companySequences[order.payingCompany].startTrackingNumber || 0;
                 if (trackNum > currentSeq) {
                     db.settings.fiscalYears[yearIndex].companySequences[order.payingCompany].startTrackingNumber = trackNum;
-                    updated = true;
                 }
             }
         }
@@ -181,18 +208,21 @@ app.post('/api/exit-permits', (req, res) => {
     const permit = req.body;
     permit.id = permit.id || Date.now().toString();
     
-    // --- VALIDATE DUPLICATE (Exit Permits) ---
+    // --- AUTO-RESOLVE DUPLICATE (Exit Permits) ---
+    let permitNum = parseInt(permit.permitNumber);
+    
     const isDuplicate = (db.exitPermits || []).some(p => 
-        String(p.permitNumber) === String(permit.permitNumber) && 
+        String(p.permitNumber) === String(permitNum) && 
         p.company === permit.company
     );
 
     if (isDuplicate) {
-        return res.status(400).json({ error: `خطا: شماره حواله ${permit.permitNumber} برای شرکت ${permit.company} قبلاً ثبت شده است.` });
+        const safeMax = getTrueMax(db.exitPermits, permit.company, 'permitNumber', 1000);
+        permitNum = safeMax + 1;
+        permit.permitNumber = permitNum;
     }
 
     // Update Sequence Logic for Exit Permit
-    const permitNum = parseInt(permit.permitNumber);
     if (!isNaN(permitNum)) {
         if (db.settings.activeFiscalYearId && permit.company) {
             const yearIndex = (db.settings.fiscalYears || []).findIndex(y => y.id === db.settings.activeFiscalYearId);
@@ -263,22 +293,25 @@ app.post('/api/warehouse/transactions', (req, res) => {
     const db = getDb(); 
     const tx = req.body;
     
-    // --- VALIDATE DUPLICATE (Bijaks - OUT only) ---
+    let bijakNum = parseInt(tx.number);
+
+    // --- AUTO-RESOLVE DUPLICATE (Bijaks - OUT only) ---
     if (tx.type === 'OUT') {
         const isDuplicate = (db.warehouseTransactions || []).some(t => 
             t.type === 'OUT' &&
-            String(t.number) === String(tx.number) && 
+            String(t.number) === String(bijakNum) && 
             t.company === tx.company
         );
 
         if (isDuplicate) {
-            return res.status(400).json({ error: `خطا: شماره بیجک ${tx.number} برای شرکت ${tx.company} قبلاً ثبت شده است.` });
+            const safeMax = getTrueMax(db.warehouseTransactions.filter(t=>t.type==='OUT'), tx.company, 'number', 1000);
+            bijakNum = safeMax + 1;
+            tx.number = bijakNum;
         }
     }
 
     // Update Bijak Number Sequence
     if (tx.type === 'OUT' && tx.number) {
-        const bijakNum = parseInt(tx.number);
         if(!isNaN(bijakNum)) {
              if (db.settings.activeFiscalYearId && tx.company) {
                 const yearIndex = (db.settings.fiscalYears || []).findIndex(y => y.id === db.settings.activeFiscalYearId);
