@@ -230,51 +230,38 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const base64 = canvas.toDataURL('image/png').split(',')[1];
             
             const targets = [];
+            const group1 = settings?.exitPermitNotificationGroup;
+            const group2 = settings?.exitPermitSecondGroupConfig?.groupId;
+
+            // --- NEW: Check for Company-Specific Config (Bale/Telegram) ---
+            const companyName = permit.company;
+            const companyConfig = settings?.companyNotifications?.[companyName];
             
-            // 1. Group 1: General Notification Group (Priority: Company Setting > General Setting)
-            const companyConfig = settings?.companyNotifications?.[permit.company];
-            
-            // Check Company Specific Config First
-            let g1WA = companyConfig?.warehouseGroup;
-            let g1Bale = companyConfig?.baleChannelId;
-            let g1Tg = companyConfig?.telegramChannelId;
+            const baleId = companyConfig?.baleChannelId;
+            const telegramId = companyConfig?.telegramChannelId;
 
-            // Fallback to Global Settings
-            if (!g1WA) g1WA = settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
-            if (!g1Bale) g1Bale = settings?.exitPermitNotificationBaleId;
-            if (!g1Tg) g1Tg = settings?.exitPermitNotificationTelegramId;
+            if (baleId) targets.push({ platform: 'bale', id: baleId });
+            if (telegramId) targets.push({ platform: 'telegram', id: telegramId });
 
-            // Push targets for Group 1 (Logic remains based on old flow - send to warehouse group at key stages)
-            // Usually sent at all stages to general group
-            if (g1WA) targets.push({ group: g1WA });
-            if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
-            if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
-
-
-            // 2. Group 2: Second Exit Group (Conditional)
-            const g2Config = settings?.exitPermitSecondGroupConfig;
-            if (g2Config && g2Config.activeStatuses.includes(permit.status)) {
-                if (g2Config.groupId) targets.push({ group: g2Config.groupId });
-                if (g2Config.baleId) targets.push({ platform: 'bale', id: g2Config.baleId });
-                if (g2Config.telegramId) targets.push({ platform: 'telegram', id: g2Config.telegramId });
-            }
-
-            // 3. Specific Roles (WhatsApp Only for now as per user model, but could expand)
-            // Just handling WhatsApp roles here as before
             let captionTitle = '';
-            
             // Determine Caption & Targets based on Transition
             if (prevStatus === ExitPermitStatus.PENDING_CEO) {
                 captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
                 targets.push({ role: UserRole.FACTORY_MANAGER });
+                if (group1) targets.push({ group: group1 });
             } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
                 captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
                 targets.push({ role: UserRole.WAREHOUSE_KEEPER });
+                if (group2) targets.push({ group: group2 });
             } else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
                 captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
                 targets.push({ role: UserRole.SECURITY_HEAD });
+                if (group1) targets.push({ group: group1 });
+                if (group2) targets.push({ group: group2 });
             } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
                 captionTitle = '👋 خروج نهایی از کارخانه';
+                if (group1) targets.push({ group: group1 });
+                if (group2) targets.push({ group: group2 });
             }
 
             let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n🔢 شماره: ${permit.permitNumber}\n👤 گیرنده: ${permit.recipientName}\n`;
