@@ -160,7 +160,6 @@ app.post('/api/orders', (req, res) => {
     let trackNum = parseInt(order.trackingNumber);
 
     // --- AUTO-RESOLVE DUPLICATE ---
-    // Instead of throwing error, we find the next true available number
     const isDuplicate = (db.orders || []).some(o => 
         String(o.trackingNumber) === String(trackNum) && 
         o.payingCompany === order.payingCompany
@@ -200,6 +199,37 @@ app.post('/api/orders', (req, res) => {
     db.orders.unshift(order); 
     saveDb(db); 
     res.json(db.orders); 
+});
+
+app.put('/api/orders/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.orders.findIndex(o => o.id === req.params.id); 
+    if(idx > -1) { 
+        // Check duplicate on edit only if number/company changed
+        const order = req.body;
+        if (order.trackingNumber !== db.orders[idx].trackingNumber || order.payingCompany !== db.orders[idx].payingCompany) {
+             const isDuplicate = db.orders.some(o => o.id !== req.params.id && String(o.trackingNumber) === String(order.trackingNumber) && o.payingCompany === order.payingCompany);
+             if (isDuplicate) return res.status(400).json({ error: "شماره سند تکراری است." });
+        }
+
+        db.orders[idx] = { ...db.orders[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.orders); 
+    } else res.status(404).send('Not Found'); 
+});
+
+// MISSING DELETE ROUTE ADDED HERE
+app.delete('/api/orders/:id', (req, res) => {
+    const db = getDb();
+    const newOrders = db.orders.filter(o => o.id !== req.params.id);
+    
+    if (newOrders.length < db.orders.length) {
+        db.orders = newOrders;
+        saveDb(db);
+        res.json(db.orders);
+    } else {
+        res.status(404).json({ error: 'Order not found' });
+    }
 });
 
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
@@ -247,23 +277,6 @@ app.post('/api/exit-permits', (req, res) => {
     db.exitPermits.push(permit);
     saveDb(db);
     res.json(db.exitPermits);
-});
-
-app.put('/api/orders/:id', (req, res) => { 
-    const db = getDb(); 
-    const idx = db.orders.findIndex(o => o.id === req.params.id); 
-    if(idx > -1) { 
-        // Check duplicate on edit only if number/company changed
-        const order = req.body;
-        if (order.trackingNumber !== db.orders[idx].trackingNumber || order.payingCompany !== db.orders[idx].payingCompany) {
-             const isDuplicate = db.orders.some(o => o.id !== req.params.id && String(o.trackingNumber) === String(order.trackingNumber) && o.payingCompany === order.payingCompany);
-             if (isDuplicate) return res.status(400).json({ error: "شماره سند تکراری است." });
-        }
-
-        db.orders[idx] = { ...db.orders[idx], ...req.body }; 
-        saveDb(db); 
-        res.json(db.orders); 
-    } else res.status(404).send('Not Found'); 
 });
 
 app.put('/api/exit-permits/:id', (req, res) => {

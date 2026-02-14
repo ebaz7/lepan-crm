@@ -111,6 +111,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.REVOKED || isRevocationStatus(order.status)) return false;
       
       if (currentUser.role === UserRole.USER) {
+          // If User created it and it's still pending, they can delete it
           return permissions.canDeleteOwn && order.requester === currentUser.fullName && (order.status === OrderStatus.PENDING || order.status === OrderStatus.REJECTED);
       }
       if (permissions.canDeleteAll) return true;
@@ -187,7 +188,11 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       try {
           await deleteOrder(id);
           await refreshData();
-      } catch(e) { alert("خطا"); }
+      } catch(e: any) { 
+          console.error("Delete failed", e);
+          const msg = e.message || 'خطا در ارتباط با سرور';
+          alert("خطا در حذف: " + msg); 
+      }
     }
   };
 
