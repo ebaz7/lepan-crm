@@ -12,7 +12,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 let browser = null;
 
-// --- FONT LOADER (ROBUST OFFLINE SUPPORT) ---
+// --- FONT LOADER ---
 const getFontBase64 = () => {
     try {
         const pathsToCheck = [
@@ -38,9 +38,8 @@ const fontFaceRule = fontBase64
     : `/* No Local Font Found */`;
 
 const getBrowser = async () => {
-    // Check if browser process is still alive and connected
     if (browser && !browser.isConnected()) {
-        console.warn("[Renderer] Browser disconnected, recreating instance...");
+        console.warn("[Renderer] Browser disconnected. Re-launching...");
         try { await browser.close(); } catch(e){}
         browser = null;
     }
@@ -48,22 +47,28 @@ const getBrowser = async () => {
     if (!browser) {
         try {
             console.log("[Renderer] Launching Puppeteer...");
+            // Use standard caching. The 'npm install' or 'npx puppeteer browsers install chrome' 
+            // should have placed chrome in the default cache directory.
             browser = await puppeteer.launch({
-                headless: true,
+                headless: true, // Use new headless mode if supported, or true
                 args: [
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
-                    '--disable-dev-shm-usage', 
+                    '--disable-dev-shm-usage', // Vital for Docker/Server
                     '--disable-gpu', 
-                    '--font-render-hinting=none',
-                    '--disable-extensions'
+                    '--no-first-run',
+                    '--no-zygote', // Vital for stability
+                    '--single-process', // Vital for some environments
+                    '--disable-extensions',
+                    '--font-render-hinting=none'
                 ],
-                timeout: 30000 
+                timeout: 60000,
+                protocolTimeout: 60000
             });
             console.log("[Renderer] Puppeteer Launched Successfully.");
         } catch (e) {
             console.error("⚠️ Puppeteer Launch Failed:", e.message);
-            console.error("HINT: If you are offline or server-side, run: 'npx puppeteer browsers install chrome'");
+            console.error("Try running: npx puppeteer browsers install chrome");
             return null;
         }
     }
@@ -91,7 +96,6 @@ const BASE_STYLE = `
     .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px; }
     .amount { font-family: monospace; font-weight: bold; font-size: 14px; direction: ltr; }
     
-    /* VOUCHER / PERMIT STYLE */
     .voucher-container { border: 2px solid #000; padding: 20px; position: relative; min-height: 500px; }
     .voucher-header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
     .voucher-title { font-size: 22px; font-weight: 900; }
@@ -103,19 +107,16 @@ const BASE_STYLE = `
     .sig-box { width: 100px; height: 60px; border-bottom: 1px solid #000; margin: 0 auto; }
 `;
 
-// --- TEMPLATES ---
 const generateRecordCardHTML = (title, data, type) => {
-    let headerColor = '#1e40af'; // Blue
-    if (type === 'EXIT') headerColor = '#c2410c'; // Orange
-    if (type === 'BIJAK') headerColor = '#b91c1c'; // Red
-    if (type === 'RECEIPT') headerColor = '#15803d'; // Green
+    let headerColor = '#1e40af';
+    if (type === 'EXIT') headerColor = '#c2410c';
+    if (type === 'BIJAK') headerColor = '#b91c1c';
+    if (type === 'RECEIPT') headerColor = '#15803d';
 
     return `
     <!DOCTYPE html>
     <html lang="fa" dir="rtl">
-    <head>
-    <meta charset="UTF-8">
-    <style>
+    <head><meta charset="UTF-8"><style>
         ${BASE_STYLE}
         body { padding: 20px; width: 800px; display: block; }
         .card { background: white; border-radius: 20px; box-shadow: none; border: 1px solid #333; overflow: hidden; }
@@ -124,18 +125,13 @@ const generateRecordCardHTML = (title, data, type) => {
         .row { display: flex; justify-content: space-between; border-bottom: 2px dashed #ccc; padding: 15px 20px; font-size: 20px; }
         .label { color: #555; font-weight: bold; }
         .value { color: #000; font-weight: 900; }
-    </style>
-    </head>
+    </style></head>
     <body>
         <div class="card">
-            <div class="card-header">
-                <div class="card-title">${title}</div>
-                <div style="margin-top:5px; opacity:0.9; font-size: 16px;">${new Date().toLocaleDateString('fa-IR')}</div>
-            </div>
+            <div class="card-header"><div class="card-title">${title}</div><div style="margin-top:5px; opacity:0.9; font-size: 16px;">${new Date().toLocaleDateString('fa-IR')}</div></div>
             ${data}
         </div>
-    </body>
-    </html>`;
+    </body></html>`;
 };
 
 // --- EXPORTED FUNCTIONS ---
@@ -143,54 +139,26 @@ const generateRecordCardHTML = (title, data, type) => {
 export const generateRecordImage = async (record, type) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
-
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
-
-        let htmlData = '';
-        let title = '';
-
+        let htmlData = '', title = '';
         if (type === 'PAYMENT') {
             title = 'دستور پرداخت وجه';
-            htmlData = `
-                <div class="row"><span class="label">شماره سند:</span><span class="value">#${record.trackingNumber}</span></div>
-                <div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div>
-                <div class="row"><span class="label">ذینفع:</span><span class="value">${record.payee}</span></div>
-                <div class="row"><span class="label">مبلغ:</span><span class="value amount" style="color:#1e40af">${parseInt(record.totalAmount).toLocaleString()}</span></div>
-                <div class="row"><span class="label">شرکت:</span><span class="value">${record.payingCompany}</span></div>
-                <div class="row"><span class="label">بابت:</span><span class="value" style="font-size: 16px;">${record.description}</span></div>
-                <div class="row"><span class="label">وضعیت:</span><span class="value">${record.status}</span></div>
-            `;
+            htmlData = `<div class="row"><span class="label">شماره سند:</span><span class="value">#${record.trackingNumber}</span></div><div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div><div class="row"><span class="label">ذینفع:</span><span class="value">${record.payee}</span></div><div class="row"><span class="label">مبلغ:</span><span class="value amount" style="color:#1e40af">${parseInt(record.totalAmount).toLocaleString()}</span></div><div class="row"><span class="label">شرکت:</span><span class="value">${record.payingCompany}</span></div><div class="row"><span class="label">بابت:</span><span class="value" style="font-size: 16px;">${record.description}</span></div><div class="row"><span class="label">وضعیت:</span><span class="value">${record.status}</span></div>`;
         } else if (type === 'EXIT') {
             title = 'مجوز خروج کالا';
-            htmlData = `
-                <div class="row"><span class="label">شماره مجوز:</span><span class="value">#${record.permitNumber}</span></div>
-                <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
-                <div class="row"><span class="label">کالا:</span><span class="value">${record.goodsName}</span></div>
-                <div class="row"><span class="label">تعداد/وزن:</span><span class="value">${record.cartonCount} کارتن / ${record.weight} KG</span></div>
-                <div class="row"><span class="label">وضعیت:</span><span class="value">${record.status}</span></div>
-            `;
+            htmlData = `<div class="row"><span class="label">شماره مجوز:</span><span class="value">#${record.permitNumber}</span></div><div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div><div class="row"><span class="label">کالا:</span><span class="value">${record.goodsName}</span></div><div class="row"><span class="label">تعداد/وزن:</span><span class="value">${record.cartonCount} کارتن / ${record.weight} KG</span></div><div class="row"><span class="label">وضعیت:</span><span class="value">${record.status}</span></div>`;
         } else if (type === 'BIJAK' || type === 'RECEIPT') {
             title = type === 'BIJAK' ? 'حواله خروج (بیجک)' : 'رسید ورود کالا';
-            htmlData = `
-                <div class="row"><span class="label">شماره سند:</span><span class="value">#${record.number || record.proformaNumber}</span></div>
-                <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
-                <div class="row"><span class="label">${type === 'BIJAK' ? 'گیرنده' : 'فرستنده'}:</span><span class="value">${type === 'BIJAK' ? record.recipientName : record.proformaNumber}</span></div>
-                <div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length} قلم</span></div>
-                <div class="row"><span class="label">راننده:</span><span class="value">${record.driverName || '-'}</span></div>
-            `;
+            htmlData = `<div class="row"><span class="label">شماره سند:</span><span class="value">#${record.number || record.proformaNumber}</span></div><div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div><div class="row"><span class="label">${type === 'BIJAK' ? 'گیرنده' : 'فرستنده'}:</span><span class="value">${type === 'BIJAK' ? record.recipientName : record.proformaNumber}</span></div><div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length} قلم</span></div><div class="row"><span class="label">راننده:</span><span class="value">${record.driverName || '-'}</span></div>`;
         }
-
-        await page.setContent(generateRecordCardHTML(title, htmlData, type), { waitUntil: 'networkidle0' });
+        await page.setContent(generateRecordCardHTML(title, htmlData, type), { waitUntil: 'networkidle0', timeout: 10000 });
         const card = await page.$('.card');
         const buffer = await card.screenshot({ type: 'png' });
         await page.close();
         return buffer;
-    } catch (e) {
-        console.error("Renderer Image Error:", e);
-        return Buffer.from("");
-    }
+    } catch (e) { console.error("Renderer Image Error:", e); return Buffer.from(""); }
 };
 
 export const generatePdfBuffer = async (html) => {
@@ -199,23 +167,16 @@ export const generatePdfBuffer = async (html) => {
     try {
         const page = await browser.newPage();
         let finalHtml = html;
-        if (!html.includes('@font-face') && fontFaceRule) {
-            finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
-        } else if (!html.includes('<head>')) {
-             finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>${html}</body></html>`;
-        }
+        if (!html.includes('@font-face') && fontFaceRule) finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
+        else if (!html.includes('<head>')) finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>${html}</body></html>`;
         
-        await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
+        await page.setContent(finalHtml, { waitUntil: 'networkidle0', timeout: 15000 });
         const pdf = await page.pdf({ format: 'A4', printBackground: true });
         await page.close();
         return pdf;
-    } catch(e) {
-        console.error("Renderer PDF Buffer Error:", e);
-        return Buffer.from("");
-    }
+    } catch(e) { console.error("Renderer PDF Buffer Error:", e); return Buffer.from(""); }
 };
 
-// 1. Voucher PDF
 export const generateVoucherPDF = async (order) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -229,14 +190,13 @@ export const generateVoucherPDF = async (order) => {
                 <div class="voucher-row"><span class="voucher-label">مبلغ:</span><span class="voucher-val amount">${parseInt(order.totalAmount).toLocaleString()}</span></div>
                 <table><thead><tr><th>#</th><th>روش</th><th>مبلغ</th><th>بانک</th><th>شرح</th></tr></thead><tbody>${linesHtml}</tbody></table>
             </div></body></html>`;
-        await page.setContent(html, { waitUntil: 'networkidle0' });
+        await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
         const pdf = await page.pdf({ format: 'A5', landscape: true, printBackground: true });
         await page.close();
         return pdf;
     } catch (e) { return Buffer.from(""); }
 };
 
-// 2. Exit Permit PDF
 export const generateExitPermitPDF = async (permit) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -251,14 +211,13 @@ export const generateExitPermitPDF = async (permit) => {
                 <table><thead><tr><th>#</th><th>کالا</th><th>تعداد</th><th>وزن</th></tr></thead><tbody>${itemsHtml}</tbody></table>
                 <div class="voucher-signatures" style="margin-top:100px"><div><div class="sig-box"></div><div>فروش</div></div><div><div class="sig-box"></div><div>مدیریت</div></div><div><div class="sig-box"></div><div>انبار</div></div><div><div class="sig-box"></div><div>انتظامات</div></div></div>
             </div></body></html>`;
-        await page.setContent(html, { waitUntil: 'networkidle0' });
+        await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
         const pdf = await page.pdf({ format: 'A4', printBackground: true });
         await page.close();
         return pdf;
     } catch (e) { return Buffer.from(""); }
 };
 
-// 3. Bijak PDF
 export const generateBijakPDF = async (tx) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -273,49 +232,9 @@ export const generateBijakPDF = async (tx) => {
                 <table><thead><tr><th>#</th><th>کالا</th><th>تعداد</th><th>وزن</th></tr></thead><tbody>${itemsHtml}</tbody></table>
                 <div class="voucher-signatures"><div><div class="sig-box"></div><div>انباردار</div></div><div><div class="sig-box"></div><div>مدیریت</div></div><div><div class="sig-box"></div><div>راننده</div></div></div>
             </div></body></html>`;
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A5', landscape: false, printBackground: true }); // A5 Portrait
+        await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
+        const pdf = await page.pdf({ format: 'A5', landscape: false, printBackground: true });
         await page.close();
         return pdf;
     } catch (e) { return Buffer.from(""); }
-};
-
-// 4. Report PDF
-export const generateReportPDF = async (title, columns, rows, landscape = false) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
-    try {
-        const page = await browser.newPage();
-        
-        let thead = '<tr>';
-        columns.forEach(c => thead += `<th>${c}</th>`);
-        thead += '</tr>';
-
-        let tbody = '';
-        rows.forEach(r => {
-            tbody += '<tr>';
-            r.forEach(cell => tbody += `<td>${cell}</td>`);
-            tbody += '</tr>';
-        });
-
-        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
-            <div class="header">
-                <div class="title">${title}</div>
-                <div class="meta"><span>تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}</span></div>
-            </div>
-            <table>
-                <thead>${thead}</thead>
-                <tbody>${tbody}</tbody>
-            </table>
-            <div class="footer">سیستم مدیریت مالی و انبار - گزارش سیستمی</div>
-        </body></html>`;
-
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A4', landscape, printBackground: true });
-        await page.close();
-        return pdf;
-    } catch (e) { 
-        console.error("Generate Report PDF Error:", e);
-        return Buffer.from(""); 
-    }
 };
