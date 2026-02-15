@@ -38,15 +38,32 @@ const fontFaceRule = fontBase64
     : `/* No Local Font Found */`;
 
 const getBrowser = async () => {
+    // Check if browser process is still alive and connected
+    if (browser && !browser.isConnected()) {
+        console.warn("[Renderer] Browser disconnected, recreating instance...");
+        try { await browser.close(); } catch(e){}
+        browser = null;
+    }
+
     if (!browser) {
         try {
+            console.log("[Renderer] Launching Puppeteer...");
             browser = await puppeteer.launch({
-                headless: "new",
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none'],
-                timeout: 60000 
+                headless: true,
+                args: [
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox', 
+                    '--disable-dev-shm-usage', 
+                    '--disable-gpu', 
+                    '--font-render-hinting=none',
+                    '--disable-extensions'
+                ],
+                timeout: 30000 
             });
+            console.log("[Renderer] Puppeteer Launched Successfully.");
         } catch (e) {
             console.error("⚠️ Puppeteer Launch Failed:", e.message);
+            console.error("HINT: If you are offline or server-side, run: 'npx puppeteer browsers install chrome'");
             return null;
         }
     }

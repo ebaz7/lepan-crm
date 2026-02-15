@@ -653,20 +653,24 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         await sendFn(chatId, "⏳ در حال محاسبه موجودی و تولید PDF...");
         try {
             // Calculate Stock Logic (simplified from WarehouseModule)
-            const items = db.warehouseItems || [];
-            const txs = db.warehouseTransactions || [];
+            // Fix: Check undefined arrays
+            const items = Array.isArray(db.warehouseItems) ? db.warehouseItems : [];
+            const txs = Array.isArray(db.warehouseTransactions) ? db.warehouseTransactions : [];
             const companies = [...new Set(txs.map(t => t.company).filter(Boolean))];
             
             const reportData = companies.map(company => {
                 const companyItems = items.map(catItem => {
                     let qty = 0; let weight = 0;
                     txs.filter(t => t.company === company && t.status !== 'REJECTED').forEach(t => {
-                        t.items.forEach(ti => {
-                            if (ti.itemId === catItem.id) {
-                                if (t.type === 'IN') { qty += ti.quantity; weight += ti.weight; }
-                                else { qty -= ti.quantity; weight -= ti.weight; }
-                            }
-                        });
+                        // Check if items array exists on transaction
+                        if (Array.isArray(t.items)) {
+                            t.items.forEach(ti => {
+                                if (ti.itemId === catItem.id) {
+                                    if (t.type === 'IN') { qty += (ti.quantity || 0); weight += (ti.weight || 0); }
+                                    else { qty -= (ti.quantity || 0); weight -= (ti.weight || 0); }
+                                }
+                            });
+                        }
                     });
                     return { name: catItem.name, quantity: qty, weight: weight };
                 });
@@ -704,12 +708,12 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             if (pdfBuffer && pdfBuffer.length > 100) {
                 await sendDocFn(chatId, pdfBuffer, `Stock_Report_${Date.now()}.pdf`, 'گزارش موجودی انبار');
             } else {
-                await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+                await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(ممکن است مرورگر سمت سرور نصب نباشد)");
             }
 
         } catch (e) {
             console.error("Stock Report Error:", e);
-            await sendFn(chatId, "⚠️ خطا در تولید گزارش.");
+            await sendFn(chatId, `⚠️ خطا در تولید گزارش: ${e.message}`);
         }
         return;
     }
@@ -831,10 +835,10 @@ const sendPdf = async (item, type, chatId, sendFn, sendDocFn) => {
         if (pdf && pdf.length > 100) {
             await sendDocFn(chatId, pdf, filename, 'فایل PDF سند');
         } else {
-            await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+            await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(ممکن است مرورگر سمت سرور نصب نباشد. دستور npm install puppeteer را بررسی کنید)");
         }
     } catch (e) {
         console.error("PDF Error:", e);
-        await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+        await sendFn(chatId, `⚠️ خطا در تولید PDF: ${e.message}`);
     }
 };
