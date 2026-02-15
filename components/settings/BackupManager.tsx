@@ -1,13 +1,33 @@
 
-import React, { useRef, useState } from 'react';
-import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff } from 'lucide-react';
-import { apiCall, LS_KEYS } from '../../services/apiService';
+import React, { useRef, useState, useEffect } from 'react';
+import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff, RefreshCw, FolderOpen } from 'lucide-react';
+import { apiCall, LS_KEYS, getServerHost } from '../../services/apiService';
 
 const BackupManager: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoring, setRestoring] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [message, setMessage] = useState('');
+    
+    // Auto Backup List
+    const [autoBackups, setAutoBackups] = useState<any[]>([]);
+    const [loadingBackups, setLoadingBackups] = useState(false);
+
+    useEffect(() => {
+        fetchAutoBackups();
+    }, []);
+
+    const fetchAutoBackups = async () => {
+        setLoadingBackups(true);
+        try {
+            const data = await apiCall<any[]>('/backups/list');
+            setAutoBackups(data || []);
+        } catch(e) {
+            console.error("Failed to load backups", e);
+        } finally {
+            setLoadingBackups(false);
+        }
+    };
 
     // Helper to read local storage safely
     const getLocalJSON = (key: string, defaultVal: any = []) => {
@@ -121,6 +141,12 @@ const BackupManager: React.FC = () => {
         e.target.value = ''; // Reset input
     };
 
+    const handleDownloadAutoBackup = (filename: string) => {
+        const baseUrl = getServerHost() || '';
+        const url = `${baseUrl}/api/backups/download/${filename}`;
+        window.open(url, '_blank');
+    };
+
     return (
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden animate-fade-in mb-6">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
@@ -133,20 +159,42 @@ const BackupManager: React.FC = () => {
             </h3>
             
             {/* Auto-Backup Status */}
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-start gap-3 relative z-10">
-                <div className="bg-green-100 p-2 rounded-full">
-                    <Clock size={20} className="text-green-600 animate-pulse"/>
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 relative z-10">
+                <div className="flex items-start gap-3 mb-3">
+                    <div className="bg-green-100 p-2 rounded-full">
+                        <Clock size={20} className="text-green-600 animate-pulse"/>
+                    </div>
+                    <div>
+                        <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار سرور (هر ۳ ساعت)</span>
+                        <p className="text-xs text-green-700 leading-relaxed">
+                            سرور به صورت خودکار از تمام اطلاعات نسخه پشتیبان تهیه کرده و در پوشه <code>/backups</code> ذخیره می‌کند.
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار فعال است</span>
-                    <p className="text-xs text-green-700 leading-relaxed">
-                        سیستم به صورت خودکار <strong>هر ۱ ساعت</strong> یک نسخه کامل از دیتابیس می‌گیرد.
-                        <br/>
-                        <span className="font-bold mt-1 block text-green-900 flex items-center gap-1">
-                            <ShieldCheck size={12}/>
-                            ضد خرابی: فایل‌های بکاپ مستقل از ورژن نرم‌افزار هستند.
-                        </span>
-                    </p>
+                
+                {/* Auto Backup List */}
+                <div className="bg-white rounded-lg border border-green-100 overflow-hidden">
+                    <div className="p-2 bg-green-100 flex justify-between items-center">
+                        <span className="text-xs font-bold text-green-800 flex items-center gap-1"><FolderOpen size={14}/> آرشیو بکاپ‌های خودکار</span>
+                        <button onClick={fetchAutoBackups} className="text-green-700 hover:bg-green-200 p-1 rounded"><RefreshCw size={14} className={loadingBackups ? "animate-spin" : ""}/></button>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto">
+                        {loadingBackups ? (
+                            <div className="p-4 text-center text-xs text-gray-400">در حال بارگذاری...</div>
+                        ) : autoBackups.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-400">هیچ بکاپ خودکاری یافت نشد.</div>
+                        ) : (
+                            autoBackups.map((backup, idx) => (
+                                <div key={idx} className="flex justify-between items-center p-2 text-xs border-b last:border-0 hover:bg-gray-50">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-gray-700">{backup.name}</span>
+                                        <span className="text-[10px] text-gray-400">{new Date(backup.date).toLocaleString('fa-IR')} - {(backup.size / 1024).toFixed(1)} KB</span>
+                                    </div>
+                                    <button onClick={() => handleDownloadAutoBackup(backup.name)} className="text-blue-600 hover:underline font-bold px-2">دانلود</button>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -162,7 +210,7 @@ const BackupManager: React.FC = () => {
                     >
                         <span className="flex items-center gap-2">
                             {downloading ? <Loader2 size={20} className="animate-spin"/> : <DownloadCloud size={20}/>} 
-                            دانلود فایل کامل دیتابیس
+                            دانلود فایل کامل دیتابیس (لحظه‌ای)
                         </span>
                         <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600 flex items-center gap-1">
                             JSON <WifiOff size={10} className="ml-1 text-gray-400" title="پشتیبانی از حالت آفلاین"/>

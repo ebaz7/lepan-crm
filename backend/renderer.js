@@ -37,6 +37,32 @@ const fontFaceRule = fontBase64
     ? `@font-face { font-family: 'Vazirmatn'; src: url(data:font/woff2;base64,${fontBase64}) format('woff2'); font-weight: normal; font-style: normal; }`
     : `/* No Local Font Found */`;
 
+// --- SYSTEM CHROME DETECTION (WINDOWS) ---
+const findSystemChrome = () => {
+    const commonPaths = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Users\\' + (process.env.USERNAME || '') + '\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe',
+        // Common Chromium locations just in case
+        'C:\\Program Files\\Chromium\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe'
+    ];
+
+    // Check environment variable first if user set it
+    if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+        console.log(`[Renderer] Using configured executable: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+
+    for (const p of commonPaths) {
+        if (fs.existsSync(p)) {
+            console.log(`[Renderer] Found System Chrome: ${p}`);
+            return p;
+        }
+    }
+    return null;
+};
+
 const getBrowser = async () => {
     // Check if browser process is still alive and connected
     if (browser && !browser.isConnected()) {
@@ -48,8 +74,10 @@ const getBrowser = async () => {
     if (!browser) {
         try {
             console.log("[Renderer] Launching Puppeteer...");
-            browser = await puppeteer.launch({
-                headless: "new", // Use new headless mode for better stability
+            
+            // Build Launch Config
+            const launchConfig = {
+                headless: "new", 
                 args: [
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
@@ -66,13 +94,24 @@ const getBrowser = async () => {
                     '--no-first-run',
                     '--safebrowsing-disable-auto-update'
                 ],
-                timeout: 60000 // Increased timeout to 60s
-            });
+                timeout: 60000 
+            };
+
+            // Try to find system chrome if local one might be missing
+            // This is safer for Windows Service or non-standard environments
+            const systemChrome = findSystemChrome();
+            if (systemChrome) {
+                launchConfig.executablePath = systemChrome;
+            } else {
+                console.log("[Renderer] No System Chrome found, trying default bundled Chromium...");
+            }
+
+            browser = await puppeteer.launch(launchConfig);
             console.log("[Renderer] Puppeteer Launched Successfully.");
         } catch (e) {
             console.error("⚠️ Puppeteer Launch Failed:", e.message);
             // Re-throw to let the caller know exactly why it failed
-            throw new Error(`Puppeteer Launch Failed: ${e.message}`);
+            throw new Error(`Puppeteer Launch Failed: ${e.message}\nIf running as Service, ensure 'chrome.exe' is installed or 'npm install' was run.`);
         }
     }
     return browser;
