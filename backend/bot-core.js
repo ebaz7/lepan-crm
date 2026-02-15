@@ -424,7 +424,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const totalPay = payMonth.reduce((sum, o) => sum + o.totalAmount, 0);
         
         const exitMonth = db.exitPermits.filter(p => toShamsiYearMonth(p.date) === currentMonth);
-        const bijakMonth = db.warehouseTransactions.filter(t => t.type === 'OUT' && toShamsiYearMonth(t.date) === currentMonth);
+        const bijakMonth = db.warehouseTransactions.filter(t => t.type === 'OUT' && t.date.startsWith(today));
 
         let msg = `🗓 *عملکرد ماه جاری* (${currentMonth})\n`;
         msg += `--------------------------\n`;
@@ -481,7 +481,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         if (pendingOrders.length === 0) return sendFn(chatId, "✅ کارتابل شما خالی است.");
 
         for (const order of pendingOrders) {
-            const caption = `🔸 سند #${order.trackingNumber}\n👤 ${order.payee}\n💰 ${parseInt(order.totalAmount).toLocaleString()} ریال\n📝 ${order.description}`;
+            const caption = `🔸 سند #${order.trackingNumber}\n👤 ${order.payee}\n💰 ${parseInt(order.totalAmount).toLocaleString()} ریال\n📝 بابت: ${order.description}`;
             const kb = {
                 inline_keyboard: [
                     [
@@ -708,7 +708,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             if (pdfBuffer && pdfBuffer.length > 100) {
                 await sendDocFn(chatId, pdfBuffer, `Stock_Report_${Date.now()}.pdf`, 'گزارش موجودی انبار');
             } else {
-                await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(ممکن است مرورگر سمت سرور نصب نباشد)");
+                await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(خروجی خالی)");
             }
 
         } catch (e) {
@@ -835,10 +835,11 @@ const sendPdf = async (item, type, chatId, sendFn, sendDocFn) => {
         if (pdf && pdf.length > 100) {
             await sendDocFn(chatId, pdf, filename, 'فایل PDF سند');
         } else {
-            await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(ممکن است مرورگر سمت سرور نصب نباشد. دستور npm install puppeteer را بررسی کنید)");
+            await sendFn(chatId, "⚠️ خطا در تولید PDF: خروجی خالی است.");
         }
     } catch (e) {
         console.error("PDF Error:", e);
+        // Provide the actual error message to the user for better diagnostics
         await sendFn(chatId, `⚠️ خطا در تولید PDF: ${e.message}`);
     }
 };

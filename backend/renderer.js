@@ -49,22 +49,30 @@ const getBrowser = async () => {
         try {
             console.log("[Renderer] Launching Puppeteer...");
             browser = await puppeteer.launch({
-                headless: true,
+                headless: "new", // Use new headless mode for better stability
                 args: [
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
                     '--disable-dev-shm-usage', 
                     '--disable-gpu', 
                     '--font-render-hinting=none',
-                    '--disable-extensions'
+                    '--disable-extensions',
+                    '--disable-background-networking',
+                    '--disable-default-apps',
+                    '--disable-sync',
+                    '--hide-scrollbars',
+                    '--metrics-recording-only',
+                    '--mute-audio',
+                    '--no-first-run',
+                    '--safebrowsing-disable-auto-update'
                 ],
-                timeout: 30000 
+                timeout: 60000 // Increased timeout to 60s
             });
             console.log("[Renderer] Puppeteer Launched Successfully.");
         } catch (e) {
             console.error("⚠️ Puppeteer Launch Failed:", e.message);
-            console.error("HINT: If you are offline or server-side, run: 'npx puppeteer browsers install chrome'");
-            return null;
+            // Re-throw to let the caller know exactly why it failed
+            throw new Error(`Puppeteer Launch Failed: ${e.message}`);
         }
     }
     return browser;
@@ -141,10 +149,8 @@ const generateRecordCardHTML = (title, data, type) => {
 // --- EXPORTED FUNCTIONS ---
 
 export const generateRecordImage = async (record, type) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
-
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         await page.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
 
@@ -188,15 +194,14 @@ export const generateRecordImage = async (record, type) => {
         await page.close();
         return buffer;
     } catch (e) {
-        console.error("Renderer Image Error:", e);
-        return Buffer.from("");
+        console.error("Renderer Image Error:", e.message);
+        throw e;
     }
 };
 
 export const generatePdfBuffer = async (html) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         let finalHtml = html;
         if (!html.includes('@font-face') && fontFaceRule) {
@@ -210,16 +215,15 @@ export const generatePdfBuffer = async (html) => {
         await page.close();
         return pdf;
     } catch(e) {
-        console.error("Renderer PDF Buffer Error:", e);
-        return Buffer.from("");
+        console.error("Renderer PDF Buffer Error:", e.message);
+        throw e;
     }
 };
 
 // 1. Voucher PDF
 export const generateVoucherPDF = async (order) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         const linesHtml = order.paymentDetails.map((d, i) => `<tr><td>${i+1}</td><td>${d.method}</td><td class="amount">${parseInt(d.amount).toLocaleString()}</td><td>${d.bankName || '-'}</td><td>${d.description || '-'}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
@@ -233,14 +237,16 @@ export const generateVoucherPDF = async (order) => {
         const pdf = await page.pdf({ format: 'A5', landscape: true, printBackground: true });
         await page.close();
         return pdf;
-    } catch (e) { return Buffer.from(""); }
+    } catch (e) { 
+        console.error("Generate Voucher PDF Error:", e.message);
+        throw e;
+    }
 };
 
 // 2. Exit Permit PDF
 export const generateExitPermitPDF = async (permit) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         const itemsHtml = permit.items.map((i, idx) => `<tr><td>${idx+1}</td><td>${i.goodsName}</td><td>${i.cartonCount}</td><td>${i.weight}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
@@ -255,14 +261,16 @@ export const generateExitPermitPDF = async (permit) => {
         const pdf = await page.pdf({ format: 'A4', printBackground: true });
         await page.close();
         return pdf;
-    } catch (e) { return Buffer.from(""); }
+    } catch (e) {
+        console.error("Generate Exit Permit PDF Error:", e.message);
+        throw e;
+    }
 };
 
 // 3. Bijak PDF
 export const generateBijakPDF = async (tx) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         const itemsHtml = tx.items.map((i, idx) => `<tr><td>${idx+1}</td><td>${i.itemName}</td><td>${i.quantity}</td><td>${i.weight}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
@@ -274,17 +282,19 @@ export const generateBijakPDF = async (tx) => {
                 <div class="voucher-signatures"><div><div class="sig-box"></div><div>انباردار</div></div><div><div class="sig-box"></div><div>مدیریت</div></div><div><div class="sig-box"></div><div>راننده</div></div></div>
             </div></body></html>`;
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A5', landscape: false, printBackground: true }); // A5 Portrait
+        const pdf = await page.pdf({ format: 'A5', landscape: false, printBackground: true });
         await page.close();
         return pdf;
-    } catch (e) { return Buffer.from(""); }
+    } catch (e) {
+        console.error("Generate Bijak PDF Error:", e.message);
+        throw e;
+    }
 };
 
 // 4. Report PDF
 export const generateReportPDF = async (title, columns, rows, landscape = false) => {
-    const browser = await getBrowser();
-    if (!browser) return Buffer.from("");
     try {
+        const browser = await getBrowser();
         const page = await browser.newPage();
         
         let thead = '<tr>';
@@ -315,7 +325,7 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         await page.close();
         return pdf;
     } catch (e) { 
-        console.error("Generate Report PDF Error:", e);
-        return Buffer.from(""); 
+        console.error("Generate Report PDF Error:", e.message);
+        throw e;
     }
 };
