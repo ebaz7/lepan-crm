@@ -79,7 +79,7 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت دستور پرداخت', callback_data: 'ACT_PAY_NEW' }],
             [{ text: '📂 کارتابل پرداخت (تایید)', callback_data: 'ACT_PAY_CARTABLE' }],
-            [{ text: '🗄️ گزارش بایگانی (جستجو)', callback_data: 'ACT_ARCHIVE_PAY' }],
+            [{ text: '🔎 جستجو با شماره', callback_data: 'ACT_SEARCH_ID_PAY' }, { text: '🗄️ آرشیو تاریخی', callback_data: 'ACT_ARCHIVE_PAY' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -87,15 +87,15 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت مجوز خروج', callback_data: 'ACT_EXIT_NEW' }],
             [{ text: '📂 کارتابل خروج (تایید)', callback_data: 'ACT_EXIT_CARTABLE' }],
-            [{ text: '🗄️ جستجو و بایگانی خروج', callback_data: 'ACT_ARCHIVE_EXIT' }],
+            [{ text: '🔎 جستجو با شماره', callback_data: 'ACT_SEARCH_ID_EXIT' }, { text: '🗄️ آرشیو تاریخی', callback_data: 'ACT_ARCHIVE_EXIT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
     WAREHOUSE: {
         inline_keyboard: [
             [{ text: '➕ ثبت بیجک خروج', callback_data: 'ACT_WH_NEW_BIJAK' }],
-            [{ text: '🗄️ آرشیو بیجک‌های خروج', callback_data: 'ACT_ARCHIVE_WH_OUT' }],
-            [{ text: '🗄️ آرشیو رسیدهای ورود', callback_data: 'ACT_ARCHIVE_WH_IN' }],
+            [{ text: '🔎 جستجو بیجک (شماره)', callback_data: 'ACT_SEARCH_ID_WH' }],
+            [{ text: '🗄️ آرشیو بیجک‌ها', callback_data: 'ACT_ARCHIVE_WH_OUT' }, { text: '🗄️ آرشیو رسیدها', callback_data: 'ACT_ARCHIVE_WH_IN' }],
             [{ text: '📦 گزارش موجودی (PDF)', callback_data: 'WH_RPT_STOCK' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
@@ -109,28 +109,41 @@ const KEYBOARDS = {
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
-    REPORTS: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]] },
+    REPORTS: { 
+        inline_keyboard: [
+            [{ text: '📊 خلاصه وضعیت امروز', callback_data: 'RPT_DAILY' }],
+            [{ text: '🗓 عملکرد ماه جاری', callback_data: 'RPT_MONTHLY' }],
+            [{ text: '⏳ وضعیت کارتابل‌ها (مانده)', callback_data: 'RPT_PENDING' }],
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
+        ] 
+    },
     BACK: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_MAIN' }]] }
 };
 
 // --- GENERIC SEARCH FUNCTION ---
-const searchAndSendResults = async (db, company, dateQuery, mode, type, platform, chatId, sendFn, sendPhotoFn) => {
+const searchAndSendResults = async (db, company, query, mode, type, platform, chatId, sendFn, sendPhotoFn) => {
     let sourceData = [];
     let imageType = '';
     
     if (type === 'PAYMENT') { sourceData = db.orders || []; imageType = 'PAYMENT'; }
     else if (type === 'EXIT') { sourceData = db.exitPermits || []; imageType = 'EXIT'; }
-    else if (type === 'WH_OUT') { sourceData = (db.warehouseTransactions || []).filter(t => t.type === 'OUT'); imageType = 'BIJAK'; }
+    else if (type === 'WH_OUT' || type === 'WH_BIJAK') { sourceData = (db.warehouseTransactions || []).filter(t => t.type === 'OUT'); imageType = 'BIJAK'; }
     else if (type === 'WH_IN') { sourceData = (db.warehouseTransactions || []).filter(t => t.type === 'IN'); imageType = 'RECEIPT'; }
 
     const results = sourceData.filter(o => {
+        // ID Search Logic
+        if (mode === 'ID') {
+            const num = (o.trackingNumber || o.permitNumber || o.number || '').toString();
+            return num.includes(query);
+        }
+
         const itemCompany = o.company || o.payingCompany;
         if (company && itemCompany !== company) return false;
         
         if (mode === 'MONTH') {
             const shamsiMonth = toShamsiYearMonth(o.date);
-            return shamsiMonth === dateQuery;
-        } else {
+            return shamsiMonth === query;
+        } else if (mode === 'EXACT_DAY') {
             try {
                 const d = new Date(o.date);
                 const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' });
@@ -138,18 +151,22 @@ const searchAndSendResults = async (db, company, dateQuery, mode, type, platform
                 const y = parts.find(p=>p.type==='year')?.value;
                 const m = parts.find(p=>p.type==='month')?.value;
                 const d_ = parts.find(p=>p.type==='day')?.value;
-                return `${y}/${m}/${d_}` === dateQuery;
+                return `${y}/${m}/${d_}` === query;
             } catch(e) { return false; }
         }
+        return false;
     });
 
     if (results.length === 0) {
-        return sendFn(chatId, `❌ موردی برای ${dateQuery} در شرکت ${company} یافت نشد.`);
+        return sendFn(chatId, `❌ موردی یافت نشد.`);
     }
 
     await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد. در حال ارسال...`);
 
-    for (const item of results) {
+    // Limit results to 10 to avoid spamming
+    const limitedResults = results.slice(0, 10);
+
+    for (const item of limitedResults) {
         try {
             const img = await Renderer.generateRecordImage(item, imageType);
             
@@ -162,7 +179,7 @@ const searchAndSendResults = async (db, company, dateQuery, mode, type, platform
             } else if (type === 'EXIT') {
                 caption = `🚛 *مجوز خروج #${item.permitNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n🔄 وضعیت: ${item.status}`;
                 pdfCallback = `GEN_PDF_EXIT_${item.id}`;
-            } else if (type === 'WH_OUT') {
+            } else if (type === 'WH_OUT' || type === 'WH_BIJAK') {
                 caption = `📦 *حواله انبار (بیجک) #${item.number}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n🚛 راننده: ${item.driverName||'-'}`;
                 pdfCallback = `GEN_PDF_BIJAK_${item.id}`;
             } else if (type === 'WH_IN') {
@@ -177,6 +194,10 @@ const searchAndSendResults = async (db, company, dateQuery, mode, type, platform
                 await sendFn(chatId, caption, { reply_markup: kb });
             }
         } catch (e) { console.error(e); }
+    }
+    
+    if (results.length > 10) {
+        await sendFn(chatId, `⚠️ ... و ${results.length - 10} مورد دیگر. لطفا جستجو را محدودتر کنید.`);
     }
     
     await sendFn(chatId, "✅ پایان لیست.", { reply_markup: KEYBOARDS.MAIN });
@@ -197,6 +218,16 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         session.state = 'IDLE';
         session.data = {};
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
+    }
+
+    // --- SEARCH BY ID HANDLER ---
+    if (session.state === 'WAIT_FOR_SEARCH_ID') {
+        const num = text.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).trim(); // Persian numbers support
+        if (!num) return sendFn(chatId, "❌ لطفا شماره سند را وارد کنید:");
+        
+        await searchAndSendResults(db, null, num, 'ID', session.data.targetType, platform, chatId, sendFn, sendPhotoFn);
+        session.state = 'IDLE';
+        return;
     }
 
     // --- STATE MACHINES ---
@@ -249,8 +280,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         saveDb(db);
         session.state = 'IDLE';
         await sendFn(chatId, `✅ دستور پرداخت #${order.trackingNumber} با موفقیت ثبت شد.`);
-        // Notify Financial
-        // await notifyRole(db, 'financial', ...); // Logic omitted for brevity, logic exists in app
         return;
     }
 
@@ -351,6 +380,88 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
     if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+
+    // --- NEW: SEARCH BY ID INIT ---
+    if (['ACT_SEARCH_ID_PAY', 'ACT_SEARCH_ID_EXIT', 'ACT_SEARCH_ID_WH'].includes(data)) {
+        let type = 'PAYMENT';
+        if (data === 'ACT_SEARCH_ID_EXIT') type = 'EXIT';
+        if (data === 'ACT_SEARCH_ID_WH') type = 'WH_BIJAK';
+        
+        session.data.targetType = type;
+        session.state = 'WAIT_FOR_SEARCH_ID';
+        return sendFn(chatId, "🔢 شماره سند / حواله / بیجک را وارد کنید:");
+    }
+
+    // --- MANAGEMENT REPORTS HANDLERS ---
+    if (data === 'RPT_DAILY') {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const shamsiToday = toShamsiFull(new Date());
+        
+        const payToday = db.orders.filter(o => o.date.startsWith(today));
+        const totalPay = payToday.reduce((sum, o) => sum + o.totalAmount, 0);
+        
+        const exitToday = db.exitPermits.filter(p => p.date.startsWith(today));
+        const bijakToday = db.warehouseTransactions.filter(t => t.type === 'OUT' && t.date.startsWith(today));
+
+        let msg = `📊 *گزارش خلاصه وضعیت امروز* (${shamsiToday})\n`;
+        msg += `--------------------------\n`;
+        msg += `💰 *پرداخت‌ها:* ${payToday.length} مورد\n`;
+        msg += `💵 *جمع مبلغ:* ${parseInt(totalPay).toLocaleString()} ریال\n`;
+        msg += `--------------------------\n`;
+        msg += `🚛 *مجوزهای خروج:* ${exitToday.length} مورد\n`;
+        msg += `📦 *بیجک‌های صادر شده:* ${bijakToday.length} مورد\n`;
+        
+        return sendFn(chatId, msg);
+    }
+
+    if (data === 'RPT_MONTHLY') {
+        const today = new Date();
+        const currentMonth = toShamsiYearMonth(today.toISOString()); // "1403/02"
+        
+        // Filter by Shamsi Month string comparison
+        const payMonth = db.orders.filter(o => toShamsiYearMonth(o.date) === currentMonth);
+        const totalPay = payMonth.reduce((sum, o) => sum + o.totalAmount, 0);
+        
+        const exitMonth = db.exitPermits.filter(p => toShamsiYearMonth(p.date) === currentMonth);
+        const bijakMonth = db.warehouseTransactions.filter(t => t.type === 'OUT' && toShamsiYearMonth(t.date) === currentMonth);
+
+        let msg = `🗓 *عملکرد ماه جاری* (${currentMonth})\n`;
+        msg += `--------------------------\n`;
+        msg += `💰 *کل پرداخت‌ها:* ${payMonth.length} فقره\n`;
+        msg += `💵 *جمع کل:* ${parseInt(totalPay).toLocaleString()} ریال\n`;
+        msg += `--------------------------\n`;
+        msg += `🚛 *مجوز خروج:* ${exitMonth.length} فقره\n`;
+        msg += `📦 *بیجک انبار:* ${bijakMonth.length} فقره\n`;
+
+        return sendFn(chatId, msg);
+    }
+
+    if (data === 'RPT_PENDING') {
+        // Count Pending Items by Status
+        const payPendingFin = db.orders.filter(o => o.status === 'در انتظار بررسی مالی').length;
+        const payPendingMgr = db.orders.filter(o => o.status === 'تایید مالی / در انتظار مدیریت').length;
+        const payPendingCeo = db.orders.filter(o => o.status === 'تایید مدیریت / در انتظار مدیرعامل').length;
+
+        const exitPendingCeo = db.exitPermits.filter(p => p.status === 'در انتظار تایید مدیرعامل').length;
+        const exitPendingFac = db.exitPermits.filter(p => p.status === 'در انتظار مدیر کارخانه').length;
+        const exitPendingWh = db.exitPermits.filter(p => p.status === 'در انتظار تایید انبار').length;
+        const exitPendingSec = db.exitPermits.filter(p => p.status === 'در انتظار خروج').length;
+
+        let msg = `⏳ *وضعیت کارتابل‌ها (اسناد باز)*\n`;
+        msg += `--------------------------\n`;
+        msg += `💰 *دستور پرداخت:*\n`;
+        msg += `   ▫️ مالی: ${payPendingFin}\n`;
+        msg += `   ▫️ مدیریت: ${payPendingMgr}\n`;
+        msg += `   ▫️ مدیرعامل: ${payPendingCeo}\n`;
+        msg += `--------------------------\n`;
+        msg += `🚛 *مجوز خروج:*\n`;
+        msg += `   ▫️ مدیرعامل: ${exitPendingCeo}\n`;
+        msg += `   ▫️ کارخانه: ${exitPendingFac}\n`;
+        msg += `   ▫️ انبار: ${exitPendingWh}\n`;
+        msg += `   ▫️ انتظامات: ${exitPendingSec}\n`;
+
+        return sendFn(chatId, msg);
+    }
 
     // --- PAYMENT ACTIONS ---
     if (data === 'ACT_PAY_NEW') {
@@ -454,12 +565,10 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     if (data === 'ACT_WH_NEW_BIJAK') {
         session.data.targetType = 'WH_BIJAK'; // Context for Company Select
         
-        // Use generic company selector flow for creating new bijak
         const companies = [...new Set((db.warehouseTransactions||[]).map(o=>o.company).filter(Boolean))];
         if (companies.length === 0 && db.settings.companyNames) companies.push(...db.settings.companyNames);
         
         if (companies.length === 0) {
-             // Fallback if no companies found
              session.state = 'WH_BIJAK_COUNT';
              return sendFn(chatId, "تعداد کالا را وارد کنید:");
         }
