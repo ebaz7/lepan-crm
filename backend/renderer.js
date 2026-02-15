@@ -179,15 +179,23 @@ export const generateRecordImage = async (record, type) => {
 export const generatePdfBuffer = async (html) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
-    const page = await browser.newPage();
-    let finalHtml = html;
-    if (!html.includes('@font-face') && fontFaceRule) {
-        finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
+    try {
+        const page = await browser.newPage();
+        let finalHtml = html;
+        if (!html.includes('@font-face') && fontFaceRule) {
+            finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
+        } else if (!html.includes('<head>')) {
+             finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>${html}</body></html>`;
+        }
+        
+        await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({ format: 'A4', printBackground: true });
+        await page.close();
+        return pdf;
+    } catch(e) {
+        console.error("Renderer PDF Buffer Error:", e);
+        return Buffer.from("");
     }
-    await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'A4', printBackground: true });
-    await page.close();
-    return pdf;
 };
 
 // 1. Voucher PDF
@@ -255,14 +263,42 @@ export const generateBijakPDF = async (tx) => {
     } catch (e) { return Buffer.from(""); }
 };
 
+// 4. Report PDF
 export const generateReportPDF = async (title, columns, rows, landscape = false) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
     try {
         const page = await browser.newPage();
-        await page.setContent(generateReportHTML(title, columns, rows), { waitUntil: 'networkidle0' });
+        
+        let thead = '<tr>';
+        columns.forEach(c => thead += `<th>${c}</th>`);
+        thead += '</tr>';
+
+        let tbody = '';
+        rows.forEach(r => {
+            tbody += '<tr>';
+            r.forEach(cell => tbody += `<td>${cell}</td>`);
+            tbody += '</tr>';
+        });
+
+        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
+            <div class="header">
+                <div class="title">${title}</div>
+                <div class="meta"><span>تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}</span></div>
+            </div>
+            <table>
+                <thead>${thead}</thead>
+                <tbody>${tbody}</tbody>
+            </table>
+            <div class="footer">سیستم مدیریت مالی و انبار - گزارش سیستمی</div>
+        </body></html>`;
+
+        await page.setContent(html, { waitUntil: 'networkidle0' });
         const pdf = await page.pdf({ format: 'A4', landscape, printBackground: true });
         await page.close();
         return pdf;
-    } catch (e) { return Buffer.from(""); }
+    } catch (e) { 
+        console.error("Generate Report PDF Error:", e);
+        return Buffer.from(""); 
+    }
 };

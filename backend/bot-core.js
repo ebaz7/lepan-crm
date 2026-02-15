@@ -86,7 +86,7 @@ const KEYBOARDS = {
     EXIT: {
         inline_keyboard: [
             [{ text: '➕ ثبت مجوز خروج', callback_data: 'ACT_EXIT_NEW' }],
-            [{ text: '📂 کارتابل خروج (تایید)', callback_data: 'ACT_EXIT_CARTABLE' }],
+            [{ text: '📂 کارتابل خروج (تایید/رد)', callback_data: 'ACT_EXIT_CARTABLE' }],
             [{ text: '🔎 جستجو با شماره', callback_data: 'ACT_SEARCH_ID_EXIT' }, { text: '🗄️ آرشیو تاریخی', callback_data: 'ACT_ARCHIVE_EXIT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
@@ -94,6 +94,7 @@ const KEYBOARDS = {
     WAREHOUSE: {
         inline_keyboard: [
             [{ text: '➕ ثبت بیجک خروج', callback_data: 'ACT_WH_NEW_BIJAK' }],
+            [{ text: '📂 کارتابل انبار (تایید/رد)', callback_data: 'ACT_WH_CARTABLE' }], 
             [{ text: '🔎 جستجو بیجک (شماره)', callback_data: 'ACT_SEARCH_ID_WH' }],
             [{ text: '🗄️ آرشیو بیجک‌ها', callback_data: 'ACT_ARCHIVE_WH_OUT' }, { text: '🗄️ آرشیو رسیدها', callback_data: 'ACT_ARCHIVE_WH_IN' }],
             [{ text: '📦 گزارش موجودی (PDF)', callback_data: 'WH_RPT_STOCK' }],
@@ -539,7 +540,10 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             const caption = `🚛 مجوز #${p.permitNumber}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔄 وضعیت: ${p.status}`;
             const kb = {
                 inline_keyboard: [
-                    [{ text: '✅ تایید و ارجاع', callback_data: `APP_EXIT_${p.id}` }]
+                    [
+                        { text: '✅ تایید', callback_data: `APP_EXIT_${p.id}` },
+                        { text: '❌ رد', callback_data: `REJ_EXIT_${p.id}` }
+                    ]
                 ]
             };
             await sendFn(chatId, caption, { reply_markup: kb });
@@ -557,6 +561,17 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             else if (p.status === 'در انتظار خروج') p.status = 'خارج شده (بایگانی)';
             saveDb(db);
             sendFn(chatId, `✅ مجوز #${p.permitNumber} تایید شد.`);
+        }
+        return;
+    }
+
+    if (data.startsWith('REJ_EXIT_')) {
+        const id = data.replace('REJ_EXIT_', '');
+        const p = db.exitPermits.find(x => x.id === id);
+        if (p) {
+            p.status = 'رد شده';
+            saveDb(db);
+            sendFn(chatId, `❌ مجوز #${p.permitNumber} رد شد.`);
         }
         return;
     }
@@ -582,6 +597,121 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         session.data.company = data.replace('SEL_COMP_BIJAK_', '');
         session.state = 'WH_BIJAK_COUNT';
         return sendFn(chatId, `🏢 شرکت: ${session.data.company}\n🔢 تعداد کالا را وارد کنید:`);
+    }
+
+    if (data === 'ACT_WH_CARTABLE') {
+        const pendingBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && t.status === 'PENDING');
+        
+        if (pendingBijaks.length === 0) return sendFn(chatId, "✅ کارتابل انبار خالی است.");
+
+        // Only Admin or CEO (or Managers with access) can approve via bot ideally, 
+        // but here we allow basic check if user role fits (Admin/CEO) or if we want open access for ease.
+        // Assuming Admin/CEO role check:
+        const canApprove = ['admin', 'ceo', 'manager'].includes(user.role);
+        
+        for (const tx of pendingBijaks) {
+            const caption = `📦 *بیجک انبار #${tx.number}*\n📅 ${toShamsiFull(tx.date)}\n🏢 ${tx.company}\n👤 گیرنده: ${tx.recipientName}\n🔢 اقلام: ${tx.items.length} ردیف`;
+            const kb = canApprove ? {
+                inline_keyboard: [
+                    [
+                        { text: '✅ تایید نهایی', callback_data: `APP_WH_${tx.id}` },
+                        { text: '❌ رد', callback_data: `REJ_WH_${tx.id}` }
+                    ]
+                ]
+            } : undefined;
+            await sendFn(chatId, caption, { reply_markup: kb });
+        }
+        return;
+    }
+
+    if (data.startsWith('APP_WH_')) {
+        const id = data.replace('APP_WH_', '');
+        const tx = db.warehouseTransactions.find(t => t.id === id);
+        if (tx) {
+            tx.status = 'APPROVED';
+            tx.approvedBy = user.fullName + ' (Bot)';
+            saveDb(db);
+            sendFn(chatId, `✅ بیجک #${tx.number} تایید نهایی شد.`);
+        }
+        return;
+    }
+
+    if (data.startsWith('REJ_WH_')) {
+        const id = data.replace('REJ_WH_', '');
+        const tx = db.warehouseTransactions.find(t => t.id === id);
+        if (tx) {
+            tx.status = 'REJECTED';
+            tx.rejectedBy = user.fullName + ' (Bot)';
+            saveDb(db);
+            sendFn(chatId, `❌ بیجک #${tx.number} رد شد.`);
+        }
+        return;
+    }
+
+    // --- WAREHOUSE STOCK REPORT ---
+    if (data === 'WH_RPT_STOCK') {
+        await sendFn(chatId, "⏳ در حال محاسبه موجودی و تولید PDF...");
+        try {
+            // Calculate Stock Logic (simplified from WarehouseModule)
+            const items = db.warehouseItems || [];
+            const txs = db.warehouseTransactions || [];
+            const companies = [...new Set(txs.map(t => t.company).filter(Boolean))];
+            
+            const reportData = companies.map(company => {
+                const companyItems = items.map(catItem => {
+                    let qty = 0; let weight = 0;
+                    txs.filter(t => t.company === company && t.status !== 'REJECTED').forEach(t => {
+                        t.items.forEach(ti => {
+                            if (ti.itemId === catItem.id) {
+                                if (t.type === 'IN') { qty += ti.quantity; weight += ti.weight; }
+                                else { qty -= ti.quantity; weight -= ti.weight; }
+                            }
+                        });
+                    });
+                    return { name: catItem.name, quantity: qty, weight: weight };
+                });
+                return { company, items: companyItems };
+            });
+
+            // Generate HTML Table for PDF
+            let html = `
+            <!DOCTYPE html>
+            <html lang="fa" dir="rtl">
+            <head><meta charset="UTF-8"><style>
+                body { font-family: 'Vazirmatn', sans-serif; padding: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+                th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+                th { background-color: #f3f4f6; }
+                .company-header { background-color: #e5e7eb; font-weight: bold; text-align: right; padding: 10px; }
+            </style></head>
+            <body>
+                <h2 style="text-align:center">گزارش موجودی انبار</h2>
+                <div style="text-align:center; font-size:12px; margin-bottom:20px;">تاریخ: ${new Date().toLocaleDateString('fa-IR')}</div>
+            `;
+
+            reportData.forEach(grp => {
+                html += `<div class="company-header">${grp.company}</div>
+                <table>
+                    <thead><tr><th>کالا</th><th>تعداد</th><th>وزن (KG)</th></tr></thead>
+                    <tbody>
+                        ${grp.items.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.weight}</td></tr>`).join('')}
+                    </tbody>
+                </table>`;
+            });
+            html += `</body></html>`;
+
+            const pdfBuffer = await Renderer.generatePdfBuffer(html);
+            if (pdfBuffer && pdfBuffer.length > 100) {
+                await sendDocFn(chatId, pdfBuffer, `Stock_Report_${Date.now()}.pdf`, 'گزارش موجودی انبار');
+            } else {
+                await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+            }
+
+        } catch (e) {
+            console.error("Stock Report Error:", e);
+            await sendFn(chatId, "⚠️ خطا در تولید گزارش.");
+        }
+        return;
     }
 
     // --- ARCHIVE & SEARCH LOGIC (GENERIC) ---
