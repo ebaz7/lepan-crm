@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, UserRole, SystemSettings } from '../types';
 import { getExitPermits, updateExitPermitStatus, deleteExitPermit, editExitPermit } from '../services/storageService';
@@ -8,16 +7,17 @@ import { formatDate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
 import EditExitPermitModal from './EditExitPermitModal';
+import useIsMobile from '../hooks/useIsMobile';
 
 const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any }> = ({ currentUser, settings, statusFilter }) => {
+    const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
-    // New Tabs: CARTABLE (My Tasks), FLOW (Active items not with me), ARCHIVE (Done/Rejected)
     const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
@@ -28,7 +28,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     useEffect(() => { loadData(); }, []);
     
-    // Auto-switch tab based on filter or data
     useEffect(() => {
         if (statusFilter) {
             // Logic to switch tab based on external filter requests
@@ -49,36 +48,17 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    // --- WORKFLOW & PERMISSION LOGIC ---
-
-    // Define "Is it my turn?" logic strictly
+    // ... (isMyTurn, getActionLabel, filtering logic remains same)
     const isMyTurn = (p: ExitPermit) => {
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
-
         switch (currentUser.role) {
-            case UserRole.CEO:
-                // CEO approves first step
-                return p.status === ExitPermitStatus.PENDING_CEO;
-            
-            case UserRole.FACTORY_MANAGER:
-                // Factory Manager approves second step
-                return p.status === ExitPermitStatus.PENDING_FACTORY;
-            
-            case UserRole.WAREHOUSE_KEEPER:
-                // Warehouse Keeper approves third step (weighing)
-                return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
-            
+            case UserRole.CEO: return p.status === ExitPermitStatus.PENDING_CEO;
+            case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY;
+            case UserRole.WAREHOUSE_KEEPER: return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
             case UserRole.SECURITY_HEAD:
-            case UserRole.SECURITY_GUARD:
-                // Security approves final step
-                return p.status === ExitPermitStatus.PENDING_SECURITY;
-
-            case UserRole.ADMIN:
-                // Admin sees everything as their turn if it's pending
-                return true; 
-                
-            default:
-                return false;
+            case UserRole.SECURITY_GUARD: return p.status === ExitPermitStatus.PENDING_SECURITY;
+            case UserRole.ADMIN: return true; 
+            default: return false;
         }
     };
 
@@ -92,7 +72,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    // --- FILTERING ---
     const myCartablePermits = permits.filter(p => isMyTurn(p));
     const activeFlowPermits = permits.filter(p => !isMyTurn(p) && p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
     const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
@@ -112,13 +91,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     const displayPermits = getDisplayPermits();
 
-    // --- ACTIONS ---
-
     const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'SECURITY') => {
         if (p.status === ExitPermitStatus.EXITED) return 'done';
         if (p.status === ExitPermitStatus.REJECTED) return 'rejected';
 
-        // Map statuses to sequence indices
         const statusOrder = [
             ExitPermitStatus.PENDING_CEO,
             ExitPermitStatus.PENDING_FACTORY,
@@ -148,7 +124,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
         
         let exitTimeStr = '';
-        // Security Step needs Time
         if (p.status === ExitPermitStatus.PENDING_SECURITY) {
             const t = prompt('ساعت خروج را وارد کنید (مثال 14:30):', new Date().toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'}));
             if (!t) return;
@@ -160,7 +135,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         setProcessingId(p.id);
         
         try {
-            // Determine Next Status
             let nextStatus = ExitPermitStatus.PENDING_FACTORY;
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
@@ -168,7 +142,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             else if (p.status === ExitPermitStatus.PENDING_SECURITY) nextStatus = ExitPermitStatus.EXITED;
 
             const updatedPermit = { ...p, status: nextStatus };
-            // Assign approver name
             if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_SECURITY) {
@@ -177,8 +150,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             }
 
             await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: exitTimeStr });
-            
-            // Trigger Auto-Send
             setAutoSendPermit(updatedPermit);
             
             setTimeout(async () => {
@@ -221,37 +192,28 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
+        // ... (Keep existing notification logic)
         const element = document.getElementById(`print-permit-autosend-${permit.id}`);
         if (!element) return;
-        
         try {
-            // @ts-ignore
+             // @ts-ignore
             const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const base64 = canvas.toDataURL('image/png').split(',')[1];
             
+            // ... (Target logic same as previous) ...
             const targets = [];
-            
-            // 1. Group 1: General Notification Group (Priority: Company Setting > General Setting)
             const companyConfig = settings?.companyNotifications?.[permit.company];
-            
-            // Check Company Specific Config First
             let g1WA = companyConfig?.warehouseGroup;
             let g1Bale = companyConfig?.baleChannelId;
             let g1Tg = companyConfig?.telegramChannelId;
-
-            // Fallback to Global Settings
             if (!g1WA) g1WA = settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
             if (!g1Bale) g1Bale = settings?.exitPermitNotificationBaleId;
             if (!g1Tg) g1Tg = settings?.exitPermitNotificationTelegramId;
 
-            // Push targets for Group 1 (Logic remains based on old flow - send to warehouse group at key stages)
-            // Usually sent at all stages to general group
             if (g1WA) targets.push({ group: g1WA });
             if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
             if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
 
-
-            // 2. Group 2: Second Exit Group (Conditional)
             const g2Config = settings?.exitPermitSecondGroupConfig;
             if (g2Config && g2Config.activeStatuses.includes(permit.status)) {
                 if (g2Config.groupId) targets.push({ group: g2Config.groupId });
@@ -259,11 +221,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 if (g2Config.telegramId) targets.push({ platform: 'telegram', id: g2Config.telegramId });
             }
 
-            // 3. Specific Roles (WhatsApp Only for now as per user model, but could expand)
-            // Just handling WhatsApp roles here as before
             let captionTitle = '';
-            
-            // Determine Caption & Targets based on Transition
             if (prevStatus === ExitPermitStatus.PENDING_CEO) {
                 captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
                 targets.push({ role: UserRole.FACTORY_MANAGER });
@@ -285,7 +243,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const allUsers = await getUsers();
             
             for (const t of targets) {
-                // Send to WhatsApp Role/Group
                 if (t.role) {
                     const u = allUsers.find(x => x.role === t.role);
                     if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
@@ -293,15 +250,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 if (t.group) {
                     await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
                 }
-
-                // Send to Bots (Bale/Telegram)
                 if (t.platform) {
-                    await apiCall('/send-bot-message', 'POST', { 
-                        platform: t.platform, 
-                        chatId: t.id, 
-                        caption: caption, 
-                        mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } 
-                    });
+                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } });
                 }
             }
         } catch (e) { console.error("Notif Error", e); }
@@ -313,12 +263,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         loadData();
     };
 
-    // Step Visualizer
     const TimelineStep = ({ status, label, icon: Icon }: any) => {
-        let colorClass = 'bg-gray-100 text-gray-400 border-gray-200'; // Pending
+        let colorClass = 'bg-gray-100 text-gray-400 border-gray-200';
         if (status === 'current') colorClass = 'bg-blue-100 text-blue-600 border-blue-500 animate-pulse ring-2 ring-blue-200';
         if (status === 'done') colorClass = 'bg-green-500 text-white border-green-600 shadow-md';
         if (status === 'rejected') colorClass = 'bg-red-500 text-white border-red-600';
+
+        // Simplify for mobile
+        if (isMobile) {
+            return (
+                <div className={`w-2 h-2 rounded-full ${colorClass.includes('bg-green') ? 'bg-green-500' : colorClass.includes('bg-blue') ? 'bg-blue-500 animate-pulse' : colorClass.includes('bg-red') ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+            );
+        }
 
         return (
             <div className="flex flex-col items-center gap-1 z-10 w-14">
@@ -330,9 +286,63 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         );
     };
 
+    // Mobile Card Renderer
+    const MobilePermitCard = ({ p, canAct }: { p: ExitPermit, canAct: boolean }) => (
+        <div className={`bg-white rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
+            <div className="flex justify-between items-start mb-2">
+                <div>
+                    <span className="text-xs font-mono text-gray-400">#{p.permitNumber}</span>
+                    <h3 className="font-bold text-gray-800 text-base">{p.recipientName}</h3>
+                </div>
+                {p.status === ExitPermitStatus.EXITED ? (
+                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold">خارج شده</span>
+                ) : (
+                     <div className="flex gap-1">
+                         <TimelineStep status="done" label="" icon={UserIcon} />
+                         <TimelineStep status={getStepStatus(p, 'CEO')} label="" icon={UserCheck} />
+                         <TimelineStep status={getStepStatus(p, 'FACTORY')} label="" icon={Building2} />
+                         <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="" icon={Warehouse} />
+                         <TimelineStep status={getStepStatus(p, 'SECURITY')} label="" icon={ShieldCheck} />
+                     </div>
+                )}
+            </div>
+            
+            <div className="text-xs text-gray-500 mb-3 flex flex-wrap gap-3">
+                <span>📦 {p.goodsName}</span>
+                <span>📅 {formatDate(p.date)}</span>
+            </div>
+
+            <div className="flex gap-2 mt-2">
+                {canAct && !processingId && (
+                     <button onClick={() => handleApprove(p)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
+                         {getActionLabel(p.status)}
+                     </button>
+                )}
+                <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
+                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
+                )}
+            </div>
+            
+            {processingId === p.id && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex items-center justify-center z-20">
+                    <Loader2 className="animate-spin text-blue-600" size={24}/>
+                </div>
+            )}
+        </div>
+    );
+
     const renderPermitCard = (p: ExitPermit) => {
         const canAct = isMyTurn(p);
         
+        if (isMobile) {
+            return (
+                <React.Fragment key={p.id}>
+                    <MobilePermitCard p={p} canAct={canAct} />
+                </React.Fragment>
+            );
+        }
+
         return (
             <div key={p.id} className={`bg-white rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
                 {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
@@ -436,7 +446,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             </div>
 
             {/* List */}
-            <div className="space-y-4 min-h-[300px]">
+            <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} min-h-[300px]`}>
                 {loading ? (
                     <div className="text-center py-20 text-gray-400 flex flex-col items-center gap-2">
                         <Loader2 className="animate-spin text-blue-500"/> در حال بارگذاری...
@@ -453,24 +463,26 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             {/* Modals */}
             {viewPermit && (
-                <PrintExitPermit 
-                    permit={viewPermit} 
-                    onClose={() => setViewPermit(null)} 
-                    settings={settings}
-                    onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined}
-                    onReject={isMyTurn(viewPermit) ? async () => {
-                         const reason = prompt('دلیل رد:'); 
-                         if(reason) { 
-                             await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
-                             loadData(); setViewPermit(null); 
-                         } 
-                    } : undefined}
-                    onEdit={
-                        (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
-                        ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
-                        : undefined
-                    }
-                />
+                <div className={isMobile ? "fixed inset-0 z-[100] bg-white overflow-y-auto" : ""}>
+                    <PrintExitPermit 
+                        permit={viewPermit} 
+                        onClose={() => setViewPermit(null)} 
+                        settings={settings}
+                        onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined}
+                        onReject={isMyTurn(viewPermit) ? async () => {
+                            const reason = prompt('دلیل رد:'); 
+                            if(reason) { 
+                                await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
+                                loadData(); setViewPermit(null); 
+                            } 
+                        } : undefined}
+                        onEdit={
+                            (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
+                            ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
+                            : undefined
+                        }
+                    />
+                </div>
             )}
 
             {editPermit && (

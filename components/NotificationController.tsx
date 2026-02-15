@@ -42,6 +42,21 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 if (permStatus.receive !== 'granted') {
                     await PushNotifications.requestPermissions();
                 }
+                
+                // Create Channel for Android 8+ (Oreo) to ensure sound and high priority
+                if (Capacitor.getPlatform() === 'android') {
+                    await PushNotifications.createChannel({
+                        id: 'fcm_default_channel',
+                        name: 'General Notifications',
+                        description: 'General notifications for the app',
+                        importance: 5, // High importance
+                        visibility: 1,
+                        lights: true,
+                        vibration: true,
+                        sound: 'default' 
+                    });
+                }
+                
                 await PushNotifications.register();
             } else {
                 if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -63,15 +78,6 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 const existingSub = await registration.pushManager.getSubscription();
                 
                 if (existingSub) {
-                    // Check if key changed (Server rotated keys)
-                    const existingKey = existingSub.options.applicationServerKey;
-                    if (existingKey) {
-                        const existingKeyStr = arrayBufferToBase64(existingKey);
-                        // Simple comparison (might need better normalization, but usually effective)
-                        // If they differ significantly, unsubscribe.
-                        // Actually, easiest way is to try subscribing again.
-                    }
-                    
                     // Always update server with current subscription details to ensure it's fresh
                     const payload = {
                         ...JSON.parse(JSON.stringify(existingSub)),
@@ -88,7 +94,6 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                     });
 
                     if (subscription) {
-                        console.log('Got New Sub:', subscription);
                         const payload = {
                             ...JSON.parse(JSON.stringify(subscription)),
                             username: currentUser.username,
@@ -101,13 +106,11 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
             }
         } catch (error) {
             console.error('Notification Setup Error:', error);
-            // If subscription failed (e.g. key mismatch error from browser), try to unsubscribe old one
             if (error.name === 'InvalidStateError' || error.message.includes('subscription')) {
                  try {
                      const reg = await navigator.serviceWorker.getRegistration();
                      const sub = await reg?.pushManager.getSubscription();
                      await sub?.unsubscribe();
-                     console.log("Old subscription removed. Refresh page to retry.");
                  } catch(e) {}
             }
         }
@@ -134,6 +137,13 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 role: currentUser.role
             };
             apiCall('/subscribe', 'POST', subObject);
+        });
+        
+        // Handle incoming notifications while app is open
+        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+            console.log('Push received: ', notification);
+            // You can use LocalNotifications here if you want a custom in-app banner, 
+            // but the system tray notification usually handles it if configured correctly in background.
         });
     }
 
