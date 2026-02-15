@@ -7,41 +7,58 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Correctly resolve root directory from backend folder
+const ROOT_DIR = path.resolve(__dirname, '..'); 
+
 let browser = null;
 
-// --- FONT LOADER (OFFLINE SUPPORT) ---
+// --- FONT LOADER (ROBUST OFFLINE SUPPORT) ---
 const getFontBase64 = () => {
     try {
-        // Try to find the font in public/fonts
-        const fontPath = path.join(__dirname, '..', 'public', 'fonts', 'Vazirmatn-Regular.woff2');
-        if (fs.existsSync(fontPath)) {
-            return fs.readFileSync(fontPath).toString('base64');
+        // Priority 1: Check in 'public/fonts' relative to root
+        const pathsToCheck = [
+            path.join(ROOT_DIR, 'public', 'fonts', 'Vazirmatn-Regular.woff2'),
+            path.join(ROOT_DIR, 'dist', 'fonts', 'Vazirmatn-Regular.woff2'), // Production build
+            path.join(process.cwd(), 'public', 'fonts', 'Vazirmatn-Regular.woff2') // CWD fallback
+        ];
+
+        for (const p of pathsToCheck) {
+            if (fs.existsSync(p)) {
+                console.log(`[Renderer] Font found at: ${p}`);
+                return fs.readFileSync(p).toString('base64');
+            }
         }
-        // Fallback or development path
-        const devFontPath = path.join(process.cwd(), 'public', 'fonts', 'Vazirmatn-Regular.woff2');
-        if (fs.existsSync(devFontPath)) {
-            return fs.readFileSync(devFontPath).toString('base64');
-        }
+        console.warn("[Renderer] Font file NOT found. PDF text might be squares.");
     } catch (e) {
-        console.warn("Font file not found for offline PDF. Using system fonts.");
+        console.warn("[Renderer] Error loading font:", e.message);
     }
     return null;
 };
 
 const fontBase64 = getFontBase64();
+// IMPORTANT: Use specific font-family name that matches CSS
 const fontFaceRule = fontBase64 
-    ? `@font-face { font-family: 'Vazirmatn'; src: url(data:font/woff2;base64,${fontBase64}) format('woff2'); }`
-    : `/* No Local Font */`;
+    ? `@font-face { font-family: 'Vazirmatn'; src: url(data:font/woff2;base64,${fontBase64}) format('woff2'); font-weight: normal; font-style: normal; }`
+    : `/* No Local Font Found */`;
 
 const getBrowser = async () => {
     if (!browser) {
         try {
+            console.log("[Renderer] Launching Puppeteer...");
             browser = await puppeteer.launch({
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
+                headless: "new",
+                args: [
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox', 
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--font-render-hinting=none'
+                ],
+                // Timeout specifically for slow environments
+                timeout: 60000 
             });
         } catch (e) {
-            console.error("⚠️ Puppeteer Launch Failed.", e.message);
+            console.error("⚠️ Puppeteer Launch Failed:", e.message);
             return null;
         }
     }
@@ -51,7 +68,14 @@ const getBrowser = async () => {
 // --- STYLES ---
 const BASE_STYLE = `
     ${fontFaceRule}
-    body { font-family: 'Vazirmatn', Tahoma, sans-serif; background: #fff; padding: 40px; direction: rtl; }
+    * { box-sizing: border-box; }
+    body { 
+        font-family: 'Vazirmatn', 'Tahoma', sans-serif !important; 
+        background: #fff; 
+        padding: 40px; 
+        direction: rtl; 
+        margin: 0;
+    }
     .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
     .title { font-size: 24px; font-weight: 900; color: #1e3a8a; }
     .meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; color: #555; font-weight: bold; }
@@ -61,9 +85,6 @@ const BASE_STYLE = `
     tr:nth-child(even) { background-color: #fafafa; }
     .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #eee; padding-top: 10px; }
     .badge { padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; color: white; }
-    .badge-green { background: #16a34a; }
-    .badge-red { background: #dc2626; }
-    .badge-blue { background: #2563eb; }
     .amount { font-family: monospace; font-weight: bold; font-size: 14px; direction: ltr; }
     
     /* VOUCHER STYLE */
@@ -79,7 +100,6 @@ const BASE_STYLE = `
 `;
 
 // --- TEMPLATES ---
-
 const generateReportHTML = (title, columns, rows) => `
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -119,20 +139,20 @@ const generateRecordCardHTML = (title, data, type) => `
 <meta charset="UTF-8">
 <style>
     ${BASE_STYLE}
-    body { padding: 20px; width: 800px; }
-    .card { background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; border: 1px solid #e5e7eb; }
+    body { padding: 20px; width: 800px; display: block; }
+    .card { background: white; border-radius: 20px; box-shadow: none; border: 1px solid #333; overflow: hidden; }
     .card-header { background: ${type === 'PAYMENT' ? '#1e40af' : type === 'EXIT' ? '#0f766e' : '#7e22ce'}; color: white; padding: 25px; text-align: center; }
     .card-title { font-size: 32px; font-weight: 900; margin: 0; }
-    .row { display: flex; justify-content: space-between; border-bottom: 2px dashed #f3f4f6; padding: 12px 20px; font-size: 18px; }
-    .label { color: #6b7280; font-weight: bold; }
-    .value { color: #111827; font-weight: 900; }
+    .row { display: flex; justify-content: space-between; border-bottom: 2px dashed #ccc; padding: 15px 20px; font-size: 20px; }
+    .label { color: #555; font-weight: bold; }
+    .value { color: #000; font-weight: 900; }
 </style>
 </head>
 <body>
     <div class="card">
         <div class="card-header">
             <div class="card-title">${title}</div>
-            <div style="margin-top:5px; opacity:0.9;">${new Date().toLocaleString('fa-IR')}</div>
+            <div style="margin-top:5px; opacity:0.9; font-size: 16px;">${new Date().toLocaleDateString('fa-IR')}</div>
         </div>
         ${data}
     </div>
@@ -141,7 +161,6 @@ const generateRecordCardHTML = (title, data, type) => `
 
 // --- EXPORTED FUNCTIONS ---
 
-// 1. Generate Image for Telegram/Bale (Single Record)
 export const generateRecordImage = async (record, type) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -161,7 +180,7 @@ export const generateRecordImage = async (record, type) => {
                 <div class="row"><span class="label">ذینفع:</span><span class="value">${record.payee}</span></div>
                 <div class="row"><span class="label">مبلغ:</span><span class="value amount" style="color:#1e40af">${parseInt(record.totalAmount).toLocaleString()}</span></div>
                 <div class="row"><span class="label">شرکت:</span><span class="value">${record.payingCompany}</span></div>
-                <div class="row"><span class="label">بابت:</span><span class="value">${record.description}</span></div>
+                <div class="row"><span class="label">بابت:</span><span class="value" style="font-size: 16px;">${record.description}</span></div>
                 <div class="row"><span class="label">وضعیت:</span><span class="value">${record.status}</span></div>
             `;
         } else if (type === 'EXIT') {
@@ -176,8 +195,10 @@ export const generateRecordImage = async (record, type) => {
             `;
         }
 
-        await page.setContent(generateRecordCardHTML(title, htmlData, type));
+        await page.setContent(generateRecordCardHTML(title, htmlData, type), { waitUntil: 'networkidle0' });
         const card = await page.$('.card');
+        if (!card) throw new Error("Card element not found");
+        
         const buffer = await card.screenshot({ type: 'png' });
         await page.close();
         return buffer;
@@ -187,7 +208,6 @@ export const generateRecordImage = async (record, type) => {
     }
 };
 
-// 2. Generate PDF Report (List of Records)
 export const generateReportPDF = async (title, columns, rows, landscape = false) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -209,22 +229,23 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
     }
 };
 
-// 3. Simple Buffer Generator from HTML (For custom raw HTML)
 export const generatePdfBuffer = async (html) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
     const page = await browser.newPage();
-    // Inject font style if missing
-    if (!html.includes('@font-face')) {
-        html = html.replace('<head>', `<head><style>${fontFaceRule}</style>`);
+    
+    // Ensure font is injected
+    let finalHtml = html;
+    if (!html.includes('@font-face') && fontFaceRule) {
+        finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
     }
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({ format: 'A4', printBackground: true });
     await page.close();
     return pdf;
 };
 
-// 4. Generate Single Voucher PDF (Formal Layout)
 export const generateVoucherPDF = async (order) => {
     const browser = await getBrowser();
     if (!browser) return Buffer.from("");
@@ -232,7 +253,6 @@ export const generateVoucherPDF = async (order) => {
     try {
         const page = await browser.newPage();
         
-        // Build lines HTML
         const linesHtml = order.paymentDetails.map((d, i) => `
             <tr>
                 <td>${i+1}</td>
@@ -304,8 +324,6 @@ export const generateVoucherPDF = async (order) => {
                         <div>مدیر عامل<br/>${order.approverCeo || '---'}</div>
                     </div>
                 </div>
-                
-                <div style="position:absolute; bottom:5px; left:10px; font-size:10px; color:#aaa">System Generated ID: ${order.id}</div>
             </div>
         </body>
         </html>

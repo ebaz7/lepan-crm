@@ -1,7 +1,8 @@
 
-import { apiCall } from '../services/apiService';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
-type PdfFormat = 'A4' | 'A5' | 'A3';
+type PdfFormat = 'A4' | 'A5';
 type PdfOrientation = 'portrait' | 'landscape';
 
 export interface PdfOptions {
@@ -9,8 +10,6 @@ export interface PdfOptions {
     filename: string;
     format?: PdfFormat;
     orientation?: PdfOrientation;
-    width?: string;
-    height?: string;
     onComplete?: () => void;
     onError?: (error: any) => void;
 }
@@ -18,10 +17,8 @@ export interface PdfOptions {
 export const generatePdf = async ({
     elementId,
     filename,
-    format,
+    format = 'A4',
     orientation = 'portrait',
-    width,
-    height,
     onComplete,
     onError
 }: PdfOptions) => {
@@ -33,132 +30,128 @@ export const generatePdf = async ({
     }
 
     try {
-        // 1. Get HTML Content
+        // 1. Create a container for rendering
+        // We create a temporary container off-screen to ensure we capture the full dimensions 
+        // regardless of the user's current screen size (Responsive fix).
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.top = '-9999px';
+        container.style.left = '-9999px';
+        container.style.zIndex = '-1';
+        
+        // Set dimensions based on format to ensure high quality scale
+        // A4 @ 96 DPI: 794px x 1123px. We use 2x scale for better quality.
+        let width = 0;
+        let height = 0;
+        
+        if (format === 'A4') {
+             if (orientation === 'portrait') { width = 794; height = 1123; }
+             else { width = 1123; height = 794; }
+        } else if (format === 'A5') {
+             if (orientation === 'portrait') { width = 559; height = 794; }
+             else { width = 794; height = 559; }
+        }
+
+        // Clone the element
         const clone = originalElement.cloneNode(true) as HTMLElement;
         
-        // Remove no-print elements
+        // Clean up UI-only elements
         const noPrints = clone.querySelectorAll('.no-print');
         noPrints.forEach(el => el.remove());
 
-        // Sync inputs
-        const inputs = clone.querySelectorAll('input, select, textarea');
-        inputs.forEach((input: any) => {
-            if (input.type === 'checkbox' || input.type === 'radio') {
-                if (input.checked) input.setAttribute('checked', 'checked');
-            } else if (input.tagName === 'SELECT') {
+        // Sync Form Values (Inputs, Selects, Textareas)
+        // This is crucial because cloning doesn't copy current values of inputs
+        const originalInputs = originalElement.querySelectorAll('input, textarea, select');
+        const clonedInputs = clone.querySelectorAll('input, textarea, select');
+
+        originalInputs.forEach((input: any, index) => {
+            const clonedInput = clonedInputs[index] as any;
+            if (!clonedInput) return;
+
+            if (input.tagName === 'SELECT') {
+                // Convert select to text for PDF clarity
                 const selectedOption = input.options[input.selectedIndex];
-                if (selectedOption) selectedOption.setAttribute('selected', 'selected');
+                const span = document.createElement('span');
+                span.innerText = selectedOption ? selectedOption.text : '';
+                span.className = input.className; // Keep styles
+                // Copy computed styles roughly
+                span.style.display = 'inline-block';
+                span.style.padding = '4px';
+                if(input.parentNode) input.parentNode.replaceChild(span, input); // This assumes clone structure matches
+                // Since we are iterating clone list based on original list index, 
+                // modifying clone structure while iterating might desync if nested. 
+                // Better approach for Select: set value.
+                clonedInput.value = input.value;
+            } else if (input.type === 'checkbox' || input.type === 'radio') {
+                clonedInput.checked = input.checked;
+                if(input.checked) clonedInput.setAttribute('checked', 'checked');
             } else {
-                input.setAttribute('value', input.value);
-                input.textContent = input.value; 
+                clonedInput.value = input.value;
+                clonedInput.setAttribute('value', input.value);
             }
         });
 
-        const htmlContent = clone.outerHTML;
+        // Apply Print Specific Styles to Clone
+        clone.style.width = `${width}px`;
+        // clone.style.height = `${height}px`; // Let height grow if content is longer
+        clone.style.margin = '0';
+        clone.style.padding = '20px'; // Add some padding
+        clone.style.transform = 'none'; // Remove any preview scaling
+        clone.classList.add('printable-content'); // Ensure print styles apply
 
-        // 2. Extract Styles (Robust approach)
-        let collectedStyles = '';
-        
-        // A. From <style> tags (Vite dev)
-        const styleTags = document.querySelectorAll('style');
-        styleTags.forEach(tag => {
-            collectedStyles += tag.innerHTML + "\n";
+        container.appendChild(clone);
+        document.body.appendChild(container);
+
+        // 2. Generate Canvas
+        // Wait a tick for DOM to settle
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const canvas = await html2canvas(clone, {
+            scale: 2, // High resolution
+            useCORS: true, // Allow cross-origin images (if backend serves them correctly)
+            logging: false,
+            backgroundColor: '#ffffff',
+            windowWidth: width,
+            width: width
         });
 
-        // B. From <link rel="stylesheet"> (Production)
-        // Accessing cssRules can throw CORS errors for external domains, so we wrap in try-catch
-        Array.from(document.styleSheets).forEach(sheet => {
-            try {
-                // If it's a local sheet or CORS-allowed, this works.
-                // If blocked, it throws and we catch it (skipping that sheet).
-                // Usually app styles are local/same-origin.
-                const rules = sheet.cssRules;
-                if (rules) {
-                    Array.from(rules).forEach(rule => {
-                        collectedStyles += rule.cssText + "\n";
-                    });
-                }
-            } catch (e) {
-                // Ignore cross-origin stylesheets (like Google Fonts) to prevent crash
-                // They won't render in PDF unless server has access, which is fine for basic structure
-            }
+        // 3. Generate PDF
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const pdf = new jsPDF({
+            orientation: orientation,
+            unit: 'mm',
+            format: format
         });
 
-        // 3. Prepare Full HTML
-        const fullHtml = `
-            <!DOCTYPE html>
-            <html lang="fa" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    /* ZERO MARGIN RESET FOR PDF ENGINE */
-                    @page { margin: 0; size: auto; }
-                    
-                    body { 
-                        font-family: 'Vazirmatn', sans-serif; 
-                        -webkit-print-color-adjust: exact; 
-                        print-color-adjust: exact; 
-                        margin: 0;
-                        padding: 0;
-                        width: 100%;
-                        height: 100%;
-                    }
-                    input, select, textarea { background: transparent; border: none; font-family: inherit; }
-                    .printable-content { margin: 0 auto; width: 100%; height: 100%; box-shadow: none !important; }
-                    
-                    /* INJECTED APP STYLES */
-                    ${collectedStyles}
-                </style>
-            </head>
-            <body>
-                ${htmlContent}
-            </body>
-            </html>
-        `;
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        // 4. Send to Backend
-        const body: any = {
-            html: fullHtml,
-            landscape: orientation === 'landscape',
-            width,
-            height
-        };
-        
-        if (format) body.format = format;
+        // If content is taller than 1 page, add pages (Simple logic, usually invoices are 1 page)
+        let heightLeft = imgHeight;
+        let position = 0;
 
-        const response = await fetch('/api/render-pdf', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            // Provide a more helpful error message if payload was too large
-            if (response.status === 413) {
-                 throw new Error("حجم اطلاعات برای تبدیل به PDF بسیار زیاد است (Payload Too Large).");
-            }
-            throw new Error((errData.error || 'Server Error') + (errData.details ? `: ${errData.details}` : ''));
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
         }
 
-        // 5. Download Blob
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+
+        // Cleanup
+        document.body.removeChild(container);
 
         if (onComplete) onComplete();
 
     } catch (error: any) {
-        console.error('PDF Generator Error:', error);
-        alert(`خطا در ایجاد PDF: ${error.message}`);
+        console.error('Client-Side PDF Error:', error);
+        alert('خطا در تولید PDF: ' + error.message);
         if (onError) onError(error);
     }
 };
