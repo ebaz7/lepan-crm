@@ -65,6 +65,17 @@ const BASE_STYLE = `
     .badge-red { background: #dc2626; }
     .badge-blue { background: #2563eb; }
     .amount { font-family: monospace; font-weight: bold; font-size: 14px; direction: ltr; }
+    
+    /* VOUCHER STYLE */
+    .voucher-container { border: 2px solid #000; padding: 20px; position: relative; min-height: 500px; }
+    .voucher-header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+    .voucher-title { font-size: 22px; font-weight: 900; }
+    .voucher-meta div { margin-bottom: 5px; font-weight: bold; }
+    .voucher-row { display: flex; margin-bottom: 10px; border: 1px solid #eee; padding: 10px; border-radius: 5px; background: #fcfcfc; }
+    .voucher-label { width: 120px; font-weight: bold; color: #555; }
+    .voucher-val { flex: 1; font-weight: bold; color: #000; }
+    .voucher-signatures { display: flex; justify-content: space-between; margin-top: 50px; text-align: center; font-size: 12px; font-weight: bold; }
+    .sig-box { width: 100px; height: 60px; border-bottom: 1px solid #000; margin: 0 auto; }
 `;
 
 // --- TEMPLATES ---
@@ -211,4 +222,105 @@ export const generatePdfBuffer = async (html) => {
     const pdf = await page.pdf({ format: 'A4', printBackground: true });
     await page.close();
     return pdf;
+};
+
+// 4. Generate Single Voucher PDF (Formal Layout)
+export const generateVoucherPDF = async (order) => {
+    const browser = await getBrowser();
+    if (!browser) return Buffer.from("");
+
+    try {
+        const page = await browser.newPage();
+        
+        // Build lines HTML
+        const linesHtml = order.paymentDetails.map((d, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td>${d.method}</td>
+                <td class="amount">${parseInt(d.amount).toLocaleString()}</td>
+                <td>${d.bankName || (d.method === 'چک' ? `چک: ${d.chequeNumber}` : '-')}</td>
+                <td>${d.description || '-'}</td>
+            </tr>
+        `).join('');
+
+        const html = `
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head>
+        <body>
+            <div class="voucher-container">
+                <div class="voucher-header">
+                    <div>
+                        <div class="voucher-title">${order.payingCompany}</div>
+                        <div>رسید دستور پرداخت وجه</div>
+                    </div>
+                    <div class="voucher-meta">
+                        <div>شماره: <span style="font-family:monospace">${order.trackingNumber}</span></div>
+                        <div>تاریخ: ${new Date(order.date).toLocaleDateString('fa-IR')}</div>
+                    </div>
+                </div>
+
+                <div class="voucher-row">
+                    <span class="voucher-label">در وجه (ذینفع):</span>
+                    <span class="voucher-val">${order.payee}</span>
+                </div>
+                <div class="voucher-row">
+                    <span class="voucher-label">مبلغ کل:</span>
+                    <span class="voucher-val amount" style="font-size:16px">${parseInt(order.totalAmount).toLocaleString()} ریال</span>
+                </div>
+                <div class="voucher-row">
+                    <span class="voucher-label">بابت:</span>
+                    <span class="voucher-val">${order.description}</span>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:30px">#</th>
+                            <th>روش</th>
+                            <th>مبلغ</th>
+                            <th>بانک / جزئیات</th>
+                            <th>شرح ردیف</th>
+                        </tr>
+                    </thead>
+                    <tbody>${linesHtml}</tbody>
+                </table>
+
+                <div class="voucher-signatures">
+                    <div>
+                        <div class="sig-box"></div>
+                        <div>درخواست کننده<br/>${order.requester}</div>
+                    </div>
+                    <div>
+                        <div class="sig-box"></div>
+                        <div>مدیر مالی<br/>${order.approverFinancial || '---'}</div>
+                    </div>
+                    <div>
+                        <div class="sig-box"></div>
+                        <div>مدیریت<br/>${order.approverManager || '---'}</div>
+                    </div>
+                    <div>
+                        <div class="sig-box"></div>
+                        <div>مدیر عامل<br/>${order.approverCeo || '---'}</div>
+                    </div>
+                </div>
+                
+                <div style="position:absolute; bottom:5px; left:10px; font-size:10px; color:#aaa">System Generated ID: ${order.id}</div>
+            </div>
+        </body>
+        </html>
+        `;
+
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({ 
+            format: 'A5', 
+            landscape: true,
+            printBackground: true
+        });
+        await page.close();
+        return pdf;
+    } catch (e) {
+        console.error("Voucher PDF Error:", e);
+        return Buffer.from("");
+    }
 };

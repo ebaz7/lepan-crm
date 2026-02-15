@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'payment-sys-v6-robust';
+const CACHE_NAME = 'payment-sys-v7-robust';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -47,9 +47,12 @@ self.addEventListener('push', (event) => {
       lang: 'fa',
       vibrate: [100, 50, 100],
       data: {
-        url: data.url || '/'
+        url: data.url || '/',
+        timestamp: Date.now()
       },
-      requireInteraction: true
+      tag: 'payment-sys-notification', // Groups notifications
+      renotify: true, // Play sound even if tag is same
+      requireInteraction: true // Keep notification until user interacts
     };
 
     event.waitUntil(
@@ -59,7 +62,7 @@ self.addEventListener('push', (event) => {
     console.error('[SW] Push Error:', err);
     // Fallback if JSON parse fails
     event.waitUntil(
-        self.registration.showNotification('پیام جدید', { body: 'پیام دریافت شد' })
+        self.registration.showNotification('پیام جدید', { body: 'پیام دریافت شد', icon: '/pwa-192x192.png' })
     );
   }
 });
@@ -68,20 +71,21 @@ self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification Clicked');
   event.notification.close();
 
+  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 1. Try to focus existing tab
+      // 1. Check if app is already open
       for (const client of clientList) {
+        // If url matches base, just focus it
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
-          return client.focus().then((focused) => {
-              if(focused) focused.navigate(event.notification.data.url || '/');
-              return focused;
-          });
+          if (targetUrl !== '/') client.navigate(targetUrl);
+          return client.focus();
         }
       }
-      // 2. Open new
+      // 2. If not open, open a new window
       if (clients.openWindow) {
-        return clients.openWindow(event.notification.data.url || '/');
+        return clients.openWindow(targetUrl);
       }
     })
   );
