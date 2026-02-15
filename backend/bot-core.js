@@ -10,6 +10,7 @@ const DB_PATH = path.join(__dirname, '..', 'database.json');
 
 const sessions = {}; 
 
+// --- DATA ACCESS ---
 const getDb = () => {
     try { 
         if (fs.existsSync(DB_PATH)) return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); 
@@ -29,24 +30,42 @@ const toShamsiYearMonth = (isoDate) => {
     try {
         if (!isoDate) return '';
         let safeDate = isoDate;
-        if (typeof isoDate === 'string' && isoDate.match(/^\d{4}-\d{2}-\d{2}$/)) { safeDate = `${isoDate}T12:00:00.000Z`; }
+        if (typeof isoDate === 'string' && isoDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+             safeDate = `${isoDate}T12:00:00.000Z`;
+        }
+
         const d = new Date(safeDate);
         if (isNaN(d.getTime())) return '';
-        const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Tehran' });
+
+        const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', {
+            year: 'numeric',
+            month: '2-digit',
+            timeZone: 'Asia/Tehran'
+        });
+        
         const parts = formatter.formatToParts(d);
         const year = parts.find(p => p.type === 'year')?.value;
         const month = parts.find(p => p.type === 'month')?.value;
+        
+        if (!year || !month) return '';
+        
         return `${year}/${month.padStart(2, '0')}`;
-    } catch (e) { return ''; }
+    } catch (e) {
+        console.error("Date Conversion Error:", e);
+        return '';
+    }
 };
 
 const toShamsiFull = (isoDate) => {
-    try { return new Date(isoDate).toLocaleDateString('fa-IR'); } catch(e) { return isoDate; }
+    try {
+        const d = new Date(isoDate);
+        return d.toLocaleDateString('fa-IR');
+    } catch(e) { return isoDate; }
 }
 
-const getAvailableYears = (list) => {
+const getAvailableYears = (orders) => {
     const years = new Set();
-    list.forEach(o => {
+    orders.forEach(o => {
         const sh = toShamsiYearMonth(o.date);
         if (sh) years.add(sh.split('/')[0]);
     });
@@ -66,7 +85,7 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت دستور پرداخت', callback_data: 'ACT_PAY_NEW' }],
             [{ text: '📂 کارتابل پرداخت', callback_data: 'ACT_PAY_CARTABLE' }],
-            [{ text: '🗄️ گزارش بایگانی (جستجو)', callback_data: 'ACT_ARCHIVE_PAY' }],
+            [{ text: '🗄️ گزارش بایگانی (جستجو)', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -74,15 +93,16 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '➕ ثبت مجوز خروج', callback_data: 'ACT_EXIT_NEW' }],
             [{ text: '📂 کارتابل خروج', callback_data: 'ACT_EXIT_CARTABLE' }],
-            [{ text: '🗄️ جستجو و بایگانی خروج', callback_data: 'ACT_ARCHIVE_EXIT' }],
+            [{ text: '📄 گزارش PDF خروجی‌های اخیر', callback_data: 'RPT_PDF_EXIT_RECENT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
     WAREHOUSE: {
         inline_keyboard: [
-            [{ text: '🗄️ آرشیو بیجک‌های خروج', callback_data: 'ACT_ARCHIVE_WH_OUT' }],
-            [{ text: '🗄️ آرشیو رسیدهای ورود', callback_data: 'ACT_ARCHIVE_WH_IN' }],
-            [{ text: '📦 گزارش موجودی (PDF)', callback_data: 'WH_RPT_STOCK' }],
+            [{ text: '📦 موجودی انبار (Stock PDF)', callback_data: 'WH_RPT_STOCK' }],
+            [{ text: '📄 کاردکس کالا (PDF)', callback_data: 'WH_RPT_KARDEX' }],
+            [{ text: '🚛 آخرین بیجک‌های خروجی (PDF)', callback_data: 'WH_RPT_BIJAKS' }],
+            [{ text: '📥 آخرین رسیدهای ورود (PDF)', callback_data: 'WH_RPT_RECEIPTS' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -95,82 +115,12 @@ const KEYBOARDS = {
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
-    REPORTS: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]] },
+    REPORTS: {
+        inline_keyboard: [
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
+        ]
+    },
     BACK: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_MAIN' }]] }
-};
-
-// --- GENERIC SEARCH & SEND ---
-const searchAndSendResults = async (db, company, dateQuery, mode, type, platform, chatId, sendFn, sendPhotoFn) => {
-    let sourceData = [];
-    let imageType = '';
-    
-    if (type === 'PAYMENT') { sourceData = db.orders || []; imageType = 'PAYMENT'; }
-    else if (type === 'EXIT') { sourceData = db.exitPermits || []; imageType = 'EXIT'; }
-    else if (type === 'WH_OUT') { sourceData = (db.warehouseTransactions || []).filter(t => t.type === 'OUT'); imageType = 'BIJAK'; }
-    else if (type === 'WH_IN') { sourceData = (db.warehouseTransactions || []).filter(t => t.type === 'IN'); imageType = 'RECEIPT'; }
-
-    // Filter Logic
-    const results = sourceData.filter(o => {
-        const itemCompany = o.company || o.payingCompany;
-        if (itemCompany !== company) return false;
-        
-        const shamsiMonth = toShamsiYearMonth(o.date);
-        
-        if (mode === 'MONTH') {
-            return shamsiMonth === dateQuery;
-        } else {
-            // Exact Day
-            try {
-                const d = new Date(o.date);
-                const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' });
-                const parts = formatter.formatToParts(d);
-                const y = parts.find(p=>p.type==='year')?.value;
-                const m = parts.find(p=>p.type==='month')?.value;
-                const d_ = parts.find(p=>p.type==='day')?.value;
-                return `${y}/${m}/${d_}` === dateQuery;
-            } catch(e) { return false; }
-        }
-    });
-
-    if (results.length === 0) {
-        return sendFn(chatId, `❌ موردی برای تاریخ ${dateQuery} یافت نشد.`);
-    }
-
-    await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد. در حال ارسال...`);
-
-    for (const item of results) {
-        try {
-            const img = await Renderer.generateRecordImage(item, imageType);
-            
-            // Build Caption based on Type
-            let caption = '';
-            let pdfCallback = '';
-
-            if (type === 'PAYMENT') {
-                caption = `📄 *سند پرداخت #${item.trackingNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}`;
-                pdfCallback = `GEN_PDF_ORDER_${item.id}`;
-            } else if (type === 'EXIT') {
-                caption = `🚛 *مجوز خروج #${item.permitNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n🔄 وضعیت: ${item.status}`;
-                pdfCallback = `GEN_PDF_EXIT_${item.id}`;
-            } else if (type === 'WH_OUT') {
-                caption = `📦 *حواله انبار (بیجک) #${item.number}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n🚛 راننده: ${item.driverName||'-'}`;
-                pdfCallback = `GEN_PDF_BIJAK_${item.id}`;
-            } else if (type === 'WH_IN') {
-                caption = `📥 *رسید ورود #${item.proformaNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n📦 اقلام: ${item.items.length} ردیف`;
-                // Receipt PDF not implemented yet, just show image
-            }
-
-            const kb = pdfCallback ? { inline_keyboard: [[{ text: '📥 دریافت PDF', callback_data: pdfCallback }]] } : undefined;
-
-            if (img && img.length > 0) {
-                await sendPhotoFn(platform, chatId, img, caption, { reply_markup: kb });
-            } else {
-                await sendFn(chatId, caption, { reply_markup: kb });
-            }
-        } catch (e) { console.error(e); }
-    }
-    
-    await sendFn(chatId, "✅ پایان لیست.", { reply_markup: KEYBOARDS.MAIN });
 };
 
 // --- HANDLERS ---
@@ -178,45 +128,51 @@ const searchAndSendResults = async (db, company, dateQuery, mode, type, platform
 export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
     const user = resolveUser(db, platform, chatId);
-    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز.");
+    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز. شما در سیستم تعریف نشده‌اید.");
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
+    // Reset on Menu commands
     if (text === '/start' || text === 'شروع' || text === 'منو') {
         session.state = 'IDLE';
-        return sendFn(chatId, `👋 سلام ${user.fullName}\nمنوی اصلی:`, { reply_markup: KEYBOARDS.MAIN });
+        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سامانه یکپارچه مدیریت خوش آمدید.\nلطفاً یکی از بخش‌های زیر را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
 
-    // --- FORM HANDLERS ---
+    // --- FORMS ---
     
-    // Manual Date Entry (Generic)
+    // 0. Manual Date Entry (Archive)
     if (session.state === 'ARCHIVE_WAIT_DATE') {
+        // Validate date format (e.g., 1403/05/20)
         const dateRegex = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/;
         const match = text.match(dateRegex);
-        if (!match) return sendFn(chatId, "⚠️ فرمت صحیح نیست (yyyy/mm/dd):");
         
+        if (!match) {
+            return sendFn(chatId, "⚠️ فرمت تاریخ صحیح نیست. لطفاً به صورت yyyy/mm/dd وارد کنید (مثال: 1403/05/20):");
+        }
+        
+        // Normalize to YYYY/MM/DD (pad zeros)
         const normalizedDate = `${match[1]}/${match[2].padStart(2, '0')}/${match[3].padStart(2, '0')}`;
-        await sendFn(chatId, `🔎 جستجو برای ${normalizedDate}...`);
+        await sendFn(chatId, `🔎 در حال جستجوی اسناد برای تاریخ ${normalizedDate}...`);
         
-        // Execute Generic Search
-        await searchAndSendResults(db, session.data.company, normalizedDate, 'EXACT_DAY', session.data.targetType, platform, chatId, sendFn, sendPhotoFn);
+        // Execute Search (Reusing helper function for DRY)
+        await searchAndSendResults(db, session.data.company, normalizedDate, 'EXACT_DAY', platform, chatId, sendFn, sendPhotoFn);
         session.state = 'IDLE';
         return;
     }
 
-    // Payment Registration (Simplified)
+    // 1. Payment Registration
     if (session.state === 'PAY_AMOUNT') {
         const amt = parseInt(text.replace(/,/g, '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-        if (isNaN(amt)) return sendFn(chatId, "❌ مبلغ نامعتبر.");
+        if (isNaN(amt)) return sendFn(chatId, "❌ مبلغ نامعتبر است. لطفاً عدد وارد کنید:", { reply_markup: KEYBOARDS.BACK });
         session.data.amount = amt;
         session.state = 'PAY_PAYEE';
-        return sendFn(chatId, "👤 نام گیرنده وجه:");
+        return sendFn(chatId, "👤 نام گیرنده وجه (ذینفع) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'PAY_PAYEE') {
         session.data.payee = text;
         session.state = 'PAY_DESC';
-        return sendFn(chatId, "📝 بابت:");
+        return sendFn(chatId, "📝 بابت (شرح پرداخت) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
     }
     if (session.state === 'PAY_DESC') {
         const order = {
@@ -237,13 +193,129 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         db.orders.unshift(order);
         saveDb(db);
         session.state = 'IDLE';
-        await sendFn(chatId, `✅ سند #${order.trackingNumber} ثبت شد.`);
-        await notifyRole(db, 'financial', `🔔 پرداخت جدید #${order.trackingNumber}`, 'PAYMENT', order, sendFn, sendPhotoFn);
+        await sendFn(chatId, `✅ سند #${order.trackingNumber} با موفقیت ثبت شد.`);
+        await notifyRole(db, 'financial', `🔔 پرداخت جدید #${order.trackingNumber}\nمبلغ: ${order.totalAmount}\nدرخواست: ${user.fullName}`, 'PAYMENT', order, sendFn, sendPhotoFn);
         return;
     }
 
-    return sendFn(chatId, "دستور نامعتبر.", { reply_markup: KEYBOARDS.MAIN });
+    // 2. Exit Registration
+    if (session.state === 'EXIT_RECIPIENT') {
+        session.data.recipient = text;
+        session.state = 'EXIT_GOODS';
+        return sendFn(chatId, "📦 نام کالا را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
+    }
+    if (session.state === 'EXIT_GOODS') {
+        session.data.goods = text;
+        session.state = 'EXIT_COUNT';
+        return sendFn(chatId, "🔢 تعداد (کارتن) را وارد کنید:", { reply_markup: KEYBOARDS.BACK });
+    }
+    if (session.state === 'EXIT_COUNT') {
+        const permit = {
+            id: Date.now().toString(),
+            permitNumber: (db.settings.currentExitPermitNumber || 1000) + 1,
+            date: new Date().toISOString().split('T')[0],
+            recipientName: session.data.recipient,
+            goodsName: session.data.goods,
+            cartonCount: parseInt(text) || 0,
+            weight: 0,
+            company: session.data.company || db.settings.defaultCompany || '-',
+            status: 'در انتظار تایید مدیرعامل',
+            requester: user.fullName,
+            items: [{ goodsName: session.data.goods, cartonCount: parseInt(text)||0, weight: 0 }],
+            createdAt: Date.now()
+        };
+        db.settings.currentExitPermitNumber = permit.permitNumber;
+        if(!db.exitPermits) db.exitPermits = [];
+        db.exitPermits.push(permit);
+        saveDb(db);
+        session.state = 'IDLE';
+        await sendFn(chatId, `✅ خروج #${permit.permitNumber} ثبت شد.`);
+        await notifyRole(db, 'ceo', `🔔 خروج جدید #${permit.permitNumber}\nگیرنده: ${permit.recipientName}`, 'EXIT', permit, sendFn, sendPhotoFn);
+        return;
+    }
+
+    return sendFn(chatId, "دستور نامعتبر. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
+
+// --- HELPER TO SEARCH AND SEND ARCHIVE RESULTS ---
+const searchAndSendResults = async (db, company, dateQuery, mode, platform, chatId, sendFn, sendPhotoFn) => {
+    // Mode: 'MONTH' (YYYY/MM) or 'EXACT_DAY' (YYYY/MM/DD)
+    
+    // Filter logic
+    const results = (db.orders || []).filter(o => {
+        if (o.payingCompany !== company) return false;
+        
+        // Convert DB ISO to Shamsi Date Object for precise checking
+        // Using toShamsiYearMonth for Month check, or toShamsiFull for Day check
+        // NOTE: Our `toShamsiYearMonth` helper returns YYYY/MM
+        // We need a helper that returns full date
+        
+        // Let's use `new Date(o.date).toLocaleDateString('fa-IR')` but we need to ensure formatting
+        // The safest is to rely on our helper logic which uses Intl
+        // Hacky way: Re-implement date check locally or expand helper.
+        // Expanding helper logic:
+        
+        const shamsiMonth = toShamsiYearMonth(o.date); // 1403/05
+        
+        if (mode === 'MONTH') {
+            return shamsiMonth === dateQuery;
+        } else {
+            // Check Exact Day
+            // Format received is YYYY/MM/DD (Persian)
+            // We need to convert ISO o.date to YYYY/MM/DD Persian
+            try {
+                const d = new Date(o.date);
+                const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' });
+                const parts = formatter.formatToParts(d);
+                const y = parts.find(p=>p.type==='year')?.value;
+                const m = parts.find(p=>p.type==='month')?.value;
+                const d_ = parts.find(p=>p.type==='day')?.value;
+                const shamsiFull = `${y}/${m}/${d_}`;
+                return shamsiFull === dateQuery;
+            } catch(e) { return false; }
+        }
+    });
+
+    if (results.length === 0) {
+        return sendFn(chatId, `❌ هیچ سندی برای تاریخ ${dateQuery} یافت نشد.`);
+    }
+
+    await sendFn(chatId, `✅ تعداد ${results.length} سند یافت شد. در حال ارسال...`);
+
+    // Send Each Result with Image + Full Details + PDF Button
+    for (const item of results) {
+        try {
+            const img = await Renderer.generateRecordImage(item, 'PAYMENT');
+            
+            // Build FULL Detail Caption
+            let caption = `📄 *سند پرداخت #${item.trackingNumber}*\n`;
+            caption += `📅 تاریخ: ${toShamsiFull(item.date)}\n`;
+            caption += `👤 ذینفع: ${item.payee}\n`;
+            caption += `💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n`;
+            caption += `🏢 شرکت: ${item.payingCompany}\n`;
+            caption += `📝 بابت: ${item.description}\n`;
+            caption += `🏦 بانک: ${item.paymentDetails.map(d => d.bankName || d.method).join(' + ')}\n`;
+            caption += `🔄 وضعیت: ${item.status}\n`;
+            if (item.requester) caption += `👤 ثبت کننده: ${item.requester}`;
+
+            // Inline Keyboard for PDF Download
+            const kb = {
+                inline_keyboard: [
+                    [{ text: '📥 دریافت فایل PDF این سند', callback_data: `GEN_PDF_ORDER_${item.id}` }]
+                ]
+            };
+
+            if (img && img.length > 0) {
+                await sendPhotoFn(platform, chatId, img, caption, { reply_markup: kb });
+            } else {
+                await sendFn(chatId, caption, { reply_markup: kb });
+            }
+        } catch (e) { console.error(e); }
+    }
+    
+    await sendFn(chatId, "✅ پایان لیست جستجو.", { reply_markup: KEYBOARDS.MAIN });
+};
+
 
 export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
@@ -262,143 +334,334 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
     // Actions
-    if (data === 'ACT_PAY_NEW') { session.state = 'PAY_AMOUNT'; return sendFn(chatId, "💵 مبلغ (ریال):"); }
-    
-    // --- GENERIC ARCHIVE SELECTORS ---
-    // Mapping: Callback -> TargetType
-    const ARCHIVE_TYPES = {
-        'ACT_ARCHIVE_PAY': 'PAYMENT',
-        'ACT_ARCHIVE_EXIT': 'EXIT',
-        'ACT_ARCHIVE_WH_OUT': 'WH_OUT',
-        'ACT_ARCHIVE_WH_IN': 'WH_IN'
-    };
-
-    if (ARCHIVE_TYPES[data]) {
-        const type = ARCHIVE_TYPES[data];
-        session.data.targetType = type; // Store type in session
-        
-        // Find companies based on type
-        let companies = [];
-        if (type === 'PAYMENT') companies = [...new Set((db.orders||[]).map(o=>o.payingCompany).filter(Boolean))];
-        else if (type === 'EXIT') companies = [...new Set((db.exitPermits||[]).map(o=>o.company).filter(Boolean))];
-        else companies = [...new Set((db.warehouseTransactions||[]).map(o=>o.company).filter(Boolean))];
-
-        if (companies.length === 0) return sendFn(chatId, "❌ شرکتی یافت نشد.");
-        
-        const buttons = companies.map(c => [{ text: c, callback_data: `ARC_SEL_COMP_${c}` }]);
-        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]);
-        
-        return sendFn(chatId, `🏢 شرکت را انتخاب کنید (${type}):`, { reply_markup: { inline_keyboard: buttons } });
+    if (data === 'ACT_PAY_NEW') {
+        session.state = 'PAY_AMOUNT';
+        return sendFn(chatId, "💵 مبلغ پرداخت (ریال):");
+    }
+    if (data === 'ACT_EXIT_NEW') {
+        session.state = 'EXIT_RECIPIENT';
+        return sendFn(chatId, "👤 نام گیرنده کالا:");
     }
 
-    if (data.startsWith('ARC_SEL_COMP_')) {
-        const company = data.replace('ARC_SEL_COMP_', '');
+    // --- ARCHIVE FLOW (BUTTON BASED) ---
+    if (data === 'ACT_PAY_ARCHIVE_REPORT') {
+        const companies = [...new Set((db.orders || []).map(o => o.payingCompany).filter(Boolean))];
+        if (companies.length === 0) return sendFn(chatId, "❌ هیچ شرکتی در سیستم یافت نشد.");
+        
+        const buttons = companies.map(c => [{ text: c, callback_data: `ARCHIVE_COMP_${c}` }]);
+        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_PAY' }]);
+        
+        return sendFn(chatId, "🏢 لطفاً شرکت مورد نظر را انتخاب کنید:", { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('ARCHIVE_COMP_')) {
+        const company = data.replace('ARCHIVE_COMP_', '');
         session.data.company = company;
-        const type = session.data.targetType || 'PAYMENT';
-
-        // Find available years
-        let sourceList = [];
-        if (type === 'PAYMENT') sourceList = (db.orders||[]).filter(o => o.payingCompany === company);
-        else if (type === 'EXIT') sourceList = (db.exitPermits||[]).filter(o => o.company === company);
-        else sourceList = (db.warehouseTransactions||[]).filter(o => o.company === company);
-
-        const years = getAvailableYears(sourceList);
+        
+        // Find available years for this company
+        const companyOrders = (db.orders || []).filter(o => o.payingCompany === company);
+        const years = getAvailableYears(companyOrders);
         if (years.length === 0) years.push('1403');
 
         const buttons = [];
         for(let i=0; i<years.length; i+=3) {
-            const row = years.slice(i, i+3).map(y => ({ text: y, callback_data: `ARC_SEL_YEAR_${y}` }));
+            const row = years.slice(i, i+3).map(y => ({ text: y, callback_data: `ARCHIVE_YEAR_${y}` }));
             buttons.push(row);
         }
-        buttons.push([{ text: '📅 جستجوی روز دقیق', callback_data: 'ARCHIVE_INPUT_DATE' }]);
-        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]);
+        
+        // ADD MANUAL DATE BUTTON HERE
+        buttons.push([{ text: '📅 ورود دستی تاریخ دقیق (روز)', callback_data: 'ARCHIVE_INPUT_DATE' }]);
+        
+        buttons.push([{ text: '🔙 بازگشت', callback_data: 'ACT_PAY_ARCHIVE_REPORT' }]);
 
-        return sendFn(chatId, `🗓 سال را انتخاب کنید (${company}):`, { reply_markup: { inline_keyboard: buttons } });
+        return sendFn(chatId, `📅 شرکت: ${company}\nلطفاً سال مورد نظر را انتخاب کنید یا گزینه ورود دستی را بزنید:`, { reply_markup: { inline_keyboard: buttons } });
     }
-
+    
+    // Handler for Manual Date Button
     if (data === 'ARCHIVE_INPUT_DATE') {
         session.state = 'ARCHIVE_WAIT_DATE';
-        return sendFn(chatId, "⌨️ تاریخ دقیق را وارد کنید (yyyy/mm/dd):");
+        return sendFn(chatId, "⌨️ لطفاً تاریخ دقیق را با فرمت yyyy/mm/dd وارد کنید (مثال: 1403/05/20):");
     }
 
-    if (data.startsWith('ARC_SEL_YEAR_')) {
-        const year = data.replace('ARC_SEL_YEAR_', '');
+    if (data.startsWith('ARCHIVE_YEAR_')) {
+        const year = data.replace('ARCHIVE_YEAR_', '');
         session.data.year = year;
+
+        // Month Buttons (3x4 grid)
         const months = [
             { text: 'فروردین', id: '01' }, { text: 'اردیبهشت', id: '02' }, { text: 'خرداد', id: '03' },
             { text: 'تیر', id: '04' }, { text: 'مرداد', id: '05' }, { text: 'شهریور', id: '06' },
             { text: 'مهر', id: '07' }, { text: 'آبان', id: '08' }, { text: 'آذر', id: '09' },
             { text: 'دی', id: '10' }, { text: 'بهمن', id: '11' }, { text: 'اسفند', id: '12' }
         ];
+
         const buttons = [];
         for(let i=0; i<months.length; i+=3) {
-            const row = months.slice(i, i+3).map(m => ({ text: m.text, callback_data: `ARC_EXEC_MONTH_${m.id}` }));
+            const row = months.slice(i, i+3).map(m => ({ text: m.text, callback_data: `ARCHIVE_EXEC_${m.id}` }));
             buttons.push(row);
         }
-        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]);
-        return sendFn(chatId, `🗓 ماه را انتخاب کنید (${year}):`, { reply_markup: { inline_keyboard: buttons } });
+        buttons.push([{ text: '🔙 بازگشت', callback_data: `ARCHIVE_COMP_${session.data.company}` }]);
+
+        return sendFn(chatId, `🗓 سال: ${year}\nلطفاً ماه مورد نظر را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
     }
 
-    if (data.startsWith('ARC_EXEC_MONTH_')) {
-        const month = data.replace('ARC_EXEC_MONTH_', '');
+    if (data.startsWith('ARCHIVE_EXEC_')) {
+        const month = data.replace('ARCHIVE_EXEC_', '');
         const targetDateStr = `${session.data.year}/${month}`;
-        await sendFn(chatId, `⏳ جستجو در ${targetDateStr}...`);
-        await searchAndSendResults(db, session.data.company, targetDateStr, 'MONTH', session.data.targetType, platform, chatId, sendFn, sendPhotoFn);
+        await sendFn(chatId, `⏳ در حال جستجوی اسناد برای ${targetDateStr} ...`);
+        await searchAndSendResults(db, session.data.company, targetDateStr, 'MONTH', platform, chatId, sendFn, sendPhotoFn);
         return;
     }
 
-    // --- PDF GENERATION CALLBACKS ---
+    // --- GENERATE SINGLE PDF FOR ORDER ---
     if (data.startsWith('GEN_PDF_ORDER_')) {
         const id = data.replace('GEN_PDF_ORDER_', '');
-        const item = db.orders.find(o => o.id === id);
-        if(item) await sendPdf(item, 'PAYMENT', chatId, sendFn, sendDocFn);
-    }
-    if (data.startsWith('GEN_PDF_EXIT_')) {
-        const id = data.replace('GEN_PDF_EXIT_', '');
-        const item = db.exitPermits.find(o => o.id === id);
-        if(item) await sendPdf(item, 'EXIT', chatId, sendFn, sendDocFn);
-    }
-    if (data.startsWith('GEN_PDF_BIJAK_')) {
-        const id = data.replace('GEN_PDF_BIJAK_', '');
-        const item = db.warehouseTransactions.find(o => o.id === id);
-        if(item) await sendPdf(item, 'BIJAK', chatId, sendFn, sendDocFn);
-    }
-
-    // --- CARTABLES (Existing Logic) ---
-    if (data === 'ACT_PAY_CARTABLE') { /* ... (Keep existing payment cartable) ... */ }
-    if (data === 'ACT_EXIT_CARTABLE') { /* ... (Keep existing exit cartable) ... */ }
-    if (data.startsWith('APP_PAY_') || data.startsWith('REJ_PAY_')) { /* ... (Keep existing approvals) ... */ }
-    
-    // --- LEGACY REPORTS ---
-    if (data === 'WH_RPT_STOCK') { /* ... Stock PDF ... */ }
-};
-
-const sendPdf = async (item, type, chatId, sendFn, sendDocFn) => {
-    await sendFn(chatId, "⏳ در حال تولید PDF...");
-    try {
-        let pdf = null;
-        let filename = 'document.pdf';
+        const order = db.orders.find(o => o.id === id);
         
-        if (type === 'PAYMENT') {
-            pdf = await Renderer.generateVoucherPDF(item);
-            filename = `Voucher_${item.trackingNumber}.pdf`;
-        } else if (type === 'EXIT') {
-            pdf = await Renderer.generateExitPermitPDF(item);
-            filename = `Permit_${item.permitNumber}.pdf`;
-        } else if (type === 'BIJAK') {
-            pdf = await Renderer.generateBijakPDF(item);
-            filename = `Bijak_${item.number}.pdf`;
+        if (!order) {
+            return sendFn(chatId, "❌ سند مورد نظر یافت نشد.");
         }
 
-        if (pdf && pdf.length > 100) {
-            await sendDocFn(chatId, pdf, filename, 'فایل PDF سند');
-        } else {
-            await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+        await sendFn(chatId, "⏳ در حال تولید فایل PDF...");
+        
+        try {
+            const pdfBuffer = await Renderer.generateVoucherPDF(order);
+            if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 100) {
+                await sendDocFn(chatId, pdfBuffer, `Voucher_${order.trackingNumber}.pdf`, `سند #${order.trackingNumber}`);
+            } else {
+                await sendFn(chatId, "⚠️ خطا در تولید فایل PDF.");
+            }
+        } catch (e) {
+            console.error("PDF Gen Error:", e);
+            await sendFn(chatId, "⚠️ خطا در تولید فایل PDF.");
         }
-    } catch (e) {
-        console.error("PDF Error:", e);
-        await sendFn(chatId, "⚠️ خطا در تولید PDF.");
+        return;
+    }
+
+    // --- CARTABLES (UNCHANGED) ---
+    if (data === 'ACT_PAY_CARTABLE') {
+        await sendFn(chatId, "⏳ در حال دریافت کارتابل...");
+        let items = [];
+        
+        // ADMIN sees ALL pending
+        if (user.role === 'admin') {
+            items = (db.orders || []).filter(o => 
+                o.status === 'در انتظار بررسی مالی' || 
+                o.status === 'تایید مالی / در انتظار مدیریت' || 
+                o.status === 'تایید مدیریت / در انتظار مدیرعامل' ||
+                o.status.includes('ابطال')
+            );
+        } else {
+            // Normal roles
+            if (user.role === 'financial') items = (db.orders || []).filter(o => o.status === 'در انتظار بررسی مالی' || o.status.includes('ابطال'));
+            if (user.role === 'manager') items = (db.orders || []).filter(o => o.status === 'تایید مالی / در انتظار مدیریت');
+            if (user.role === 'ceo') items = (db.orders || []).filter(o => o.status === 'تایید مدیریت / در انتظار مدیرعامل');
+        }
+        
+        if (items.length === 0) return sendFn(chatId, "✅ کارتابل پرداخت خالی است.");
+        
+        for (const item of items) {
+            try {
+                // Try generating image
+                const img = await Renderer.generateRecordImage(item, 'PAYMENT');
+                const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] };
+                
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, `سند #${item.trackingNumber}\nوضعیت: ${item.status}`, { reply_markup: kb });
+                } else {
+                    const txt = `📋 *دستور پرداخت #${item.trackingNumber}*\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📝 بابت: ${item.description}\n⏳ وضعیت: ${item.status}`;
+                    await sendFn(chatId, txt, { reply_markup: kb });
+                }
+            } catch (e) {
+                console.error("Error sending item:", e);
+                await sendFn(chatId, `خطا در نمایش سند #${item.trackingNumber}. اما می‌توانید اقدام کنید.`, { 
+                    reply_markup: { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_PAY_${item.id}` }, { text: '❌ رد', callback_data: `REJ_PAY_${item.id}` }]] } 
+                });
+            }
+        }
+        return;
+    }
+
+    if (data === 'ACT_EXIT_CARTABLE') {
+        let items = [];
+        if (user.role === 'admin') {
+            items = (db.exitPermits || []).filter(p => 
+                p.status === 'در انتظار تایید مدیرعامل' || 
+                p.status === 'در انتظار مدیر کارخانه' || 
+                p.status === 'در انتظار تایید انبار' ||
+                p.status === 'در انتظار خروج'
+            );
+        } else {
+            if (user.role === 'ceo') items = (db.exitPermits || []).filter(p => p.status === 'در انتظار تایید مدیرعامل');
+            if (user.role === 'factory_manager') items = (db.exitPermits || []).filter(p => p.status === 'در انتظار مدیر کارخانه');
+            if (user.role === 'warehouse_keeper') items = (db.exitPermits || []).filter(p => p.status === 'در انتظار تایید انبار');
+            if (user.role === 'security_head') items = (db.exitPermits || []).filter(p => p.status === 'در انتظار خروج');
+        }
+
+        if (items.length === 0) return sendFn(chatId, "✅ کارتابل خروج خالی است.");
+
+        for (const item of items) {
+            try {
+                const img = await Renderer.generateRecordImage(item, 'EXIT');
+                const kb = { inline_keyboard: [[{ text: '✅ تایید', callback_data: `APP_EXIT_${item.id}` }, { text: '❌ رد', callback_data: `REJ_EXIT_${item.id}` }]] };
+                
+                if (img && img.length > 0) {
+                    await sendPhotoFn(platform, chatId, img, `مجوز #${item.permitNumber}\nگیرنده: ${item.recipientName}\nوضعیت: ${item.status}`, { reply_markup: kb });
+                } else {
+                    await sendFn(chatId, `🚛 *مجوز خروج #${item.permitNumber}*\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n⏳ وضعیت: ${item.status}`, { reply_markup: kb });
+                }
+            } catch (e) { console.error(e); }
+        }
+        return;
+    }
+
+    // --- APPROVALS ---
+    if (data.startsWith('APP_PAY_')) {
+        const id = data.replace('APP_PAY_', '');
+        const order = db.orders.find(o => o.id === id);
+        if (order) {
+            let next = '';
+            if (order.status === 'در انتظار بررسی مالی') next = 'تایید مالی / در انتظار مدیریت';
+            else if (order.status === 'تایید مالی / در انتظار مدیریت') next = 'تایید مدیریت / در انتظار مدیرعامل';
+            else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') next = 'تایید نهایی';
+            else if (order.status.includes('ابطال')) next = 'باطل شده'; // Handle revocation flow simply
+            
+            if (next) {
+                order.status = next;
+                saveDb(db);
+                sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${next}`);
+            } else {
+                sendFn(chatId, `ℹ️ وضعیت قابل تغییر نیست.`);
+            }
+        }
+    }
+    
+    if (data.startsWith('REJ_PAY_')) {
+        const id = data.replace('REJ_PAY_', '');
+        const order = db.orders.find(o => o.id === id);
+        if (order) {
+            order.status = 'رد شده';
+            saveDb(db);
+            sendFn(chatId, `❌ سند رد شد.`);
+        }
+    }
+
+    if (data.startsWith('APP_EXIT_')) {
+        const id = data.replace('APP_EXIT_', '');
+        const permit = db.exitPermits.find(p => p.id === id);
+        if (permit) {
+            let next = '';
+            if (permit.status === 'در انتظار تایید مدیرعامل') next = 'در انتظار مدیر کارخانه';
+            else if (permit.status === 'در انتظار مدیر کارخانه') next = 'در انتظار تایید انبار';
+            else if (permit.status === 'در انتظار تایید انبار') next = 'در انتظار خروج';
+            else if (permit.status === 'در انتظار خروج') next = 'خارج شده (بایگانی)';
+            
+            if (next) {
+                permit.status = next;
+                saveDb(db);
+                sendFn(chatId, `✅ تایید شد. وضعیت جدید: ${next}`);
+            }
+        }
+    }
+
+    // --- PDF REPORTS (SAFE MODE) ---
+    
+    const sendPdfSafe = async (generatePromise, filename, caption) => {
+        try {
+            sendFn(chatId, "⏳ در حال تولید گزارش PDF...");
+            const pdf = await generatePromise;
+            
+            // CRITICAL FIX: Check buffer validity before sending
+            if (pdf && Buffer.isBuffer(pdf) && pdf.length > 100) {
+                await sendDocFn(chatId, pdf, filename, caption);
+            } else {
+                console.error("PDF Generation Failed: Empty or invalid buffer returned");
+                sendFn(chatId, "⚠️ خطا در تولید فایل PDF (فایل خالی است). لطفاً لاگ سرور را بررسی کنید.");
+            }
+        } catch (e) {
+            console.error("PDF Send Error:", e);
+            sendFn(chatId, `❌ خطا در ارسال گزارش: ${e.message}`);
+        }
+    };
+
+    // 1. WAREHOUSE STOCK PDF
+    if (data === 'WH_RPT_STOCK') {
+        const items = db.warehouseItems || [];
+        const txs = db.warehouseTransactions || [];
+        const stockData = items.map(item => {
+            let qty = 0;
+            txs.forEach(tx => {
+                if (tx.status !== 'REJECTED') {
+                    const line = tx.items.find(i => i.itemId === item.id);
+                    if (line) {
+                        if (tx.type === 'IN') qty += line.quantity;
+                        else qty -= line.quantity;
+                    }
+                }
+            });
+            return [item.name, item.code || '-', item.unit, qty];
+        });
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش موجودی انبار', ['نام کالا', 'کد کالا', 'واحد', 'موجودی فعلی'], stockData), 'Stock_Report.pdf', 'گزارش موجودی انبار');
+    }
+
+    // 2. WAREHOUSE KARDEX
+    if (data === 'WH_RPT_KARDEX') {
+        const txs = (db.warehouseTransactions || []).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
+        const rows = txs.map(tx => [tx.type === 'IN' ? 'ورود' : 'خروج', tx.number || tx.proformaNumber || '-', new Date(tx.date).toLocaleDateString('fa-IR'), tx.items.length, tx.company]);
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش گردش انبار (کاردکس کلی)', ['نوع', 'شماره سند', 'تاریخ', 'تعداد اقلام', 'شرکت'], rows), 'Kardex_Report.pdf', 'گزارش گردش انبار');
+    }
+
+    // 3. WAREHOUSE BIJAKS
+    if (data === 'WH_RPT_BIJAKS') {
+        const txs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT').slice(0, 20);
+        const rows = txs.map(tx => [tx.number, new Date(tx.date).toLocaleDateString('fa-IR'), tx.recipientName, tx.driverName || '-', tx.status]);
+        await sendPdfSafe(Renderer.generateReportPDF('لیست بیجک‌های خروجی اخیر', ['شماره', 'تاریخ', 'گیرنده', 'راننده', 'وضعیت'], rows), 'Bijaks_Report.pdf', 'بیجک‌های خروجی');
+    }
+
+    // 4. TRADE REPORTS
+    if (data === 'TRD_RPT_ALLOCATION') {
+        const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
+        const rows = records.map(r => [r.fileNumber, r.goodsName, r.company, (r.stages['در صف تخصیص ارز']?.isCompleted ? 'در صف' : 'تخصیص یافته'), `${r.mainCurrency} ${r.freightCost}`]);
+        await sendPdfSafe(Renderer.generateReportPDF('گزارش صف تخصیص ارز', ['شماره پرونده', 'کالا', 'شرکت', 'وضعیت', 'مبلغ'], rows, true), 'Allocation_Report.pdf', 'گزارش صف تخصیص');
+    }
+
+    if (data === 'TRD_RPT_ACTIVE') {
+        const records = (db.tradeRecords || []).filter(r => r.status !== 'Completed');
+        const rows = records.map(r => [r.fileNumber, r.goodsName, r.sellerName, r.company]);
+        await sendPdfSafe(Renderer.generateReportPDF('لیست پرونده‌های فعال بازرگانی', ['شماره', 'کالا', 'فروشنده', 'شرکت'], rows), 'Active_Files.pdf', 'لیست پرونده‌ها');
+    }
+
+    // 5. EXIT RECENT
+    if (data === 'RPT_PDF_EXIT_RECENT') {
+        const recents = (db.exitPermits || []).slice(0, 20).map(p => [p.permitNumber, p.recipientName, p.goodsName, p.date, p.status]);
+        await sendPdfSafe(Renderer.generateReportPDF('لیست ۲۰ مجوز خروج اخیر', ['شماره', 'گیرنده', 'کالا', 'تاریخ', 'وضعیت'], recents), 'Recent_Exits.pdf', 'گزارش خروج');
     }
 };
 
-const notifyRole = async (db, role, caption, type, data, sendFn, sendPhotoFn) => { /* ... (Existing) ... */ };
+const notifyRole = async (db, role, caption, type, data, sendFn, sendPhotoFn) => {
+    const users = db.users.filter(u => u.role === role || u.role === 'admin');
+    for (const u of users) {
+        if (u.telegramChatId) {
+            try {
+                const img = await Renderer.generateRecordImage(data, type);
+                const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
+                if (img && img.length > 0) {
+                    await sendPhotoFn('telegram', u.telegramChatId, img, caption, { reply_markup: kb });
+                } else {
+                    await sendFn(u.telegramChatId, caption, { reply_markup: kb });
+                }
+            } catch(e){}
+        }
+        if (u.baleChatId) {
+            try {
+                const img = await Renderer.generateRecordImage(data, type);
+                const kb = { inline_keyboard: [[{ text: '✅ بررسی', callback_data: `ACT_${type}_CARTABLE` }]] };
+                if (img && img.length > 0) {
+                    await sendPhotoFn('bale', u.baleChatId, img, caption, { reply_markup: kb });
+                } else {
+                    await sendFn(u.baleChatId, caption, { reply_markup: kb });
+                }
+            } catch(e){}
+        }
+    }
+};
