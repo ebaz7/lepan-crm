@@ -79,7 +79,6 @@ export const deleteSecurityIncident = async (id: string): Promise<SecurityIncide
 export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
 
-// Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
     try { 
         const url = company ? `/next-tracking-number?company=${encodeURIComponent(company)}` : '/next-tracking-number';
@@ -94,7 +93,26 @@ export const getNextTrackingNumber = async (company?: string): Promise<number> =
 export const getMessages = async (): Promise<ChatMessage[]> => { const res = await apiCall<ChatMessage[]>('/chat'); return safeArray(res); };
 export const sendMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>('/chat', 'POST', message); };
 export const updateMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${message.id}`, 'PUT', message); };
-export const deleteMessage = async (id: string): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${id}`, 'DELETE'); };
+
+export const deleteMessage = async (id: string, forUser?: string): Promise<ChatMessage[]> => {
+    // If forUser is provided, it's a "delete for me" (Soft Delete)
+    if (forUser) {
+        // We need to fetch the message, update hiddenFor, and save back
+        const messages = await getMessages();
+        const msg = messages.find(m => m.id === id);
+        if (msg) {
+            const hiddenFor = msg.hiddenFor || [];
+            if (!hiddenFor.includes(forUser)) {
+                hiddenFor.push(forUser);
+                return await updateMessage({ ...msg, hiddenFor });
+            }
+        }
+        return messages;
+    } else {
+        // Hard Delete (Delete for everyone)
+        return await apiCall<ChatMessage[]>(`/chat/${id}`, 'DELETE'); 
+    }
+};
 
 export const getGroups = async (): Promise<ChatGroup[]> => { const res = await apiCall<ChatGroup[]>('/groups'); return safeArray(res); };
 export const createGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>('/groups', 'POST', group); };
