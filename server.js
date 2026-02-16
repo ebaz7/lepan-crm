@@ -154,7 +154,7 @@ app.delete('/api/exit-permits/:id', (req, res) => {
     if (!db.exitPermits) { db.exitPermits = []; return res.json([]); }
     
     const initialLength = db.exitPermits.length;
-    // Compare as strings to ensure types match
+    // Compare as strings to ensure types match (Fixes string vs number issue)
     db.exitPermits = db.exitPermits.filter(p => String(p.id) !== String(idToDelete));
     
     // Fallback: if not found by ID, try deleting by permitNumber (legacy data support)
