@@ -266,14 +266,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         };
 
         const list = [];
-        list.push({ type: 'private', id: currentUser.username, name: 'پیام‌های ذخیره شده', avatar: null, isGroup: false, isSaved: true });
-        users.filter(u => u.username !== currentUser.username).forEach(u => {
-            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar, isGroup: false, isSaved: false });
-        });
-        list.push({ type: 'public', id: null, name: 'کانال عمومی', avatar: null, isGroup: true, isSaved: false });
-        groups.forEach(g => {
-            list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isGroup: true, isSaved: false });
-        });
+        
+        // Filter based on Sidebar Tab
+        if (sidebarTab === 'private') {
+            list.push({ type: 'private', id: currentUser.username, name: 'پیام‌های ذخیره شده', avatar: null, isGroup: false, isSaved: true });
+            users.filter(u => u.username !== currentUser.username).forEach(u => {
+                list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar, isGroup: false, isSaved: false });
+            });
+        } else {
+             // For 'groups' and 'tasks', show groups and public channel
+             list.push({ type: 'public', id: null, name: 'کانال عمومی', avatar: null, isGroup: true, isSaved: false });
+             groups.forEach(g => {
+                list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isGroup: true, isSaved: false });
+             });
+        }
 
         const listWithMeta = list.map(item => {
             const meta = getChannelMeta(item.type as any, item.id);
@@ -287,7 +293,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return b.timestamp - a.timestamp;
         });
 
-    }, [messages, users, groups, searchTerm, currentUser.username, lastReadMap]);
+    }, [messages, users, groups, searchTerm, currentUser.username, lastReadMap, sidebarTab]);
 
     // --- ACTION HANDLERS ---
     
