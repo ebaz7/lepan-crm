@@ -52,38 +52,69 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
-  // --- NAVIGATION HISTORY MANAGER ---
-  const safePushState = (state: any, title: string, url?: string) => { 
-      // Always use history API for better UX even in PWA
-      try { 
-          if (url && window.location.protocol !== 'blob:') {
-            window.history.pushState(state, title, url);
-          } else {
-            window.history.pushState(state, title); 
-          }
-      } catch (e) { 
-          // Fallback if URL push fails (e.g. cross-origin issues in some environments)
-          try { window.history.pushState(state, title); } catch(e2) { console.error("Nav Error", e); }
-      } 
-  };
+  // --- GLOBAL BACK BUTTON HANDLER ---
+  useEffect(() => {
+    // Initial handling of Hash on load
+    const handleInitialHash = () => {
+        const hash = window.location.hash.replace('#', '');
+        if (hash) {
+            // If hash is a tab, set it
+            const tabName = hash.split('/')[0]; // Handle nested like chat/user_id
+            if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(tabName)) {
+                setActiveTabState(tabName);
+            }
+        } else {
+            // Default to dashboard and set hash
+            try {
+                if (window.location.protocol !== 'blob:') {
+                    window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
+                } else {
+                    window.history.replaceState({ tab: 'dashboard' }, '');
+                }
+            } catch (e) {
+                // Fallback for strict environments
+                try { window.history.replaceState({ tab: 'dashboard' }, ''); } catch(e2) {}
+            }
+        }
+    };
 
-  const safeReplaceState = (state: any, title: string, url?: string) => { 
-      try { 
-          if (url && window.location.protocol !== 'blob:') {
-            window.history.replaceState(state, title, url);
+    handleInitialHash();
+
+    // Handle Back Button (PopState)
+    const handlePopState = (event: PopStateEvent) => {
+        // If we have state with a tab, use it
+        if (event.state && event.state.tab) {
+            setActiveTabState(event.state.tab);
+        } else {
+            // Fallback to parsing hash if state is missing (e.g. external link)
+            const hash = window.location.hash.replace('#', '');
+            if (hash && hash !== 'menu' && !hash.includes('/')) {
+                 setActiveTabState(hash);
+            } else if (!hash) {
+                 // If no hash, we might be at root, show dashboard
+                 setActiveTabState('dashboard');
+            }
+            // Note: We ignore 'menu' hash here because Layout.tsx handles closing the menu
+            // We ignore hashes with '/' (like chat/id) because components handle closing those views
+        }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Function to change tab and push history
+  const handleSetActiveTab = (tab: string) => {
+      setActiveTabState(tab);
+      // Push new state
+      try {
+          if (window.location.protocol !== 'blob:') {
+               window.history.pushState({ tab }, '', `#${tab}`);
           } else {
-            window.history.replaceState(state, title); 
+               window.history.pushState({ tab }, '');
           }
-      } catch (e) { 
-          // Fallback
-          try { window.history.replaceState(state, title); } catch(e2) { console.error("Nav Replace Error", e); }
-      } 
-  };
-  
-  const setActiveTab = (tab: string, addToHistory = true) => { 
-      setActiveTabState(tab); 
-      if (addToHistory) {
-          safePushState({ tab }, '', `#${tab}`);
+      } catch (e) {
+          try { window.history.pushState({ tab }, ''); } catch(e2) {}
       }
   };
 
@@ -94,7 +125,7 @@ function App() {
                 const data = notification.notification.data;
                 if (data && data.url) {
                     const target = data.url.replace('#', '');
-                    setActiveTab(target);
+                    handleSetActiveTab(target);
                 }
             });
         } catch(e) { console.error("Push Listener Error", e); }
@@ -104,15 +135,10 @@ function App() {
   // --- HEARTBEAT FOR ONLINE STATUS ---
   useEffect(() => {
       if (currentUser) {
-          // Send heartbeat every minute to update lastSeen
           const heartbeat = setInterval(() => {
-              // Fire and forget update to avoid full re-render loop
               updateUser({ ...currentUser, lastSeen: Date.now() }).catch(err => console.error("Heartbeat fail", err));
           }, 60000);
-          
-          // Initial update on load
           updateUser({ ...currentUser, lastSeen: Date.now() });
-
           return () => clearInterval(heartbeat);
       }
   }, [currentUser]);
@@ -156,38 +182,6 @@ function App() {
       setBackgroundJobs(prev => prev.slice(1));
       processingJobRef.current = false;
   };
-
-  // --- BACK BUTTON HANDLER ---
-  useEffect(() => {
-    // Initial Load Handler
-    const hash = window.location.hash.replace('#', '').split('/')[0]; // Simple clean
-    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(hash)) {
-        setActiveTabState(hash); 
-        safeReplaceState({ tab: hash }, '', `#${hash}`);
-    } else { 
-        safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); 
-    }
-
-    // PopState Handler (Back Button)
-    const handlePopState = (event: PopStateEvent) => {
-        // If the state has specific 'tab' property, switch to it
-        if (event.state && event.state.tab) {
-            setActiveTabState(event.state.tab);
-        } else {
-            // Fallback: Check Hash
-            const currentHash = window.location.hash.replace('#', '').split('/')[0];
-            if (currentHash && currentHash !== 'menu') { // Avoid menu hash if handled locally
-                 setActiveTabState(currentHash);
-            } else {
-                 // Really default to dashboard if no state and no valid hash
-                 setActiveTabState('dashboard');
-            }
-        }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   // ... (Rest of the component logic - No Change) ...
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
@@ -258,15 +252,15 @@ function App() {
   useEffect(() => { const handleAppStateChange = async (state: any) => { if (state.isActive && currentUser) { await loadData(true); } }; let listener: any; if (Capacitor.isNativePlatform()) { CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; }); } return () => { if (listener) listener.remove(); }; }, [currentUser]);
   useEffect(() => { if (currentUser) { loadData(false); const intervalId = setInterval(() => loadData(true), 5000); return () => clearInterval(intervalId); } }, [currentUser]);
 
-  const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); setActiveTab('manage'); };
-  const handleLogin = (user: User) => { setCurrentUser(user); setActiveTab('dashboard'); };
-  const handleViewArchive = () => { setManageOrdersInitialTab('archive'); setDashboardStatusFilter(null); setActiveTab('manage'); };
-  const handleDashboardFilter = (status: any) => { setDashboardStatusFilter(status); setManageOrdersInitialTab('current'); setActiveTab('manage'); };
+  const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); handleSetActiveTab('manage'); };
+  const handleLogin = (user: User) => { setCurrentUser(user); handleSetActiveTab('dashboard'); };
+  const handleViewArchive = () => { setManageOrdersInitialTab('archive'); setDashboardStatusFilter(null); handleSetActiveTab('manage'); };
+  const handleDashboardFilter = (status: any) => { setDashboardStatusFilter(status); setManageOrdersInitialTab('current'); handleSetActiveTab('manage'); };
 
-  const handleGoToPaymentApprovals = () => { let filter: any = 'pending_all'; if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial'; else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager'; else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo'; setDashboardStatusFilter(filter); setManageOrdersInitialTab('current'); setActiveTab('manage'); };
-  const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
+  const handleGoToPaymentApprovals = () => { let filter: any = 'pending_all'; if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial'; else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager'; else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo'; setDashboardStatusFilter(filter); setManageOrdersInitialTab('current'); handleSetActiveTab('manage'); };
+  const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); handleSetActiveTab('manage-exit'); };
   const [warehouseInitialTab, setWarehouseInitialTab] = useState<'dashboard' | 'approvals'>('dashboard');
-  const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); setActiveTab('warehouse'); };
+  const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); handleSetActiveTab('warehouse'); };
 
   return (
     <>
@@ -275,7 +269,7 @@ function App() {
         ) : (
             <Layout 
             activeTab={activeTab} 
-            setActiveTab={(t) => { setActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); }} 
+            setActiveTab={(t) => { handleSetActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); }} 
             currentUser={currentUser} 
             onLogout={handleLogout} 
             notifications={notifications} 
@@ -315,7 +309,7 @@ function App() {
                     {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} />}
                     {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                     {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} />}
-                    {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
+                    {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => handleSetActiveTab('manage-exit')} currentUser={currentUser} />}
                     {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} />}
                     {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}

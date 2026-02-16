@@ -20,7 +20,6 @@ interface ManageOrdersProps {
 }
 
 const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, currentUser, initialTab = 'current', settings, statusFilter }) => {
-  // CRITICAL FIX: Ensure orders is always an array to prevent "filter is not a function"
   const safeOrders = Array.isArray(orders) ? orders : [];
 
   const [activeTab, setActiveTab] = useState<'current' | 'archive'>(initialTab);
@@ -39,7 +38,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   
   const [currentStatusFilter, setCurrentStatusFilter] = useState<any>(statusFilter || null);
 
-  // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
       const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -50,7 +48,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   // --- HISTORY STATE FOR VIEW MODAL ---
   useEffect(() => {
       const handlePopState = (event: PopStateEvent) => {
-          // If popped back and we were viewing an order, close it
           if (viewOrder) {
               setViewOrder(null);
           }
@@ -61,23 +58,21 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
 
   const openOrderView = (order: PaymentOrder) => {
       if (isMobile) {
-          try {
-              if (window.location.protocol !== 'blob:') {
-                  window.history.pushState({ view: 'order_detail', orderId: order.id }, '', '#manage/view');
-              } else {
-                  window.history.pushState({ view: 'order_detail' }, '');
-              }
-          } catch(e) {}
+          if (window.location.protocol !== 'blob:') {
+              window.history.pushState({ view: 'order_detail', orderId: order.id }, '', '#manage/view');
+          } else {
+              window.history.pushState({ view: 'order_detail' }, '');
+          }
       }
       setViewOrder(order);
   };
 
   const closeOrderView = () => {
       if (isMobile && viewOrder) {
-          // If we manually close, go back to revert URL state if it was pushed
           window.history.back(); 
+      } else {
+          setViewOrder(null);
       }
-      setViewOrder(null);
   };
 
   useEffect(() => {
@@ -144,7 +139,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.REVOKED || isRevocationStatus(order.status)) return false;
       
       if (currentUser.role === UserRole.USER) {
-          // If User created it and it's still pending, they can delete it
           return permissions.canDeleteOwn && order.requester === currentUser.fullName && (order.status === OrderStatus.PENDING || order.status === OrderStatus.REJECTED);
       }
       if (permissions.canDeleteAll) return true;
@@ -177,8 +171,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
         try {
             const updatedOrders = await updateOrderStatus(id, nextStatus, currentUser); 
             refreshData(); 
-            // In mobile, we might want to stay in view, or close it. Usually better to close.
-            if(isMobile) window.history.back(); // Triggers closeOrderView via popstate
+            if(isMobile) window.history.back(); 
             else setViewOrder(null);
             
             const order = updatedOrders.find(o => o.id === id);
@@ -226,7 +219,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
           await deleteOrder(id);
           await refreshData();
       } catch(e: any) { 
-          console.error("Delete failed", e);
           const msg = e.message || 'خطا در ارتباط با سرور';
           alert("خطا در حذف: " + msg); 
       }
@@ -235,7 +227,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
 
   const handleEdit = (order: PaymentOrder) => {
       setEditingOrder(order);
-      // Close view first if mobile
       if (isMobile) window.history.back();
       else setViewOrder(null);
   };
@@ -244,7 +235,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       if (filteredOrders.length === 0) { alert("هیچ سفارشی موجود نیست."); return; }
       const headers = ["شماره دستور", "تاریخ", "گیرنده", "مبلغ", "شرکت پرداخت کننده", "بانک/روش", "شرح", "وضعیت", "درخواست کننده"];
       const rows = filteredOrders.map(o => {
-          // SAFE GUARD for paymentDetails
           const details = Array.isArray(o.paymentDetails) ? o.paymentDetails : [];
           const banks = details.map(d => d.bankName || d.method).join(', ');
           return [o.trackingNumber, formatDate(o.date), o.payee, o.totalAmount, o.payingCompany || '-', banks, o.description, getStatusLabel(o.status), o.requester];
@@ -265,7 +255,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   };
 
   const getOrdersForTab = () => {
-      // Use safeOrders instead of orders
       let tabOrders = safeOrders;
       if (activeTab === 'archive') {
           tabOrders = safeOrders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -311,7 +300,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
     if (companyFilter && order.payingCompany !== companyFilter) return false;
 
     const term = searchTerm.toLowerCase();
-    // Safety check for strings
     const payee = order.payee || '';
     const desc = order.description || '';
     const track = order.trackingNumber ? order.trackingNumber.toString() : '';
@@ -453,7 +441,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                           const isRevocation = isRevocationStatus(order.status);
                           const rowClass = isRevocation ? "bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500 transition-colors" : "hover:bg-gray-50/80 transition-colors";
                           
-                          // SAFE ACCESS for paymentDetails map
                           const paymentDetails = Array.isArray(order.paymentDetails) ? order.paymentDetails : [];
 
                           return (

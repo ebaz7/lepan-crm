@@ -152,7 +152,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   // --- HANDLE MOBILE MENU BACK NAVIGATION (Enhanced) ---
   const toggleMobileMenu = () => {
       if (!showMobileMenu) {
-          window.history.pushState({ menu: 'open' }, '', '#menu');
+          if (window.location.protocol !== 'blob:') {
+               window.history.pushState({ menu: 'open' }, '', '#menu');
+          } else {
+               window.history.pushState({ menu: 'open' }, '');
+          }
           setShowMobileMenu(true);
       } else {
           window.history.back(); // This triggers popstate to close menu
@@ -163,7 +167,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       const handlePopState = (event: PopStateEvent) => {
           if (showMobileMenu) {
               setShowMobileMenu(false);
-              // We consumed the popstate for menu closing, fine.
           }
       };
       window.addEventListener('popstate', handlePopState);

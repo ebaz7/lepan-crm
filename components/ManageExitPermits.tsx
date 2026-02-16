@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, UserRole, SystemSettings } from '../types';
 import { getExitPermits, updateExitPermitStatus, deleteExitPermit, editExitPermit } from '../services/storageService';
@@ -28,11 +29,35 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     useEffect(() => { loadData(); }, []);
     
+    // --- HISTORY STATE FOR VIEW MODAL ---
     useEffect(() => {
-        if (statusFilter) {
-            // Logic to switch tab based on external filter requests
+        const handlePopState = (event: PopStateEvent) => {
+            if (viewPermit) {
+                setViewPermit(null);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [viewPermit]);
+
+    const openPermitView = (permit: ExitPermit) => {
+        if (isMobile) {
+            if (window.location.protocol !== 'blob:') {
+                 window.history.pushState({ view: 'permit_detail', permitId: permit.id }, '', '#manage-exit/view');
+            } else {
+                 window.history.pushState({ view: 'permit_detail' }, '');
+            }
         }
-    }, [statusFilter]);
+        setViewPermit(permit);
+    };
+
+    const closePermitView = () => {
+        if (isMobile && viewPermit) {
+             window.history.back(); 
+        } else {
+             setViewPermit(null);
+        }
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -48,7 +73,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    // ... (isMyTurn, getActionLabel, filtering logic remains same)
     const isMyTurn = (p: ExitPermit) => {
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
         switch (currentUser.role) {
@@ -157,6 +181,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 setProcessingId(null);
                 setAutoSendPermit(null);
                 loadData();
+                if(isMobile) closePermitView();
+                else setViewPermit(null);
             }, 2500);
 
         } catch (e) {
@@ -192,7 +218,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
-        // ... (Keep existing notification logic)
         const element = document.getElementById(`print-permit-autosend-${permit.id}`);
         if (!element) return;
         try {
@@ -200,7 +225,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const base64 = canvas.toDataURL('image/png').split(',')[1];
             
-            // ... (Target logic same as previous) ...
             const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
             let g1WA = companyConfig?.warehouseGroup;
@@ -269,7 +293,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         if (status === 'done') colorClass = 'bg-green-500 text-white border-green-600 shadow-md';
         if (status === 'rejected') colorClass = 'bg-red-500 text-white border-red-600';
 
-        // Simplify for mobile
         if (isMobile) {
             return (
                 <div className={`w-2 h-2 rounded-full ${colorClass.includes('bg-green') ? 'bg-green-500' : colorClass.includes('bg-blue') ? 'bg-blue-500 animate-pulse' : colorClass.includes('bg-red') ? 'bg-red-500' : 'bg-gray-300'}`}></div>
@@ -286,7 +309,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         );
     };
 
-    // Mobile Card Renderer
     const MobilePermitCard = ({ p, canAct }: { p: ExitPermit, canAct: boolean }) => (
         <div className={`bg-white rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
             <div className="flex justify-between items-start mb-2">
@@ -318,7 +340,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                          {getActionLabel(p.status)}
                      </button>
                 )}
-                <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+                <button onClick={() => openPermitView(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
                 )}
@@ -366,7 +388,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                     <CheckCircle size={16}/> {getActionLabel(p.status)}
                                 </button>
                             )}
-                            <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+                            <button onClick={() => openPermitView(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
                                 <>
                                     <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
@@ -376,7 +398,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         </div>
                     </div>
 
-                    {/* Timeline */}
                     <div className="relative mt-6 px-2 pb-2">
                         <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 -z-0"></div>
                         <div className="flex justify-between relative z-10">
@@ -401,7 +422,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     return (
         <div className="space-y-6 pb-20 animate-fade-in">
-             {/* Hidden Render */}
              {autoSendPermit && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-autosend-${autoSendPermit.id}`}>
@@ -410,7 +430,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 </div>
             )}
 
-            {/* Header / Tabs */}
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
                     <h1 className="text-xl font-black text-gray-800 flex items-center gap-2"><Truck className="text-teal-600"/> کارتابل خروج</h1>
@@ -445,7 +464,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 </div>
             </div>
 
-            {/* List */}
             <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} min-h-[300px]`}>
                 {loading ? (
                     <div className="text-center py-20 text-gray-400 flex flex-col items-center gap-2">
@@ -461,19 +479,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 )}
             </div>
 
-            {/* Modals */}
             {viewPermit && (
                 <div className={isMobile ? "fixed inset-0 z-[100] bg-white overflow-y-auto" : ""}>
                     <PrintExitPermit 
                         permit={viewPermit} 
-                        onClose={() => setViewPermit(null)} 
+                        onClose={closePermitView} 
                         settings={settings}
                         onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined}
                         onReject={isMyTurn(viewPermit) ? async () => {
                             const reason = prompt('دلیل رد:'); 
                             if(reason) { 
                                 await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
-                                loadData(); setViewPermit(null); 
+                                loadData(); 
+                                closePermitView();
                             } 
                         } : undefined}
                         onEdit={
