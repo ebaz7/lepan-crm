@@ -29,7 +29,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     useEffect(() => { loadData(); }, []);
     
-    // --- HISTORY STATE FOR VIEW MODAL ---
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
             if (viewPermit) {
@@ -73,6 +72,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
+    // ... (Helper functions match previous version) ...
     const isMyTurn = (p: ExitPermit) => {
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
         switch (currentUser.role) {
@@ -142,11 +142,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const handleApprove = async (p: ExitPermit) => {
+        // ... (Approve Logic same as before) ...
         if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
             setWarehouseFinalize(p); 
             return; 
         }
-        
         let exitTimeStr = '';
         if (p.status === ExitPermitStatus.PENDING_SECURITY) {
             const t = prompt('ساعت خروج را وارد کنید (مثال 14:30):', new Date().toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'}));
@@ -155,9 +155,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         } else {
             if (!confirm(`آیا مطمئن هستید؟ (${getActionLabel(p.status)})`)) return;
         }
-
         setProcessingId(p.id);
-        
         try {
             let nextStatus = ExitPermitStatus.PENDING_FACTORY;
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
@@ -184,28 +182,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 if(isMobile) closePermitView();
                 else setViewPermit(null);
             }, 2500);
-
         } catch (e) {
             alert('خطا در عملیات تایید');
             setProcessingId(null);
         }
     };
-
+    
+    // ... (Warehouse submit and notification logic same as before) ...
     const handleWarehouseSubmit = async (finalItems: any[]) => {
         if (!warehouseFinalize) return;
         setProcessingId(warehouseFinalize.id);
         try {
-            const updated = { 
-                ...warehouseFinalize, 
-                items: finalItems, 
-                approverWarehouse: currentUser.fullName, 
-                status: ExitPermitStatus.PENDING_SECURITY,
-                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0),
-                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0)
-            };
-            
+            const updated = { ...warehouseFinalize, items: finalItems, approverWarehouse: currentUser.fullName, status: ExitPermitStatus.PENDING_SECURITY, weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0), cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0) };
             await editExitPermit(updated); 
-            
             setAutoSendPermit(updated);
             setTimeout(async () => {
                 await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
@@ -216,7 +205,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             }, 2500);
         } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
     };
-
+    
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
         const element = document.getElementById(`print-permit-autosend-${permit.id}`);
         if (!element) return;
@@ -224,8 +213,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
              // @ts-ignore
             const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const base64 = canvas.toDataURL('image/png').split(',')[1];
-            
-            const targets = [];
+            // ... (Send logic same as before) ...
+             const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
             let g1WA = companyConfig?.warehouseGroup;
             let g1Bale = companyConfig?.baleChannelId;
@@ -246,18 +235,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             }
 
             let captionTitle = '';
-            if (prevStatus === ExitPermitStatus.PENDING_CEO) {
-                captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
-                targets.push({ role: UserRole.FACTORY_MANAGER });
-            } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
-                captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
-                targets.push({ role: UserRole.WAREHOUSE_KEEPER });
-            } else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
-                captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
-                targets.push({ role: UserRole.SECURITY_HEAD });
-            } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
-                captionTitle = '👋 خروج نهایی از کارخانه';
-            }
+            if (prevStatus === ExitPermitStatus.PENDING_CEO) { captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه'; targets.push({ role: UserRole.FACTORY_MANAGER }); } 
+            else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) { captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار'; targets.push({ role: UserRole.WAREHOUSE_KEEPER }); } 
+            else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) { captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات'; targets.push({ role: UserRole.SECURITY_HEAD }); } 
+            else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) { captionTitle = '👋 خروج نهایی از کارخانه'; }
 
             let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n🔢 شماره: ${permit.permitNumber}\n👤 گیرنده: ${permit.recipientName}\n`;
             if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
@@ -267,24 +248,32 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const allUsers = await getUsers();
             
             for (const t of targets) {
-                if (t.role) {
-                    const u = allUsers.find(x => x.role === t.role);
-                    if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
-                }
-                if (t.group) {
-                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
-                }
-                if (t.platform) {
-                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } });
-                }
+                if (t.role) { const u = allUsers.find(x => x.role === t.role); if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } }); }
+                if (t.group) { await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } }); }
+                if (t.platform) { await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } }); }
             }
         } catch (e) { console.error("Notif Error", e); }
     };
 
+    // --- FIX: ROBUST DELETE ---
     const handleDelete = async (id: string) => {
-        if(!confirm('حذف شود؟')) return;
-        await deleteExitPermit(id);
-        loadData();
+        if(!confirm('آیا از حذف این مجوز اطمینان دارید؟')) return;
+        
+        setProcessingId(id);
+        try {
+            await deleteExitPermit(id);
+            // IMMEDIATE UI UPDATE
+            setPermits(prev => prev.filter(p => p.id !== id));
+            
+            if (viewPermit && viewPermit.id === id) {
+                closePermitView();
+            }
+        } catch (error) {
+            console.error("Delete Error", error);
+            alert('خطا در حذف مجوز. لطفا مجددا تلاش کنید.');
+        } finally {
+            setProcessingId(null);
+        }
     };
 
     const TimelineStep = ({ status, label, icon: Icon }: any) => {
@@ -413,7 +402,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 {processingId === p.id && (
                     <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center z-20">
                         <Loader2 className="animate-spin text-blue-600 mb-2" size={32}/>
-                        <span className="text-xs font-bold text-blue-700 animate-pulse">در حال ثبت و ارسال پیام...</span>
+                        <span className="text-xs font-bold text-blue-700 animate-pulse">در حال پردازش...</span>
                     </div>
                 )}
             </div>
@@ -437,23 +426,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 </div>
                 
                 <div className="flex p-1 bg-gray-200 rounded-xl overflow-x-auto no-scrollbar">
-                    <button 
-                        onClick={() => setActiveTab('CARTABLE')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'bg-white text-blue-700 shadow-md' : 'text-gray-500'}`}
-                    >
+                    <button onClick={() => setActiveTab('CARTABLE')} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'bg-white text-blue-700 shadow-md' : 'text-gray-500'}`}>
                         <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
                         کارتابل من ({myCartablePermits.length})
                     </button>
-                    <button 
-                        onClick={() => setActiveTab('FLOW')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
-                    >
+                    <button onClick={() => setActiveTab('FLOW')} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}>
                         جریان فعال
                     </button>
-                    <button 
-                        onClick={() => setActiveTab('ARCHIVE')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
-                    >
+                    <button onClick={() => setActiveTab('ARCHIVE')} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}>
                         بایگانی
                     </button>
                 </div>

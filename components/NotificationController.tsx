@@ -37,16 +37,18 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 
                 // Create Channel for Android 8+ (Oreo)
                 if (Capacitor.getPlatform() === 'android') {
-                    await PushNotifications.createChannel({
-                        id: 'fcm_default_channel',
-                        name: 'General Notifications',
-                        description: 'General notifications for the app',
-                        importance: 5, // High importance
-                        visibility: 1,
-                        lights: true,
-                        vibration: true,
-                        sound: 'default' 
-                    });
+                    try {
+                        await PushNotifications.createChannel({
+                            id: 'fcm_default_channel',
+                            name: 'General Notifications',
+                            description: 'General notifications for the app',
+                            importance: 5, // IMPORTANCE_HIGH: Makes sound and pops up
+                            visibility: 1, // VISIBILITY_PUBLIC
+                            lights: true,
+                            vibration: true,
+                            sound: 'default' 
+                        });
+                    } catch(e){}
                 }
                 
                 await PushNotifications.register();
@@ -71,31 +73,35 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 }
 
                 // 3. Get Public Key from Server
-                const { publicKey } = await apiCall<{ publicKey: string }>('/vapid-key');
-                if (!publicKey) return;
+                try {
+                    const { publicKey } = await apiCall<{ publicKey: string }>('/vapid-key');
+                    if (!publicKey) return;
 
-                const convertedVapidKey = urlBase64ToUint8Array(publicKey);
+                    const convertedVapidKey = urlBase64ToUint8Array(publicKey);
 
-                // 4. Check Existing Subscription
-                let subscription = await registration.pushManager.getSubscription();
-                
-                if (!subscription) {
-                    // Subscribe New
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: convertedVapidKey
-                    });
-                }
+                    // 4. Check Existing Subscription
+                    let subscription = await registration.pushManager.getSubscription();
+                    
+                    if (!subscription) {
+                        // Subscribe New
+                        subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: convertedVapidKey
+                        });
+                    }
 
-                if (subscription) {
-                    // Always update server with current subscription details
-                    const payload = {
-                        ...JSON.parse(JSON.stringify(subscription)),
-                        username: currentUser.username,
-                        role: currentUser.role,
-                        deviceType: 'web'
-                    };
-                    await apiCall('/subscribe', 'POST', payload);
+                    if (subscription) {
+                        // Always update server with current subscription details
+                        const payload = {
+                            ...JSON.parse(JSON.stringify(subscription)),
+                            username: currentUser.username,
+                            role: currentUser.role,
+                            deviceType: 'web'
+                        };
+                        await apiCall('/subscribe', 'POST', payload);
+                    }
+                } catch (e) {
+                    console.error("VAPID Setup Error:", e);
                 }
             }
         } catch (error) {
