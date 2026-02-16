@@ -49,10 +49,12 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // Database Helpers
 const getDb = () => {
     try {
-        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+        const raw = fs.readFileSync(DB_PATH, 'utf8');
+        return JSON.parse(raw);
     } catch (e) {
         console.error("DB Read Error:", e);
-        return {};
+        // Return a basic structure if read fails to prevent crashes
+        return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {} };
     }
 };
 
@@ -68,7 +70,7 @@ const saveDb = (data) => {
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     const db = getDb();
-    const user = db.users.find(u => u.username === username && u.password === password);
+    const user = (db.users || []).find(u => u.username === username && u.password === password);
     if (user) res.json(user);
     else res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
 });
@@ -91,7 +93,6 @@ const createCrudRoutes = (route, key) => {
     app.put(`/api/${route}/:id`, (req, res) => {
         const db = getDb();
         if (!db[key]) db[key] = [];
-        // Fixed: Use String() comparison for robust ID matching
         const index = db[key].findIndex(i => String(i.id) === String(req.params.id));
         if (index !== -1) {
             db[key][index] = { ...db[key][index], ...req.body };
@@ -103,14 +104,8 @@ const createCrudRoutes = (route, key) => {
     app.delete(`/api/${route}/:id`, (req, res) => {
         const db = getDb();
         if (!db[key]) db[key] = [];
-        // Fixed: Use String() comparison to ensure deletion works for both number and string IDs
-        const originalLength = db[key].length;
+        const originalLen = db[key].length;
         db[key] = db[key].filter(i => String(i.id) !== String(req.params.id));
-        
-        if (db[key].length === originalLength) {
-             console.warn(`[Warning] No item deleted for ${route}/${req.params.id}. Type mismatch?`);
-        }
-        
         saveDb(db);
         res.json(db[key]);
     });
@@ -139,7 +134,7 @@ app.post('/api/exit-permits', (req, res) => {
     if (!db.exitPermits) db.exitPermits = [];
     db.exitPermits.push(req.body);
     // Update counter if present
-    if (req.body.permitNumber > (db.settings.currentExitPermitNumber || 0)) {
+    if (db.settings && req.body.permitNumber > (db.settings.currentExitPermitNumber || 0)) {
         db.settings.currentExitPermitNumber = req.body.permitNumber;
     }
     saveDb(db);
@@ -148,6 +143,7 @@ app.post('/api/exit-permits', (req, res) => {
 
 app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
+    if (!db.exitPermits) db.exitPermits = [];
     const idx = db.exitPermits.findIndex(p => String(p.id) === String(req.params.id));
     if (idx !== -1) {
         db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body };
@@ -156,38 +152,42 @@ app.put('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// *** CRITICAL FIX: Explicit Delete Route for Exit Permits ***
+// Explicit Delete Route for Exit Permits
 app.delete('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
-        const idToDelete = String(req.params.id); // Normalize to string
+        const idToDelete = String(req.params.id); 
         
         if (!db.exitPermits) { db.exitPermits = []; }
 
-        // Filter using String comparison
         const initialLen = db.exitPermits.length;
+        // Filter out item
         db.exitPermits = db.exitPermits.filter(p => String(p.id) !== idToDelete);
         
-        // Safety check: if nothing deleted, try checking permitNumber as ID (legacy case)
+        // Also clean up by legacy permit number just in case
         if (db.exitPermits.length === initialLen) {
-             db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== idToDelete);
+             // Only if ID format looks like a number, otherwise skip to avoid accidents
+             if (!isNaN(Number(idToDelete))) {
+                 db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== idToDelete);
+             }
         }
 
         saveDb(db);
+        // Return remaining list to ensure client updates correctly
         res.json(db.exitPermits);
     } catch (e) {
         console.error("Delete Error:", e);
+        // Even on error, try to return empty array or current list to prevent client freeze
         res.status(500).json({ error: "Server Delete Error" });
     }
 });
 
-// Settings (Singleton)
+// Settings
 app.get('/api/settings', (req, res) => res.json(getDb().settings || {}));
 app.post('/api/settings', (req, res) => {
     const db = getDb();
     db.settings = req.body;
     saveDb(db);
-    // Re-init bots if tokens changed
     if(req.body.telegramBotToken) initTelegram(req.body.telegramBotToken);
     if(req.body.baleBotToken) initBaleBot(req.body.baleBotToken);
     res.json(db.settings);
@@ -199,15 +199,12 @@ app.get('/api/next-tracking-number', (req, res) => {
     const company = req.query.company;
     let nextNum = 1001;
 
-    if (db.settings.activeFiscalYearId) {
+    if (db.settings && db.settings.activeFiscalYearId) {
         const year = db.settings.fiscalYears?.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && company && year.companySequences[company]) {
             nextNum = (year.companySequences[company].startTrackingNumber || 1000) + 1;
-            year.companySequences[company].startTrackingNumber = nextNum; 
-            // We only simulate increment here for display, real increment happens on save. 
-            // But frontend asks for "Next".
         }
-    } else {
+    } else if (db.settings) {
         nextNum = (db.settings.currentTrackingNumber || 1000) + 1;
     }
     res.json({ nextTrackingNumber: nextNum });
@@ -218,12 +215,12 @@ app.get('/api/next-exit-permit-number', (req, res) => {
     const company = req.query.company;
     let nextNum = 1001;
 
-    if (db.settings.activeFiscalYearId) {
+    if (db.settings && db.settings.activeFiscalYearId) {
         const year = db.settings.fiscalYears?.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && company && year.companySequences[company]) {
             nextNum = (year.companySequences[company].startExitPermitNumber || 1000) + 1;
         }
-    } else {
+    } else if (db.settings) {
         nextNum = (db.settings.currentExitPermitNumber || 1000) + 1;
     }
     res.json({ nextNumber: nextNum });
@@ -234,16 +231,15 @@ app.get('/api/next-bijak-number', (req, res) => {
     const company = req.query.company;
     let nextNum = 1001;
     
-    if (db.settings.activeFiscalYearId) {
+    if (db.settings && db.settings.activeFiscalYearId) {
         const year = db.settings.fiscalYears?.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && company && year.companySequences[company]) {
              nextNum = (year.companySequences[company].startBijakNumber || 1000) + 1;
         }
-    } else {
+    } else if (db.settings) {
         if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) {
             nextNum = db.settings.warehouseSequences[company] + 1;
         } else {
-            // Find max across all if no company specific
             const max = Math.max(0, ...(db.warehouseTransactions?.filter(t => t.type === 'OUT').map(t => t.number) || []));
             nextNum = max + 1;
         }
@@ -270,7 +266,7 @@ app.post('/api/upload', (req, res) => {
     }
 });
 
-// --- WHATSAPP ROUTES ---
+// WhatsApp
 app.get('/api/whatsapp/status', (req, res) => res.json(getStatus()));
 app.get('/api/whatsapp/groups', async (req, res) => {
     try {
@@ -294,8 +290,8 @@ app.post('/api/send-whatsapp', async (req, res) => {
     }
 });
 
-// --- SYSTEM ROUTES ---
-app.get('/api/version', (req, res) => res.json({ version: '2.5.0' }));
+// System
+app.get('/api/version', (req, res) => res.json({ version: '2.5.1' }));
 
 app.post('/api/restart-bot', (req, res) => {
     const { type } = req.body;
@@ -308,16 +304,10 @@ app.post('/api/restart-bot', (req, res) => {
 
 app.post('/api/emergency-restore', (req, res) => {
     try {
-        const { fileData } = req.body; // Expects JSON content in base64
+        const { fileData } = req.body;
         if (!fileData) return res.status(400).json({ error: 'No data' });
-        
-        // Very basic restore: overwrite database.json
-        // In real world, unzip logic for ZIPs would go here.
-        // Assuming JSON for now based on simple restore button.
         const jsonStr = Buffer.from(fileData.split(',').pop(), 'base64').toString('utf-8');
         const data = JSON.parse(jsonStr);
-        
-        // Validate structure roughly
         if (data.users && data.settings) {
             saveDb(data);
             res.json({ success: true, mode: 'json' });
@@ -329,21 +319,17 @@ app.post('/api/emergency-restore', (req, res) => {
     }
 });
 
-// Serve Frontend
+// Serve
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// Start
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    
-    // Init Bots
     const db = getDb();
     if (db.settings) {
         if (db.settings.telegramBotToken) initTelegram(db.settings.telegramBotToken);
         if (db.settings.baleBotToken) initBaleBot(db.settings.baleBotToken);
     }
-    // Init WhatsApp
     initWhatsApp(path.join(__dirname, 'wauth'));
 });

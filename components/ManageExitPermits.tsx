@@ -261,31 +261,43 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         } catch (e) { console.error("Notif Error", e); }
     };
 
-    // --- FIXED DELETE HANDLER ---
+    // --- UPDATED DELETE HANDLER ---
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
-        // 1. Prevent bubble to parent onclick
+        // Prevent bubble up if event object exists
         if (e) {
             e.stopPropagation();
             e.preventDefault();
         }
         
+        if(!id) {
+            console.error("Delete Error: No ID provided");
+            return;
+        }
+
         if(!confirm('آیا از حذف این مجوز اطمینان دارید؟')) return;
         
-        // 2. Set processing state to prevent double clicks
+        // Prevent duplicate clicks
         setProcessingId(id);
         
         try {
-            await deleteExitPermit(id);
-            // 3. Update local state immediately
+            // Optimistic update
+            const prevPermits = [...permits];
             setPermits(prev => prev.filter(p => p.id !== id));
+
+            await deleteExitPermit(id);
             
-            // 4. Close view if the deleted item was open
+            // If we are viewing this specific permit, close the view
             if (viewPermit && viewPermit.id === id) {
+                if (isMobile) {
+                    window.history.back();
+                }
                 setViewPermit(null);
             }
         } catch (error) {
             console.error("Delete Error", error);
             alert('خطا در حذف مجوز. لطفا مجددا تلاش کنید.');
+            // Revert state if error (though in most cases we might reload)
+            loadData();
         } finally {
             setProcessingId(null);
         }
