@@ -126,6 +126,7 @@ createCrudRoutes('security/incidents', 'securityIncidents');
 
 // Exit Permits (with specific delete fix)
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
+
 app.post('/api/exit-permits', (req, res) => {
     const db = getDb();
     if (!db.exitPermits) db.exitPermits = [];
@@ -137,6 +138,7 @@ app.post('/api/exit-permits', (req, res) => {
     saveDb(db);
     res.json(db.exitPermits);
 });
+
 app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     const idx = db.exitPermits.findIndex(p => String(p.id) === String(req.params.id));
@@ -149,21 +151,34 @@ app.put('/api/exit-permits/:id', (req, res) => {
 
 // *** CRITICAL FIX FOR EXIT PERMIT DELETION ***
 app.delete('/api/exit-permits/:id', (req, res) => {
-    const db = getDb();
-    const idToDelete = req.params.id;
-    if (!db.exitPermits) { db.exitPermits = []; return res.json([]); }
-    
-    const initialLength = db.exitPermits.length;
-    // Compare as strings to ensure types match (Fixes string vs number issue)
-    db.exitPermits = db.exitPermits.filter(p => String(p.id) !== String(idToDelete));
-    
-    // Fallback: if not found by ID, try deleting by permitNumber (legacy data support)
-    if (db.exitPermits.length === initialLength) {
-         db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== String(idToDelete));
+    try {
+        const db = getDb();
+        const idToDelete = req.params.id;
+        
+        if (!db.exitPermits) { 
+            db.exitPermits = []; 
+            return res.json([]); 
+        }
+        
+        const initialLength = db.exitPermits.length;
+        
+        // 1. Try deleting by exact string ID match
+        let newPermits = db.exitPermits.filter(p => String(p.id) !== String(idToDelete));
+        
+        // 2. If nothing deleted, maybe it was passed as a permit number (Legacy issue)
+        if (newPermits.length === initialLength) {
+             newPermits = db.exitPermits.filter(p => String(p.permitNumber) !== String(idToDelete));
+        }
+        
+        db.exitPermits = newPermits;
+        saveDb(db);
+        
+        // Always return the array, even if empty or unchanged, to prevent client JSON errors
+        res.json(db.exitPermits);
+    } catch (e) {
+        console.error("Delete Error:", e);
+        res.status(500).json({ error: "Server Delete Error" });
     }
-    
-    saveDb(db);
-    res.json(db.exitPermits);
 });
 
 // Settings (Singleton)
