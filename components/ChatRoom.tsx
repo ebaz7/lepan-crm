@@ -7,7 +7,7 @@ import { generateUUID } from '../constants';
 import { 
     Send, User as UserIcon, Users, Plus, Paperclip, 
     CheckSquare, X, Trash2, Reply, Edit2, ArrowRight, 
-    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye, Mic, StopCircle
+    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye, Mic, StopCircle, Download, Share2, ZoomIn
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -32,6 +32,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [searchTerm, setSearchTerm] = useState(''); 
     const [showInnerSearch, setShowInnerSearch] = useState(false);
     const [innerSearchTerm, setInnerSearchTerm] = useState('');
+
+    // --- Image Viewer State ---
+    const [viewImage, setViewImage] = useState<{url: string, fileName: string} | null>(null);
 
     // --- Selection Mode State ---
     const [isSelectionMode, setIsSelectionMode] = useState(false); // Sidebar selection
@@ -103,6 +106,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- HANDLE HARDWARE BACK BUTTON (MOBILE & HISTORY API) ---
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
+            // Priority 0: Close Image Viewer
+            if (viewImage) {
+                setViewImage(null);
+                return;
+            }
+
             // Priority 1: Close Forward Modal
             if (showForwardDestinationModal) {
                 setShowForwardDestinationModal(false);
@@ -126,34 +135,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [mobileShowChat, showForwardDestinationModal, showInnerSearch]);
+    }, [mobileShowChat, showForwardDestinationModal, showInnerSearch, viewImage]);
 
     // Push state when opening chat to allow back button
-    const pushChatHistory = () => {
-        if (window.innerWidth < 768) {
-            try {
-                if (window.location.protocol !== 'blob:') {
-                     window.history.pushState({ view: 'chat' }, '', '#chat/open');
-                } else {
-                     window.history.pushState({ view: 'chat' }, '');
-                }
-            } catch(e) {
-                 try { window.history.pushState({ view: 'chat' }, ''); } catch(e2) {}
+    const pushChatHistory = (subView: string = 'open') => {
+        try {
+            if (window.location.protocol !== 'blob:') {
+                    window.history.pushState({ view: 'chat', sub: subView }, '', `#chat/${subView}`);
+            } else {
+                    window.history.pushState({ view: 'chat', sub: subView }, '');
             }
+        } catch(e) {
+                try { window.history.pushState({ view: 'chat', sub: subView }, ''); } catch(e2) {}
         }
     };
 
-    // Push state for modals
-    const pushModalHistory = () => {
-        try {
-            if (window.location.protocol !== 'blob:') {
-                 window.history.pushState({ view: 'modal' }, '', '#chat/modal');
-            } else {
-                 window.history.pushState({ view: 'modal' }, '');
-            }
-        } catch(e) {
-             try { window.history.pushState({ view: 'modal' }, ''); } catch(e2) {}
-        }
+    const pushModalHistory = (subView: string = 'modal') => {
+        pushChatHistory(subView);
     };
 
     const checkSharedContent = async () => {
@@ -373,7 +371,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setSelectedMsgIds([]);
             setHideForwardSender(false);
             setShowForwardDestinationModal(true);
-            pushModalHistory();
+            pushModalHistory('modal');
         }
     };
 
@@ -489,13 +487,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 if (event.data.size > 0) audioChunksRef.current.push(event.data);
             };
 
+            // CRITICAL FIX: The onstop handler MUST be defined before stopping.
+            // AND we should avoid using stale state inside the closure if possible.
             mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); // webm is safer for recording
+                // Rename to mp3 just for compatibility hint, though raw data is webm
                 const audioFile = new File([audioBlob], `voice_${Date.now()}.mp3`, { type: 'audio/mp3' });
+                
+                // IMPORTANT: activeChannel is a dependency, ensure we are using the latest or passing it.
+                // Since this closure is created once, we rely on the fact that handleStartRecording is recreated
+                // OR we just use the current state available in scope when onstop fires.
                 processFile(audioFile, '', activeChannel);
                 
                 // Cleanup tracks
                 stream.getTracks().forEach(track => track.stop());
+                setIsRecording(false);
             };
 
             mediaRecorder.start();
@@ -514,8 +520,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleStopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
+            // Just stop the recorder. The 'onstop' event defined in start will handle the sending.
             mediaRecorderRef.current.stop();
-            setIsRecording(false);
+            // Don't set isRecording false here immediately, let onstop do it to ensure flow.
+            // But we clear timer immediately.
             if(timerRef.current) clearInterval(timerRef.current);
         }
     };
@@ -523,7 +531,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const handleCancelRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
              // Stop without saving
-             mediaRecorderRef.current.onstop = null; // Remove handler
+             mediaRecorderRef.current.onstop = null; // Remove handler to prevent sending
              mediaRecorderRef.current.stop();
              mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
              setIsRecording(false);
@@ -625,7 +633,45 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setPendingForward(msg);
         setHideForwardSender(false);
         setShowForwardDestinationModal(true);
-        pushModalHistory();
+        pushModalHistory('modal');
+    };
+
+    const handleOpenImage = (url: string, fileName: string) => {
+        setViewImage({ url, fileName });
+        pushChatHistory('image');
+    };
+
+    const handleDownloadImage = async () => {
+        if (!viewImage) return;
+        try {
+            const response = await fetch(viewImage.url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = viewImage.fileName || 'image.jpg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+            alert('خطا در دانلود تصویر');
+        }
+    };
+
+    const handleShareImage = async () => {
+        if (!viewImage || !navigator.share) return;
+        try {
+            const response = await fetch(viewImage.url);
+            const blob = await response.blob();
+            const file = new File([blob], viewImage.fileName || 'image.jpg', { type: blob.type });
+            await navigator.share({
+                files: [file],
+                title: 'اشتراک‌گذاری تصویر'
+            });
+        } catch (e) {
+            console.error('Share failed', e);
+        }
     };
 
     const onActionEdit = () => {
@@ -650,7 +696,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setHideForwardSender(false);
         setContextMenu(null);
         setShowForwardDestinationModal(true);
-        pushModalHistory();
+        pushModalHistory('modal');
     };
 
     const onActionCopy = () => {
@@ -685,18 +731,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         // Online if active in last 2 minutes
         if (diff < 120000) return 'آنلاین';
         
-        const minutes = Math.floor(diff / 60000);
-        if (minutes < 60) return `آخرین بازدید ${minutes} دقیقه پیش`;
-        
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `آخرین بازدید ${hours} ساعت پیش`;
-
         const d = new Date(targetUser.lastSeen);
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
 
-        if (d.toDateString() === yesterday.toDateString()) {
+        if (d.toDateString() === today.toDateString()) {
+             return `آخرین بازدید امروز ${d.toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}`;
+        } else if (d.toDateString() === yesterday.toDateString()) {
              return `آخرین بازدید دیروز ${d.toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}`;
         } else {
              return `آخرین بازدید ${d.toLocaleDateString('fa-IR')}`;
@@ -705,15 +747,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Dynamic Background Style ---
     const backgroundStyle = useMemo(() => {
-        // Standard Telegram-like pattern if no custom background
-        const defaultPattern = `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
+        // TELEGRAM-LIKE PATTERN (SVG Data URI) - A subtle geometric pattern
+        const telegramPattern = `url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%239ca3af' fill-opacity='0.1'%3E%3Cpath d='M200 200c0-10 10-20 20-20s20 10 20 20-10 20-20 20-20-10-20-20zm-50-50c0-10 10-20 20-20s20 10 20 20-10 20-20 20-20-10-20-20zm100 0c0-10 10-20 20-20s20 10 20 20-10 20-20 20-20-10-20-20zm-50 100c0-10 10-20 20-20s20 10 20 20-10 20-20 20-20-10-20-20z'/%3E%3C/g%3E%3C/svg%3E")`;
 
         const style: React.CSSProperties = {
-            backgroundColor: '#e6ebee', // Default light chat color
-            backgroundImage: defaultPattern,
-            backgroundSize: 'auto',
+            backgroundColor: '#e6ebee', // Default light chat color (Telegram web default)
+            backgroundImage: telegramPattern,
+            backgroundSize: '400px 400px', // Adjust size of pattern
             backgroundRepeat: 'repeat',
-            backgroundAttachment: 'fixed',
+            backgroundAttachment: 'fixed', // Keeps pattern static while scrolling
             position: 'absolute',
             inset: 0,
             zIndex: 0
@@ -850,7 +892,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
                                             {activeChannel.id === currentUser.username ? 'پیام‌های ذخیره شده' : (activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name)}
                                         </h3>
-                                        {/* Accuate Status Display */}
+                                        {/* Status Display */}
                                         <span className="text-xs font-medium text-gray-500">
                                             {activeChannel.id === currentUser.username ? 'شخصی' : 
                                              activeChannel.type === 'public' ? 'آنلاین' : 
@@ -912,8 +954,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         onClick={(e) => handleMessageClick(e, msg)}
                                         onContextMenu={(e) => triggerMenuDesktop(e, msg)}
                                     >
-                                        
-                                        {/* Hover Menu Button (Desktop Only) */}
+                                        {/* HOVER ACTIONS (Quick Reply/Forward) */}
+                                        <div className={`absolute top-0 ${isMe ? '-left-20' : '-right-20'} hidden group-hover:flex items-center gap-1 bg-white/80 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-gray-200 transition-all z-20`}>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuickReply(msg); }} className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-full" title="پاسخ"><Reply size={14}/></button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuickForward(msg); }} className="p-1.5 hover:bg-green-50 text-green-600 rounded-full" title="فوروارد"><CornerUpRight size={14}/></button>
+                                        </div>
+
+                                        {/* Hover Menu Button (Desktop Only - Alternative to context menu) */}
                                         <button 
                                             className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-black/5 z-20 transition-all opacity-0 group-hover:opacity-100 hidden md:block`}
                                             onClick={(e) => { e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, msg }); }}
@@ -942,7 +989,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         {msg.attachment && (
                                             <div className="mb-2">
                                                 {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                    <img src={msg.attachment.url} alt="attachment" className="max-w-full h-auto rounded-lg max-h-72 object-cover" />
+                                                    <div className="relative group">
+                                                        <img 
+                                                            src={msg.attachment.url} 
+                                                            alt="attachment" 
+                                                            className="max-w-full h-auto rounded-lg max-h-72 object-cover cursor-zoom-in" 
+                                                            onClick={(e) => { e.stopPropagation(); handleOpenImage(msg.attachment!.url, msg.attachment!.fileName); }}
+                                                        />
+                                                    </div>
                                                 ) : (
                                                     <div className="flex items-center gap-3 bg-black/5 p-3 rounded-lg border border-black/5">
                                                         <div className="p-2 rounded-full bg-blue-500 text-white"><File size={20}/></div>
@@ -1041,6 +1095,38 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     </div>
                 )}
             </div>
+
+            {/* FULL SCREEN IMAGE VIEWER */}
+            {viewImage && (
+                <div className="fixed inset-0 z-[60] bg-black flex flex-col animate-fade-in">
+                    {/* Header */}
+                    <div className="flex justify-between items-center p-4 bg-black/50 backdrop-blur-sm absolute top-0 left-0 right-0 z-10">
+                        <button onClick={() => window.history.back()} className="text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                            <ArrowRight size={24} className="rotate-180"/> {/* Back Icon */}
+                        </button>
+                        <div className="flex gap-4">
+                            {navigator.share && (
+                                <button onClick={handleShareImage} className="text-white p-2 rounded-full hover:bg-white/10 transition-colors" title="اشتراک‌گذاری">
+                                    <Share2 size={24}/>
+                                </button>
+                            )}
+                            <button onClick={handleDownloadImage} className="text-white p-2 rounded-full hover:bg-white/10 transition-colors" title="دانلود">
+                                <Download size={24}/>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Image Container */}
+                    <div className="flex-1 flex items-center justify-center overflow-hidden p-2">
+                        <img 
+                            src={viewImage.url} 
+                            className="max-h-full max-w-full object-contain"
+                            alt="Full View"
+                            onClick={(e) => e.stopPropagation()} // Prevent closing if we add click-to-close on bg
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Context Menu (Action Sheet) */}
             {contextMenu && (

@@ -52,61 +52,96 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
-  // --- GLOBAL BACK BUTTON HANDLER ---
+  // --- ROBUST BACK BUTTON HANDLER ---
   useEffect(() => {
-    // Initial handling of Hash on load
+    // 1. Initial Load: Check Hash
     const handleInitialHash = () => {
         const hash = window.location.hash.replace('#', '');
         if (hash) {
-            // If hash is a tab, set it
-            const tabName = hash.split('/')[0]; // Handle nested like chat/user_id
+            const tabName = hash.split('/')[0]; // Split to handle sub-routes like trade/view
             if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(tabName)) {
                 setActiveTabState(tabName);
             }
         } else {
-            // Default to dashboard and set hash
-            try {
-                if (window.location.protocol !== 'blob:') {
-                    window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
-                } else {
-                    window.history.replaceState({ tab: 'dashboard' }, '');
-                }
-            } catch (e) {
-                // Fallback for strict environments
-                try { window.history.replaceState({ tab: 'dashboard' }, ''); } catch(e2) {}
+            // Force hash to dashboard on load if empty
+            if (currentUser) {
+                window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
             }
         }
     };
-
     handleInitialHash();
 
-    // Handle Back Button (PopState)
+    // 2. Handle Browser/Software Back Button (PopState)
     const handlePopState = (event: PopStateEvent) => {
-        // If we have state with a tab, use it
-        if (event.state && event.state.tab) {
-            setActiveTabState(event.state.tab);
-        } else {
-            // Fallback to parsing hash if state is missing (e.g. external link)
-            const hash = window.location.hash.replace('#', '');
-            if (hash && hash !== 'menu' && !hash.includes('/')) {
-                 setActiveTabState(hash);
-            } else if (!hash) {
-                 // If no hash, we might be at root, show dashboard
-                 setActiveTabState('dashboard');
-            }
-            // Note: We ignore 'menu' hash here because Layout.tsx handles closing the menu
-            // We ignore hashes with '/' (like chat/id) because components handle closing those views
+        // Allow sub-components (Trade, Chat, etc.) to handle their own popstate first.
+        // If the URL hash matches a main tab, switch to it.
+        const hash = window.location.hash.replace('#', '');
+        
+        // If we are at root or dashboard hash
+        if (!hash || hash === 'dashboard') {
+            setActiveTabState('dashboard');
+            return;
+        }
+
+        // Determine the main tab from the hash (e.g., #trade/view -> trade)
+        const mainTab = hash.split('/')[0];
+        const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'];
+        
+        if (validTabs.includes(mainTab)) {
+            setActiveTabState(mainTab);
         }
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
-  // Function to change tab and push history
+    // 3. Handle Android Hardware Back Button
+    let backListener: any;
+    if (isNative) {
+        CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+            // If the current tab is NOT dashboard, go to dashboard
+            const currentHash = window.location.hash.replace('#', '');
+            
+            // Check if we are deep inside a module (e.g. #trade/view)
+            // If URL has slashes, it means a child component is handling the view, so we let the browser 'back' handle it
+            if (currentHash.includes('/')) {
+                window.history.back();
+                return;
+            }
+
+            // If we are on a main tab but NOT dashboard, go to dashboard
+            if (activeTab !== 'dashboard') {
+                handleSetActiveTab('dashboard');
+                return;
+            }
+
+            // If on Dashboard, Exit App
+            if (activeTab === 'dashboard') {
+                if (confirm('آیا می‌خواهید از برنامه خارج شوید؟')) {
+                    CapacitorApp.exitApp();
+                }
+            }
+        }).then(l => backListener = l);
+    }
+
+    return () => {
+        window.removeEventListener('popstate', handlePopState);
+        if (backListener) backListener.remove();
+    };
+  }, [activeTab, currentUser]);
+
+  // Unified Tab Switcher
   const handleSetActiveTab = (tab: string) => {
+      // If clicking the same tab, do nothing (prevent duplicate history)
+      if (activeTab === tab) return;
+
       setActiveTabState(tab);
-      // Push new state
+      
+      // Reset specific filters when leaving their tabs
+      if(tab !== 'warehouse') setWarehouseInitialTab('dashboard'); 
+      if(tab !== 'manage-exit') setExitPermitStatusFilter(null); 
+      if(tab !== 'manage') setDashboardStatusFilter(null);
+
+      // Push to History
       try {
           if (window.location.protocol !== 'blob:') {
                window.history.pushState({ tab }, '', `#${tab}`);
@@ -269,7 +304,7 @@ function App() {
         ) : (
             <Layout 
             activeTab={activeTab} 
-            setActiveTab={(t) => { handleSetActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); }} 
+            setActiveTab={(t) => { handleSetActiveTab(t); }} 
             currentUser={currentUser} 
             onLogout={handleLogout} 
             notifications={notifications} 
