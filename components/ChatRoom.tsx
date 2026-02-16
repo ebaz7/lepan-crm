@@ -626,10 +626,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const backgroundStyle = useMemo(() => {
         if (currentUser.chatBackground) {
-            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' };
+            // Updated to ensure full image visibility (might stretch) or fit exact
+            // Using 100% 100% stretches to fit the container exact dimensions
+            return { 
+                backgroundImage: `url(${currentUser.chatBackground})`, 
+                backgroundSize: '100% 100%', 
+                backgroundPosition: 'center', 
+                backgroundRepeat: 'no-repeat' 
+            };
         }
         if (systemSettings?.defaultChatBackground) {
-             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' };
+             return { 
+                 backgroundImage: `url(${systemSettings.defaultChatBackground})`, 
+                 backgroundSize: '100% 100%', 
+                 backgroundPosition: 'center', 
+                 backgroundRepeat: 'no-repeat'
+             };
         }
         // CLEAN Fallback (No ugly pattern)
         return { backgroundColor: '#f0f2f5' };
