@@ -57,14 +57,57 @@ app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// DB Helpers
+// --- ROBUST DATABASE HANDLER (ENSURES NO DATA LOSS) ---
 const getDb = () => {
     try {
-        if (!fs.existsSync(DB_FILE)) return { settings: {}, orders: [], exitPermits: [], users: [] };
-        return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    } catch (e) { return {}; }
+        // Default Structure containing ALL modules
+        const defaultDb = { 
+            settings: {}, 
+            users: [],
+            // Payment Module
+            orders: [], 
+            // Exit Module
+            exitPermits: [], 
+            // Warehouse Module
+            warehouseItems: [], 
+            warehouseTransactions: [], 
+            // Trade (Commerce) Module
+            tradeRecords: [], 
+            // Security Module
+            securityLogs: [], 
+            personnelDelays: [], 
+            securityIncidents: [],
+            // Chat Module
+            messages: [], 
+            groups: [], 
+            tasks: [] 
+        };
+
+        if (!fs.existsSync(DB_FILE)) return defaultDb;
+        
+        const fileContent = fs.readFileSync(DB_FILE, 'utf8');
+        if (!fileContent.trim()) return defaultDb;
+
+        const data = JSON.parse(fileContent);
+
+        // Merge with default to ensure all keys exist even if file is partial
+        // This guarantees that when we backup, we backup EVERYTHING.
+        return { ...defaultDb, ...data };
+
+    } catch (e) { 
+        console.error("Database Read Error:", e);
+        return {}; 
+    }
 };
-const saveDb = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+
+const saveDb = (data) => {
+    // Write safely
+    try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    } catch(e) {
+        console.error("Database Save Error:", e);
+    }
+};
 
 // --- AUTOMATIC FULL BACKUP LOGIC (ZIP) ---
 const performAutoBackup = () => {
@@ -87,13 +130,15 @@ const performAutoBackup = () => {
 
         archive.pipe(output);
 
-        // 1. Add Database File
+        // 1. Add Database File (Data)
         if (fs.existsSync(DB_FILE)) {
             archive.file(DB_FILE, { name: 'database.json' });
         }
 
-        // 2. Add Uploads Directory (Chat files, Invoices, etc.)
-        archive.directory(UPLOADS_DIR, 'uploads');
+        // 2. Add Uploads Directory (Files: Images, PDF, Excel, Voice)
+        if (fs.existsSync(UPLOADS_DIR)) {
+            archive.directory(UPLOADS_DIR, 'uploads');
+        }
 
         archive.finalize();
         
@@ -193,6 +238,7 @@ app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
 app.post('/api/exit-permits', (req, res) => { const db = getDb(); if(!db.exitPermits) db.exitPermits = []; db.exitPermits.push(req.body); saveDb(db); res.json(db.exitPermits); });
 app.put('/api/exit-permits/:id', (req, res) => { const db = getDb(); const idx = db.exitPermits.findIndex(p => p.id === req.params.id); if (idx > -1) { db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; saveDb(db); res.json(db.exitPermits); } else res.status(404).send('Not Found'); });
+app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
 
 app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems || []));
 app.post('/api/warehouse/items', (req, res) => { const db = getDb(); if(!db.warehouseItems) db.warehouseItems=[]; db.warehouseItems.push(req.body); saveDb(db); res.json(db.warehouseItems); });

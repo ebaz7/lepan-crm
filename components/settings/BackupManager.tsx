@@ -71,21 +71,50 @@ const BackupManager: React.FC = () => {
             console.warn("Server unreachable or timeout, switching to Offline Mode...", e);
             
             // 2. Fallback: Offline Backup (From LocalStorage) - JSON Only
+            // IMPORTANT: We must include ALL data keys to ensure full backup
             try {
+                // Try to fetch current state from server API first if possible (even if backup zip failed)
+                // If not, fallback to localStorage cache
+                
+                let offlineData: any = {};
+                
+                try {
+                    // Attempt quick API fetch for non-cached critical data
+                    const [secLogs, delays, incidents, permits] = await Promise.all([
+                        apiCall('/security/logs').catch(()=>[]),
+                        apiCall('/security/delays').catch(()=>[]),
+                        apiCall('/security/incidents').catch(()=>[]),
+                        apiCall('/exit-permits').catch(()=>[])
+                    ]);
+                    
+                    offlineData.securityLogs = secLogs;
+                    offlineData.personnelDelays = delays;
+                    offlineData.securityIncidents = incidents;
+                    offlineData.exitPermits = permits;
+                } catch(err) {
+                    console.warn("Could not fetch fresh data for offline backup, using defaults");
+                }
+
                 const localData = {
                     settings: getLocalJSON(LS_KEYS.SETTINGS, {}),
-                    orders: getLocalJSON(LS_KEYS.ORDERS, []),
                     users: getLocalJSON(LS_KEYS.USERS, []),
-                    tradeRecords: getLocalJSON(LS_KEYS.TRADE, []),
+                    // Payment
+                    orders: getLocalJSON(LS_KEYS.ORDERS, []),
+                    // Warehouse
                     warehouseItems: getLocalJSON(LS_KEYS.WH_ITEMS, []),
                     warehouseTransactions: getLocalJSON(LS_KEYS.WH_TX, []),
+                    // Trade
+                    tradeRecords: getLocalJSON(LS_KEYS.TRADE, []),
+                    // Chat
                     messages: getLocalJSON(LS_KEYS.CHAT, []),
                     groups: getLocalJSON(LS_KEYS.GROUPS, []),
                     tasks: getLocalJSON(LS_KEYS.TASKS, []),
-                    exitPermits: [], 
-                    securityLogs: [],
-                    personnelDelays: [],
-                    securityIncidents: [],
+                    // Merged Security & Exits (from API fetch above or empty if offline)
+                    exitPermits: offlineData.exitPermits || [], 
+                    securityLogs: offlineData.securityLogs || [],
+                    personnelDelays: offlineData.personnelDelays || [],
+                    securityIncidents: offlineData.securityIncidents || [],
+                    
                     meta: { 
                         source: 'offline_browser_cache', 
                         date: new Date().toISOString(),
@@ -99,7 +128,7 @@ const BackupManager: React.FC = () => {
                 
                 downloadBlob(blob, `Offline_Cache_Backup_${dateStr}.json`);
                 
-                alert('⚠️ هشدار: ارتباط با سرور برقرار نشد.\n\n✅ فایل پشتیبان JSON از «حافظه موقت مرورگر» تهیه شد.\nتوجه: این نسخه شامل فایل‌های آپلود شده (تصاویر/PDF) نمی‌باشد.');
+                alert('⚠️ هشدار: ارتباط با سرور برای دانلود فایل ZIP برقرار نشد.\n\n✅ فایل پشتیبان JSON (داده‌های متنی) تهیه شد.\nتوجه: این نسخه شامل فایل‌های آپلود شده (تصاویر/PDF) نمی‌باشد.');
             } catch (err) {
                 alert("خطا در ایجاد بکاپ آفلاین.");
             }
