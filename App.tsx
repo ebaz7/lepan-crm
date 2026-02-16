@@ -160,7 +160,7 @@ function App() {
   // --- BACK BUTTON HANDLER ---
   useEffect(() => {
     // Initial Load Handler
-    const hash = window.location.hash.replace('#', '');
+    const hash = window.location.hash.replace('#', '').split('/')[0]; // Simple clean
     if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(hash)) {
         setActiveTabState(hash); 
         safeReplaceState({ tab: hash }, '', `#${hash}`);
@@ -174,8 +174,14 @@ function App() {
         if (event.state && event.state.tab) {
             setActiveTabState(event.state.tab);
         } else {
-            // Fallback for root
-            setActiveTabState('dashboard');
+            // Fallback: Check Hash
+            const currentHash = window.location.hash.replace('#', '').split('/')[0];
+            if (currentHash && currentHash !== 'menu') { // Avoid menu hash if handled locally
+                 setActiveTabState(currentHash);
+            } else {
+                 // Really default to dashboard if no state and no valid hash
+                 setActiveTabState('dashboard');
+            }
         }
     };
 

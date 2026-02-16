@@ -651,27 +651,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const backgroundStyle = useMemo(() => {
+        const style: React.CSSProperties = {
+            backgroundColor: '#f0f2f5', // Default gray fallback
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+        };
+
         if (currentUser.chatBackground) {
-            // Ensure full fit without cropping - Force 100% 100%
-            return { 
-                backgroundImage: `url(${currentUser.chatBackground})`, 
-                backgroundSize: '100% 100%', 
-                backgroundPosition: 'center', 
-                backgroundRepeat: 'no-repeat',
-                backgroundColor: 'transparent' // Clear fallback gray
-            };
+            style.backgroundImage = `url(${currentUser.chatBackground})`;
+            style.backgroundColor = 'transparent'; // Ensure image shows
+        } else if (systemSettings?.defaultChatBackground) {
+             style.backgroundImage = `url(${systemSettings.defaultChatBackground})`;
+             style.backgroundColor = 'transparent';
         }
-        if (systemSettings?.defaultChatBackground) {
-             return { 
-                 backgroundImage: `url(${systemSettings.defaultChatBackground})`, 
-                 backgroundSize: '100% 100%', 
-                 backgroundPosition: 'center', 
-                 backgroundRepeat: 'no-repeat',
-                 backgroundColor: 'transparent'
-             };
-        }
-        // Fallback gray only if no image at all
-        return { backgroundColor: '#f0f2f5' };
+        
+        return style;
     }, [currentUser.chatBackground, systemSettings?.defaultChatBackground]);
 
     return (
@@ -758,11 +753,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* --- CHAT AREA --- */}
             <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 
-                {/* Background Image Layer (Relative Container) */}
-                <div className="absolute inset-0 z-0 pointer-events-none bg-gray-100" style={backgroundStyle}></div>
+                {/* Background Image Layer (Relative Container) - IMPORTANT FIX FOR MOBILE */}
+                <div className="absolute inset-0 z-0 pointer-events-none" style={backgroundStyle}></div>
 
                 {/* Header */}
-                <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0 h-[64px]">
+                <div className="bg-white/95 backdrop-blur-sm p-3 flex justify-between items-center shadow-sm z-10 sticky top-0 h-[64px]">
                     {showInnerSearch ? (
                         <div className="flex-1 flex items-center bg-gray-100 rounded-lg mx-2 px-2 animate-fade-in">
                             <Search size={18} className="text-gray-400"/>
@@ -936,7 +931,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                 {/* Input Area */}
                 {activeTab === 'chat' && (
-                    <div className="bg-white p-2 flex flex-col border-t relative z-20">
+                    <div className="bg-white/95 backdrop-blur-sm p-2 flex flex-col border-t relative z-20">
                         {/* Reply / Forward Preview - Compact */}
                         {(replyingTo || pendingForward) && (
                             <div className="bg-gray-50 px-3 py-2 rounded-t-lg border-b border-gray-200 flex justify-between items-center text-xs animate-slide-up">

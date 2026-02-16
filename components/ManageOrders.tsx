@@ -47,6 +47,39 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- HISTORY STATE FOR VIEW MODAL ---
+  useEffect(() => {
+      const handlePopState = (event: PopStateEvent) => {
+          // If popped back and we were viewing an order, close it
+          if (viewOrder) {
+              setViewOrder(null);
+          }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+  }, [viewOrder]);
+
+  const openOrderView = (order: PaymentOrder) => {
+      if (isMobile) {
+          try {
+              if (window.location.protocol !== 'blob:') {
+                  window.history.pushState({ view: 'order_detail', orderId: order.id }, '', '#manage/view');
+              } else {
+                  window.history.pushState({ view: 'order_detail' }, '');
+              }
+          } catch(e) {}
+      }
+      setViewOrder(order);
+  };
+
+  const closeOrderView = () => {
+      if (isMobile && viewOrder) {
+          // If we manually close, go back to revert URL state if it was pushed
+          window.history.back(); 
+      }
+      setViewOrder(null);
+  };
+
   useEffect(() => {
       setActiveTab(initialTab);
   }, [initialTab]);
@@ -144,7 +177,9 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
         try {
             const updatedOrders = await updateOrderStatus(id, nextStatus, currentUser); 
             refreshData(); 
-            setViewOrder(null); 
+            // In mobile, we might want to stay in view, or close it. Usually better to close.
+            if(isMobile) window.history.back(); // Triggers closeOrderView via popstate
+            else setViewOrder(null);
             
             const order = updatedOrders.find(o => o.id === id);
             if (order) {
@@ -166,7 +201,8 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
           try {
               await updateOrderStatus(id, OrderStatus.REJECTED, currentUser, reason || 'بدون توضیح');
               await refreshData();
-              setViewOrder(null); 
+              if(isMobile) window.history.back();
+              else setViewOrder(null); 
           } catch(e) { alert("خطا"); }
       }
   };
@@ -176,7 +212,8 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
           try {
               await apiCall(`/orders/${id}`, 'PUT', { status: OrderStatus.REVOCATION_PENDING_FINANCE, updatedAt: Date.now() });
               await refreshData();
-              setViewOrder(null);
+              if(isMobile) window.history.back();
+              else setViewOrder(null);
           } catch (e) {
               alert('خطا در عملیات ابطال.');
           }
@@ -198,7 +235,9 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
 
   const handleEdit = (order: PaymentOrder) => {
       setEditingOrder(order);
-      setViewOrder(null);
+      // Close view first if mobile
+      if (isMobile) window.history.back();
+      else setViewOrder(null);
   };
 
   const handleExportCSV = () => {
@@ -384,7 +423,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                         <MobileOrderCard 
                             key={order.id} 
                             order={order} 
-                            onView={setViewOrder} 
+                            onView={openOrderView} 
                             onDelete={handleDelete}
                             canDelete={canDelete(order)}
                         />
@@ -448,7 +487,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                             </td>
                             <td className="px-6 py-4"><div className="flex justify-center items-center gap-2">
                                  <button 
-                                    onClick={() => setViewOrder(order)} 
+                                    onClick={() => openOrderView(order)} 
                                     className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs transition-colors shadow-sm ${isRevocation ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                  >
                                     <Eye size={16}/> مشاهده
@@ -468,7 +507,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
           <div className={isMobile ? "fixed inset-0 z-[100] bg-white overflow-y-auto" : ""}>
               <PrintVoucher 
                 order={viewOrder} 
-                onClose={() => setViewOrder(null)} 
+                onClose={closeOrderView} 
                 settings={settings}
                 onApprove={canApprove(viewOrder) ? () => handleApprove(viewOrder.id, viewOrder.status) : undefined}
                 onReject={canApprove(viewOrder) ? () => handleReject(viewOrder.id) : undefined}

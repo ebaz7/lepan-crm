@@ -452,7 +452,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                           return (
                               <button 
                                 key={item.id} 
-                                onClick={() => { setActiveTab(item.id); window.history.back(); }}
+                                onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }}
                                 className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border aspect-square transition-all active:scale-95 ${isActive ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200' : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'}`}
                               >
                                   <Icon size={24} strokeWidth={isActive ? 2.5 : 1.5} />
