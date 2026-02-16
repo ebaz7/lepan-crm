@@ -7,7 +7,7 @@ import { generateUUID } from '../constants';
 import { 
     Send, User as UserIcon, Users, Plus, Paperclip, 
     CheckSquare, X, Trash2, Reply, Edit2, ArrowRight, 
-    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye
+    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye, Mic, StopCircle
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -48,6 +48,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [isUploading, setIsUploading] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
     
+    // --- Audio Recording State ---
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const timerRef = useRef<any>(null);
+
     // --- Forwarding Modal State ---
     const [showForwardDestinationModal, setShowForwardDestinationModal] = useState(false);
     const [sharedFile, setSharedFile] = useState<File | null>(null); 
@@ -88,7 +95,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => { 
         loadMeta();
         loadReadStatus();
-        const interval = setInterval(loadMeta, 5000); 
+        const interval = setInterval(loadMeta, 10000); // Reduced frequency for performance
         checkSharedContent();
         return () => clearInterval(interval);
     }, []);
@@ -257,6 +264,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (!showInnerSearch) {
             scrollToBottom();
+            // Slight delay to ensure image loading doesn't mess up scroll
             setTimeout(scrollToBottom, 100);
         }
     }, [activeChannel, mobileShowChat, displayMsgs.length, showInnerSearch]);
@@ -422,8 +430,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
              return;
         }
 
+        const tempId = generateUUID();
         const newMsg: ChatMessage = {
-            id: generateUUID(),
+            id: tempId,
             sender: currentUser.fullName,
             senderUsername: currentUser.username,
             role: currentUser.role,
@@ -447,18 +456,85 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             if (pendingForward.audioUrl) newMsg.audioUrl = pendingForward.audioUrl;
         }
 
+        // OPTIMISTIC UPDATE: Show message immediately
+        setMessages(prev => [...prev, newMsg]);
+        setInputText('');
+        setReplyingTo(null);
+        setPendingForward(null);
+        setHideForwardSender(false);
+        scrollToBottom();
+
         try {
             await sendMessage(newMsg);
-            setInputText('');
-            setReplyingTo(null);
-            setPendingForward(null);
-            setHideForwardSender(false);
-            onRefresh();
-            scrollToBottom();
-            setTimeout(scrollToBottom, 200);
+            // We can optionally refresh here, but it's better to rely on background poll or just trust the optimism
             if (activeChannel.id) updateReadStatus(activeChannel.id);
             else if (activeChannel.type === 'public') updateReadStatus('public');
-        } catch (e: any) { alert(`خطا در ارسال پیام: ${e.message}`); }
+        } catch (e: any) { 
+            console.error("Failed to send", e);
+            // Revert on failure (remove the optimistic message)
+            setMessages(prev => prev.filter(m => m.id !== tempId));
+            alert(`خطا در ارسال پیام: ${e.message}`); 
+        }
+    };
+
+    // --- Audio Recording Handlers ---
+    const handleStartRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+                const audioFile = new File([audioBlob], `voice_${Date.now()}.mp3`, { type: 'audio/mp3' });
+                processFile(audioFile, '', activeChannel);
+                
+                // Cleanup tracks
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+            
+            timerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+
+        } catch (e) {
+            console.error(e);
+            alert("دسترسی به میکروفون امکان‌پذیر نیست.");
+        }
+    };
+
+    const handleStopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            if(timerRef.current) clearInterval(timerRef.current);
+        }
+    };
+
+    const handleCancelRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+             // Stop without saving
+             mediaRecorderRef.current.onstop = null; // Remove handler
+             mediaRecorderRef.current.stop();
+             mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+             setIsRecording(false);
+             if(timerRef.current) clearInterval(timerRef.current);
+        }
+    };
+
+    const formatRecordingTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -480,8 +556,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 const targetType = customTarget ? customTarget.type : activeChannel.type;
                 const targetId = customTarget ? customTarget.id : activeChannel.id;
 
+                const tempId = generateUUID();
                 const newMsg: ChatMessage = {
-                    id: generateUUID(),
+                    id: tempId,
                     sender: currentUser.fullName,
                     senderUsername: currentUser.username,
                     role: currentUser.role,
@@ -489,11 +566,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     timestamp: Date.now(),
                     recipient: targetType === 'private' ? targetId! : undefined,
                     groupId: targetType === 'group' ? targetId! : undefined,
-                    attachment: { fileName: result.fileName, url: result.url }
+                    attachment: file.type.startsWith('audio/') ? undefined : { fileName: result.fileName, url: result.url },
+                    audioUrl: file.type.startsWith('audio/') ? result.url : undefined
                 };
+                
+                // Optimistic UI for file
+                setMessages(prev => [...prev, newMsg]);
+                scrollToBottom();
+
                 await sendMessage(newMsg);
-                onRefresh();
-            } catch (error) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
+                // onRefresh(); // No need for full refresh if optimistic works
+            } catch (error) { 
+                alert('خطا در ارسال فایل.'); 
+            } finally { 
+                setIsUploading(false); 
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -574,9 +661,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const onActionDelete = async (forEveryone: boolean) => {
         if (!contextMenu) return;
-        await deleteMessage(contextMenu.msg.id, forEveryone ? undefined : currentUser.username);
-        onRefresh();
+        const msgId = contextMenu.msg.id;
+        // Optimistic Delete
+        setMessages(prev => prev.filter(m => m.id !== msgId));
         setContextMenu(null);
+        
+        await deleteMessage(msgId, forEveryone ? undefined : currentUser.username);
     };
 
     const handleCancelReplyForward = () => {
@@ -912,16 +1002,41 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     value={inputText}
                                     onChange={e => setInputText(e.target.value)}
                                     onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}}
-                                    placeholder="پیام خود را بنویسید..."
-                                    className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
+                                    placeholder={isRecording ? "در حال ضبط صدا..." : "پیام خود را بنویسید..."}
+                                    className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32 disabled:opacity-50"
                                     rows={1}
                                     style={{ height: 'auto', minHeight: '24px' }}
+                                    disabled={isRecording}
                                 />
+                                {isRecording && (
+                                    <div className="flex items-center gap-2 text-red-500 animate-pulse text-xs font-bold whitespace-nowrap">
+                                        <span>{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>
+                                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                    </div>
+                                )}
                             </div>
 
-                            <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
-                                <Send size={20} className={document.dir === 'rtl' ? 'rotate-180' : ''}/>
-                            </button>
+                            {/* Voice / Send Button Logic */}
+                            {inputText.trim() || pendingForward || sharedFile ? (
+                                <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
+                                    <Send size={20} className={document.dir === 'rtl' ? 'rotate-180' : ''}/>
+                                </button>
+                            ) : (
+                                isRecording ? (
+                                    <div className="flex gap-1 mb-1">
+                                        <button onClick={handleCancelRecording} className="p-3 bg-gray-200 text-gray-600 rounded-full hover:bg-gray-300 transition-transform active:scale-95">
+                                            <Trash2 size={20}/>
+                                        </button>
+                                        <button onClick={handleStopRecording} className="p-3 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-transform active:scale-95">
+                                            <Send size={20} className={document.dir === 'rtl' ? 'rotate-180' : ''}/>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button onClick={handleStartRecording} className="p-3 bg-teal-500 text-white rounded-full shadow-lg hover:bg-teal-600 transition-transform active:scale-95 mb-1">
+                                        <Mic size={20}/>
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
                 )}

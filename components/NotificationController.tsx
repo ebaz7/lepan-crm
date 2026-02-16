@@ -23,18 +23,10 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
       return outputArray;
   }
 
-  function arrayBufferToBase64(buffer: ArrayBuffer) {
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-      }
-      return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
   useEffect(() => {
     if (!currentUser) return; 
 
+    // Always attempt to register/update sub on mount
     const registerOrUpdateSubscription = async () => {
         try {
             if (Capacitor.isNativePlatform()) {
@@ -43,7 +35,7 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                     await PushNotifications.requestPermissions();
                 }
                 
-                // Create Channel for Android 8+ (Oreo) to ensure sound and high priority
+                // Create Channel for Android 8+ (Oreo)
                 if (Capacitor.getPlatform() === 'android') {
                     await PushNotifications.createChannel({
                         id: 'fcm_default_channel',
@@ -68,51 +60,46 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 const registration = await navigator.serviceWorker.register('/sw.js');
                 await navigator.serviceWorker.ready;
 
-                // 2. Get Public Key from Server
+                // 2. Check Permission first
+                if (Notification.permission === 'default') {
+                    await Notification.requestPermission();
+                }
+
+                if (Notification.permission !== 'granted') {
+                    console.warn("Notification permission denied");
+                    return;
+                }
+
+                // 3. Get Public Key from Server
                 const { publicKey } = await apiCall<{ publicKey: string }>('/vapid-key');
                 if (!publicKey) return;
 
                 const convertedVapidKey = urlBase64ToUint8Array(publicKey);
 
-                // 3. Check Existing Subscription
-                const existingSub = await registration.pushManager.getSubscription();
+                // 4. Check Existing Subscription
+                let subscription = await registration.pushManager.getSubscription();
                 
-                if (existingSub) {
-                    // Always update server with current subscription details to ensure it's fresh
+                if (!subscription) {
+                    // Subscribe New
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: convertedVapidKey
+                    });
+                }
+
+                if (subscription) {
+                    // Always update server with current subscription details
                     const payload = {
-                        ...JSON.parse(JSON.stringify(existingSub)),
+                        ...JSON.parse(JSON.stringify(subscription)),
                         username: currentUser.username,
                         role: currentUser.role,
                         deviceType: 'web'
                     };
                     await apiCall('/subscribe', 'POST', payload);
-                } else {
-                    // 4. Subscribe New
-                    const subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: convertedVapidKey
-                    });
-
-                    if (subscription) {
-                        const payload = {
-                            ...JSON.parse(JSON.stringify(subscription)),
-                            username: currentUser.username,
-                            role: currentUser.role,
-                            deviceType: 'web'
-                        };
-                        await apiCall('/subscribe', 'POST', payload);
-                    }
                 }
             }
         } catch (error) {
             console.error('Notification Setup Error:', error);
-            if (error.name === 'InvalidStateError' || error.message.includes('subscription')) {
-                 try {
-                     const reg = await navigator.serviceWorker.getRegistration();
-                     const sub = await reg?.pushManager.getSubscription();
-                     await sub?.unsubscribe();
-                 } catch(e) {}
-            }
         }
     };
 
@@ -137,13 +124,6 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 role: currentUser.role
             };
             apiCall('/subscribe', 'POST', subObject);
-        });
-        
-        // Handle incoming notifications while app is open
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push received: ', notification);
-            // You can use LocalNotifications here if you want a custom in-app banner, 
-            // but the system tray notification usually handles it if configured correctly in background.
         });
     }
 
