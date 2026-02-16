@@ -152,33 +152,40 @@ app.put('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// Explicit Delete Route for Exit Permits
+// Explicit Delete Route for Exit Permits (Robust)
 app.delete('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
-        const idToDelete = String(req.params.id); 
+        const idToDelete = String(req.params.id).trim(); 
         
-        if (!db.exitPermits) { db.exitPermits = []; }
+        console.log(`[Server] Deleting Exit Permit ID: ${idToDelete}`);
+
+        if (!Array.isArray(db.exitPermits)) { db.exitPermits = []; }
 
         const initialLen = db.exitPermits.length;
-        // Filter out item
+        // Filter out item by exact ID
         db.exitPermits = db.exitPermits.filter(p => String(p.id) !== idToDelete);
         
-        // Also clean up by legacy permit number just in case
+        // Fallback: If nothing deleted by ID, check if it's a legacy numeric ID (permitNumber)
         if (db.exitPermits.length === initialLen) {
-             // Only if ID format looks like a number, otherwise skip to avoid accidents
              if (!isNaN(Number(idToDelete))) {
+                 console.log(`[Server] ID not found, trying legacy permitNumber match for: ${idToDelete}`);
                  db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== idToDelete);
              }
         }
 
+        if (db.exitPermits.length < initialLen) {
+            console.log(`[Server] Deleted successfully. Count: ${initialLen} -> ${db.exitPermits.length}`);
+        } else {
+            console.warn(`[Server] Item not found for deletion: ${idToDelete}`);
+        }
+
         saveDb(db);
-        // Return remaining list to ensure client updates correctly
+        // Return the fresh list
         res.json(db.exitPermits);
     } catch (e) {
         console.error("Delete Error:", e);
-        // Even on error, try to return empty array or current list to prevent client freeze
-        res.status(500).json({ error: "Server Delete Error" });
+        res.status(500).json({ error: "Server Delete Error: " + e.message });
     }
 });
 

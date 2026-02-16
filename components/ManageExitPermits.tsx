@@ -261,7 +261,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         } catch (e) { console.error("Notif Error", e); }
     };
 
-    // --- UPDATED DELETE HANDLER ---
+    // --- UPDATED DELETE HANDLER (SYNCED WITH SERVER) ---
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
         // Prevent bubble up if event object exists
         if (e) {
@@ -280,11 +280,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         setProcessingId(id);
         
         try {
-            // Optimistic update
-            const prevPermits = [...permits];
+            // OPTIMISTIC UPDATE: Remove locally immediately for speed
             setPermits(prev => prev.filter(p => p.id !== id));
 
-            await deleteExitPermit(id);
+            // SERVER REQUEST
+            const updatedList = await deleteExitPermit(id);
+            
+            // CONFIRMATION UPDATE: If server returns list, use it to ensure sync
+            if (Array.isArray(updatedList)) {
+                setPermits(updatedList.sort((a, b) => b.createdAt - a.createdAt));
+            }
             
             // If we are viewing this specific permit, close the view
             if (viewPermit && viewPermit.id === id) {
@@ -293,11 +298,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 }
                 setViewPermit(null);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Delete Error", error);
-            alert('خطا در حذف مجوز. لطفا مجددا تلاش کنید.');
-            // Revert state if error (though in most cases we might reload)
+            // Rollback optimistic update by reloading data
             loadData();
+            
+            // Show user-friendly error
+            const msg = error.message || 'خطا در ارتباط با سرور';
+            alert('خطا در حذف مجوز: ' + msg);
         } finally {
             setProcessingId(null);
         }
