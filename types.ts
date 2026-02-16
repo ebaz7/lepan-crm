@@ -443,15 +443,23 @@ export interface ChatGroup {
     name: string;
     members: string[];
     createdBy: string;
+    admins?: string[];
+    avatar?: string;
+    description?: string;
 }
 
 export interface GroupTask {
     id: string;
     groupId: string;
     title: string;
+    description?: string;
+    assignee?: string;
+    dueDate?: string;
     isCompleted: boolean;
     createdBy: string;
     createdAt: number;
+    completedBy?: string;
+    completedAt?: number;
 }
 
 export enum TradeStage {
