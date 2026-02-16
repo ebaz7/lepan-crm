@@ -24,7 +24,7 @@ export interface User {
   baleChatId?: string;
   canManageTrade?: boolean;
   receiveNotifications?: boolean;
-  chatBackground?: string;
+  chatBackground?: string; // NEW: Personal Chat Background
 }
 
 export interface AppNotification {
@@ -145,17 +145,17 @@ export interface FiscalYear {
 }
 
 export interface ExitPermitGroupConfig {
-    groupId: string;
-    baleId?: string;
-    telegramId?: string;
+    groupId: string; // WhatsApp Group ID
+    baleId?: string; // NEW: Bale Channel/Group ID
+    telegramId?: string; // NEW: Telegram Chat ID
     activeStatuses: string[];
 }
 
 export interface CompanyNotificationConfig {
     salesManager?: string;
     warehouseGroup?: string;
-    baleChannelId?: string;
-    telegramChannelId?: string;
+    baleChannelId?: string; // NEW: Company specific Bale
+    telegramChannelId?: string; // NEW: Company specific Telegram
 }
 
 export interface DailySecurityMeta {
@@ -190,18 +190,18 @@ export interface SystemSettings {
   geminiApiKey?: string;
   warehouseSequences?: Record<string, number>;
   companyNotifications?: Record<string, CompanyNotificationConfig>;
-  defaultWarehouseGroup?: string;
-  exitPermitNotificationBaleId?: string;
-  exitPermitNotificationTelegramId?: string;
+  defaultWarehouseGroup?: string; // WhatsApp Default
+  exitPermitNotificationBaleId?: string; // NEW: Default Group 1 Bale
+  exitPermitNotificationTelegramId?: string; // NEW: Default Group 1 Telegram
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
-  exitPermitNotificationGroup?: string;
+  exitPermitNotificationGroup?: string; // Legacy field
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
   dailySecurityMeta?: Record<string, DailySecurityMeta>;
-  defaultChatBackground?: string;
+  defaultChatBackground?: string; // NEW: Admin Default Chat Background
 }
 
 export enum PaymentMethod {
@@ -438,7 +438,6 @@ export interface ChatMessage {
     audioUrl?: string;
     replyTo?: { id: string, sender: string, message: string };
     isEdited?: boolean;
-    hiddenFor?: string[]; // Array of usernames who deleted this message for themselves
 }
 
 export interface ChatGroup {
@@ -622,6 +621,7 @@ export interface InspectionData {
     inspectionCompany?: string;
 }
 
+// Added missing trade-related interfaces
 export interface TradeTransaction {
     id: string;
     date: string;
