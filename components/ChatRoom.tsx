@@ -623,16 +623,42 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setPendingForward(null);
         setHideForwardSender(false);
     };
+    
+    // --- HELPER: GET USER ONLINE STATUS ---
+    const getUserStatusText = (targetUser: User | undefined) => {
+        if (!targetUser) return 'آفلاین';
+        // Check Last Seen
+        if (targetUser.lastSeen) {
+            const diff = Date.now() - targetUser.lastSeen;
+            // Less than 2 minutes -> Online
+            if (diff < 120000) return 'آنلاین';
+            
+            // Format Last Seen
+            const d = new Date(targetUser.lastSeen);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+
+            if (d.toDateString() === today.toDateString()) {
+                return `آخرین بازدید امروز ${d.toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}`;
+            } else if (d.toDateString() === yesterday.toDateString()) {
+                 return `آخرین بازدید دیروز ${d.toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}`;
+            } else {
+                 return `آخرین بازدید ${d.toLocaleDateString('fa-IR')}`;
+            }
+        }
+        return 'آفلاین';
+    };
 
     const backgroundStyle = useMemo(() => {
         if (currentUser.chatBackground) {
-            // Updated to ensure full image visibility (might stretch) or fit exact
-            // Using 100% 100% stretches to fit the container exact dimensions
+            // Ensure full fit without cropping - Force 100% 100%
             return { 
                 backgroundImage: `url(${currentUser.chatBackground})`, 
                 backgroundSize: '100% 100%', 
                 backgroundPosition: 'center', 
-                backgroundRepeat: 'no-repeat' 
+                backgroundRepeat: 'no-repeat',
+                backgroundColor: 'transparent' // Clear fallback gray
             };
         }
         if (systemSettings?.defaultChatBackground) {
@@ -640,10 +666,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                  backgroundImage: `url(${systemSettings.defaultChatBackground})`, 
                  backgroundSize: '100% 100%', 
                  backgroundPosition: 'center', 
-                 backgroundRepeat: 'no-repeat'
+                 backgroundRepeat: 'no-repeat',
+                 backgroundColor: 'transparent'
              };
         }
-        // CLEAN Fallback (No ugly pattern)
+        // Fallback gray only if no image at all
         return { backgroundColor: '#f0f2f5' };
     }, [currentUser.chatBackground, systemSettings?.defaultChatBackground]);
 
@@ -729,10 +756,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col bg-[#8E98A3] z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+            <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 
-                {/* Background Image Layer */}
-                <div className="absolute inset-0 z-0 pointer-events-none" style={backgroundStyle}></div>
+                {/* Background Image Layer (Relative Container) */}
+                <div className="absolute inset-0 z-0 pointer-events-none bg-gray-100" style={backgroundStyle}></div>
 
                 {/* Header */}
                 <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0 h-[64px]">
@@ -765,8 +792,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
                                             {activeChannel.id === currentUser.username ? 'پیام‌های ذخیره شده' : (activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name)}
                                         </h3>
-                                        <span className="text-xs text-blue-500 font-medium">
-                                            {activeChannel.id === currentUser.username ? 'شخصی' : 'آنلاین'}
+                                        {/* Updated Status Display */}
+                                        <span className={`text-xs font-medium ${activeChannel.type === 'private' && activeChannel.id !== currentUser.username && getUserStatusText(users.find(u=>u.username===activeChannel.id)) === 'آنلاین' ? 'text-green-600' : 'text-blue-500'}`}>
+                                            {activeChannel.id === currentUser.username ? 'شخصی' : 
+                                             activeChannel.type === 'public' ? 'آنلاین' : 
+                                             activeChannel.type === 'group' ? 'گروه' :
+                                             getUserStatusText(users.find(u => u.username === activeChannel.id))}
                                         </span>
                                     </div>
                                 )}
@@ -844,10 +875,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         onTouchMove={handleTouchMove}
                                     >
                                         
-                                        {/* Three Dots Menu Button - Improved for Mobile */}
+                                        {/* Three Dots Menu Button - Refined/Unobtrusive */}
                                         {!isMsgSelectionMode && (
                                             <button 
-                                                className={`absolute -top-2 ${isMe ? '-left-2' : '-right-2'} p-1.5 rounded-full bg-white shadow-sm border border-gray-200 text-gray-600 z-20 hover:scale-110 active:scale-95 transition-all`}
+                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-black/5 z-20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 active:opacity-100`}
                                                 onClick={(e) => triggerMenu(e, msg)}
                                             >
                                                 <MoreVertical size={14} />

@@ -25,6 +25,7 @@ export interface User {
   canManageTrade?: boolean;
   receiveNotifications?: boolean;
   chatBackground?: string;
+  lastSeen?: number; // Added for online status tracking
 }
 
 export interface AppNotification {

@@ -16,7 +16,7 @@ import SecurityModule from './components/SecurityModule';
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
 import { getOrders, getSettings, getMessages } from './services/storageService'; 
-import { getCurrentUser, getUsers } from './services/authService';
+import { getCurrentUser, getUsers, updateUser } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
@@ -100,6 +100,22 @@ function App() {
         } catch(e) { console.error("Push Listener Error", e); }
     }
   }, []);
+
+  // --- HEARTBEAT FOR ONLINE STATUS ---
+  useEffect(() => {
+      if (currentUser) {
+          // Send heartbeat every minute to update lastSeen
+          const heartbeat = setInterval(() => {
+              // Fire and forget update to avoid full re-render loop
+              updateUser({ ...currentUser, lastSeen: Date.now() }).catch(err => console.error("Heartbeat fail", err));
+          }, 60000);
+          
+          // Initial update on load
+          updateUser({ ...currentUser, lastSeen: Date.now() });
+
+          return () => clearInterval(heartbeat);
+      }
+  }, [currentUser]);
 
   // ... (Background Jobs Logic - No Change) ...
   useEffect(() => {
