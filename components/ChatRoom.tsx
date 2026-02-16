@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole, SystemSettings } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage, getSettings } from '../services/storageService';
+import { sendMessage, deleteMessage, getGroups, getTasks, uploadFile, updateMessage, getSettings } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { generateUUID } from '../constants';
 import { 
-    Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
-    CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
-    Loader2, Search, File, CheckCheck, DownloadCloud, Bookmark, Lock, Forward, Share2, CornerUpRight, Copy, MoreVertical, CheckCircle
+    Send, User as UserIcon, Users, Plus, Paperclip, 
+    CheckSquare, X, Trash2, Reply, Edit2, ArrowRight, 
+    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -42,18 +42,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Input & Action State ---
     const [inputText, setInputText] = useState('');
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
-    const [pendingForward, setPendingForward] = useState<ChatMessage | null>(null); // New state for forward draft
+    const [pendingForward, setPendingForward] = useState<ChatMessage | null>(null);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
     
-    // --- Voice Recording State ---
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordingDuration, setRecordingDuration] = useState(0); 
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
-    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
     // --- Forwarding Modal State ---
     const [showForwardDestinationModal, setShowForwardDestinationModal] = useState(false);
     const [sharedFile, setSharedFile] = useState<File | null>(null); 
@@ -68,9 +61,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Modal State ---
     const [showGroupModal, setShowGroupModal] = useState(false);
-    const [newGroupName, setNewGroupName] = useState('');
-    const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
-    const [newTaskTitle, setNewTaskTitle] = useState('');
     
     // --- READ STATUS TRACKING ---
     const [lastReadMap, setLastReadMap] = useState<Record<string, number>>({});
@@ -102,7 +92,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return () => clearInterval(interval);
     }, []);
 
-    // Check for PWA Shared Content
     const checkSharedContent = async () => {
         if (window.location.hash.includes('share_received')) {
             try {
@@ -157,29 +146,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         localStorage.setItem(`chat_last_read_${currentUser.username}`, JSON.stringify(newMap));
     };
 
-    useEffect(() => {
-        if (!showInnerSearch) {
-            scrollToBottom();
-            setTimeout(scrollToBottom, 100);
-        }
-        // Reset message selections when changing channel
-        setIsMsgSelectionMode(false);
-        setSelectedMsgIds([]);
-        setReplyingTo(null);
-        setEditingMessageId(null);
-        
-        if (mobileShowChat && activeChannel.id) updateReadStatus(activeChannel.id);
-        else if (mobileShowChat && activeChannel.type === 'public') updateReadStatus('public');
-
-    }, [activeChannel, mobileShowChat]);
-
-    // Close Context Menu on click outside
-    useEffect(() => {
-        const handleClickOutside = () => setContextMenu(null);
-        window.addEventListener('click', handleClickOutside);
-        return () => window.removeEventListener('click', handleClickOutside);
-    }, []);
-
     const loadMeta = async () => {
         try {
             const usrList = await getUsers();
@@ -195,10 +161,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         } catch (e) { console.error("Chat load error", e); }
     };
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-    };
-
+    // --- Message Processing & Filtering ---
     const getDisplayMessages = () => {
         const list = messages.filter(msg => { 
             // Filter out deleted messages for this user (Soft Delete)
@@ -226,6 +189,45 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return list;
     };
 
+    const displayMsgs = getDisplayMessages();
+
+    // --- SCROLL TO BOTTOM LOGIC (Fixed) ---
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    };
+
+    // Scroll whenever the active channel changes OR messages update
+    useEffect(() => {
+        if (!showInnerSearch) {
+            scrollToBottom();
+            // Retry a few times for slow renders (images, etc)
+            setTimeout(scrollToBottom, 100);
+            setTimeout(scrollToBottom, 300);
+        }
+    }, [activeChannel, mobileShowChat, displayMsgs.length, showInnerSearch]);
+
+    // Reset UI states when changing channel
+    useEffect(() => {
+        setIsMsgSelectionMode(false);
+        setSelectedMsgIds([]);
+        setReplyingTo(null);
+        setEditingMessageId(null);
+        setShowInnerSearch(false);
+        setInnerSearchTerm('');
+        
+        if (mobileShowChat && activeChannel.id) updateReadStatus(activeChannel.id);
+        else if (mobileShowChat && activeChannel.type === 'public') updateReadStatus('public');
+
+    }, [activeChannel, mobileShowChat]);
+
+    // Close Context Menu on click outside
+    useEffect(() => {
+        const handleClickOutside = () => setContextMenu(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
+
+    // --- SORTED CHAT LIST ---
     const sortedChatList = useMemo(() => {
         const getChannelMeta = (type: 'public' | 'group' | 'private', id: string | null) => {
             let relevantMsgs = [];
@@ -269,15 +271,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     }, [messages, users, groups, searchTerm, currentUser.username, lastReadMap]);
 
-    // --- SELECTION HANDLERS ---
-    const toggleChatSelection = (id: string) => {
-        if (selectedChatIds.includes(id)) setSelectedChatIds(selectedChatIds.filter(i => i !== id));
-        else setSelectedChatIds([...selectedChatIds, id]);
-    };
-
+    // --- ACTION HANDLERS ---
+    
     const toggleMsgSelection = (id: string) => {
-        if (selectedMsgIds.includes(id)) setSelectedMsgIds(selectedMsgIds.filter(i => i !== id));
-        else setSelectedMsgIds([...selectedMsgIds, id]);
+        if (selectedMsgIds.includes(id)) {
+            setSelectedMsgIds(prev => prev.filter(i => i !== id));
+        } else {
+            setSelectedMsgIds(prev => [...prev, id]);
+        }
     };
 
     const handleBulkDeleteChats = async () => {
@@ -301,7 +302,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (selectedMsgIds.length === 0) return;
         const msgsToForward = messages.filter(m => selectedMsgIds.includes(m.id));
         if (msgsToForward.length > 0) {
-            setPendingForward(msgsToForward[0]); 
+            setPendingForward(msgsToForward[0]); // Just taking the first one for now as per simple logic
             setIsMsgSelectionMode(false);
             setSelectedMsgIds([]);
             setShowForwardDestinationModal(true);
@@ -310,7 +311,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleOpenChat = (item: any) => {
         if (isSelectionMode) {
-            toggleChatSelection(item.id || 'public');
+            if (selectedChatIds.includes(item.id || 'public')) setSelectedChatIds(selectedChatIds.filter(i => i !== (item.id || 'public')));
+            else setSelectedChatIds([...selectedChatIds, item.id || 'public']);
             return;
         }
         
@@ -352,7 +354,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
         let finalMessage = inputText;
         
-        // If Shared File
         if (sharedFile) {
              processFile(sharedFile, sharedText, activeChannel);
              setSharedFile(null);
@@ -393,6 +394,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setPendingForward(null);
             onRefresh();
             scrollToBottom();
+            // Trigger again for safety
             setTimeout(scrollToBottom, 200);
             if (activeChannel.id) updateReadStatus(activeChannel.id);
             else if (activeChannel.type === 'public') updateReadStatus('public');
@@ -478,9 +480,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setContextMenu(null);
     };
 
-    const displayMsgs = getDisplayMessages();
-
-    // Background
     const backgroundStyle = useMemo(() => {
         if (currentUser.chatBackground) {
             return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' };
@@ -578,40 +577,57 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 <div className={`absolute inset-0 pointer-events-none ${!currentUser.chatBackground && !systemSettings?.defaultChatBackground ? 'opacity-10' : 'opacity-100'}`} style={backgroundStyle}></div>
 
                 {/* Header */}
-                <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => { setMobileShowChat(false); if (window.history.state?.chatDetail) window.history.back(); }} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
-                        
-                        {isMsgSelectionMode ? (
+                <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0 h-[64px]">
+                    {showInnerSearch ? (
+                        <div className="flex-1 flex items-center bg-gray-100 rounded-lg mx-2 px-2 animate-fade-in">
+                            <Search size={18} className="text-gray-400"/>
+                            <input
+                                ref={innerSearchInputRef}
+                                className="flex-1 bg-transparent border-none outline-none text-sm p-2"
+                                placeholder="جستجو در این گفتگو..."
+                                value={innerSearchTerm}
+                                onChange={e => setInnerSearchTerm(e.target.value)}
+                                autoFocus
+                            />
+                            <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }}><X size={18} className="text-gray-500 hover:text-red-500"/></button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => { setMobileShowChat(false); if (window.history.state?.chatDetail) window.history.back(); }} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
+                                
+                                {isMsgSelectionMode ? (
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => { setIsMsgSelectionMode(false); setSelectedMsgIds([]); }}><X size={20}/></button>
+                                        <span className="font-bold">{selectedMsgIds.length} انتخاب شده</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col cursor-pointer" onClick={() => { if(activeChannel.type==='group') setActiveTab(activeTab==='chat'?'tasks':'chat') }}>
+                                        <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                                            {activeChannel.id === currentUser.username ? 'پیام‌های ذخیره شده' : (activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name)}
+                                        </h3>
+                                        <span className="text-xs text-blue-500 font-medium">
+                                            {activeChannel.id === currentUser.username ? 'شخصی' : 'آنلاین'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div className="flex items-center gap-2">
-                                <button onClick={() => { setIsMsgSelectionMode(false); setSelectedMsgIds([]); }}><X size={20}/></button>
-                                <span className="font-bold">{selectedMsgIds.length} انتخاب شده</span>
+                                {isMsgSelectionMode ? (
+                                    <>
+                                        <button onClick={handleBulkForward} className="p-2 hover:bg-gray-100 rounded-full"><CornerUpRight size={20}/></button>
+                                        <button onClick={() => handleBulkDeleteMessages(false)} className="p-2 hover:bg-red-50 text-red-500 rounded-full"><Trash2 size={20}/></button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button onClick={() => setShowInnerSearch(true)} className="p-2 hover:bg-gray-100 rounded-full"><Search size={20}/></button>
+                                        <button onClick={() => setIsMsgSelectionMode(true)} className="p-2 hover:bg-gray-100 rounded-full"><CheckSquare size={20}/></button>
+                                    </>
+                                )}
                             </div>
-                        ) : (
-                            <div className="flex flex-col cursor-pointer" onClick={() => { if(activeChannel.type==='group') setActiveTab(activeTab==='chat'?'tasks':'chat') }}>
-                                <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
-                                    {activeChannel.id === currentUser.username ? 'پیام‌های ذخیره شده' : (activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name)}
-                                </h3>
-                                <span className="text-xs text-blue-500 font-medium">
-                                    {activeChannel.id === currentUser.username ? 'شخصی' : 'آنلاین'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                        {isMsgSelectionMode ? (
-                            <>
-                                <button onClick={handleBulkForward} className="p-2 hover:bg-gray-100 rounded-full"><CornerUpRight size={20}/></button>
-                                <button onClick={() => handleBulkDeleteMessages(false)} className="p-2 hover:bg-red-50 text-red-500 rounded-full"><Trash2 size={20}/></button>
-                            </>
-                        ) : (
-                            <>
-                                <button onClick={() => setShowInnerSearch(!showInnerSearch)} className="p-2 hover:bg-gray-100 rounded-full"><Search size={20}/></button>
-                                <button onClick={() => setIsMsgSelectionMode(true)} className="p-2 hover:bg-gray-100 rounded-full"><CheckSquare size={20}/></button>
-                            </>
-                        )}
-                    </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Messages */}
