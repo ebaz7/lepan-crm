@@ -95,6 +95,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return () => clearInterval(interval);
     }, []);
 
+    // --- HANDLE HARDWARE BACK BUTTON (MOBILE) ---
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            // If the chat view is open on mobile, close it
+            if (mobileShowChat) {
+                setMobileShowChat(false);
+                // We don't prevent default here because the history pop has already happened
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [mobileShowChat]);
+
     const checkSharedContent = async () => {
         if (window.location.hash.includes('share_received')) {
             try {
@@ -331,10 +345,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const readKey = type === 'public' ? 'public' : id;
         updateReadStatus(readKey);
         setActiveChannel({ type, id });
-        setMobileShowChat(true);
+        
+        // Push state so back button works to close chat
         if (window.innerWidth < 768) {
             window.history.pushState({ tab: 'chat', chatDetail: true }, '', window.location.hash);
         }
+        
+        setMobileShowChat(true);
+        
         if (sidebarTab === 'tasks') setActiveTab('tasks');
         else setActiveTab('chat');
     };
@@ -648,7 +666,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     ) : (
                         <>
                             <div className="flex items-center gap-3">
-                                <button onClick={() => { setMobileShowChat(false); if (window.history.state?.chatDetail) window.history.back(); }} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
+                                {/* Use window.history.back() for consistency with pushState logic */}
+                                <button onClick={() => { window.history.back(); }} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
                                 
                                 {isMsgSelectionMode ? (
                                     <div className="flex items-center gap-2">

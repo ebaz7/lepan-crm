@@ -149,6 +149,26 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showNotifDropdown]);
 
+  // --- HANDLE MOBILE MENU BACK NAVIGATION ---
+  const toggleMobileMenu = () => {
+      if (!showMobileMenu) {
+          window.history.pushState({ menu: 'open' }, '');
+          setShowMobileMenu(true);
+      } else {
+          window.history.back(); // This triggers popstate to close menu
+      }
+  };
+
+  useEffect(() => {
+      const handlePopState = () => {
+          if (showMobileMenu) {
+              setShowMobileMenu(false);
+          }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+  }, [showMobileMenu]);
+
   const handleLogout = () => { logout(); onLogout(); };
   
   const handleToggleNotif = async () => { 
@@ -407,7 +427,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Mobile Drawer (Refined Design) */}
       {showMobileMenu && (
           <div className="fixed inset-0 z-[60] md:hidden animate-fade-in">
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => window.history.back()}></div>
               <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] max-h-[85vh] overflow-y-auto animate-slide-up pb-safe shadow-2xl flex flex-col">
                   {/* Header */}
                   <div className="p-5 border-b flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-[2rem]">
@@ -420,7 +440,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                               <div className="text-[10px] text-gray-500">{currentUser.fullName}</div>
                           </div>
                       </div>
-                      <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                      <button onClick={() => window.history.back()} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
                   </div>
                   
                   {/* Grid Menu */}
@@ -431,7 +451,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                           return (
                               <button 
                                 key={item.id} 
-                                onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }}
+                                onClick={() => { setActiveTab(item.id); window.history.back(); }}
                                 className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border aspect-square transition-all active:scale-95 ${isActive ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200' : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'}`}
                               >
                                   <Icon size={24} strokeWidth={isActive ? 2.5 : 1.5} />
@@ -441,10 +461,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                       })}
                   </div>
 
-                  {/* Footer Actions */}
-                  <div className="mt-auto p-5 border-t bg-gray-50/50 pb-8">
-                      <button onClick={handleLogout} className="w-full p-4 bg-white border border-red-100 text-red-600 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-sm active:bg-red-50 transition-colors">
-                          <LogOut size={20} />
+                  {/* Footer Actions (Minimal) */}
+                  <div className="mt-auto px-5 pb-8 pt-2">
+                      <button onClick={handleLogout} className="w-full py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors border-t border-gray-100 pt-4">
+                          <LogOut size={16} />
                           خروج از حساب کاربری
                       </button>
                   </div>
@@ -470,7 +490,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         
         {/* Menu Button */}
         <button 
-            onClick={() => setShowMobileMenu(true)} 
+            onClick={toggleMobileMenu} 
             className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${showMobileMenu ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400'}`}
         >
             <Menu size={24} strokeWidth={showMobileMenu ? 2.5 : 2} />
