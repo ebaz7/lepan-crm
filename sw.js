@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'payment-sys-v8-share';
+const CACHE_NAME = 'payment-sys-v9-share';
 const urlsToCache = [
   '/',
   '/index.html',
