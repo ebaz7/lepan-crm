@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
 import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage } from '../services/storageService';
@@ -8,7 +7,7 @@ import {
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
-    Check, CheckCheck, DownloadCloud, StopCircle
+    Check, CheckCheck, DownloadCloud, StopCircle, Bookmark, Lock
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -26,7 +25,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     
     // --- UI State ---
     const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group', id: string | null}>({ type: 'public', id: null });
-    const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat'); 
+    const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat'); // View mode inside a group
+    const [sidebarTab, setSidebarTab] = useState<'private' | 'groups' | 'tasks'>('private'); // Sidebar Category
+    
     const [mobileShowChat, setMobileShowChat] = useState(false);
     const [searchTerm, setSearchTerm] = useState(''); // Sidebar Search
     
@@ -42,8 +43,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     
     // --- Voice Recording State ---
     const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0); // Seconds
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // --- Refs ---
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -66,9 +69,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return () => clearInterval(interval);
     }, []);
 
+    // Scroll to bottom when channel changes or chat opens
     useEffect(() => {
-        // Only scroll if not searching history
-        if (!showInnerSearch) scrollToBottom();
+        if (!showInnerSearch) {
+            // Instant scroll attempt
+            scrollToBottom();
+            // Delayed scroll to ensure rendering is complete
+            setTimeout(scrollToBottom, 100);
+            setTimeout(scrollToBottom, 300);
+        }
         
         // Reset inputs on channel change
         setReplyingTo(null);
@@ -78,13 +87,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setInnerSearchTerm('');
     }, [activeChannel, mobileShowChat]);
 
+    // Auto-scroll on new message
     useEffect(() => {
-        // Auto-scroll on new message if at bottom and not searching
         if (!showInnerSearch && messages.length > 0) {
              scrollToBottom();
         }
     }, [messages.length]);
     
+    // Timer for Recording
+    useEffect(() => {
+        if (isRecording) {
+            setRecordingDuration(0);
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1);
+            }, 1000);
+        } else {
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+            setRecordingDuration(0);
+        }
+        return () => { if (recordingTimerRef.current) clearInterval(recordingTimerRef.current); };
+    }, [isRecording]);
+
     // Auto Focus inner search
     useEffect(() => {
         if (showInnerSearch) {
@@ -95,7 +118,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const loadMeta = async () => {
         try {
             const usrList = await getUsers();
-            setUsers(usrList.filter(u => u.username !== currentUser.username));
+            // We keep ALL users (including self) to allow finding "Saved Messages" logic, 
+            // but we filter self out in the list rendering EXCEPT for the Saved Messages item.
+            setUsers(usrList); 
             
             const grpList = await getGroups();
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
@@ -108,13 +133,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     };
 
     const getDisplayMessages = () => {
         const list = messages.filter(msg => { 
             if (activeChannel.type === 'public') return !msg.recipient && !msg.groupId; 
-            if (activeChannel.type === 'private') return (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id); 
+            
+            if (activeChannel.type === 'private') {
+                // Saved Messages Logic (Self Chat)
+                if (activeChannel.id === currentUser.username) {
+                    return msg.senderUsername === currentUser.username && msg.recipient === currentUser.username;
+                }
+                // Normal Private Chat
+                return (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || 
+                       (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id); 
+            }
+            
             if (activeChannel.type === 'group') return msg.groupId === activeChannel.id; 
             return false; 
         });
@@ -130,14 +165,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return list;
     };
 
-    // --- SORTED CHAT LIST LOGIC (Telegram Style) ---
+    // --- SORTED CHAT LIST LOGIC (Telegram Style + Tabs) ---
     const sortedChatList = useMemo(() => {
         // 1. Helper to find last message for a channel
         const getChannelMeta = (type: 'public' | 'group' | 'private', id: string | null) => {
             let relevantMsgs = [];
             if (type === 'public') relevantMsgs = messages.filter(m => !m.recipient && !m.groupId);
             else if (type === 'group') relevantMsgs = messages.filter(m => m.groupId === id);
-            else if (type === 'private') relevantMsgs = messages.filter(m => (m.senderUsername === id && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === id));
+            else if (type === 'private') {
+                if (id === currentUser.username) {
+                    // Saved Messages
+                    relevantMsgs = messages.filter(m => m.senderUsername === currentUser.username && m.recipient === currentUser.username);
+                } else {
+                    relevantMsgs = messages.filter(m => (m.senderUsername === id && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === id));
+                }
+            }
             
             if (relevantMsgs.length === 0) return { lastMsg: null, timestamp: 0 };
             
@@ -145,12 +187,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return { lastMsg, timestamp: lastMsg.timestamp };
         };
 
-        // 2. Build list
-        const list = [
-            { type: 'public', id: null, name: 'کانال عمومی', avatar: null, isGroup: true },
-            ...groups.map(g => ({ type: 'group', id: g.id, name: g.name, avatar: null, isGroup: true })),
-            ...users.map(u => ({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar, isGroup: false }))
-        ];
+        const list = [];
+
+        // 2. Build list based on Sidebar Tab
+        if (sidebarTab === 'private') {
+            // Saved Messages (Always Top)
+            list.push({ type: 'private', id: currentUser.username, name: 'پیام‌های ذخیره شده', avatar: null, isGroup: false, isSaved: true });
+            
+            // Other Users (Excluding Self)
+            users.filter(u => u.username !== currentUser.username).forEach(u => {
+                list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar, isGroup: false, isSaved: false });
+            });
+        } 
+        else if (sidebarTab === 'groups' || sidebarTab === 'tasks') {
+            // Public Channel (Only in Groups tab maybe? Or separate?) Let's put in Groups.
+            if (sidebarTab === 'groups') {
+                 list.push({ type: 'public', id: null, name: 'کانال عمومی', avatar: null, isGroup: true, isSaved: false });
+            }
+            
+            // Groups
+            groups.forEach(g => {
+                list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isGroup: true, isSaved: false });
+            });
+        }
 
         // 3. Attach Meta & Filter
         const listWithMeta = list.map(item => {
@@ -163,10 +222,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             item.name.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-        // 5. Sort by Timestamp Descending
-        return filtered.sort((a, b) => b.timestamp - a.timestamp);
+        // 5. Sort by Timestamp Descending (Pinned Saved Messages stay top in 'private' tab logically, but let's enforce it)
+        return filtered.sort((a, b) => {
+            if (a.isSaved) return -1;
+            if (b.isSaved) return 1;
+            return b.timestamp - a.timestamp;
+        });
 
-    }, [messages, users, groups, searchTerm, currentUser.username]);
+    }, [messages, users, groups, searchTerm, currentUser.username, sidebarTab]);
 
     const handleSendMessage = async () => {
         if ((!inputText.trim()) || isUploading) return;
@@ -205,7 +268,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setInputText('');
             setReplyingTo(null);
             onRefresh();
+            // Immediate scroll
             scrollToBottom();
+            setTimeout(scrollToBottom, 200);
         } catch (e: any) {
             console.error("Send Error:", e);
             alert(`خطا در ارسال پیام: ${e.message}`);
@@ -330,6 +395,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return d.toLocaleDateString('fa-IR', {month:'short', day:'numeric'});
     };
 
+    // Format Seconds to mm:ss
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
     const displayMsgs = getDisplayMessages();
 
     return (
@@ -344,12 +416,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200">
                                 {currentUser.fullName.charAt(0)}
                             </div>
-                            <span className="font-bold text-gray-800">گفتگوها</span>
+                            <span className="font-bold text-gray-800">پیام‌ها</span>
                         </div>
-                        <button onClick={() => setShowGroupModal(true)} className="p-2 text-blue-600 bg-white rounded-full hover:bg-blue-50 shadow-sm transition-colors">
-                            <Edit2 size={18}/>
-                        </button>
+                        {sidebarTab === 'groups' && (
+                            <button onClick={() => setShowGroupModal(true)} className="p-2 text-blue-600 bg-white rounded-full hover:bg-blue-50 shadow-sm transition-colors">
+                                <Plus size={18}/>
+                            </button>
+                        )}
                     </div>
+                    
+                    {/* Tabs */}
+                    <div className="flex bg-gray-200 p-1 rounded-lg">
+                        <button onClick={() => setSidebarTab('private')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${sidebarTab === 'private' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>شخصی</button>
+                        <button onClick={() => setSidebarTab('groups')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${sidebarTab === 'groups' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>گروه‌ها</button>
+                        <button onClick={() => setSidebarTab('tasks')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${sidebarTab === 'tasks' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>تسک‌ها</button>
+                    </div>
+
                     {/* Sidebar Search */}
                     <div className="relative">
                         <Search size={16} className="absolute right-3 top-2.5 text-gray-400"/>
@@ -366,18 +448,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {sortedChatList.map(item => {
                         const isActive = activeChannel.type === item.type && activeChannel.id === item.id;
-                        const isOnline = item.timestamp > 0; // Simple check if active
-
+                        
                         return (
                             <div key={`${item.type}_${item.id}`} 
-                                onClick={() => { setActiveChannel({type: item.type as any, id: item.id}); setMobileShowChat(true); }}
+                                onClick={() => { 
+                                    setActiveChannel({type: item.type as any, id: item.id}); 
+                                    setMobileShowChat(true); 
+                                    // If clicked from 'Tasks' tab, switch directly to tasks view
+                                    if (sidebarTab === 'tasks') {
+                                        setActiveTab('tasks');
+                                    } else {
+                                        setActiveTab('chat');
+                                    }
+                                }}
                                 className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-50 ${isActive ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
                             >
                                 <div className="relative">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm overflow-hidden ${item.type === 'public' ? 'bg-indigo-500' : item.type === 'group' ? 'bg-orange-500' : 'bg-gray-400'}`}>
-                                        {item.avatar ? <img src={item.avatar} className="w-full h-full object-cover"/> : (item.type === 'public' ? <Users size={22}/> : item.type === 'group' ? <Users size={20}/> : <UserIcon size={20}/>)}
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm overflow-hidden ${item.isSaved ? 'bg-sky-600' : item.type === 'public' ? 'bg-indigo-500' : item.type === 'group' ? 'bg-orange-500' : 'bg-gray-400'}`}>
+                                        {item.isSaved ? <Bookmark size={20}/> : item.avatar ? <img src={item.avatar} className="w-full h-full object-cover"/> : (item.type === 'public' ? <Users size={22}/> : item.type === 'group' ? <Users size={20}/> : <UserIcon size={20}/>)}
                                     </div>
-                                    {/* Online indicator if needed, currently based on activity timestamp logic */}
                                 </div>
                                 
                                 <div className="flex-1 min-w-0">
@@ -388,8 +477,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     <p className="text-xs text-gray-500 truncate flex items-center gap-1">
                                         {item.lastMsg ? (
                                             <>
-                                                {item.lastMsg.senderUsername === currentUser.username && <span className="text-blue-500">شما:</span>}
-                                                <span className={`${!item.lastMsg.senderUsername.includes(currentUser.username) ? 'text-gray-800 font-medium' : ''}`}>
+                                                {!item.isSaved && item.lastMsg.senderUsername === currentUser.username && <span className="text-blue-500">شما:</span>}
+                                                <span className={`${!item.isSaved && !item.lastMsg.senderUsername.includes(currentUser.username) ? 'text-gray-800 font-medium' : ''}`}>
                                                     {item.lastMsg.message || (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : '')}
                                                 </span>
                                             </>
@@ -419,11 +508,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     <div className="flex items-center gap-3">
                         <button onClick={() => setMobileShowChat(false)} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
                         <div className="flex flex-col cursor-pointer" onClick={() => { if(activeChannel.type==='group') setActiveTab(activeTab==='chat'?'tasks':'chat') }}>
-                            <h3 className="font-bold text-gray-800 text-base">
-                                {activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name}
+                            <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                                {activeChannel.id === currentUser.username ? 'پیام‌های ذخیره شده' : (activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name)}
+                                {activeChannel.id === currentUser.username && <Lock size={14} className="text-gray-400"/>}
                             </h3>
                             <span className="text-xs text-blue-500 font-medium">
-                                {activeChannel.type === 'group' ? (activeTab === 'chat' ? 'بزنید برای تسک‌ها' : 'بزنید برای چت') : 'آنلاین'}
+                                {activeChannel.id === currentUser.username ? 'شخصی' : (activeChannel.type === 'group' ? (activeTab === 'chat' ? 'بزنید برای تسک‌ها' : 'بزنید برای چت') : 'آنلاین')}
                             </span>
                         </div>
                     </div>
@@ -436,7 +526,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                              </button>
                         )}
                         {activeChannel.type === 'group' && (
-                            <div className="bg-gray-100 p-2 rounded-lg text-gray-600" onClick={() => setActiveTab(activeTab==='chat'?'tasks':'chat')}>
+                            <div className="bg-gray-100 p-2 rounded-lg text-gray-600 cursor-pointer" onClick={() => setActiveTab(activeTab==='chat'?'tasks':'chat')}>
                                 {activeTab === 'chat' ? <ListTodo size={20}/> : <MessageSquare size={20}/>}
                             </div>
                         )}
@@ -466,6 +556,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         
                         {displayMsgs.map((msg) => {
                             const isMe = msg.senderUsername === currentUser.username;
+                            // For Saved Messages, both sides are me, so we align right always (standard behavior)
+                            // or left if it was forwarded? For now, standard right align.
+                            
                             return (
                                 <div key={msg.id} id={`msg-${msg.id}`} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-1 group`}>
                                     <div className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'}`}>
@@ -487,7 +580,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         {/* Content: Voice (FIXED UI) */}
                                         {msg.audioUrl && (
                                             <div className="flex items-center gap-2 min-w-[160px] py-1">
-                                                {/* Removed the redundant div with Play icon */}
                                                 <audio controls src={msg.audioUrl} className="h-8 w-full opacity-90 custom-audio-player" />
                                             </div>
                                         )}
@@ -598,7 +690,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     }
                                     // Default behavior for Shift+Enter or Ctrl+Enter is new line, so we do nothing here to allow it
                                 }}
-                                placeholder={isRecording ? "در حال ضبط..." : "پیام خود را بنویسید..."}
+                                placeholder={isRecording ? `در حال ضبط... ${formatDuration(recordingDuration)}` : "پیام خود را بنویسید..."}
                                 className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
                                 rows={1}
                                 style={{ height: 'auto', minHeight: '24px' }}
