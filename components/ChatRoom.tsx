@@ -128,13 +128,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // Push state when opening chat to allow back button
     const pushChatHistory = () => {
         if (window.innerWidth < 768) {
-            window.history.pushState({ view: 'chat' }, '', '#chat/open');
+            try {
+                if (window.location.protocol !== 'blob:') {
+                     window.history.pushState({ view: 'chat' }, '', '#chat/open');
+                } else {
+                     window.history.pushState({ view: 'chat' }, '');
+                }
+            } catch(e) {
+                 // Fallback
+                 try { window.history.pushState({ view: 'chat' }, ''); } catch(e2) {}
+            }
         }
     };
 
     // Push state for modals
     const pushModalHistory = () => {
-        window.history.pushState({ view: 'modal' }, '', '#chat/modal');
+        try {
+            if (window.location.protocol !== 'blob:') {
+                 window.history.pushState({ view: 'modal' }, '', '#chat/modal');
+            } else {
+                 window.history.pushState({ view: 'modal' }, '');
+            }
+        } catch(e) {
+             try { window.history.pushState({ view: 'modal' }, ''); } catch(e2) {}
+        }
     };
 
     const checkSharedContent = async () => {
@@ -170,7 +187,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                     await cache.delete('/shared-meta');
                     await cache.delete('/shared-file-0');
-                    window.history.replaceState(null, '', window.location.pathname + window.location.hash.replace('?action=share_received', ''));
+                    // Clean URL
+                    if (window.location.protocol !== 'blob:') {
+                        window.history.replaceState(null, '', window.location.pathname + window.location.hash.replace('?action=share_received', ''));
+                    }
                 }
             } catch (e) {
                 console.error("Error reading shared content", e);

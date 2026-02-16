@@ -56,16 +56,28 @@ function App() {
   const safePushState = (state: any, title: string, url?: string) => { 
       // Always use history API for better UX even in PWA
       try { 
-          if (url) window.history.pushState(state, title, url); 
-          else window.history.pushState(state, title); 
-      } catch (e) { console.error("Nav Error", e); } 
+          if (url && window.location.protocol !== 'blob:') {
+            window.history.pushState(state, title, url);
+          } else {
+            window.history.pushState(state, title); 
+          }
+      } catch (e) { 
+          // Fallback if URL push fails (e.g. cross-origin issues in some environments)
+          try { window.history.pushState(state, title); } catch(e2) { console.error("Nav Error", e); }
+      } 
   };
 
   const safeReplaceState = (state: any, title: string, url?: string) => { 
       try { 
-          if (url) window.history.replaceState(state, title, url); 
-          else window.history.replaceState(state, title); 
-      } catch (e) { console.error("Nav Replace Error", e); } 
+          if (url && window.location.protocol !== 'blob:') {
+            window.history.replaceState(state, title, url);
+          } else {
+            window.history.replaceState(state, title); 
+          }
+      } catch (e) { 
+          // Fallback
+          try { window.history.replaceState(state, title); } catch(e2) { console.error("Nav Replace Error", e); }
+      } 
   };
   
   const setActiveTab = (tab: string, addToHistory = true) => { 
