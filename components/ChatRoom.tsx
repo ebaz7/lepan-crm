@@ -46,7 +46,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [inputText, setInputText] = useState('');
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
     const [pendingForward, setPendingForward] = useState<ChatMessage | null>(null);
-    const [hideForwardSender, setHideForwardSender] = useState(false); // New state for hiding quote
+    const [hideForwardSender, setHideForwardSender] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
@@ -93,7 +93,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     // --- Load Data & Effects ---
-    // Critical: Update local messages when props change
     useEffect(() => { 
         if (preloadedMessages && Array.isArray(preloadedMessages)) {
             setMessages(preloadedMessages); 
@@ -194,14 +193,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         } catch (e) { console.error("Chat load error", e); }
     };
 
-    // --- Message Processing & Filtering (SAFEGUARDED) ---
+    // --- Message Processing & Filtering (FIXED) ---
     const getDisplayMessages = () => {
         const list = messages.filter(msg => { 
             // Soft Delete check
             if (msg.hiddenFor && msg.hiddenFor.includes(currentUser.username)) return false;
 
             if (activeChannel.type === 'public') {
-                // Safely check for falsy values
                 return (!msg.recipient || msg.recipient === '') && (!msg.groupId || msg.groupId === ''); 
             }
             if (activeChannel.type === 'private') {
@@ -496,6 +494,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     
     const handleMessageClick = (e: React.MouseEvent | React.TouchEvent, msg: ChatMessage) => {
         if (isMsgSelectionMode) { toggleMsgSelection(msg.id); return; }
+        // On mobile, tap to show menu
         if (window.innerWidth < 768) {
             e.stopPropagation();
             e.preventDefault();
