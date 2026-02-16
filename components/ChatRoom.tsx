@@ -47,6 +47,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [isUploading, setIsUploading] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
     
+    // --- Long Press State ---
+    const longPressTimer = useRef<any>(null);
+    
     // --- Forwarding Modal State ---
     const [showForwardDestinationModal, setShowForwardDestinationModal] = useState(false);
     const [sharedFile, setSharedFile] = useState<File | null>(null); 
@@ -439,9 +442,47 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
     
     // --- Context Menu Actions ---
-    const triggerMenu = (e: React.MouseEvent, msg: ChatMessage) => {
+    const triggerMenu = (e: React.MouseEvent | React.TouchEvent, msg: ChatMessage) => {
         e.stopPropagation();
-        setContextMenu({ x: e.clientX, y: e.clientY, msg });
+        let clientX, clientY;
+        
+        if ('touches' in e) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = (e as React.MouseEvent).clientX;
+            clientY = (e as React.MouseEvent).clientY;
+        }
+
+        setContextMenu({ x: clientX, y: clientY, msg });
+    };
+    
+    // --- Touch Handlers (Long Press) ---
+    const handleTouchStart = (e: React.TouchEvent, msg: ChatMessage) => {
+        if (isMsgSelectionMode) return;
+        
+        const touch = e.touches[0];
+        const { clientX, clientY } = touch;
+        
+        longPressTimer.current = setTimeout(() => {
+             // Trigger vibration if available
+             if (navigator.vibrate) navigator.vibrate(50);
+             setContextMenu({ x: clientX, y: clientY, msg });
+        }, 600); // 600ms long press
+    };
+
+    const handleTouchEnd = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+    
+    const handleTouchMove = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
     };
 
     const onActionEdit = () => {
@@ -482,10 +523,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const backgroundStyle = useMemo(() => {
         if (currentUser.chatBackground) {
-            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', opacity: 1 };
         }
         if (systemSettings?.defaultChatBackground) {
-             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', opacity: 1 };
         }
         return { backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`, opacity: 0.1 };
     }, [currentUser.chatBackground, systemSettings?.defaultChatBackground]);
@@ -574,7 +615,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* --- CHAT AREA --- */}
             <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col bg-[#8E98A3] z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 
-                <div className={`absolute inset-0 pointer-events-none ${!currentUser.chatBackground && !systemSettings?.defaultChatBackground ? 'opacity-10' : 'opacity-100'}`} style={backgroundStyle}></div>
+                {/* Background Image Layer */}
+                <div className="absolute inset-0 z-0 pointer-events-none" style={backgroundStyle}></div>
 
                 {/* Header */}
                 <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0 h-[64px]">
@@ -658,12 +700,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         </div>
                                     )}
 
-                                    <div className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm cursor-pointer select-none ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+                                    <div 
+                                        className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm cursor-pointer select-none ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                                        onTouchStart={(e) => handleTouchStart(e, msg)}
+                                        onTouchEnd={handleTouchEnd}
+                                        onTouchMove={handleTouchMove}
+                                    >
                                         
-                                        {/* Three Dots Menu Button (Visible on Hover/Touch) */}
+                                        {/* Three Dots Menu Button (Visible on Hover/Touch) - ALWAYS PRESENT */}
                                         {!isMsgSelectionMode && (
                                             <button 
-                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 z-10 md:opacity-0 active:opacity-100`}
+                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 z-10 active:opacity-100`}
                                                 onClick={(e) => triggerMenu(e, msg)}
                                             >
                                                 <MoreVertical size={14} />
