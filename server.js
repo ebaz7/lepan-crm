@@ -54,18 +54,7 @@ const getDb = () => {
         return JSON.parse(raw);
     } catch (e) {
         console.error("DB Read Error:", e);
-        // CRITICAL FIX: Include 'chat', 'groups', 'tasks' in default fallback to prevent UI issues
-        return { 
-            users: [], 
-            orders: [], 
-            exitPermits: [], 
-            warehouseTransactions: [], 
-            tradeRecords: [],
-            chat: [], 
-            groups: [], 
-            tasks: [], 
-            settings: {} 
-        };
+        return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {} };
     }
 };
 
