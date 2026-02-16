@@ -261,7 +261,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         } catch (e) { console.error("Notif Error", e); }
     };
 
-    // --- FIX: ROBUST DELETE ---
+    // --- CRITICAL FIX: ROBUST DELETE ---
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
         // 1. Prevent Bubble
         if (e) {
