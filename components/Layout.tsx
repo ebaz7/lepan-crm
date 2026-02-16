@@ -50,9 +50,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   });
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingWallpaper, setUploadingWallpaper] = useState(false); // NEW
+  const [uploadingWallpaper, setUploadingWallpaper] = useState(false); 
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const wallpaperInputRef = useRef<HTMLInputElement>(null); // NEW
+  const wallpaperInputRef = useRef<HTMLInputElement>(null); 
 
   // Update Detection State
   const [serverVersion, setServerVersion] = useState<string | null>(null);
@@ -149,10 +149,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showNotifDropdown]);
 
-  // --- HANDLE MOBILE MENU BACK NAVIGATION ---
+  // --- HANDLE MOBILE MENU BACK NAVIGATION (Enhanced) ---
   const toggleMobileMenu = () => {
       if (!showMobileMenu) {
-          window.history.pushState({ menu: 'open' }, '');
+          window.history.pushState({ menu: 'open' }, '', '#menu');
           setShowMobileMenu(true);
       } else {
           window.history.back(); // This triggers popstate to close menu
@@ -160,9 +160,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   };
 
   useEffect(() => {
-      const handlePopState = () => {
+      const handlePopState = (event: PopStateEvent) => {
           if (showMobileMenu) {
               setShowMobileMenu(false);
+              // We consumed the popstate for menu closing, fine.
           }
       };
       window.addEventListener('popstate', handlePopState);

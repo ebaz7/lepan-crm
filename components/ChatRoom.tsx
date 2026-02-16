@@ -96,19 +96,46 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return () => clearInterval(interval);
     }, []);
 
-    // --- HANDLE HARDWARE BACK BUTTON (MOBILE) ---
+    // --- HANDLE HARDWARE BACK BUTTON (MOBILE & HISTORY API) ---
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
-            // If the chat view is open on mobile, close it
+            // Priority 1: Close Forward Modal
+            if (showForwardDestinationModal) {
+                setShowForwardDestinationModal(false);
+                setPendingForward(null);
+                return;
+            }
+            
+            // Priority 2: Close Inner Search
+            if (showInnerSearch) {
+                setShowInnerSearch(false);
+                setInnerSearchTerm('');
+                return;
+            }
+
+            // Priority 3: Close Chat View (Mobile)
             if (mobileShowChat) {
                 setMobileShowChat(false);
-                // We don't prevent default here because the history pop has already happened
+                // Also reset active channel to reflect "closed" state visually if needed
+                return;
             }
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [mobileShowChat]);
+    }, [mobileShowChat, showForwardDestinationModal, showInnerSearch]);
+
+    // Push state when opening chat to allow back button
+    const pushChatHistory = () => {
+        if (window.innerWidth < 768) {
+            window.history.pushState({ view: 'chat' }, '', '#chat/open');
+        }
+    };
+
+    // Push state for modals
+    const pushModalHistory = () => {
+        window.history.pushState({ view: 'modal' }, '', '#chat/modal');
+    };
 
     const checkSharedContent = async () => {
         if (window.location.hash.includes('share_received')) {
@@ -331,6 +358,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setSelectedMsgIds([]);
             setHideForwardSender(false); // Default to show quote
             setShowForwardDestinationModal(true);
+            pushModalHistory();
         }
     };
 
@@ -345,6 +373,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setActiveChannel({ type: item.type, id: item.id });
             setMobileShowChat(true);
             setShowForwardDestinationModal(false); 
+            pushChatHistory();
             return;
         }
 
@@ -354,12 +383,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         updateReadStatus(readKey);
         setActiveChannel({ type, id });
         
-        // Push state so back button works to close chat
-        if (window.innerWidth < 768) {
-            window.history.pushState({ tab: 'chat', chatDetail: true }, '', window.location.hash);
-        }
-        
         setMobileShowChat(true);
+        pushChatHistory();
         
         if (sidebarTab === 'tasks') setActiveTab('tasks');
         else setActiveTab('chat');
@@ -479,6 +504,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Context Menu Actions ---
     const triggerMenu = (e: React.MouseEvent | React.TouchEvent, msg: ChatMessage) => {
         e.stopPropagation();
+        e.preventDefault(); // Prevent default browser context menu
+        
         let clientX, clientY;
         
         if ('touches' in e) {
@@ -530,6 +557,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setPendingForward(msg);
         setHideForwardSender(false); // Default: Show Quote
         setShowForwardDestinationModal(true);
+        pushModalHistory();
     };
 
     const onActionEdit = () => {
@@ -554,6 +582,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setHideForwardSender(false); // Default: Show Quote
         setContextMenu(null);
         setShowForwardDestinationModal(true);
+        pushModalHistory();
     };
 
     const onActionCopy = () => {
@@ -758,7 +787,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                                     {/* Quick Actions (Reply/Forward) - Shows on Hover/Touch */}
                                     {!isMsgSelectionMode && (
-                                        <div className={`flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity mx-2 mb-1 ${isMe ? 'order-first' : 'order-last'}`}>
+                                        <div className={`flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity mx-2 mb-1 md:flex hidden ${isMe ? 'order-first' : 'order-last'}`}>
                                             <button 
                                                 className="p-1.5 bg-white/80 hover:bg-white rounded-full text-gray-600 shadow-sm" 
                                                 title="پاسخ"
@@ -783,13 +812,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         onTouchMove={handleTouchMove}
                                     >
                                         
-                                        {/* Three Dots Menu Button - Clearer */}
+                                        {/* Three Dots Menu Button - Improved for Mobile */}
                                         {!isMsgSelectionMode && (
                                             <button 
-                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-600 hover:bg-black/15 z-10 opacity-70 hover:opacity-100 transition-all`}
+                                                className={`absolute -top-2 ${isMe ? '-left-2' : '-right-2'} p-1.5 rounded-full bg-white shadow-sm border border-gray-200 text-gray-600 z-20 hover:scale-110 active:scale-95 transition-all`}
                                                 onClick={(e) => triggerMenu(e, msg)}
                                             >
-                                                <MoreVertical size={16} />
+                                                <MoreVertical size={14} />
                                             </button>
                                         )}
 
@@ -916,7 +945,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 <div className="absolute inset-0 z-50 bg-white flex flex-col animate-fade-in">
                     <div className="p-3 border-b flex justify-between items-center bg-gray-50">
                         <span className="font-bold">ارسال به ...</span>
-                        <button onClick={() => { setShowForwardDestinationModal(false); setPendingForward(null); setSharedFile(null); setHideForwardSender(false); }}><X/></button>
+                        <button onClick={() => { setShowForwardDestinationModal(false); setPendingForward(null); setSharedFile(null); setHideForwardSender(false); window.history.back(); }}><X/></button>
                     </div>
                     
                     <div className="p-2 bg-blue-50 text-xs text-blue-800 mb-2 mx-2 rounded border border-blue-100">

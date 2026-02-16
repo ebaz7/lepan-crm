@@ -52,16 +52,28 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
+  // --- NAVIGATION HISTORY MANAGER ---
   const safePushState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.pushState(state, title, url); else window.history.pushState(state, title); } catch (e) { try { window.history.pushState(state, title); } catch(e2) {} } 
+      // Always use history API for better UX even in PWA
+      try { 
+          if (url) window.history.pushState(state, title, url); 
+          else window.history.pushState(state, title); 
+      } catch (e) { console.error("Nav Error", e); } 
   };
+
   const safeReplaceState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
+      try { 
+          if (url) window.history.replaceState(state, title, url); 
+          else window.history.replaceState(state, title); 
+      } catch (e) { console.error("Nav Replace Error", e); } 
   };
   
-  const setActiveTab = (tab: string, addToHistory = true) => { setActiveTabState(tab); if (addToHistory) safePushState({ tab }, '', `#${tab}`); };
+  const setActiveTab = (tab: string, addToHistory = true) => { 
+      setActiveTabState(tab); 
+      if (addToHistory) {
+          safePushState({ tab }, '', `#${tab}`);
+      }
+  };
 
   useEffect(() => {
     if (isNative) {
@@ -77,6 +89,7 @@ function App() {
     }
   }, []);
 
+  // ... (Background Jobs Logic - No Change) ...
   useEffect(() => {
       const handleJob = (e: CustomEvent) => { setBackgroundJobs(prev => [...prev, e.detail]); };
       window.addEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
@@ -116,19 +129,34 @@ function App() {
       processingJobRef.current = false;
   };
 
+  // --- BACK BUTTON HANDLER ---
   useEffect(() => {
-    if (isNative) return; 
+    // Initial Load Handler
     const hash = window.location.hash.replace('#', '');
     if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(hash)) {
-        setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
-    } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
-    const handlePopState = (event: PopStateEvent) => { if (event.state && event.state.tab) setActiveTabState(event.state.tab); else setActiveTabState('dashboard'); };
+        setActiveTabState(hash); 
+        safeReplaceState({ tab: hash }, '', `#${hash}`);
+    } else { 
+        safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); 
+    }
+
+    // PopState Handler (Back Button)
+    const handlePopState = (event: PopStateEvent) => {
+        // If the state has specific 'tab' property, switch to it
+        if (event.state && event.state.tab) {
+            setActiveTabState(event.state.tab);
+        } else {
+            // Fallback for root
+            setActiveTabState('dashboard');
+        }
+    };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // ... (Rest of the component logic - No Change) ...
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
-
   const handleLogout = () => { setCurrentUser(null); isFirstLoad.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
 
   useEffect(() => {
@@ -144,36 +172,17 @@ function App() {
     }
   }, [currentUser]);
 
-  const playNotificationSound = () => { 
-      try { 
-          // Offline-safe beep sound (Base64)
-          const beep = "data:audio/wav;base64,UklGRl9vT1dAVEfmt"; 
-          const audio = new Audio(beep); 
-          audio.volume = 1.0; 
-          audio.play().catch(e => console.log("Audio blocked")); 
-      } catch (e) { } 
-  };
-
-  const addAppNotification = (title: string, message: string, url: string = '/') => { 
-      setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); 
-      playNotificationSound();
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-      setToast({ show: true, title, message });
-      toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
-      sendNotification(title, message, url);
-  };
-
+  const playNotificationSound = () => { try { const beep = "data:audio/wav;base64,UklGRl9vT1dAVEfmt"; const audio = new Audio(beep); audio.volume = 1.0; audio.play().catch(e => console.log("Audio blocked")); } catch (e) { } };
+  const addAppNotification = (title: string, message: string, url: string = '/') => { setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); playNotificationSound(); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); setToast({ show: true, title, message }); toastTimeoutRef.current = setTimeout(() => setToast(null), 5000); sendNotification(title, message, url); };
   const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
   const closeToast = () => { setToast(null); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
 
   const loadData = async (silent = false) => {
     if (!currentUser) return;
-    
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
         const cachedSettings = getLocalData<SystemSettings>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 } as any);
         const cachedMessages = getLocalData<ChatMessage[]>(LS_KEYS.CHAT, []); 
-        
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) setSettings(cachedSettings);
         if (cachedMessages.length > 0) {
@@ -181,41 +190,17 @@ function App() {
             if (cachedMessages.length > 0) lastChatMsgIdRef.current = cachedMessages[cachedMessages.length - 1].id;
         }
     }
-
     if (!silent && orders.length === 0) setLoading(true);
-
     try {
         const [ordersData, settingsData, messagesData] = await Promise.all([getOrders(), getSettings(), getMessages()]);
-        
-        // --- SAFE GUARD & DEEP SANITIZATION (The Fix) ---
-        // Recursively clean the data to ensure nested arrays are actually arrays.
-        // This fixes crashes where a backup might have 'paymentDetails: null'
-        
-        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
-            ...o,
-            // Deep clean paymentDetails
-            paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [],
-            // Deep clean attachments
-            attachments: Array.isArray(o.attachments) ? o.attachments : []
-        })) : [];
-
+        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({ ...o, paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [], attachments: Array.isArray(o.attachments) ? o.attachments : [] })) : [];
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
-        
-        // Also sanitize settings arrays just in case
-        if (settingsData) {
-            if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
-            if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
-            if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
-            if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
-        }
-
+        if (settingsData) { if (!Array.isArray(settingsData.companies)) settingsData.companies = []; if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = []; if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = []; if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = []; }
         setSettings(settingsData);
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
-        
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);
-        
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
             if (lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username) {
@@ -227,95 +212,24 @@ function App() {
             }
             lastChatMsgIdRef.current = lastMsg.id;
         }
-
         if (isFirstLoad.current) { checkChequeAlerts(safeOrders); }
-        
         localStorage.setItem(NOTIFICATION_CHECK_KEY, Date.now().toString());
         isFirstLoad.current = false;
-    } catch (error) { 
-        console.error("Failed to load data", error); 
-    } finally { 
-        if (!silent) setLoading(false); 
-    }
+    } catch (error) { console.error("Failed to load data", error); } finally { if (!silent) setLoading(false); }
   };
 
-  const checkChequeAlerts = (list: PaymentOrder[]) => {
-      const now = new Date();
-      let alertCount = 0;
-      list.forEach(order => {
-          // Double check array existence even after sanitization
-          if (order.paymentDetails && Array.isArray(order.paymentDetails)) {
-              order.paymentDetails.forEach(detail => {
-                  if (detail.method === PaymentMethod.CHEQUE && detail.chequeDate) {
-                      const dueDate = parsePersianDate(detail.chequeDate);
-                      if (dueDate) {
-                          const diffTime = dueDate.getTime() - now.getTime();
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                          if (diffDays <= 2 && diffDays >= 0) { alertCount++; }
-                      }
-                  }
-              });
-          }
-      });
-      if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); }
-  };
+  const checkChequeAlerts = (list: PaymentOrder[]) => { const now = new Date(); let alertCount = 0; list.forEach(order => { if (order.paymentDetails && Array.isArray(order.paymentDetails)) { order.paymentDetails.forEach(detail => { if (detail.method === PaymentMethod.CHEQUE && detail.chequeDate) { const dueDate = parsePersianDate(detail.chequeDate); if (dueDate) { const diffTime = dueDate.getTime() - now.getTime(); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if (diffDays <= 2 && diffDays >= 0) { alertCount++; } } } }); } }); if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); } };
+  const checkForNotifications = (newList: PaymentOrder[], user: User, lastCheckTime: number) => { if (!Array.isArray(newList)) return; const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime); newEvents.forEach(newItem => { const status = newItem.status; const isAdmin = user.role === UserRole.ADMIN; if (isAdmin) { const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); } } if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); } else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); } else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); } else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } } else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); } }); };
 
-  const checkForNotifications = (newList: PaymentOrder[], user: User, lastCheckTime: number) => {
-     // Safe guard against non-array input
-     if (!Array.isArray(newList)) return;
-
-     const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
-     newEvents.forEach(newItem => {
-        const status = newItem.status;
-        const isAdmin = user.role === UserRole.ADMIN;
-        if (isAdmin) {
-             const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
-             if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
-        }
-        if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); }
-        else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); }
-        else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
-        else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
-        else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
-     });
-  };
-
-  useEffect(() => {
-      const handleAppStateChange = async (state: any) => {
-          if (state.isActive && currentUser) {
-              await loadData(true);
-          }
-      };
-      let listener: any;
-      if (Capacitor.isNativePlatform()) {
-          CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; });
-      }
-      return () => { if (listener) listener.remove(); };
-  }, [currentUser]);
-
-  useEffect(() => { 
-      if (currentUser) { 
-          loadData(false); 
-          const intervalId = setInterval(() => loadData(true), 5000); 
-          return () => clearInterval(intervalId); 
-      } 
-  }, [currentUser]);
+  useEffect(() => { const handleAppStateChange = async (state: any) => { if (state.isActive && currentUser) { await loadData(true); } }; let listener: any; if (Capacitor.isNativePlatform()) { CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; }); } return () => { if (listener) listener.remove(); }; }, [currentUser]);
+  useEffect(() => { if (currentUser) { loadData(false); const intervalId = setInterval(() => loadData(true), 5000); return () => clearInterval(intervalId); } }, [currentUser]);
 
   const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); setActiveTab('manage'); };
   const handleLogin = (user: User) => { setCurrentUser(user); setActiveTab('dashboard'); };
   const handleViewArchive = () => { setManageOrdersInitialTab('archive'); setDashboardStatusFilter(null); setActiveTab('manage'); };
   const handleDashboardFilter = (status: any) => { setDashboardStatusFilter(status); setManageOrdersInitialTab('current'); setActiveTab('manage'); };
 
-  const handleGoToPaymentApprovals = () => {
-      let filter: any = 'pending_all';
-      if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial';
-      else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager';
-      else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo';
-      setDashboardStatusFilter(filter);
-      setManageOrdersInitialTab('current');
-      setActiveTab('manage');
-  };
-
+  const handleGoToPaymentApprovals = () => { let filter: any = 'pending_all'; if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial'; else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager'; else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo'; setDashboardStatusFilter(filter); setManageOrdersInitialTab('current'); setActiveTab('manage'); };
   const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
   const [warehouseInitialTab, setWarehouseInitialTab] = useState<'dashboard' | 'approvals'>('dashboard');
   const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); setActiveTab('warehouse'); };
