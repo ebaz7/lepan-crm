@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
 import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage } from '../services/storageService';
 import { getUsers } from '../services/authService';
@@ -130,6 +130,44 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return list;
     };
 
+    // --- SORTED CHAT LIST LOGIC (Telegram Style) ---
+    const sortedChatList = useMemo(() => {
+        // 1. Helper to find last message for a channel
+        const getChannelMeta = (type: 'public' | 'group' | 'private', id: string | null) => {
+            let relevantMsgs = [];
+            if (type === 'public') relevantMsgs = messages.filter(m => !m.recipient && !m.groupId);
+            else if (type === 'group') relevantMsgs = messages.filter(m => m.groupId === id);
+            else if (type === 'private') relevantMsgs = messages.filter(m => (m.senderUsername === id && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === id));
+            
+            if (relevantMsgs.length === 0) return { lastMsg: null, timestamp: 0 };
+            
+            const lastMsg = relevantMsgs[relevantMsgs.length - 1];
+            return { lastMsg, timestamp: lastMsg.timestamp };
+        };
+
+        // 2. Build list
+        const list = [
+            { type: 'public', id: null, name: 'کانال عمومی', avatar: null, isGroup: true },
+            ...groups.map(g => ({ type: 'group', id: g.id, name: g.name, avatar: null, isGroup: true })),
+            ...users.map(u => ({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar, isGroup: false }))
+        ];
+
+        // 3. Attach Meta & Filter
+        const listWithMeta = list.map(item => {
+            const meta = getChannelMeta(item.type as any, item.id);
+            return { ...item, ...meta };
+        });
+
+        // 4. Search Filter
+        const filtered = listWithMeta.filter(item => 
+            item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        // 5. Sort by Timestamp Descending
+        return filtered.sort((a, b) => b.timestamp - a.timestamp);
+
+    }, [messages, users, groups, searchTerm, currentUser.username]);
+
     const handleSendMessage = async () => {
         if ((!inputText.trim()) || isUploading) return;
 
@@ -177,21 +215,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        // Increased limit for enterprise needs
-        if (file.size > 200 * 1024 * 1024) {
-            alert('حجم فایل نباید بیشتر از 200 مگابایت باشد.');
-            return;
-        }
-
+        if (file.size > 200 * 1024 * 1024) { alert('حجم فایل نباید بیشتر از 200 مگابایت باشد.'); return; }
         setIsUploading(true);
         const reader = new FileReader();
-        
         reader.onload = async (ev) => {
             try {
                 const base64 = ev.target?.result as string;
                 const result = await uploadFile(file.name, base64);
-                
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
                     sender: currentUser.fullName,
@@ -205,18 +235,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 };
                 await sendMessage(newMsg);
                 onRefresh();
-            } catch (error) {
-                console.error("File Upload Error:", error);
-                alert('خطا در ارسال فایل. اتصال را بررسی کنید.');
-            } finally {
-                setIsUploading(false);
-            }
+            } catch (error) { alert('خطا در ارسال فایل. اتصال را بررسی کنید.'); } finally { setIsUploading(false); }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
     };
     
-    // ... (Voice logic same as before) ...
     const toggleRecording = async () => {
          if (isRecording) {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -285,7 +309,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     };
     
-    // Highlight logic
     const renderMessageContent = (text: string) => {
         if (!innerSearchTerm || !text) return text;
         const parts = text.split(new RegExp(`(${innerSearchTerm})`, 'gi'));
@@ -297,9 +320,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </span>
         );
     };
+    
+    // Helper to format preview date
+    const getPreviewTime = (ts: number) => {
+        if (!ts) return '';
+        const d = new Date(ts);
+        const now = new Date();
+        if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'});
+        return d.toLocaleDateString('fa-IR', {month:'short', day:'numeric'});
+    };
 
-    const filteredUsers = users.filter(u => u.fullName.includes(searchTerm));
-    const filteredGroups = groups.filter(g => g.name.includes(searchTerm));
     const displayMsgs = getDisplayMessages();
 
     return (
@@ -314,7 +344,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200">
                                 {currentUser.fullName.charAt(0)}
                             </div>
-                            <span className="font-bold text-gray-800">پیام‌رسان سازمانی</span>
+                            <span className="font-bold text-gray-800">گفتگوها</span>
                         </div>
                         <button onClick={() => setShowGroupModal(true)} className="p-2 text-blue-600 bg-white rounded-full hover:bg-blue-50 shadow-sm transition-colors">
                             <Edit2 size={18}/>
@@ -325,67 +355,54 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <Search size={16} className="absolute right-3 top-2.5 text-gray-400"/>
                         <input 
                             className="w-full bg-white border border-gray-200 rounded-xl py-2 pr-9 pl-3 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
-                            placeholder="جستجو در مخاطبین..."
+                            placeholder="جستجو..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
 
-                {/* Chat List */}
+                {/* Chat List (Sorted) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {/* Public Channel */}
-                    <div 
-                        onClick={() => { setActiveChannel({type: 'public', id: null}); setMobileShowChat(true); }}
-                        className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'public' ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                    >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md">
-                            <Users size={22}/>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="font-bold text-gray-800 text-sm">کانال عمومی</span>
-                                <span className="text-[10px] text-gray-400">همیشه</span>
-                            </div>
-                            <p className="text-xs text-gray-500 truncate">پیام‌های عمومی سیستم...</p>
-                        </div>
-                    </div>
+                    {sortedChatList.map(item => {
+                        const isActive = activeChannel.type === item.type && activeChannel.id === item.id;
+                        const isOnline = item.timestamp > 0; // Simple check if active
 
-                    {/* Groups */}
-                    {filteredGroups.map(g => (
-                        <div key={g.id} 
-                            onClick={() => { setActiveChannel({type: 'group', id: g.id}); setMobileShowChat(true); }}
-                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'group' && activeChannel.id === g.id ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                        >
-                            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold border border-orange-200">
-                                {g.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-gray-800 text-sm truncate">{g.name}</span>
+                        return (
+                            <div key={`${item.type}_${item.id}`} 
+                                onClick={() => { setActiveChannel({type: item.type as any, id: item.id}); setMobileShowChat(true); }}
+                                className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-50 ${isActive ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
+                            >
+                                <div className="relative">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm overflow-hidden ${item.type === 'public' ? 'bg-indigo-500' : item.type === 'group' ? 'bg-orange-500' : 'bg-gray-400'}`}>
+                                        {item.avatar ? <img src={item.avatar} className="w-full h-full object-cover"/> : (item.type === 'public' ? <Users size={22}/> : item.type === 'group' ? <Users size={20}/> : <UserIcon size={20}/>)}
+                                    </div>
+                                    {/* Online indicator if needed, currently based on activity timestamp logic */}
                                 </div>
-                                <p className="text-xs text-gray-500 truncate">گروه کاری</p>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Users */}
-                    {filteredUsers.map(u => (
-                        <div key={u.id} 
-                            onClick={() => { setActiveChannel({type: 'private', id: u.username}); setMobileShowChat(true); }}
-                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'private' && activeChannel.id === u.username ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                        >
-                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border border-gray-100">
-                                {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : <UserIcon className="text-gray-500"/>}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-gray-800 text-sm truncate">{u.fullName}</span>
+                                
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-gray-800 text-sm truncate">{item.name}</span>
+                                        {item.timestamp > 0 && <span className="text-[10px] text-gray-400">{getPreviewTime(item.timestamp)}</span>}
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                        {item.lastMsg ? (
+                                            <>
+                                                {item.lastMsg.senderUsername === currentUser.username && <span className="text-blue-500">شما:</span>}
+                                                <span className={`${!item.lastMsg.senderUsername.includes(currentUser.username) ? 'text-gray-800 font-medium' : ''}`}>
+                                                    {item.lastMsg.message || (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : '')}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="opacity-50 italic">پیامی نیست</span>
+                                        )}
+                                    </p>
                                 </div>
-                                <p className="text-xs text-gray-500 truncate">{u.role}</p>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
+                    
+                    {sortedChatList.length === 0 && <div className="p-4 text-center text-xs text-gray-400">موردی یافت نشد.</div>}
                 </div>
             </div>
 
@@ -467,13 +484,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <div className="text-[11px] font-bold text-orange-600 mb-1">{msg.sender}</div>
                                         )}
 
-                                        {/* Content: Voice */}
+                                        {/* Content: Voice (FIXED UI) */}
                                         {msg.audioUrl && (
-                                            <div className="flex items-center gap-3 min-w-[160px] py-1">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm ${isMe ? 'bg-green-500' : 'bg-blue-500'}`}>
-                                                    <Play size={14} fill="currentColor" className="ml-0.5"/>
-                                                </div>
-                                                <audio controls src={msg.audioUrl} className="h-8 w-40 opacity-80" />
+                                            <div className="flex items-center gap-2 min-w-[160px] py-1">
+                                                {/* Removed the redundant div with Play icon */}
+                                                <audio controls src={msg.audioUrl} className="h-8 w-full opacity-90 custom-audio-player" />
                                             </div>
                                         )}
 
@@ -576,7 +591,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 ref={inputAreaRef}
                                 value={inputText}
                                 onChange={e => setInputText(e.target.value)}
-                                onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                                onKeyDown={e => { 
+                                    if(e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { 
+                                        e.preventDefault(); 
+                                        handleSendMessage(); 
+                                    }
+                                    // Default behavior for Shift+Enter or Ctrl+Enter is new line, so we do nothing here to allow it
+                                }}
                                 placeholder={isRecording ? "در حال ضبط..." : "پیام خود را بنویسید..."}
                                 className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
                                 rows={1}
@@ -606,7 +627,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 )}
             </div>
 
-            {/* Modal for Group Creation (kept same) */}
+            {/* Modal for Group Creation */}
             {showGroupModal && (
                 <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
