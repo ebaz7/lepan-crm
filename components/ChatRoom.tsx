@@ -7,7 +7,7 @@ import { generateUUID } from '../constants';
 import { 
     Send, User as UserIcon, Users, Plus, Paperclip, 
     CheckSquare, X, Trash2, Reply, Edit2, ArrowRight, 
-    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye, Mic, StopCircle, Download, Share2, ZoomIn
+    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, Mic, Download, Share2
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -193,21 +193,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         } catch (e) { console.error("Chat load error", e); }
     };
 
-    // --- Message Processing & Filtering (FIXED) ---
+    // --- Message Processing & Filtering (FIXED LOGIC) ---
     const getDisplayMessages = () => {
         const list = messages.filter(msg => { 
             // Soft Delete check
             if (msg.hiddenFor && msg.hiddenFor.includes(currentUser.username)) return false;
 
             if (activeChannel.type === 'public') {
-                return (!msg.recipient || msg.recipient === '') && (!msg.groupId || msg.groupId === ''); 
+                // Public messages have NO recipient AND NO groupId
+                const hasRecipient = msg.recipient && msg.recipient !== 'public';
+                const hasGroup = msg.groupId && msg.groupId !== 'public';
+                return !hasRecipient && !hasGroup; 
             }
             if (activeChannel.type === 'private') {
                 if (activeChannel.id === currentUser.username) {
+                    // Saved Messages
                     return msg.senderUsername === currentUser.username && msg.recipient === currentUser.username;
                 }
-                return (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || 
-                       (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id); 
+                // DM Conversation
+                const isMeSender = msg.senderUsername === currentUser.username;
+                const isThemSender = msg.senderUsername === activeChannel.id;
+                const isMeRecipient = msg.recipient === currentUser.username;
+                const isThemRecipient = msg.recipient === activeChannel.id;
+                
+                return (isMeSender && isThemRecipient) || (isThemSender && isMeRecipient);
             }
             if (activeChannel.type === 'group') return msg.groupId === activeChannel.id; 
             return false; 
@@ -258,9 +267,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const sortedChatList = useMemo(() => {
         const getChannelMeta = (type: 'public' | 'group' | 'private', id: string | null) => {
             let relevantMsgs = [];
-            if (type === 'public') relevantMsgs = messages.filter(m => !m.recipient && !m.groupId);
-            else if (type === 'group') relevantMsgs = messages.filter(m => m.groupId === id);
-            else if (type === 'private') {
+            if (type === 'public') {
+                relevantMsgs = messages.filter(m => (!m.recipient || m.recipient === 'public') && (!m.groupId || m.groupId === 'public'));
+            } else if (type === 'group') {
+                relevantMsgs = messages.filter(m => m.groupId === id);
+            } else if (type === 'private') {
                 if (id === currentUser.username) relevantMsgs = messages.filter(m => m.senderUsername === currentUser.username && m.recipient === currentUser.username);
                 else relevantMsgs = messages.filter(m => (m.senderUsername === id && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === id));
             }
