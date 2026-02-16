@@ -438,7 +438,7 @@ export interface ChatMessage {
     audioUrl?: string;
     replyTo?: { id: string, sender: string, message: string };
     isEdited?: boolean;
-    hiddenFor?: string[]; // New: Array of usernames who deleted this message for themselves
+    hiddenFor?: string[]; // Array of usernames who deleted this message for themselves
 }
 
 export interface ChatGroup {

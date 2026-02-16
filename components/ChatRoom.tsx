@@ -7,7 +7,7 @@ import { generateUUID } from '../constants';
 import { 
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
-    Loader2, Search, File, CheckCheck, DownloadCloud, Bookmark, Lock, Forward, Share2, CornerUpRight, Copy, MoreVertical
+    Loader2, Search, File, CheckCheck, DownloadCloud, Bookmark, Lock, Forward, Share2, CornerUpRight, Copy, MoreVertical, CheckCircle
 } from 'lucide-react';
 
 interface ChatRoomProps { 
