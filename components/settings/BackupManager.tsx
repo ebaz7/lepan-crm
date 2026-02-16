@@ -254,6 +254,7 @@ const BackupManager: React.FC = () => {
                             <li>تصاویر و ویس‌های چت</li>
                             <li>اسناد PDF و اکسل</li>
                             <li>عکس‌های پرسنلی</li>
+                            <li>تمام منوهای سیستم</li>
                         </ul>
                     </div>
                 </div>

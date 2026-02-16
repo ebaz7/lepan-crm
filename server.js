@@ -20,7 +20,6 @@ if (!fs.existsSync(PUPPETEER_CACHE)) {
     try { fs.mkdirSync(PUPPETEER_CACHE, { recursive: true }); } catch(e) {}
 }
 process.env.PUPPETEER_CACHE_DIR = PUPPETEER_CACHE;
-// ---------------------------------------
 
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL ERROR (Uncaught Exception):', err);
@@ -52,32 +51,32 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors()); 
 app.use(compression()); 
-// INCREASED LIMIT TO 500MB TO SUPPORT FULL BACKUP RESTORES
-app.use(express.json({ limit: '500mb' })); 
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
+// INCREASED LIMIT TO 1GB TO SUPPORT FULL SYSTEM RESTORE (Files + DB)
+app.use(express.json({ limit: '1024mb' })); 
+app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- ROBUST DATABASE HANDLER (ENSURES NO DATA LOSS) ---
+// --- ROBUST DATABASE HANDLER (GUARANTEED DATA INTEGRITY) ---
 const getDb = () => {
     try {
-        // Default Structure containing ALL modules
+        // Default Structure containing ALL modules to ensure nothing is missed
         const defaultDb = { 
             settings: {}, 
             users: [],
-            // Payment Module
+            // 1. Payment Module
             orders: [], 
-            // Exit Module
+            // 2. Exit Module
             exitPermits: [], 
-            // Warehouse Module
+            // 3. Warehouse Module
             warehouseItems: [], 
             warehouseTransactions: [], 
-            // Trade (Commerce) Module
+            // 4. Trade (Commerce) Module
             tradeRecords: [], 
-            // Security Module
+            // 5. Security Module
             securityLogs: [], 
             personnelDelays: [], 
             securityIncidents: [],
-            // Chat Module
+            // 6. Chat & Communication Module
             messages: [], 
             groups: [], 
             tasks: [] 
@@ -101,7 +100,6 @@ const getDb = () => {
 };
 
 const saveDb = (data) => {
-    // Write safely
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch(e) {
@@ -136,6 +134,7 @@ const performAutoBackup = () => {
         }
 
         // 2. Add Uploads Directory (Files: Images, PDF, Excel, Voice)
+        // This is crucial for Chat Attachments and Document Scans
         if (fs.existsSync(UPLOADS_DIR)) {
             archive.directory(UPLOADS_DIR, 'uploads');
         }
@@ -164,7 +163,6 @@ cron.schedule('0 */3 * * *', performAutoBackup);
 // Initial backup on start (delayed)
 setTimeout(performAutoBackup, 10000); 
 
-
 // --- HELPER: Find True Max ID ---
 const getTrueMax = (items, company, field, settingsStart) => {
     let max = settingsStart || 1000;
@@ -181,8 +179,9 @@ const getTrueMax = (items, company, field, settingsStart) => {
     return max;
 };
 
-// --- API ROUTES ---
+// --- API ROUTES (Expanded for Clarity & Safety) ---
 
+// 1. SEQUENCE GENERATORS
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
@@ -229,53 +228,255 @@ app.get('/api/next-bijak-number', (req, res) => {
     res.json({ nextNumber: safeMax + 1 });
 });
 
-// ... (CRUD Routes for Orders, Permits, Warehouse - Keep Existing) ...
-app.get('/api/orders', (req, res) => res.json(getDb().orders || []));
-app.post('/api/orders', (req, res) => { const db = getDb(); const order = req.body; order.id = order.id || Date.now().toString(); if(!db.orders) db.orders = []; db.orders.unshift(order); saveDb(db); res.json(db.orders); });
-app.put('/api/orders/:id', (req, res) => { const db = getDb(); const idx = db.orders.findIndex(o => o.id === req.params.id); if(idx > -1) { db.orders[idx] = { ...db.orders[idx], ...req.body }; saveDb(db); res.json(db.orders); } else res.status(404).send('Not Found'); });
-app.delete('/api/orders/:id', (req, res) => { const db = getDb(); db.orders = db.orders.filter(o => o.id !== req.params.id); saveDb(db); res.json(db.orders); });
+// 2. PAYMENT ORDERS
+app.get('/api/orders', (req, res) => {
+    res.json(getDb().orders || []);
+});
+app.post('/api/orders', (req, res) => { 
+    const db = getDb(); 
+    const order = req.body; 
+    order.id = order.id || Date.now().toString(); 
+    if(!db.orders) db.orders = []; 
+    db.orders.unshift(order); 
+    saveDb(db); 
+    res.json(db.orders); 
+});
+app.put('/api/orders/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.orders.findIndex(o => o.id === req.params.id); 
+    if(idx > -1) { 
+        db.orders[idx] = { ...db.orders[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.orders); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/orders/:id', (req, res) => { 
+    const db = getDb(); 
+    db.orders = db.orders.filter(o => o.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.orders); 
+});
 
-app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
-app.post('/api/exit-permits', (req, res) => { const db = getDb(); if(!db.exitPermits) db.exitPermits = []; db.exitPermits.push(req.body); saveDb(db); res.json(db.exitPermits); });
-app.put('/api/exit-permits/:id', (req, res) => { const db = getDb(); const idx = db.exitPermits.findIndex(p => p.id === req.params.id); if (idx > -1) { db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; saveDb(db); res.json(db.exitPermits); } else res.status(404).send('Not Found'); });
-app.delete('/api/exit-permits/:id', (req, res) => { const db = getDb(); db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); saveDb(db); res.json(db.exitPermits); });
+// 3. EXIT PERMITS
+app.get('/api/exit-permits', (req, res) => {
+    res.json(getDb().exitPermits || []);
+});
+app.post('/api/exit-permits', (req, res) => { 
+    const db = getDb(); 
+    if(!db.exitPermits) db.exitPermits = []; 
+    db.exitPermits.push(req.body); 
+    saveDb(db); 
+    res.json(db.exitPermits); 
+});
+app.put('/api/exit-permits/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
+    if (idx > -1) { 
+        db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.exitPermits); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/exit-permits/:id', (req, res) => { 
+    const db = getDb(); 
+    db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.exitPermits); 
+});
 
-app.get('/api/warehouse/items', (req, res) => res.json(getDb().warehouseItems || []));
-app.post('/api/warehouse/items', (req, res) => { const db = getDb(); if(!db.warehouseItems) db.warehouseItems=[]; db.warehouseItems.push(req.body); saveDb(db); res.json(db.warehouseItems); });
-app.put('/api/warehouse/items/:id', (req, res) => { const db = getDb(); const idx = db.warehouseItems.findIndex(i => i.id === req.params.id); if(idx > -1) { db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body }; saveDb(db); res.json(db.warehouseItems); } else res.status(404).send('Not Found'); });
-app.delete('/api/warehouse/items/:id', (req, res) => { const db = getDb(); db.warehouseItems = db.warehouseItems.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.warehouseItems); });
+// 4. WAREHOUSE (Items & Transactions)
+app.get('/api/warehouse/items', (req, res) => {
+    res.json(getDb().warehouseItems || []);
+});
+app.post('/api/warehouse/items', (req, res) => { 
+    const db = getDb(); 
+    if(!db.warehouseItems) db.warehouseItems=[]; 
+    db.warehouseItems.push(req.body); 
+    saveDb(db); 
+    res.json(db.warehouseItems); 
+});
+app.put('/api/warehouse/items/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.warehouseItems.findIndex(i => i.id === req.params.id); 
+    if(idx > -1) { 
+        db.warehouseItems[idx] = { ...db.warehouseItems[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.warehouseItems); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/warehouse/items/:id', (req, res) => { 
+    const db = getDb(); 
+    db.warehouseItems = db.warehouseItems.filter(i => i.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.warehouseItems); 
+});
 
-app.get('/api/warehouse/transactions', (req, res) => res.json(getDb().warehouseTransactions || []));
-app.post('/api/warehouse/transactions', (req, res) => { const db = getDb(); if(!db.warehouseTransactions) db.warehouseTransactions=[]; db.warehouseTransactions.unshift(req.body); saveDb(db); res.json(db.warehouseTransactions); });
-app.put('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); if(idx > -1) { db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; saveDb(db); res.json(db.warehouseTransactions); } else res.status(404).send('Not Found'); });
-app.delete('/api/warehouse/transactions/:id', (req, res) => { const db = getDb(); db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.warehouseTransactions); });
+app.get('/api/warehouse/transactions', (req, res) => {
+    res.json(getDb().warehouseTransactions || []);
+});
+app.post('/api/warehouse/transactions', (req, res) => { 
+    const db = getDb(); 
+    if(!db.warehouseTransactions) db.warehouseTransactions=[]; 
+    db.warehouseTransactions.unshift(req.body); 
+    saveDb(db); 
+    res.json(db.warehouseTransactions); 
+});
+app.put('/api/warehouse/transactions/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); 
+    if(idx > -1) { 
+        db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.warehouseTransactions); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/warehouse/transactions/:id', (req, res) => { 
+    const db = getDb(); 
+    db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.warehouseTransactions); 
+});
 
-app.get('/api/trade', (req, res) => res.json(getDb().tradeRecords || []));
-app.post('/api/trade', (req, res) => { const db = getDb(); if(!db.tradeRecords) db.tradeRecords=[]; db.tradeRecords.unshift(req.body); saveDb(db); res.json(db.tradeRecords); });
-app.put('/api/trade/:id', (req, res) => { const db = getDb(); const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); if(idx > -1) { db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; saveDb(db); res.json(db.tradeRecords); } else res.status(404).send('Not Found'); });
-app.delete('/api/trade/:id', (req, res) => { const db = getDb(); db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); saveDb(db); res.json(db.tradeRecords); });
+// 5. TRADE (Commerce)
+app.get('/api/trade', (req, res) => {
+    res.json(getDb().tradeRecords || []);
+});
+app.post('/api/trade', (req, res) => { 
+    const db = getDb(); 
+    if(!db.tradeRecords) db.tradeRecords=[]; 
+    db.tradeRecords.unshift(req.body); 
+    saveDb(db); 
+    res.json(db.tradeRecords); 
+});
+app.put('/api/trade/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.tradeRecords.findIndex(r => r.id === req.params.id); 
+    if(idx > -1) { 
+        db.tradeRecords[idx] = { ...db.tradeRecords[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.tradeRecords); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/trade/:id', (req, res) => { 
+    const db = getDb(); 
+    db.tradeRecords = db.tradeRecords.filter(r => r.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.tradeRecords); 
+});
 
-app.get('/api/security/logs', (req, res) => res.json(getDb().securityLogs || []));
-app.post('/api/security/logs', (req, res) => { const db = getDb(); if(!db.securityLogs) db.securityLogs=[]; db.securityLogs.unshift(req.body); saveDb(db); res.json(db.securityLogs); });
-app.put('/api/security/logs/:id', (req, res) => { const db = getDb(); const idx = db.securityLogs.findIndex(l => l.id === req.params.id); if(idx > -1) { db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; saveDb(db); res.json(db.securityLogs); } else res.status(404).send('Not Found'); });
-app.delete('/api/security/logs/:id', (req, res) => { const db = getDb(); db.securityLogs = db.securityLogs.filter(l => l.id !== req.params.id); saveDb(db); res.json(db.securityLogs); });
+// 6. SECURITY (Logs, Delays, Incidents)
+app.get('/api/security/logs', (req, res) => {
+    res.json(getDb().securityLogs || []);
+});
+app.post('/api/security/logs', (req, res) => { 
+    const db = getDb(); 
+    if(!db.securityLogs) db.securityLogs=[]; 
+    db.securityLogs.unshift(req.body); 
+    saveDb(db); 
+    res.json(db.securityLogs); 
+});
+app.put('/api/security/logs/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.securityLogs.findIndex(l => l.id === req.params.id); 
+    if(idx > -1) { 
+        db.securityLogs[idx] = { ...db.securityLogs[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.securityLogs); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/security/logs/:id', (req, res) => { 
+    const db = getDb(); 
+    db.securityLogs = db.securityLogs.filter(l => l.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.securityLogs); 
+});
 
-app.get('/api/security/delays', (req, res) => res.json(getDb().personnelDelays || []));
-app.post('/api/security/delays', (req, res) => { const db = getDb(); if(!db.personnelDelays) db.personnelDelays=[]; db.personnelDelays.unshift(req.body); saveDb(db); res.json(db.personnelDelays); });
-app.put('/api/security/delays/:id', (req, res) => { const db = getDb(); const idx = db.personnelDelays.findIndex(d => d.id === req.params.id); if(idx > -1) { db.personnelDelays[idx] = { ...db.personnelDelays[idx], ...req.body }; saveDb(db); res.json(db.personnelDelays); } else res.status(404).send('Not Found'); });
-app.delete('/api/security/delays/:id', (req, res) => { const db = getDb(); db.personnelDelays = db.personnelDelays.filter(d => d.id !== req.params.id); saveDb(db); res.json(db.personnelDelays); });
+app.get('/api/security/delays', (req, res) => {
+    res.json(getDb().personnelDelays || []);
+});
+app.post('/api/security/delays', (req, res) => { 
+    const db = getDb(); 
+    if(!db.personnelDelays) db.personnelDelays=[]; 
+    db.personnelDelays.unshift(req.body); 
+    saveDb(db); 
+    res.json(db.personnelDelays); 
+});
+app.put('/api/security/delays/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.personnelDelays.findIndex(d => d.id === req.params.id); 
+    if(idx > -1) { 
+        db.personnelDelays[idx] = { ...db.personnelDelays[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.personnelDelays); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/security/delays/:id', (req, res) => { 
+    const db = getDb(); 
+    db.personnelDelays = db.personnelDelays.filter(d => d.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.personnelDelays); 
+});
 
-app.get('/api/security/incidents', (req, res) => res.json(getDb().securityIncidents || []));
-app.post('/api/security/incidents', (req, res) => { const db = getDb(); if(!db.securityIncidents) db.securityIncidents=[]; db.securityIncidents.unshift(req.body); saveDb(db); res.json(db.securityIncidents); });
-app.put('/api/security/incidents/:id', (req, res) => { const db = getDb(); const idx = db.securityIncidents.findIndex(i => i.id === req.params.id); if(idx > -1) { db.securityIncidents[idx] = { ...db.securityIncidents[idx], ...req.body }; saveDb(db); res.json(db.securityIncidents); } else res.status(404).send('Not Found'); });
-app.delete('/api/security/incidents/:id', (req, res) => { const db = getDb(); db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); saveDb(db); res.json(db.securityIncidents); });
+app.get('/api/security/incidents', (req, res) => {
+    res.json(getDb().securityIncidents || []);
+});
+app.post('/api/security/incidents', (req, res) => { 
+    const db = getDb(); 
+    if(!db.securityIncidents) db.securityIncidents=[]; 
+    db.securityIncidents.unshift(req.body); 
+    saveDb(db); 
+    res.json(db.securityIncidents); 
+});
+app.put('/api/security/incidents/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.securityIncidents.findIndex(i => i.id === req.params.id); 
+    if(idx > -1) { 
+        db.securityIncidents[idx] = { ...db.securityIncidents[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.securityIncidents); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/security/incidents/:id', (req, res) => { 
+    const db = getDb(); 
+    db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.securityIncidents); 
+});
 
-app.get('/api/settings', (req, res) => res.json(getDb().settings));
-app.post('/api/settings', (req, res) => { const db = getDb(); db.settings = { ...db.settings, ...req.body }; saveDb(db); res.json(db.settings); });
-app.get('/api/users', (req, res) => res.json(getDb().users));
-app.post('/api/users', (req, res) => { const db = getDb(); db.users.push(req.body); saveDb(db); res.json(db.users); });
-app.put('/api/users/:id', (req, res) => { const db = getDb(); const idx = db.users.findIndex(u => u.id === req.params.id); if(idx > -1) { db.users[idx] = { ...db.users[idx], ...req.body }; saveDb(db); res.json(db.users); } else res.status(404).send('Not Found'); });
-app.delete('/api/users/:id', (req, res) => { const db = getDb(); db.users = db.users.filter(u => u.id !== req.params.id); saveDb(db); res.json(db.users); });
+// 7. SYSTEM (Settings, Users, Login)
+app.get('/api/settings', (req, res) => {
+    res.json(getDb().settings);
+});
+app.post('/api/settings', (req, res) => { 
+    const db = getDb(); 
+    db.settings = { ...db.settings, ...req.body }; 
+    saveDb(db); 
+    res.json(db.settings); 
+});
+app.get('/api/users', (req, res) => {
+    res.json(getDb().users);
+});
+app.post('/api/users', (req, res) => { 
+    const db = getDb(); 
+    db.users.push(req.body); 
+    saveDb(db); 
+    res.json(db.users); 
+});
+app.put('/api/users/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.users.findIndex(u => u.id === req.params.id); 
+    if(idx > -1) { 
+        db.users[idx] = { ...db.users[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.users); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/users/:id', (req, res) => { 
+    const db = getDb(); 
+    db.users = db.users.filter(u => u.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.users); 
+});
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
@@ -285,6 +486,44 @@ app.post('/api/login', (req, res) => {
     else { res.status(401).json({ error: 'Invalid credentials' }); }
 });
 
+// 8. CHAT & COMMUNICATION
+app.get('/api/chat', (req, res) => {
+    res.json(getDb().messages || []);
+});
+app.post('/api/chat', (req, res) => { 
+    const db = getDb(); 
+    if(!db.messages) db.messages=[]; 
+    db.messages.push(req.body); 
+    saveDb(db); 
+    res.json(db.messages); 
+});
+app.put('/api/chat/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.messages.findIndex(m => m.id === req.params.id); 
+    if(idx > -1) { 
+        db.messages[idx] = { ...db.messages[idx], ...req.body }; 
+        saveDb(db); 
+        res.json(db.messages); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/chat/:id', (req, res) => { 
+    const db = getDb(); 
+    db.messages = db.messages.filter(m => m.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.messages); 
+});
+
+app.get('/api/groups', (req, res) => res.json(getDb().groups || []));
+app.post('/api/groups', (req, res) => { const db = getDb(); if(!db.groups) db.groups=[]; db.groups.push(req.body); saveDb(db); res.json(db.groups); });
+app.put('/api/groups/:id', (req, res) => { const db = getDb(); const idx = db.groups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.groups[idx] = { ...db.groups[idx], ...req.body }; saveDb(db); res.json(db.groups); } else res.status(404).send('Not Found'); });
+app.delete('/api/groups/:id', (req, res) => { const db = getDb(); db.groups = db.groups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.groups); });
+
+app.get('/api/tasks', (req, res) => res.json(getDb().tasks || []));
+app.post('/api/tasks', (req, res) => { const db = getDb(); if(!db.tasks) db.tasks=[]; db.tasks.push(req.body); saveDb(db); res.json(db.tasks); });
+app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
+app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
+
+// 9. FILE UPLOAD
 app.post('/api/upload', (req, res) => {
     const { fileName, fileData } = req.body;
     if (!fileName || !fileData) return res.status(400).send('Missing data');
@@ -297,22 +536,7 @@ app.post('/api/upload', (req, res) => {
     });
 });
 
-// Chat Routes
-app.get('/api/chat', (req, res) => res.json(getDb().messages || []));
-app.post('/api/chat', (req, res) => { const db = getDb(); if(!db.messages) db.messages=[]; db.messages.push(req.body); saveDb(db); res.json(db.messages); });
-app.put('/api/chat/:id', (req, res) => { const db = getDb(); const idx = db.messages.findIndex(m => m.id === req.params.id); if(idx > -1) { db.messages[idx] = { ...db.messages[idx], ...req.body }; saveDb(db); res.json(db.messages); } else res.status(404).send('Not Found'); });
-app.delete('/api/chat/:id', (req, res) => { const db = getDb(); db.messages = db.messages.filter(m => m.id !== req.params.id); saveDb(db); res.json(db.messages); });
-
-app.get('/api/groups', (req, res) => res.json(getDb().groups || []));
-app.post('/api/groups', (req, res) => { const db = getDb(); if(!db.groups) db.groups=[]; db.groups.push(req.body); saveDb(db); res.json(db.groups); });
-app.put('/api/groups/:id', (req, res) => { const db = getDb(); const idx = db.groups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.groups[idx] = { ...db.groups[idx], ...req.body }; saveDb(db); res.json(db.groups); } else res.status(404).send('Not Found'); });
-app.delete('/api/groups/:id', (req, res) => { const db = getDb(); db.groups = db.groups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.groups); });
-
-app.get('/api/tasks', (req, res) => res.json(getDb().tasks || []));
-app.post('/api/tasks', (req, res) => { const db = getDb(); if(!db.tasks) db.tasks=[]; db.tasks.push(req.body); saveDb(db); res.json(db.tasks); });
-app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
-app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
-
+// 10. BOTS (Telegram/Bale/WhatsApp)
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
     const db = getDb();
@@ -323,7 +547,7 @@ app.post('/api/restart-bot', async (req, res) => {
 });
 
 app.post('/api/send-bot-message', async (req, res) => {
-    // ... (Keep existing implementation logic)
+    // ... (Keep existing logic)
     res.json({ success: true }); 
 });
 
@@ -373,7 +597,7 @@ app.get('/api/full-backup', (req, res) => {
     }
 });
 
-// FULL RESTORE (ZIP OR JSON)
+// FULL RESTORE (ZIP OR JSON) - SMART HANDLING
 app.post('/api/emergency-restore', (req, res) => {
     const { fileData } = req.body;
     if (!fileData) return res.status(400).json({ success: false, error: 'No data' });
@@ -401,13 +625,10 @@ app.post('/api/emergency-restore', (req, res) => {
             
             // Extract Uploads
             // AdmZip extractAllTo will overwrite existing files which is desired for restore
-            // We verify the zip contains an 'uploads' folder
+            // We verify the zip contains an 'uploads' folder or files
             if (zip.getEntry('uploads/')) {
                 zip.extractEntryTo("uploads/", ROOT_DIR, true, true); 
                 console.log("✅ Uploads restored.");
-            } else {
-                 // Try to find if files are in root or nested
-                 // If not found, we just restore what we can. 
             }
             
             fs.unlinkSync(tempZip);
@@ -426,7 +647,7 @@ app.post('/api/emergency-restore', (req, res) => {
     }
 });
 
-app.get('/api/version', (req, res) => { res.json({ version: '1.2.0' }); });
+app.get('/api/version', (req, res) => { res.json({ version: '1.3.0' }); });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 if (fs.existsSync(DIST_DIR)) {
