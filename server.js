@@ -318,6 +318,12 @@ app.delete('/api/exit-permits/:id', (req, res) => {
     const db = getDb(); 
     const idToDelete = req.params.id;
     
+    // Ensure array exists to prevent crash
+    if (!db.exitPermits) {
+        db.exitPermits = [];
+        return res.json([]);
+    }
+
     // Ensure we compare IDs as strings to avoid type mismatch bugs
     // Some IDs might be numbers in older records, params are strings
     const initialLen = db.exitPermits.length;
