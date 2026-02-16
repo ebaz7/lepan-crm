@@ -91,6 +91,7 @@ const createCrudRoutes = (route, key) => {
     app.put(`/api/${route}/:id`, (req, res) => {
         const db = getDb();
         if (!db[key]) db[key] = [];
+        // Fixed: Use String() comparison for robust ID matching
         const index = db[key].findIndex(i => String(i.id) === String(req.params.id));
         if (index !== -1) {
             db[key][index] = { ...db[key][index], ...req.body };
@@ -102,8 +103,14 @@ const createCrudRoutes = (route, key) => {
     app.delete(`/api/${route}/:id`, (req, res) => {
         const db = getDb();
         if (!db[key]) db[key] = [];
-        // Strict String Comparison to fix deletion bugs
+        // Fixed: Use String() comparison to ensure deletion works for both number and string IDs
+        const originalLength = db[key].length;
         db[key] = db[key].filter(i => String(i.id) !== String(req.params.id));
+        
+        if (db[key].length === originalLength) {
+             console.warn(`[Warning] No item deleted for ${route}/${req.params.id}. Type mismatch?`);
+        }
+        
         saveDb(db);
         res.json(db[key]);
     });
@@ -124,7 +131,7 @@ createCrudRoutes('security/incidents', 'securityIncidents');
 
 // --- SPECIAL ROUTES (FIXED) ---
 
-// Exit Permits (with specific delete fix)
+// Exit Permits
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
 
 app.post('/api/exit-permits', (req, res) => {
@@ -149,31 +156,24 @@ app.put('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// *** CRITICAL FIX FOR EXIT PERMIT DELETION ***
+// *** CRITICAL FIX: Explicit Delete Route for Exit Permits ***
 app.delete('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
-        const idToDelete = req.params.id;
+        const idToDelete = String(req.params.id); // Normalize to string
         
-        if (!db.exitPermits) { 
-            db.exitPermits = []; 
-            return res.json([]); 
+        if (!db.exitPermits) { db.exitPermits = []; }
+
+        // Filter using String comparison
+        const initialLen = db.exitPermits.length;
+        db.exitPermits = db.exitPermits.filter(p => String(p.id) !== idToDelete);
+        
+        // Safety check: if nothing deleted, try checking permitNumber as ID (legacy case)
+        if (db.exitPermits.length === initialLen) {
+             db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== idToDelete);
         }
-        
-        const initialLength = db.exitPermits.length;
-        
-        // 1. Try deleting by exact string ID match
-        let newPermits = db.exitPermits.filter(p => String(p.id) !== String(idToDelete));
-        
-        // 2. If nothing deleted, maybe it was passed as a permit number (Legacy issue)
-        if (newPermits.length === initialLength) {
-             newPermits = db.exitPermits.filter(p => String(p.permitNumber) !== String(idToDelete));
-        }
-        
-        db.exitPermits = newPermits;
+
         saveDb(db);
-        
-        // Always return the array, even if empty or unchanged, to prevent client JSON errors
         res.json(db.exitPermits);
     } catch (e) {
         console.error("Delete Error:", e);

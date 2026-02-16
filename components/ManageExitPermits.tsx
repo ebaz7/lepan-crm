@@ -261,30 +261,28 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         } catch (e) { console.error("Notif Error", e); }
     };
 
-    // --- CRITICAL FIX: ROBUST DELETE ---
+    // --- FIXED DELETE HANDLER ---
     const handleDelete = async (id: string, e?: React.MouseEvent) => {
-        // 1. Prevent Bubble
+        // 1. Prevent bubble to parent onclick
         if (e) {
-            e.preventDefault();
             e.stopPropagation();
+            e.preventDefault();
         }
         
         if(!confirm('آیا از حذف این مجوز اطمینان دارید؟')) return;
         
-        // 2. Prevent Interaction
+        // 2. Set processing state to prevent double clicks
         setProcessingId(id);
         
         try {
-            // 3. IMPORTANT: Close view if deleting current item
+            await deleteExitPermit(id);
+            // 3. Update local state immediately
+            setPermits(prev => prev.filter(p => p.id !== id));
+            
+            // 4. Close view if the deleted item was open
             if (viewPermit && viewPermit.id === id) {
                 setViewPermit(null);
             }
-
-            await deleteExitPermit(id);
-            
-            // 4. Update List
-            setPermits(prev => prev.filter(p => p.id !== id));
-            
         } catch (error) {
             console.error("Delete Error", error);
             alert('خطا در حذف مجوز. لطفا مجددا تلاش کنید.');
@@ -362,7 +360,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button 
                         onClick={(e) => handleDelete(p.id, e)} 
-                        className="bg-red-50 text-red-500 px-3 py-2 rounded-lg z-10 hover:bg-red-100"
+                        className="bg-red-50 text-red-500 px-3 py-2 rounded-lg z-10 hover:bg-red-100 flex items-center justify-center"
                         title="حذف"
                     >
                         <Trash2 size={16}/>
