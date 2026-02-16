@@ -40,6 +40,7 @@ if (!fs.existsSync(DB_PATH)) {
 
 // Middleware
 app.use(cors());
+app.options('*', cors()); // Enable Pre-Flight for all routes
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -53,7 +54,6 @@ const getDb = () => {
         return JSON.parse(raw);
     } catch (e) {
         console.error("DB Read Error:", e);
-        // Return a basic structure if read fails to prevent crashes
         return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {} };
     }
 };
@@ -104,7 +104,6 @@ const createCrudRoutes = (route, key) => {
     app.delete(`/api/${route}/:id`, (req, res) => {
         const db = getDb();
         if (!db[key]) db[key] = [];
-        const originalLen = db[key].length;
         db[key] = db[key].filter(i => String(i.id) !== String(req.params.id));
         saveDb(db);
         res.json(db[key]);
@@ -124,11 +123,13 @@ createCrudRoutes('security/logs', 'securityLogs');
 createCrudRoutes('security/delays', 'personnelDelays');
 createCrudRoutes('security/incidents', 'securityIncidents');
 
-// --- SPECIAL ROUTES (FIXED) ---
+// --- EXIT PERMITS (MANUAL ROUTES) ---
+// Note: We use manual routes for exit-permits to handle specific logic like counters and legacy ID support
 
-// Exit Permits
+// GET
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
 
+// POST
 app.post('/api/exit-permits', (req, res) => {
     const db = getDb();
     if (!db.exitPermits) db.exitPermits = [];
@@ -141,6 +142,7 @@ app.post('/api/exit-permits', (req, res) => {
     res.json(db.exitPermits);
 });
 
+// PUT
 app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     if (!db.exitPermits) db.exitPermits = [];
@@ -152,7 +154,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// Explicit Delete Route for Exit Permits (Robust)
+// DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
@@ -174,20 +176,15 @@ app.delete('/api/exit-permits/:id', (req, res) => {
              }
         }
 
-        if (db.exitPermits.length < initialLen) {
-            console.log(`[Server] Deleted successfully. Count: ${initialLen} -> ${db.exitPermits.length}`);
-        } else {
-            console.warn(`[Server] Item not found for deletion: ${idToDelete}`);
-        }
-
         saveDb(db);
-        // Return the fresh list
+        // Return the fresh list - status 200
         res.json(db.exitPermits);
     } catch (e) {
         console.error("Delete Error:", e);
         res.status(500).json({ error: "Server Delete Error: " + e.message });
     }
 });
+
 
 // Settings
 app.get('/api/settings', (req, res) => res.json(getDb().settings || {}));

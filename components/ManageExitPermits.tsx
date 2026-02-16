@@ -299,13 +299,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 setViewPermit(null);
             }
         } catch (error: any) {
-            console.error("Delete Error", error);
-            // Rollback optimistic update by reloading data
-            loadData();
-            
-            // Show user-friendly error
-            const msg = error.message || 'خطا در ارتباط با سرور';
-            alert('خطا در حذف مجوز: ' + msg);
+            // SPECIFIC 404 HANDLER FOR SERVER SYNC ISSUES
+            if (error.message && error.message.includes('404')) {
+                alert('خطا: سرور آپدیت نشده است (404).\nلطفاً فایل server.js را ذخیره کرده و برنامه سرور (node server.js) را ببندید و مجدداً اجرا کنید تا قابلیت حذف فعال شود.');
+                // Don't rollback immediately, let user see it removed optimistically, or refresh to revert
+                loadData(); 
+            } else {
+                console.error("Delete Error", error);
+                // Rollback optimistic update by reloading data
+                loadData();
+                const msg = error.message || 'خطا در ارتباط با سرور';
+                alert('خطا در حذف مجوز: ' + msg);
+            }
         } finally {
             setProcessingId(null);
         }
