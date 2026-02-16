@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff, RefreshCw, FolderOpen } from 'lucide-react';
+import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff, RefreshCw, FolderOpen, FileArchive } from 'lucide-react';
 import { apiCall, LS_KEYS, getServerHost } from '../../services/apiService';
 
 const BackupManager: React.FC = () => {
@@ -53,10 +53,11 @@ const BackupManager: React.FC = () => {
         setMessage('');
         
         try {
-            // 1. Try Server Backup (Best Quality - Complete DB)
+            // 1. Try Server Backup (Best Quality - Complete DB + Uploads)
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for server check
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for ZIP generation
 
+            // Request the ZIP backup from new endpoint
             const response = await fetch(`/api/full-backup`, { signal: controller.signal });
             clearTimeout(timeoutId);
             
@@ -64,12 +65,12 @@ const BackupManager: React.FC = () => {
             
             const blob = await response.blob();
             const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            downloadBlob(blob, `Full_System_Backup_${dateStr}.json`);
+            downloadBlob(blob, `Full_System_Backup_${dateStr}.zip`);
             
         } catch (e) {
-            console.warn("Server unreachable, switching to Offline Mode...", e);
+            console.warn("Server unreachable or timeout, switching to Offline Mode...", e);
             
-            // 2. Fallback: Offline Backup (From LocalStorage)
+            // 2. Fallback: Offline Backup (From LocalStorage) - JSON Only
             try {
                 const localData = {
                     settings: getLocalJSON(LS_KEYS.SETTINGS, {}),
@@ -81,7 +82,6 @@ const BackupManager: React.FC = () => {
                     messages: getLocalJSON(LS_KEYS.CHAT, []),
                     groups: getLocalJSON(LS_KEYS.GROUPS, []),
                     tasks: getLocalJSON(LS_KEYS.TASKS, []),
-                    // Initialize missing keys to empty arrays to ensure restore compatibility
                     exitPermits: [], 
                     securityLogs: [],
                     personnelDelays: [],
@@ -89,7 +89,7 @@ const BackupManager: React.FC = () => {
                     meta: { 
                         source: 'offline_browser_cache', 
                         date: new Date().toISOString(),
-                        note: 'Created in Offline Mode'
+                        note: 'Offline Mode - JSON Data Only (No Files)'
                     }
                 };
 
@@ -99,7 +99,7 @@ const BackupManager: React.FC = () => {
                 
                 downloadBlob(blob, `Offline_Cache_Backup_${dateStr}.json`);
                 
-                alert('⚠️ هشدار: ارتباط با سرور برقرار نشد.\n\n✅ فایل پشتیبان از «حافظه موقت مرورگر» (Offline Cache) تهیه و دانلود شد.\n\nتوجه: این فایل شامل اطلاعاتی است که آخرین بار روی این دستگاه مشاهده کرده‌اید.');
+                alert('⚠️ هشدار: ارتباط با سرور برقرار نشد.\n\n✅ فایل پشتیبان JSON از «حافظه موقت مرورگر» تهیه شد.\nتوجه: این نسخه شامل فایل‌های آپلود شده (تصاویر/PDF) نمی‌باشد.');
             } catch (err) {
                 alert("خطا در ایجاد بکاپ آفلاین.");
             }
@@ -109,7 +109,7 @@ const BackupManager: React.FC = () => {
     };
 
     const handleRestoreClick = () => {
-        if (confirm('⚠️ هشدار بازگردانی هوشمند:\n\nآیا مطمئن هستید؟ این عملیات تمام اطلاعات فعلی را با فایل انتخاب شده جایگزین می‌کند.\n\nنکته: سیستم از «بازسازی هوشمند» استفاده می‌کند. این یعنی می‌توانید بکاپ نسخه قدیمی را روی نسخه جدید بریزید و همه چیز سالم می‌ماند.')) {
+        if (confirm('⚠️ هشدار بازگردانی:\n\nآیا مطمئن هستید؟ این عملیات تمام اطلاعات فعلی را جایگزین می‌کند.\n\nنکته: اگر فایل ZIP آپلود کنید، تمام فایل‌های چت، اسناد و تصاویر نیز بازیابی می‌شوند.\nفایل‌های JSON فقط دیتابیس را برمی‌گردانند.')) {
             fileInputRef.current?.click();
         }
     };
@@ -125,15 +125,16 @@ const BackupManager: React.FC = () => {
         reader.onload = async (ev) => {
             const base64 = ev.target?.result as string;
             try {
-                const response = await apiCall<{success: boolean}>('/emergency-restore', 'POST', { fileData: base64 });
+                const response = await apiCall<{success: boolean, mode: string}>('/emergency-restore', 'POST', { fileData: base64 });
                 if (response.success) {
-                    alert('✅ بازگردانی هوشمند با موفقیت انجام شد.\nسیستم جهت اعمال تغییرات رفرش می‌شود.');
+                    const modeMsg = response.mode === 'zip' ? '(کامل به همراه فایل‌ها)' : '(داده‌های متنی)';
+                    alert(`✅ بازگردانی هوشمند ${modeMsg} با موفقیت انجام شد.\nسیستم جهت اعمال تغییرات رفرش می‌شود.`);
                     window.location.reload();
                 } else {
                     throw new Error("Restore failed on server");
                 }
             } catch (error) {
-                setMessage('❌ خطا در بازگردانی فایل. لطفاً فایل صحیح (JSON) را انتخاب کنید.');
+                setMessage('❌ خطا در بازگردانی. فایل نامعتبر است.');
                 setRestoring(false);
             }
         };
@@ -165,9 +166,9 @@ const BackupManager: React.FC = () => {
                         <Clock size={20} className="text-green-600 animate-pulse"/>
                     </div>
                     <div>
-                        <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار سرور (هر ۳ ساعت)</span>
+                        <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار (شامل فایل‌ها)</span>
                         <p className="text-xs text-green-700 leading-relaxed">
-                            سرور به صورت خودکار از تمام اطلاعات نسخه پشتیبان تهیه کرده و در پوشه <code>/backups</code> ذخیره می‌کند.
+                            سرور هر ۳ ساعت به طور خودکار از تمام دیتابیس و فایل‌های آپلود شده (چت، اسناد و ...) نسخه پشتیبان (ZIP) تهیه می‌کند.
                         </p>
                     </div>
                 </div>
@@ -188,7 +189,7 @@ const BackupManager: React.FC = () => {
                                 <div key={idx} className="flex justify-between items-center p-2 text-xs border-b last:border-0 hover:bg-gray-50">
                                     <div className="flex flex-col">
                                         <span className="font-bold text-gray-700">{backup.name}</span>
-                                        <span className="text-[10px] text-gray-400">{new Date(backup.date).toLocaleString('fa-IR')} - {(backup.size / 1024).toFixed(1)} KB</span>
+                                        <span className="text-[10px] text-gray-400">{new Date(backup.date).toLocaleString('fa-IR')} - {(backup.size / 1024 / 1024).toFixed(2)} MB</span>
                                     </div>
                                     <button onClick={() => handleDownloadAutoBackup(backup.name)} className="text-blue-600 hover:underline font-bold px-2">دانلود</button>
                                 </div>
@@ -201,7 +202,7 @@ const BackupManager: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                 {/* Download Section */}
                 <div className="space-y-3">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2">تهیه نسخه پشتیبان (دستی)</h4>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2">تهیه نسخه پشتیبان دستی</h4>
                     <button 
                         type="button" 
                         onClick={handleDownloadBackup} 
@@ -210,33 +211,28 @@ const BackupManager: React.FC = () => {
                     >
                         <span className="flex items-center gap-2">
                             {downloading ? <Loader2 size={20} className="animate-spin"/> : <DownloadCloud size={20}/>} 
-                            دانلود فایل کامل دیتابیس (لحظه‌ای)
+                            دانلود کامل (ZIP: دیتابیس + فایل‌ها)
                         </span>
                         <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600 flex items-center gap-1">
-                            JSON <WifiOff size={10} className="ml-1 text-gray-400" title="پشتیبانی از حالت آفلاین"/>
+                            <FileArchive size={12}/>
                         </span>
                     </button>
                     
                     <div className="text-[10px] text-gray-500 leading-relaxed bg-gray-50 p-3 rounded-lg border">
                         <div className="flex items-center gap-1 font-bold text-gray-700 mb-1"><FileJson size={12}/> محتویات فایل بکاپ:</div>
                         <ul className="list-disc list-inside grid grid-cols-2 gap-x-2 gap-y-1">
-                            <li>تمام منوها و زیرمجموعه‌ها</li>
-                            <li>مجوزهای خروج و بیجک‌ها</li>
-                            <li>دستور پرداخت‌ها</li>
-                            <li>کاربران و تنظیمات</li>
-                            <li>اطلاعات انبار و بازرگانی</li>
-                            <li>گزارشات انتظامات</li>
+                            <li>تمام اطلاعات دیتابیس</li>
+                            <li>تصاویر و ویس‌های چت</li>
+                            <li>اسناد PDF و اکسل</li>
+                            <li>عکس‌های پرسنلی</li>
                         </ul>
-                        <div className="mt-2 text-blue-600 font-bold border-t pt-1 border-gray-200">
-                            * در صورت قطعی اینترنت، فایل از حافظه مرورگر ساخته می‌شود.
-                        </div>
                     </div>
                 </div>
 
                 {/* Restore Section */}
                 <div className="border-r-0 md:border-r border-gray-100 md:pr-6">
                     <h4 className="text-sm font-bold text-gray-700 mb-2">بازیابی اطلاعات (Smart Restore)</h4>
-                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept=".json,.txt" />
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept=".json,.txt,.zip" />
                     
                     <button 
                         type="button" 
@@ -245,8 +241,8 @@ const BackupManager: React.FC = () => {
                         className="w-full h-[120px] flex flex-col items-center justify-center gap-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border-2 border-dashed border-amber-300 px-4 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
                     >
                         {restoring ? <Loader2 size={36} className="animate-spin"/> : <UploadCloud size={36} className="group-hover:scale-110 transition-transform"/>}
-                        {restoring ? 'در حال بازگردانی هوشمند...' : 'آپلود فایل بکاپ برای بازگردانی'}
-                        {!restoring && <span className="text-[10px] opacity-70 font-normal bg-white/50 px-2 py-0.5 rounded">سازگار با تمام نسخه‌ها</span>}
+                        {restoring ? 'در حال بازگردانی و استخراج...' : 'آپلود فایل بکاپ (JSON یا ZIP)'}
+                        {!restoring && <span className="text-[10px] opacity-70 font-normal bg-white/50 px-2 py-0.5 rounded">پشتیبانی از فایل‌های حجیم</span>}
                     </button>
                     
                     {message && (
