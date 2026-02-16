@@ -954,10 +954,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         onClick={(e) => handleMessageClick(e, msg)}
                                         onContextMenu={(e) => triggerMenuDesktop(e, msg)}
                                     >
-                                        {/* HOVER ACTIONS (Quick Reply/Forward) */}
-                                        <div className={`absolute top-0 ${isMe ? '-left-20' : '-right-20'} hidden group-hover:flex items-center gap-1 bg-white/80 backdrop-blur-sm p-1 rounded-lg shadow-sm border border-gray-200 transition-all z-20`}>
-                                            <button onClick={(e) => { e.stopPropagation(); handleQuickReply(msg); }} className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-full" title="پاسخ"><Reply size={14}/></button>
-                                            <button onClick={(e) => { e.stopPropagation(); handleQuickForward(msg); }} className="p-1.5 hover:bg-green-50 text-green-600 rounded-full" title="فوروارد"><CornerUpRight size={14}/></button>
+                                        {/* HOVER ACTIONS (Quick Reply/Forward) - MOVED INSIDE */}
+                                        <div className={`absolute -top-3 ${isMe ? 'left-2' : 'right-2'} flex opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-all duration-200 items-center gap-1 bg-white shadow-md border border-gray-100 p-0.5 rounded-full z-20 transform scale-90 group-hover:scale-100`}>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuickReply(msg); }} className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-full transition-colors" title="پاسخ"><Reply size={14}/></button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuickForward(msg); }} className="p-1.5 hover:bg-green-50 text-green-600 rounded-full transition-colors" title="فوروارد"><CornerUpRight size={14}/></button>
                                         </div>
 
                                         {/* Hover Menu Button (Desktop Only - Alternative to context menu) */}
