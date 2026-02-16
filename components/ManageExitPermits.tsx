@@ -39,7 +39,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         return () => window.removeEventListener('popstate', handlePopState);
     }, [viewPermit]);
 
-    const openPermitView = (permit: ExitPermit) => {
+    const openPermitView = (permit: ExitPermit, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (isMobile) {
             if (window.location.protocol !== 'blob:') {
                  window.history.pushState({ view: 'permit_detail', permitId: permit.id }, '', '#manage-exit/view');
@@ -72,7 +76,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    // ... (Helper functions match previous version) ...
     const isMyTurn = (p: ExitPermit) => {
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
         switch (currentUser.role) {
@@ -141,8 +144,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         return 'pending';
     };
 
-    const handleApprove = async (p: ExitPermit) => {
-        // ... (Approve Logic same as before) ...
+    const handleApprove = async (p: ExitPermit, e?: React.MouseEvent) => {
+        if(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
         if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
             setWarehouseFinalize(p); 
             return; 
@@ -188,7 +195,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
     
-    // ... (Warehouse submit and notification logic same as before) ...
     const handleWarehouseSubmit = async (finalItems: any[]) => {
         if (!warehouseFinalize) return;
         setProcessingId(warehouseFinalize.id);
@@ -213,7 +219,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
              // @ts-ignore
             const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const base64 = canvas.toDataURL('image/png').split(',')[1];
-            // ... (Send logic same as before) ...
+            
              const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
             let g1WA = companyConfig?.warehouseGroup;
@@ -256,18 +262,29 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     // --- FIX: ROBUST DELETE ---
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, e?: React.MouseEvent) => {
+        // 1. Prevent Bubble
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
         if(!confirm('آیا از حذف این مجوز اطمینان دارید؟')) return;
         
+        // 2. Prevent Interaction
         setProcessingId(id);
+        
         try {
+            // 3. IMPORTANT: Close view if deleting current item
+            if (viewPermit && viewPermit.id === id) {
+                setViewPermit(null);
+            }
+
             await deleteExitPermit(id);
-            // IMMEDIATE UI UPDATE
+            
+            // 4. Update List
             setPermits(prev => prev.filter(p => p.id !== id));
             
-            if (viewPermit && viewPermit.id === id) {
-                closePermitView();
-            }
         } catch (error) {
             console.error("Delete Error", error);
             alert('خطا در حذف مجوز. لطفا مجددا تلاش کنید.');
@@ -299,7 +316,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const MobilePermitCard = ({ p, canAct }: { p: ExitPermit, canAct: boolean }) => (
-        <div className={`bg-white rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
+        <div 
+            className={`bg-white rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}
+            onClick={() => openPermitView(p)} 
+        >
             <div className="flex justify-between items-start mb-2">
                 <div>
                     <span className="text-xs font-mono text-gray-400">#{p.permitNumber}</span>
@@ -323,15 +343,30 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 <span>📅 {formatDate(p.date)}</span>
             </div>
 
-            <div className="flex gap-2 mt-2">
+            {/* ACTION BUTTONS */}
+            <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                {/* Always Show View Button */}
+                <button 
+                    onClick={(e) => openPermitView(p, e)} 
+                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-200 flex items-center justify-center gap-1"
+                >
+                    <Eye size={16}/> مشاهده
+                </button>
+
                 {canAct && !processingId && (
-                     <button onClick={() => handleApprove(p)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
-                         {getActionLabel(p.status)}
+                     <button onClick={(e) => handleApprove(p, e)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1">
+                         <CheckCircle size={16}/> {getActionLabel(p.status)}
                      </button>
                 )}
-                <button onClick={() => openPermitView(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+                
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
-                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
+                    <button 
+                        onClick={(e) => handleDelete(p.id, e)} 
+                        className="bg-red-50 text-red-500 px-3 py-2 rounded-lg z-10 hover:bg-red-100"
+                        title="حذف"
+                    >
+                        <Trash2 size={16}/>
+                    </button>
                 )}
             </div>
             
@@ -355,7 +390,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
 
         return (
-            <div key={p.id} className={`bg-white rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
+            <div key={p.id} onClick={() => openPermitView(p)} className={`bg-white rounded-2xl border transition-all relative overflow-hidden cursor-pointer ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
                 {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
                 {p.status === ExitPermitStatus.REJECTED && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
                 
@@ -371,17 +406,22 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                             </div>
                         </div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                            {/* Explicit View Button for Desktop */}
+                            <button onClick={(e) => openPermitView(p, e)} className="bg-gray-100 text-gray-600 p-2 rounded-xl hover:bg-gray-200" title="مشاهده">
+                                <Eye size={18}/>
+                            </button>
+
                             {canAct && !processingId && (
-                                <button onClick={() => handleApprove(p)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
+                                <button onClick={(e) => handleApprove(p, e)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
                                     <CheckCircle size={16}/> {getActionLabel(p.status)}
                                 </button>
                             )}
-                            <button onClick={() => openPermitView(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+                            
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
                                 <>
-                                    <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
-                                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-100"><Trash2 size={18}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setEditPermit(p); }} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
+                                    <button onClick={(e) => handleDelete(p.id, e)} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-100"><Trash2 size={18}/></button>
                                 </>
                             )}
                         </div>
