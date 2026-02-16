@@ -24,6 +24,7 @@ export interface User {
   baleChatId?: string;
   canManageTrade?: boolean;
   receiveNotifications?: boolean;
+  chatBackground?: string; // NEW: Personal Chat Background
 }
 
 export interface AppNotification {
@@ -200,6 +201,7 @@ export interface SystemSettings {
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
   dailySecurityMeta?: Record<string, DailySecurityMeta>;
+  defaultChatBackground?: string; // NEW: Admin Default Chat Background
 }
 
 export enum PaymentMethod {

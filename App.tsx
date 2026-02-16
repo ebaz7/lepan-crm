@@ -154,13 +154,13 @@ function App() {
       } catch (e) { } 
   };
 
-  const addAppNotification = (title: string, message: string) => { 
+  const addAppNotification = (title: string, message: string, url: string = '/') => { 
       setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); 
       playNotificationSound();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       setToast({ show: true, title, message });
       toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
-      sendNotification(title, message);
+      sendNotification(title, message, url);
   };
 
   const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
@@ -222,7 +222,7 @@ function App() {
                 if (activeTab !== 'chat') {
                     let body = lastMsg.message || 'فایل ضمیمه';
                     if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
-                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body);
+                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, '#chat');
                 }
             }
             lastChatMsgIdRef.current = lastMsg.id;

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage } from '../services/storageService';
+import { User, ChatMessage, ChatGroup, GroupTask, UserRole, SystemSettings } from '../types';
+import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage, getSettings } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { generateUUID } from '../constants';
 import { 
@@ -22,6 +23,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [users, setUsers] = useState<User[]>([]);
     const [groups, setGroups] = useState<ChatGroup[]>([]);
     const [tasks, setTasks] = useState<GroupTask[]>([]);
+    const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
     
     // --- UI State ---
     const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group', id: string | null}>({ type: 'public', id: null });
@@ -59,15 +61,36 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
     const [newTaskTitle, setNewTaskTitle] = useState('');
+    
+    // --- READ STATUS TRACKING ---
+    // Store last read timestamp for each channel: Key = "channelId", Value = timestamp
+    // For Private: "username", Group: "groupId", Public: "public"
+    const [lastReadMap, setLastReadMap] = useState<Record<string, number>>({});
 
     // --- Load Data & Effects ---
     useEffect(() => { if (preloadedMessages) setMessages(preloadedMessages); }, [preloadedMessages]);
 
     useEffect(() => { 
         loadMeta();
+        loadReadStatus();
         const interval = setInterval(loadMeta, 5000); 
         return () => clearInterval(interval);
     }, []);
+
+    // Load Last Read Map from LocalStorage
+    const loadReadStatus = () => {
+        try {
+            const stored = localStorage.getItem(`chat_last_read_${currentUser.username}`);
+            if (stored) setLastReadMap(JSON.parse(stored));
+        } catch(e) {}
+    };
+
+    // Save Last Read Status
+    const updateReadStatus = (channelId: string) => {
+        const newMap = { ...lastReadMap, [channelId]: Date.now() };
+        setLastReadMap(newMap);
+        localStorage.setItem(`chat_last_read_${currentUser.username}`, JSON.stringify(newMap));
+    };
 
     // Scroll to bottom when channel changes or chat opens
     useEffect(() => {
@@ -85,12 +108,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setInputText('');
         setShowInnerSearch(false);
         setInnerSearchTerm('');
+        
+        // Update Read Status when entering a channel
+        if (activeChannel.id) updateReadStatus(activeChannel.id);
+        else if (activeChannel.type === 'public') updateReadStatus('public');
+
     }, [activeChannel, mobileShowChat]);
 
     // Auto-scroll on new message
     useEffect(() => {
         if (!showInnerSearch && messages.length > 0) {
              scrollToBottom();
+             // Also mark read if currently active in that channel
+             if (mobileShowChat || window.innerWidth >= 768) {
+                 if (activeChannel.id) updateReadStatus(activeChannel.id);
+                 else if (activeChannel.type === 'public') updateReadStatus('public');
+             }
         }
     }, [messages.length]);
     
@@ -129,6 +162,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             
             const tskList = await getTasks();
             setTasks(tskList);
+            
+            const s = await getSettings();
+            setSystemSettings(s);
         } catch (e) { console.error("Chat load error", e); }
     };
 
@@ -165,9 +201,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return list;
     };
 
-    // --- SORTED CHAT LIST LOGIC (Telegram Style + Tabs) ---
+    // --- SORTED CHAT LIST LOGIC (Telegram Style + Tabs + Unread) ---
     const sortedChatList = useMemo(() => {
-        // 1. Helper to find last message for a channel
+        // 1. Helper to find last message & Unread Count for a channel
         const getChannelMeta = (type: 'public' | 'group' | 'private', id: string | null) => {
             let relevantMsgs = [];
             if (type === 'public') relevantMsgs = messages.filter(m => !m.recipient && !m.groupId);
@@ -181,10 +217,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 }
             }
             
-            if (relevantMsgs.length === 0) return { lastMsg: null, timestamp: 0 };
+            if (relevantMsgs.length === 0) return { lastMsg: null, timestamp: 0, unreadCount: 0 };
             
             const lastMsg = relevantMsgs[relevantMsgs.length - 1];
-            return { lastMsg, timestamp: lastMsg.timestamp };
+            
+            // Calculate Unread
+            const readTime = lastReadMap[id || 'public'] || 0;
+            // Count messages where timestamp > readTime AND sender is NOT me (unless saved messages)
+            const unreadCount = relevantMsgs.filter(m => 
+                m.timestamp > readTime && 
+                (id === currentUser.username ? true : m.senderUsername !== currentUser.username) 
+            ).length;
+
+            return { lastMsg, timestamp: lastMsg.timestamp, unreadCount };
         };
 
         const list = [];
@@ -229,7 +274,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return b.timestamp - a.timestamp;
         });
 
-    }, [messages, users, groups, searchTerm, currentUser.username, sidebarTab]);
+    }, [messages, users, groups, searchTerm, currentUser.username, sidebarTab, lastReadMap]);
 
     const handleSendMessage = async () => {
         if ((!inputText.trim()) || isUploading) return;
@@ -271,6 +316,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             // Immediate scroll
             scrollToBottom();
             setTimeout(scrollToBottom, 200);
+            
+            // Mark as read immediately since I sent it
+            if (activeChannel.id) updateReadStatus(activeChannel.id);
+            else if (activeChannel.type === 'public') updateReadStatus('public');
+
         } catch (e: any) {
             console.error("Send Error:", e);
             alert(`خطا در ارسال پیام: ${e.message}`);
@@ -300,6 +350,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 };
                 await sendMessage(newMsg);
                 onRefresh();
+                // Mark read
+                if (activeChannel.id) updateReadStatus(activeChannel.id);
+                else if (activeChannel.type === 'public') updateReadStatus('public');
             } catch (error) { alert('خطا در ارسال فایل. اتصال را بررسی کنید.'); } finally { setIsUploading(false); }
         };
         reader.readAsDataURL(file);
@@ -348,6 +401,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             };
                             await sendMessage(newMsg);
                             onRefresh();
+                             // Mark read
+                            if (activeChannel.id) updateReadStatus(activeChannel.id);
+                            else if (activeChannel.type === 'public') updateReadStatus('public');
                         } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); }
                     };
                     stream.getTracks().forEach(track => track.stop());
@@ -403,6 +459,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const displayMsgs = getDisplayMessages();
+
+    // Calculate Background
+    const backgroundStyle = useMemo(() => {
+        // 1. User Preference
+        if (currentUser.chatBackground) {
+            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+        }
+        // 2. Admin Default
+        if (systemSettings?.defaultChatBackground) {
+             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+        }
+        // 3. Fallback Pattern (Existing)
+        return { backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`, opacity: 0.1 };
+    }, [currentUser.chatBackground, systemSettings?.defaultChatBackground]);
+
+    const isPatternBackground = !currentUser.chatBackground && !systemSettings?.defaultChatBackground;
 
     return (
         <div className="flex h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] bg-white overflow-hidden rounded-xl border border-gray-200 shadow-sm relative">
@@ -460,6 +532,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     } else {
                                         setActiveTab('chat');
                                     }
+                                    // Mark read immediately upon click
+                                    if (item.id) updateReadStatus(item.id);
+                                    else if (item.type === 'public') updateReadStatus('public');
                                 }}
                                 className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-50 ${isActive ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
                             >
@@ -467,6 +542,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm overflow-hidden ${item.isSaved ? 'bg-sky-600' : item.type === 'public' ? 'bg-indigo-500' : item.type === 'group' ? 'bg-orange-500' : 'bg-gray-400'}`}>
                                         {item.isSaved ? <Bookmark size={20}/> : item.avatar ? <img src={item.avatar} className="w-full h-full object-cover"/> : (item.type === 'public' ? <Users size={22}/> : item.type === 'group' ? <Users size={20}/> : <UserIcon size={20}/>)}
                                     </div>
+                                    {/* Unread Badge */}
+                                    {item.unreadCount > 0 && (
+                                        <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white shadow-sm font-bold">
+                                            {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div className="flex-1 min-w-0">
@@ -499,8 +580,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col bg-[#8E98A3] z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 
                 {/* Chat Background */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none" 
-                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
+                <div 
+                    className={`absolute inset-0 pointer-events-none ${isPatternBackground ? 'opacity-10' : 'opacity-100'}`} 
+                    style={backgroundStyle}
+                >
                 </div>
 
                 {/* Header */}
