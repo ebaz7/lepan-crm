@@ -6,15 +6,23 @@ const config: CapacitorConfig = {
   appName: 'Payment Order System',
   webDir: 'dist',
   server: {
-    // Allows loading from external domains (HTTP/HTTPS)
-    androidScheme: 'https',
-    cleartext: true,
-    allowNavigation: ['*'] 
+    //androidScheme: 'https', // این خط باعث می‌شود فایل‌ها از طریق پروتکل امن داخلی بارگذاری شوند
+    cleartext: true, // اجازه دسترسی به API های http معمولی (لوکال شبکه)
+    allowNavigation: ['*', 'http://*', 'https://*'] // اجازه درخواست به سرورهای خارجی
   },
   plugins: {
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"]
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'dark',
+      resizeOnFullScreen: true
     }
+  },
+  android: {
+    allowMixedContent: true,
+    backgroundColor: "#ffffff"
   }
 };
 
