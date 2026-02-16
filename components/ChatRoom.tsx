@@ -167,7 +167,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setSelectedMsgIds([]);
         setReplyingTo(null);
         setEditingMessageId(null);
-        // Do NOT reset pendingForward here, as we navigate to channel to send it
         
         if (mobileShowChat && activeChannel.id) updateReadStatus(activeChannel.id);
         else if (mobileShowChat && activeChannel.type === 'public') updateReadStatus('public');
@@ -202,7 +201,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getDisplayMessages = () => {
         const list = messages.filter(msg => { 
-            // Filter out deleted messages for this user
+            // Filter out deleted messages for this user (Soft Delete)
             if (msg.hiddenFor && msg.hiddenFor.includes(currentUser.username)) return false;
 
             if (activeChannel.type === 'public') return !msg.recipient && !msg.groupId; 
@@ -283,10 +282,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleBulkDeleteChats = async () => {
         if(!confirm('آیا از حذف گفتگوهای انتخاب شده اطمینان دارید؟')) return;
-        // In this implementation, we mostly hide/clear history. For simplicity:
-        // We iterate selected items. If group, delete group. If private, delete messages for me.
-        // Since we don't have true "Hide Chat" logic yet, we'll just implement group deletion for admins or msg clear.
-        // For now, let's just clear selection to simulate action or delete groups if owner.
         setIsSelectionMode(false);
         setSelectedChatIds([]);
     };
@@ -304,16 +299,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleBulkForward = () => {
         if (selectedMsgIds.length === 0) return;
-        // Find messages
         const msgsToForward = messages.filter(m => selectedMsgIds.includes(m.id));
         if (msgsToForward.length > 0) {
-            // For bulk forward, we probably just want to pick the LAST one as preview or handle multiple.
-            // Simplified: Set the last one as preview, but maybe we should allow multiple? 
-            // Current design only supports single pending forward in UI.
-            // Let's just forward the *last selected* for simplicity in this draft, 
-            // or we could chain them. 
-            // Better: Just take the first one or show a "X messages forwarded" placeholder.
-            // Let's stick to single forwarding via menu for now to avoid complexity, OR just pick one.
             setPendingForward(msgsToForward[0]); 
             setIsMsgSelectionMode(false);
             setSelectedMsgIds([]);
@@ -327,11 +314,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return;
         }
         
-        // If we are in "Forwarding Mode" (selecting destination)
         if (pendingForward || sharedFile) {
             setActiveChannel({ type: item.type, id: item.id });
             setMobileShowChat(true);
-            setShowForwardDestinationModal(false); // Close modal, user is now in the chat to confirm send
+            setShowForwardDestinationModal(false); 
             return;
         }
 
@@ -365,14 +351,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
 
         let finalMessage = inputText;
-        let attachment = undefined;
-
-        // Logic for "Forwarding" as a quote in text or separate message?
-        // Telegram style: The forwarded message is sent, and IF there is text, it's a separate message OR caption.
-        // We will treat pendingForward as a "Quote" that is rendered specially.
-        // OR we create a new message that has `replyTo` or a new field `forwardedFrom`.
-        // Let's use `replyTo` structure but marking it as forward content for now to reuse UI, 
-        // OR just prepend text if it's text.
         
         // If Shared File
         if (sharedFile) {
@@ -396,19 +374,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 sender: replyingTo.sender,
                 message: replyingTo.message || 'رسانه'
             } : undefined,
-            // If pendingForward exists, we attach it. 
-            // We can reuse `replyTo` visual or add a specific field. 
-            // Let's append it to message text for simple visual representation if it's text,
-            // or send as attachment if it has one.
         };
 
         if (pendingForward) {
-            // If the user didn't type anything, just send the forwarded content
             if (!finalMessage) {
                 newMsg.message = pendingForward.message;
             } else {
-                // If user typed, maybe send two messages or combine?
-                // Simple approach: Combine
                 newMsg.message = `${finalMessage}\n\n[بازارسال از ${pendingForward.sender}]:\n${pendingForward.message}`;
             }
             if (pendingForward.attachment) newMsg.attachment = pendingForward.attachment;
@@ -419,7 +390,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             await sendMessage(newMsg);
             setInputText('');
             setReplyingTo(null);
-            setPendingForward(null); // Clear forward draft
+            setPendingForward(null);
             onRefresh();
             scrollToBottom();
             setTimeout(scrollToBottom, 200);
@@ -466,8 +437,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
     
     // --- Context Menu Actions ---
-    const handleContextMenu = (e: React.MouseEvent, msg: ChatMessage) => {
-        e.preventDefault();
+    const triggerMenu = (e: React.MouseEvent, msg: ChatMessage) => {
+        e.stopPropagation();
         setContextMenu({ x: e.clientX, y: e.clientY, msg });
     };
 
@@ -584,9 +555,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm overflow-hidden ${item.isSaved ? 'bg-sky-600' : item.type === 'public' ? 'bg-indigo-500' : item.type === 'group' ? 'bg-orange-500' : 'bg-gray-400'}`}>
                                         {item.isSaved ? <Bookmark size={20}/> : item.avatar ? <img src={item.avatar} className="w-full h-full object-cover"/> : (item.type === 'public' ? <Users size={22}/> : item.type === 'group' ? <Users size={20}/> : <UserIcon size={20}/>)}
                                     </div>
-                                    {/* Unread Badge Fix for Desktop */}
+                                    {/* Unread Badge */}
                                     {item.unreadCount > 0 && (
-                                        <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white shadow-sm font-bold animate-pulse z-10">
+                                        <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white shadow-sm font-bold z-10">
                                             {item.unreadCount > 99 ? '99+' : item.unreadCount}
                                         </div>
                                     )}
@@ -659,8 +630,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         if (isMsgSelectionMode) {
                                             e.stopPropagation();
                                             toggleMsgSelection(msg.id);
-                                        } else {
-                                            handleContextMenu(e, msg);
                                         }
                                     }}
                                 >
@@ -675,6 +644,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                                     <div className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm cursor-pointer select-none ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
                                         
+                                        {/* Three Dots Menu Button (Visible on Hover/Touch) */}
+                                        {!isMsgSelectionMode && (
+                                            <button 
+                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 z-10 md:opacity-0 active:opacity-100`}
+                                                onClick={(e) => triggerMenu(e, msg)}
+                                            >
+                                                <MoreVertical size={14} />
+                                            </button>
+                                        )}
+
                                         {/* Reply/Quote */}
                                         {msg.replyTo && (
                                             <div className={`mb-1 px-2 py-1 rounded border-r-2 text-xs opacity-70 truncate ${isMe ? 'bg-green-100 border-green-600' : 'bg-gray-100 border-blue-600'}`}>
@@ -726,22 +705,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {/* Input Area */}
                 {activeTab === 'chat' && (
                     <div className="bg-white p-2 flex flex-col border-t relative z-20">
-                        {/* Reply / Forward Preview */}
+                        {/* Reply / Forward Preview - Compact */}
                         {(replyingTo || pendingForward) && (
-                            <div className="bg-gray-50 p-2 rounded-lg border-l-4 border-blue-500 mb-2 flex justify-between items-center text-xs animate-slide-up">
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-blue-600">
-                                        {replyingTo ? `پاسخ به ${replyingTo.sender}` : `فوروارد از ${pendingForward?.sender}`}
-                                    </span>
-                                    <span className="text-gray-500 truncate max-w-[200px]">
-                                        {replyingTo ? replyingTo.message : pendingForward?.message}
-                                    </span>
+                            <div className="bg-gray-50 px-3 py-1.5 rounded-t-lg border-b border-gray-200 flex justify-between items-center text-xs animate-slide-up">
+                                <div className="flex items-center gap-2 truncate">
+                                    <div className={`w-1 h-8 rounded-full ${replyingTo ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                                    <div className="flex flex-col truncate">
+                                        <span className={`font-bold ${replyingTo ? 'text-blue-600' : 'text-green-600'}`}>
+                                            {replyingTo ? `پاسخ به ${replyingTo.sender}` : `فوروارد از ${pendingForward?.sender}`}
+                                        </span>
+                                        <span className="text-gray-500 truncate max-w-[200px]">
+                                            {replyingTo ? replyingTo.message : pendingForward?.message}
+                                        </span>
+                                    </div>
                                 </div>
-                                <button onClick={() => { setReplyingTo(null); setPendingForward(null); }} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
+                                <button onClick={() => { setReplyingTo(null); setPendingForward(null); }} className="text-gray-400 hover:text-red-500 p-1"><X size={16}/></button>
                             </div>
                         )}
 
-                        <div className="flex items-end gap-2">
+                        <div className="flex items-end gap-2 pt-2">
                             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} disabled={isUploading}/>
                             <button onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors mb-1">
                                 {isUploading ? <Loader2 size={24} className="animate-spin text-blue-500"/> : <Paperclip size={24}/>}
@@ -772,19 +754,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {contextMenu && (
                 <div 
                     className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 w-48 animate-scale-in"
-                    style={{ top: Math.min(contextMenu.y, window.innerHeight - 200), left: contextMenu.x > window.innerWidth / 2 ? contextMenu.x - 192 : contextMenu.x }}
+                    style={{ top: Math.min(contextMenu.y, window.innerHeight - 220), left: contextMenu.x > window.innerWidth / 2 ? contextMenu.x - 192 : contextMenu.x }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <button onClick={onActionReply} className="w-full text-right px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
-                    <button onClick={onActionForward} className="w-full text-right px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"><CornerUpRight size={16}/> فوروارد</button>
-                    <button onClick={onActionCopy} className="w-full text-right px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
+                    <button onClick={onActionReply} className="w-full text-right px-4 py-2.5 hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-700"><Reply size={16}/> پاسخ</button>
+                    <button onClick={onActionForward} className="w-full text-right px-4 py-2.5 hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-700"><CornerUpRight size={16}/> فوروارد</button>
+                    <button onClick={onActionCopy} className="w-full text-right px-4 py-2.5 hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-700"><Copy size={16}/> کپی متن</button>
                     {contextMenu.msg.senderUsername === currentUser.username && (
-                        <button onClick={onActionEdit} className="w-full text-right px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm text-amber-600"><Edit2 size={16}/> ویرایش</button>
+                        <button onClick={onActionEdit} className="w-full text-right px-4 py-2.5 hover:bg-gray-100 flex items-center gap-2 text-sm text-amber-600"><Edit2 size={16}/> ویرایش</button>
                     )}
                     <div className="border-t my-1"></div>
-                    <button onClick={() => onActionDelete(false)} className="w-full text-right px-4 py-2 hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"><Trash2 size={16}/> حذف برای من</button>
+                    <button onClick={() => onActionDelete(false)} className="w-full text-right px-4 py-2.5 hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"><Trash2 size={16}/> حذف برای من</button>
                     {(contextMenu.msg.senderUsername === currentUser.username || currentUser.role === UserRole.ADMIN) && (
-                        <button onClick={() => onActionDelete(true)} className="w-full text-right px-4 py-2 hover:bg-red-50 flex items-center gap-2 text-sm text-red-600 font-bold"><Trash2 size={16}/> حذف برای همه</button>
+                        <button onClick={() => onActionDelete(true)} className="w-full text-right px-4 py-2.5 hover:bg-red-50 flex items-center gap-2 text-sm text-red-600 font-bold"><Trash2 size={16}/> حذف برای همه</button>
                     )}
                 </div>
             )}
@@ -796,7 +778,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <span className="font-bold">ارسال به ...</span>
                         <button onClick={() => { setShowForwardDestinationModal(false); setPendingForward(null); setSharedFile(null); }}><X/></button>
                     </div>
-                    <div className="p-2 bg-blue-50 text-xs text-blue-800 mb-2 mx-2 rounded">
+                    <div className="p-2 bg-blue-50 text-xs text-blue-800 mb-2 mx-2 rounded border border-blue-100">
                         {sharedFile ? `فایل: ${sharedFile.name}` : `پیام: ${pendingForward?.message?.substring(0, 30)}...`}
                     </div>
                     <div className="flex-1 overflow-y-auto">
