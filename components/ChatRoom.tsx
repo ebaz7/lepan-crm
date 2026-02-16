@@ -485,6 +485,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     };
 
+    // --- Direct Reply/Forward Handlers (for new side buttons) ---
+    const handleQuickReply = (msg: ChatMessage) => {
+        setReplyingTo(msg);
+        inputAreaRef.current?.focus();
+    };
+
+    const handleQuickForward = (msg: ChatMessage) => {
+        setPendingForward(msg);
+        setShowForwardDestinationModal(true);
+    };
+
     const onActionEdit = () => {
         if (!contextMenu) return;
         if (contextMenu.msg.senderUsername !== currentUser.username) { alert('فقط پیام خودتان را می‌توانید ویرایش کنید.'); return; }
@@ -523,12 +534,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const backgroundStyle = useMemo(() => {
         if (currentUser.chatBackground) {
-            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', opacity: 1 };
+            return { backgroundImage: `url(${currentUser.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' };
         }
         if (systemSettings?.defaultChatBackground) {
-             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', opacity: 1 };
+             return { backgroundImage: `url(${systemSettings.defaultChatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' };
         }
-        return { backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`, opacity: 0.1 };
+        // CLEAN Fallback (No ugly pattern)
+        return { backgroundColor: '#f0f2f5' };
     }, [currentUser.chatBackground, systemSettings?.defaultChatBackground]);
 
     return (
@@ -683,7 +695,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <div 
                                     key={msg.id} 
                                     id={`msg-${msg.id}`} 
-                                    className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-1 group relative`}
+                                    className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-3 group relative items-end`}
                                     onClick={(e) => {
                                         if (isMsgSelectionMode) {
                                             e.stopPropagation();
@@ -700,59 +712,80 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         </div>
                                     )}
 
+                                    {/* Quick Actions (Reply/Forward) - Shows on Hover/Touch */}
+                                    {!isMsgSelectionMode && (
+                                        <div className={`flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity mx-2 mb-1 ${isMe ? 'order-first' : 'order-last'}`}>
+                                            <button 
+                                                className="p-1.5 bg-white/80 hover:bg-white rounded-full text-gray-600 shadow-sm" 
+                                                title="پاسخ"
+                                                onClick={(e) => { e.stopPropagation(); handleQuickReply(msg); }}
+                                            >
+                                                <Reply size={14}/>
+                                            </button>
+                                            <button 
+                                                className="p-1.5 bg-white/80 hover:bg-white rounded-full text-gray-600 shadow-sm" 
+                                                title="فوروارد"
+                                                onClick={(e) => { e.stopPropagation(); handleQuickForward(msg); }}
+                                            >
+                                                <CornerUpRight size={14}/>
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <div 
-                                        className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm cursor-pointer select-none ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
+                                        className={`relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%] rounded-2xl px-4 py-3 shadow-sm text-sm cursor-pointer select-none ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}
                                         onTouchStart={(e) => handleTouchStart(e, msg)}
                                         onTouchEnd={handleTouchEnd}
                                         onTouchMove={handleTouchMove}
                                     >
                                         
-                                        {/* Three Dots Menu Button (Visible on Hover/Touch) - ALWAYS PRESENT */}
+                                        {/* Three Dots Menu Button - Clearer */}
                                         {!isMsgSelectionMode && (
                                             <button 
-                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 z-10 active:opacity-100`}
+                                                className={`absolute top-1 ${isMe ? 'left-1' : 'right-1'} p-1 rounded-full bg-black/5 text-gray-600 hover:bg-black/15 z-10 opacity-70 hover:opacity-100 transition-all`}
                                                 onClick={(e) => triggerMenu(e, msg)}
                                             >
-                                                <MoreVertical size={14} />
+                                                <MoreVertical size={16} />
                                             </button>
                                         )}
 
                                         {/* Reply/Quote */}
                                         {msg.replyTo && (
-                                            <div className={`mb-1 px-2 py-1 rounded border-r-2 text-xs opacity-70 truncate ${isMe ? 'bg-green-100 border-green-600' : 'bg-gray-100 border-blue-600'}`}>
-                                                <span className="font-bold">{msg.replyTo.sender}</span>: {msg.replyTo.message}
+                                            <div className={`mb-2 px-2 py-1.5 rounded-lg border-r-4 text-xs opacity-80 truncate ${isMe ? 'bg-green-100 border-green-600' : 'bg-gray-100 border-blue-600'}`}>
+                                                <span className="font-bold block mb-0.5">{msg.replyTo.sender}</span>
+                                                <span>{msg.replyTo.message}</span>
                                             </div>
                                         )}
 
                                         {!isMe && activeChannel.type !== 'private' && (
-                                            <div className="text-[11px] font-bold text-orange-600 mb-1">{msg.sender}</div>
+                                            <div className="text-xs font-bold text-orange-700 mb-1">{msg.sender}</div>
                                         )}
 
                                         {msg.audioUrl && (
-                                            <div className="flex items-center gap-2 min-w-[160px] py-1">
+                                            <div className="flex items-center gap-2 min-w-[180px] py-1">
                                                 <audio controls src={msg.audioUrl} className="h-8 w-full opacity-90 custom-audio-player" />
                                             </div>
                                         )}
 
                                         {msg.attachment && (
-                                            <div className="mb-1">
+                                            <div className="mb-2">
                                                 {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                    <img src={msg.attachment.url} alt="attachment" className="max-w-full h-auto rounded-lg max-h-60 object-cover" />
+                                                    <img src={msg.attachment.url} alt="attachment" className="max-w-full h-auto rounded-lg max-h-72 object-cover" />
                                                 ) : (
-                                                    <div className="flex items-center gap-3 bg-black/5 p-2 rounded-lg">
-                                                        <div className="p-2 rounded-full bg-blue-500 text-white"><File size={18}/></div>
+                                                    <div className="flex items-center gap-3 bg-black/5 p-3 rounded-lg border border-black/5">
+                                                        <div className="p-2 rounded-full bg-blue-500 text-white"><File size={20}/></div>
                                                         <div className="truncate font-bold text-xs">{msg.attachment.fileName}</div>
                                                     </div>
                                                 )}
                                             </div>
                                         )}
 
-                                        {msg.message && <div className="whitespace-pre-wrap leading-relaxed break-words">{msg.message}</div>}
+                                        {msg.message && <div className="whitespace-pre-wrap leading-relaxed break-words text-[15px]">{msg.message}</div>}
 
-                                        <div className="flex justify-end items-center gap-1 mt-1 opacity-50 text-[10px]">
-                                            {msg.isEdited && <span>ویرایش شده</span>}
+                                        <div className="flex justify-end items-center gap-1 mt-1 opacity-50 text-[10px] font-medium">
+                                            {msg.isEdited && <span className="mr-1">ویرایش شده</span>}
                                             <span>{new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>
-                                            {isMe && <CheckCheck size={12} className="text-green-600"/>}
+                                            {isMe && <CheckCheck size={14} className="text-green-600 ml-0.5"/>}
                                         </div>
                                     </div>
                                 </div>
@@ -770,7 +803,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     <div className="bg-white p-2 flex flex-col border-t relative z-20">
                         {/* Reply / Forward Preview - Compact */}
                         {(replyingTo || pendingForward) && (
-                            <div className="bg-gray-50 px-3 py-1.5 rounded-t-lg border-b border-gray-200 flex justify-between items-center text-xs animate-slide-up">
+                            <div className="bg-gray-50 px-3 py-2 rounded-t-lg border-b border-gray-200 flex justify-between items-center text-xs animate-slide-up">
                                 <div className="flex items-center gap-2 truncate">
                                     <div className={`w-1 h-8 rounded-full ${replyingTo ? 'bg-blue-500' : 'bg-green-500'}`}></div>
                                     <div className="flex flex-col truncate">
