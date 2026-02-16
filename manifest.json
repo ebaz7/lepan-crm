@@ -1,3 +1,4 @@
+
 {
   "name": "Payment Order System",
   "short_name": "PaySys",
@@ -20,5 +21,21 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/share-target/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*", "audio/*", "application/pdf", "text/*"]
+        }
+      ]
+    }
+  }
 }
