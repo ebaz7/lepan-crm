@@ -7,7 +7,7 @@ import { generateUUID } from '../constants';
 import { 
     Send, User as UserIcon, Users, Plus, Paperclip, 
     CheckSquare, X, Trash2, Reply, Edit2, ArrowRight, 
-    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical
+    Loader2, Search, File, CheckCheck, Bookmark, CornerUpRight, Copy, MoreVertical, EyeOff, Eye
 } from 'lucide-react';
 
 interface ChatRoomProps { 
@@ -43,6 +43,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [inputText, setInputText] = useState('');
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
     const [pendingForward, setPendingForward] = useState<ChatMessage | null>(null);
+    const [hideForwardSender, setHideForwardSender] = useState(false); // New state for hiding quote
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
@@ -322,6 +323,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setPendingForward(msgsToForward[0]); // Just taking the first one for now as per simple logic
             setIsMsgSelectionMode(false);
             setSelectedMsgIds([]);
+            setHideForwardSender(false); // Default to show quote
             setShowForwardDestinationModal(true);
         }
     };
@@ -399,11 +401,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         };
 
         if (pendingForward) {
-            if (!finalMessage) {
-                newMsg.message = pendingForward.message;
-            } else {
-                newMsg.message = `${finalMessage}\n\n[بازارسال از ${pendingForward.sender}]:\n${pendingForward.message}`;
+            // Logic for Forward with/without Quote
+            let content = pendingForward.message || '';
+            
+            if (!hideForwardSender) {
+                 content = `[بازارسال از ${pendingForward.sender}]:\n${content}`;
             }
+
+            if (finalMessage) {
+                newMsg.message = `${finalMessage}\n\n${content}`;
+            } else {
+                newMsg.message = content;
+            }
+            
             if (pendingForward.attachment) newMsg.attachment = pendingForward.attachment;
             if (pendingForward.audioUrl) newMsg.audioUrl = pendingForward.audioUrl;
         }
@@ -413,6 +423,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setInputText('');
             setReplyingTo(null);
             setPendingForward(null);
+            setHideForwardSender(false); // Reset toggle
             onRefresh();
             scrollToBottom();
             // Trigger again for safety
@@ -511,6 +522,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleQuickForward = (msg: ChatMessage) => {
         setPendingForward(msg);
+        setHideForwardSender(false); // Default: Show Quote
         setShowForwardDestinationModal(true);
     };
 
@@ -533,6 +545,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const onActionForward = () => {
         if (!contextMenu) return;
         setPendingForward(contextMenu.msg);
+        setHideForwardSender(false); // Default: Show Quote
         setContextMenu(null);
         setShowForwardDestinationModal(true);
     };
@@ -548,6 +561,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         await deleteMessage(contextMenu.msg.id, forEveryone ? undefined : currentUser.username);
         onRefresh();
         setContextMenu(null);
+    };
+
+    const handleCancelReplyForward = () => {
+        setReplyingTo(null);
+        setPendingForward(null);
+        setHideForwardSender(false);
     };
 
     const backgroundStyle = useMemo(() => {
@@ -830,11 +849,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             {replyingTo ? `پاسخ به ${replyingTo.sender}` : `فوروارد از ${pendingForward?.sender}`}
                                         </span>
                                         <span className="text-gray-500 truncate max-w-[200px]">
-                                            {replyingTo ? replyingTo.message : pendingForward?.message}
+                                            {replyingTo ? replyingTo.message : (hideForwardSender ? 'بدون نقل قول' : pendingForward?.message)}
                                         </span>
                                     </div>
                                 </div>
-                                <button onClick={() => { setReplyingTo(null); setPendingForward(null); }} className="text-gray-400 hover:text-red-500 p-1"><X size={16}/></button>
+                                <button onClick={handleCancelReplyForward} className="text-gray-400 hover:text-red-500 p-1"><X size={16}/></button>
                             </div>
                         )}
 
@@ -891,11 +910,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 <div className="absolute inset-0 z-50 bg-white flex flex-col animate-fade-in">
                     <div className="p-3 border-b flex justify-between items-center bg-gray-50">
                         <span className="font-bold">ارسال به ...</span>
-                        <button onClick={() => { setShowForwardDestinationModal(false); setPendingForward(null); setSharedFile(null); }}><X/></button>
+                        <button onClick={() => { setShowForwardDestinationModal(false); setPendingForward(null); setSharedFile(null); setHideForwardSender(false); }}><X/></button>
                     </div>
+                    
                     <div className="p-2 bg-blue-50 text-xs text-blue-800 mb-2 mx-2 rounded border border-blue-100">
                         {sharedFile ? `فایل: ${sharedFile.name}` : `پیام: ${pendingForward?.message?.substring(0, 30)}...`}
                     </div>
+                    
                     <div className="flex-1 overflow-y-auto">
                         {sortedChatList.map(item => (
                             <div key={item.id} onClick={() => handleOpenChat(item)} className="flex items-center gap-3 p-3 border-b hover:bg-gray-50 cursor-pointer">
@@ -903,6 +924,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <span className="font-bold text-sm">{item.name}</span>
                             </div>
                         ))}
+                    </div>
+                    
+                    {/* Toggle: Hide Sender (Quote) */}
+                    <div 
+                        className="p-4 border-t bg-gray-50 flex items-center gap-3 cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => setHideForwardSender(!hideForwardSender)}
+                    >
+                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${hideForwardSender ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400'}`}>
+                             {hideForwardSender && <CheckCheck size={12} className="text-white"/>}
+                         </div>
+                         <div className="flex flex-col">
+                             <span className="text-sm font-bold text-gray-800">مخفی کردن نام فرستنده (بدون نقل قول)</span>
+                             <span className="text-[10px] text-gray-500">{hideForwardSender ? 'پیام به نام شما ارسال می‌شود' : 'پیام با نام نویسنده اصلی ارسال می‌شود'}</span>
+                         </div>
                     </div>
                 </div>
             )}
