@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
 import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
@@ -52,6 +51,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingTimerRef = useRef<any>(null);
+    const recordedMimeTypeRef = useRef<string>('');
 
     // --- Refs ---
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -277,18 +277,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         } catch (e: any) { console.error("Send Error:", e); }
     };
 
+    const getBestMimeType = () => {
+        const types = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg;codecs=opus',
+            'audio/aac'
+        ];
+        for (const type of types) {
+            if (MediaRecorder.isTypeSupported(type)) return type;
+        }
+        return '';
+    };
+
     const startRecording = async () => {
         if (isRecording) return; 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            // Detect compatible mimetype
-            let options = {};
-            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-                options = { mimeType: 'audio/webm;codecs=opus' };
-            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-                options = { mimeType: 'audio/mp4' };
-            }
+            const mimeType = getBestMimeType();
+            const options = mimeType ? { mimeType } : undefined;
+            recordedMimeTypeRef.current = mimeType || '';
 
             const mediaRecorder = new MediaRecorder(stream, options);
             mediaRecorderRef.current = mediaRecorder;
@@ -301,13 +311,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             };
             
             mediaRecorder.onstop = async () => {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+
                 if (audioChunksRef.current.length === 0) {
                     setIsRecording(false);
                     return;
                 }
 
-                const mimeType = (mediaRecorder.mimeType || 'audio/webm') as string;
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                // Construct blob with correct type
+                const finalMime = recordedMimeTypeRef.current || 'audio/webm';
+                const audioBlob = new Blob(audioChunksRef.current, { type: finalMime });
                 
                 // Only send if substantial data
                 if (audioBlob.size < 100) { 
@@ -322,7 +336,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 reader.onloadend = async () => {
                     const base64 = (reader.result || '') as string;
                     try {
-                        const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+                        // Determine extension based on mimeType for better playback compatibility
+                        let ext = 'webm';
+                        if (finalMime.includes('mp4') || finalMime.includes('aac')) ext = 'm4a';
+                        else if (finalMime.includes('ogg')) ext = 'ogg';
+
                         const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
                         const newMsg: ChatMessage = {
                             id: generateUUID(),
@@ -347,12 +365,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         audioChunksRef.current = []; // Clear buffer
                     }
                 };
-                
-                stream.getTracks().forEach(track => track.stop());
             };
 
-            // Start with timeslice to ensure chunks are generated
-            mediaRecorder.start(1000); 
+            // Start WITHOUT timeslice to let browser manage buffer and headers correctly.
+            // This prevents corruption in some browsers (Safari/Mobile Chrome).
+            mediaRecorder.start(); 
             setIsRecording(true);
             setRecordingTime(0);
             if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -624,7 +641,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                         {/* Messages List */}
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
-                            {displayMessages.map(msg => {
+                            {displayMessages.map((msg: ChatMessage) => {
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
                                 
