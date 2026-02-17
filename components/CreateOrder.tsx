@@ -96,18 +96,11 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
       // 2. Then load settings and refine if default company exists
       getSettings().then((s) => {
           setSettings(s);
-          
-          // Robustly get company names
-          let names: string[] = [];
-          if (s.companies && s.companies.length > 0) {
-              names = s.companies.map(c => c.name);
-          } else if (s.companyNames && s.companyNames.length > 0) {
-              names = s.companyNames;
-          }
+          const names = s.companies?.map(c => c.name) || s.companyNames || [];
           setAvailableCompanies(names);
           
           const defCompany = s.defaultCompany || '';
-          if (defCompany && names.includes(defCompany)) {
+          if (defCompany) {
               setPayingCompany(defCompany);
               updateBanksForCompany(defCompany, s);
               // 3. Re-fetch for specific company sequence if needed

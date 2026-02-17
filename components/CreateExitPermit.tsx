@@ -26,16 +26,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
     useEffect(() => {
         getSettings().then(s => {
-            // Robustly get company names
-            let names: string[] = [];
-            if (s.companies && s.companies.length > 0) {
-                names = s.companies.map(c => c.name);
-            } else if (s.companyNames && s.companyNames.length > 0) {
-                names = s.companyNames;
-            }
+            const names = s.companies?.map(c => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
-
-            if (s.defaultCompany && names.includes(s.defaultCompany)) {
+            if (s.defaultCompany) {
                 setSelectedCompany(s.defaultCompany);
                 fetchNextNumber(s.defaultCompany);
             }
