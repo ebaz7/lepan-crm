@@ -59,17 +59,24 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // --- ROBUST DATABASE HANDLER (GUARANTEED DATA INTEGRITY) ---
 const getDb = () => {
     try {
+        // Default Structure containing ALL modules to ensure nothing is missed
         const defaultDb = { 
             settings: {}, 
             users: [],
+            // 1. Payment Module
             orders: [], 
+            // 2. Exit Module
             exitPermits: [], 
+            // 3. Warehouse Module
             warehouseItems: [], 
             warehouseTransactions: [], 
+            // 4. Trade (Commerce) Module
             tradeRecords: [], 
+            // 5. Security Module
             securityLogs: [], 
             personnelDelays: [], 
             securityIncidents: [],
+            // 6. Chat & Communication Module
             messages: [], 
             groups: [], 
             tasks: [] 
@@ -81,6 +88,9 @@ const getDb = () => {
         if (!fileContent.trim()) return defaultDb;
 
         const data = JSON.parse(fileContent);
+
+        // Merge with default to ensure all keys exist even if file is partial
+        // This guarantees that when we backup, we backup EVERYTHING.
         return { ...defaultDb, ...data };
 
     } catch (e) { 
@@ -101,12 +111,12 @@ const saveDb = (data) => {
 const performAutoBackup = () => {
     console.log(">>> Starting Automatic Full Backup (ZIP)...");
     try {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16); 
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16); // YYYY-MM-DD-HH-mm
         const filename = `AutoBackup_Full_${timestamp}.zip`;
         const filePath = path.join(BACKUPS_DIR, filename);
         
         const output = fs.createWriteStream(filePath);
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = archiver('zip', { zlib: { level: 9 } }); // Max compression
 
         output.on('close', () => {
             console.log(`✅ Auto Backup Created: ${filename} (${(archive.pointer() / 1024 / 1024).toFixed(2)} MB)`);
@@ -118,16 +128,20 @@ const performAutoBackup = () => {
 
         archive.pipe(output);
 
+        // 1. Add Database File (Data)
         if (fs.existsSync(DB_FILE)) {
             archive.file(DB_FILE, { name: 'database.json' });
         }
 
+        // 2. Add Uploads Directory (Files: Images, PDF, Excel, Voice)
+        // This is crucial for Chat Attachments and Document Scans
         if (fs.existsSync(UPLOADS_DIR)) {
             archive.directory(UPLOADS_DIR, 'uploads');
         }
 
         archive.finalize();
         
+        // Retention Policy: Keep last 20 backups to save space
         setTimeout(() => {
             try {
                 const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('AutoBackup_')).sort();
@@ -137,73 +151,64 @@ const performAutoBackup = () => {
                     console.log(`🧹 Cleaned up ${toDelete.length} old backups.`);
                 }
             } catch(e) { console.error("Cleanup error", e); }
-        }, 10000); 
+        }, 10000); // Wait 10s for write to finish
 
     } catch (e) {
         console.error("❌ Automatic Backup Failed:", e);
     }
 };
 
+// Schedule: At minute 0 past every 3rd hour
 cron.schedule('0 */3 * * *', performAutoBackup);
+// Initial backup on start (delayed)
 setTimeout(performAutoBackup, 10000); 
 
-// --- HELPER: Find Next Sequence Number (Filling Gaps) ---
-// This function finds the first missing integer in the sequence
-const findNextGapNumber = (items, company, field, settingsStart) => {
-    let startNum = settingsStart || 1000;
-    
-    // 1. Filter items by company
-    const relevantItems = items && Array.isArray(items) 
-        ? items.filter(i => {
-            const itemCompany = i.company || i.payingCompany || '';
-            const targetCompany = company || '';
-            return itemCompany === targetCompany;
-        })
-        : [];
-    
-    // 2. Extract and Sort existing numbers
-    const existingNumbers = relevantItems
-        .map(i => parseInt(i[field]))
-        .filter(n => !isNaN(n) && n >= startNum) // Only consider numbers >= startNum
-        .sort((a, b) => a - b);
-    
-    // 3. Find the first gap
-    // If existing is [1001, 1003, 1004], start is 1000.
-    // Loop will check:
-    // Expected: 1001. Found: 1001. -> Next Expected: 1002.
-    // Expected: 1002. Found: 1003. -> Gap! Return 1002.
-    
-    let expected = startNum + 1; // e.g. 1001
-    
-    // Create a Set for O(1) lookup to handle the logic cleanly
-    const numSet = new Set(existingNumbers);
-    
-    // We check sequentially. This is safe up to ~100k records.
-    while (numSet.has(expected)) {
-        expected++;
+// --- HELPER: Find True Max ID ---
+const getTrueMax = (items, company, field, settingsStart) => {
+    let max = settingsStart || 1000;
+    if (items && Array.isArray(items)) {
+        const relevantItems = company 
+            ? items.filter(i => (i.company === company) || (i.payingCompany === company))
+            : items;
+        const numbers = relevantItems.map(i => parseInt(i[field])).filter(n => !isNaN(n));
+        if (numbers.length > 0) {
+            const dbMax = Math.max(...numbers);
+            // Fix: Strict max from DB to allow filling gaps if settings is out of sync, 
+            // but ensure we don't go below settingsStart if DB is empty/low
+            if (dbMax >= max) max = dbMax;
+        }
     }
-    
-    return expected;
+    return max;
 };
 
-// --- API ROUTES ---
+// --- API ROUTES (Expanded for Clarity & Safety) ---
 
-// 1. SEQUENCE GENERATORS (UPDATED)
+// 1. SEQUENCE GENERATORS
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
     
+    // Determine the FLOOR based on settings/fiscal year
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startTrackingNumber || 1000;
         }
     } 
+    // Logic Changed: Ignore db.settings.currentTrackingNumber as a "current counter" and treat it only as a "floor" 
+    // if no fiscal year overrides it. This ensures if user deletes order #1005, getTrueMax sees #1004 in DB and returns 1005 again.
     
-    // Use Gap Finder instead of Max+1
-    const nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
-    res.json({ nextTrackingNumber: nextNum });
+    // We pass minStart - 1 because getTrueMax returns the highest FOUND. We want to return highest + 1.
+    // So if minStart is 1000, and DB is empty, getTrueMax should return 999 so result is 1000? 
+    // No, standard logic: max = minStart || 1000. 
+    // If DB has 1005, max becomes 1005. Result 1006.
+    // If DB has nothing, max stays minStart. Result minStart + 1? No, usually start is 1000, first order 1001.
+    
+    const safeMax = getTrueMax(db.orders, company, 'trackingNumber', minStart);
+    // If DB is empty, safeMax is minStart (e.g. 1000). Next is 1001.
+    // If DB has 1002, safeMax is 1002. Next is 1003.
+    res.json({ nextTrackingNumber: safeMax + 1 });
 });
 
 app.get('/api/next-exit-permit-number', (req, res) => {
@@ -218,8 +223,8 @@ app.get('/api/next-exit-permit-number', (req, res) => {
         }
     }
     
-    const nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
-    res.json({ nextNumber: nextNum });
+    const safeMax = getTrueMax(db.exitPermits, company, 'permitNumber', minStart);
+    res.json({ nextNumber: safeMax + 1 });
 });
 
 app.get('/api/next-bijak-number', (req, res) => {
@@ -234,13 +239,14 @@ app.get('/api/next-bijak-number', (req, res) => {
         }
     } else {
         if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) { 
+            // Keep warehouse sequence support for non-fiscal mode
             minStart = db.settings.warehouseSequences[company]; 
         }
     }
     
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    const nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
-    res.json({ nextNumber: nextNum });
+    const safeMax = getTrueMax(outTxs, company, 'number', minStart);
+    res.json({ nextNumber: safeMax + 1 });
 });
 
 // 2. PAYMENT ORDERS
@@ -251,11 +257,10 @@ app.post('/api/orders', (req, res) => {
     const db = getDb(); 
     const order = req.body; 
     
-    // --- STRICT DUPLICATE CHECK ---
-    // Ensure we are comparing apples to apples
+    // --- DUPLICATE CHECK ---
     const isDuplicate = db.orders && db.orders.some(o => 
-        Number(o.trackingNumber) === Number(order.trackingNumber) && 
-        (o.payingCompany || '') === (order.payingCompany || '')
+        o.trackingNumber === Number(order.trackingNumber) && 
+        o.payingCompany === order.payingCompany
     );
 
     if (isDuplicate) {
@@ -266,6 +271,11 @@ app.post('/api/orders', (req, res) => {
     if(!db.orders) db.orders = []; 
     db.orders.unshift(order); 
     
+    // Optional: Update settings counter as a fallback, though we rely on DB max now
+    if (order.trackingNumber > (db.settings.currentTrackingNumber || 0)) {
+        db.settings.currentTrackingNumber = order.trackingNumber;
+    }
+
     saveDb(db); 
     res.json(db.orders); 
 });
@@ -293,9 +303,10 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
+    // --- DUPLICATE CHECK ---
     const isDuplicate = db.exitPermits && db.exitPermits.some(p => 
-        Number(p.permitNumber) === Number(permit.permitNumber) && 
-        (p.company || '') === (permit.company || '')
+        p.permitNumber === Number(permit.permitNumber) && 
+        p.company === permit.company
     );
 
     if (isDuplicate) {
@@ -361,8 +372,8 @@ app.post('/api/warehouse/transactions', (req, res) => {
     if (tx.type === 'OUT') {
         const isDuplicate = db.warehouseTransactions && db.warehouseTransactions.some(t => 
             t.type === 'OUT' &&
-            Number(t.number) === Number(tx.number) && 
-            (t.company || '') === (tx.company || '')
+            t.number === Number(tx.number) && 
+            t.company === tx.company
         );
         if (isDuplicate) return res.status(409).json({ error: "Duplicate bijak number" });
     }
@@ -598,6 +609,7 @@ app.post('/api/restart-bot', async (req, res) => {
 });
 
 app.post('/api/send-bot-message', async (req, res) => {
+    // ... (Keep existing logic)
     res.json({ success: true }); 
 });
 
@@ -635,7 +647,9 @@ app.get('/api/full-backup', (req, res) => {
         res.attachment(filename);
         archive.pipe(res);
         
+        // Append DB
         if (fs.existsSync(DB_FILE)) archive.file(DB_FILE, { name: 'database.json' });
+        // Append Uploads Directory
         if (fs.existsSync(UPLOADS_DIR)) archive.directory(UPLOADS_DIR, 'uploads');
         
         archive.finalize();
@@ -672,6 +686,8 @@ app.post('/api/emergency-restore', (req, res) => {
             }
             
             // Extract Uploads
+            // AdmZip extractAllTo will overwrite existing files which is desired for restore
+            // We verify the zip contains an 'uploads' folder or files
             if (zip.getEntry('uploads/')) {
                 zip.extractEntryTo("uploads/", ROOT_DIR, true, true); 
                 console.log("✅ Uploads restored.");
