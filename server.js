@@ -173,7 +173,9 @@ const getTrueMax = (items, company, field, settingsStart) => {
         const numbers = relevantItems.map(i => parseInt(i[field])).filter(n => !isNaN(n));
         if (numbers.length > 0) {
             const dbMax = Math.max(...numbers);
-            if (dbMax > max) max = dbMax;
+            // Fix: Strict max from DB to allow filling gaps if settings is out of sync, 
+            // but ensure we don't go below settingsStart if DB is empty/low
+            if (dbMax >= max) max = dbMax;
         }
     }
     return max;
@@ -185,46 +187,65 @@ const getTrueMax = (items, company, field, settingsStart) => {
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
-    let currentMaxSetting = 1000;
+    let minStart = 1000;
+    
+    // Determine the FLOOR based on settings/fiscal year
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMaxSetting = year.companySequences[company].startTrackingNumber || 1000;
-        } else { currentMaxSetting = db.settings.currentTrackingNumber || 1000; }
-    } else { currentMaxSetting = db.settings.currentTrackingNumber || 1000; }
-    const safeMax = getTrueMax(db.orders, company, 'trackingNumber', currentMaxSetting);
+            minStart = year.companySequences[company].startTrackingNumber || 1000;
+        }
+    } 
+    // Logic Changed: Ignore db.settings.currentTrackingNumber as a "current counter" and treat it only as a "floor" 
+    // if no fiscal year overrides it. This ensures if user deletes order #1005, getTrueMax sees #1004 in DB and returns 1005 again.
+    
+    // We pass minStart - 1 because getTrueMax returns the highest FOUND. We want to return highest + 1.
+    // So if minStart is 1000, and DB is empty, getTrueMax should return 999 so result is 1000? 
+    // No, standard logic: max = minStart || 1000. 
+    // If DB has 1005, max becomes 1005. Result 1006.
+    // If DB has nothing, max stays minStart. Result minStart + 1? No, usually start is 1000, first order 1001.
+    
+    const safeMax = getTrueMax(db.orders, company, 'trackingNumber', minStart);
+    // If DB is empty, safeMax is minStart (e.g. 1000). Next is 1001.
+    // If DB has 1002, safeMax is 1002. Next is 1003.
     res.json({ nextTrackingNumber: safeMax + 1 });
 });
 
 app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
-    let currentMaxSetting = 1000;
+    let minStart = 1000;
+    
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMaxSetting = year.companySequences[company].startExitPermitNumber || 1000;
-        } else { currentMaxSetting = db.settings.currentExitPermitNumber || 1000; }
-    } else { currentMaxSetting = db.settings.currentExitPermitNumber || 1000; }
-    const safeMax = getTrueMax(db.exitPermits, company, 'permitNumber', currentMaxSetting);
+            minStart = year.companySequences[company].startExitPermitNumber || 1000;
+        }
+    }
+    
+    const safeMax = getTrueMax(db.exitPermits, company, 'permitNumber', minStart);
     res.json({ nextNumber: safeMax + 1 });
 });
 
 app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
-    let currentMaxSetting = 1000;
+    let minStart = 1000;
+    
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            currentMaxSetting = year.companySequences[company].startBijakNumber || 1000;
-        } else { currentMaxSetting = (db.settings.warehouseSequences && db.settings.warehouseSequences[company]) ? db.settings.warehouseSequences[company] : 1000; }
+            minStart = year.companySequences[company].startBijakNumber || 1000;
+        }
     } else {
-        if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) { currentMaxSetting = db.settings.warehouseSequences[company]; } 
-        else { currentMaxSetting = 1000; }
+        if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) { 
+            // Keep warehouse sequence support for non-fiscal mode
+            minStart = db.settings.warehouseSequences[company]; 
+        }
     }
+    
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    const safeMax = getTrueMax(outTxs, company, 'number', currentMaxSetting);
+    const safeMax = getTrueMax(outTxs, company, 'number', minStart);
     res.json({ nextNumber: safeMax + 1 });
 });
 
@@ -235,9 +256,26 @@ app.get('/api/orders', (req, res) => {
 app.post('/api/orders', (req, res) => { 
     const db = getDb(); 
     const order = req.body; 
+    
+    // --- DUPLICATE CHECK ---
+    const isDuplicate = db.orders && db.orders.some(o => 
+        o.trackingNumber === Number(order.trackingNumber) && 
+        o.payingCompany === order.payingCompany
+    );
+
+    if (isDuplicate) {
+        return res.status(409).json({ error: "Duplicate tracking number" }); // 409 Conflict
+    }
+
     order.id = order.id || Date.now().toString(); 
     if(!db.orders) db.orders = []; 
     db.orders.unshift(order); 
+    
+    // Optional: Update settings counter as a fallback, though we rely on DB max now
+    if (order.trackingNumber > (db.settings.currentTrackingNumber || 0)) {
+        db.settings.currentTrackingNumber = order.trackingNumber;
+    }
+
     saveDb(db); 
     res.json(db.orders); 
 });
@@ -263,8 +301,20 @@ app.get('/api/exit-permits', (req, res) => {
 });
 app.post('/api/exit-permits', (req, res) => { 
     const db = getDb(); 
+    const permit = req.body;
+
+    // --- DUPLICATE CHECK ---
+    const isDuplicate = db.exitPermits && db.exitPermits.some(p => 
+        p.permitNumber === Number(permit.permitNumber) && 
+        p.company === permit.company
+    );
+
+    if (isDuplicate) {
+        return res.status(409).json({ error: "Duplicate permit number" });
+    }
+
     if(!db.exitPermits) db.exitPermits = []; 
-    db.exitPermits.push(req.body); 
+    db.exitPermits.push(permit); 
     saveDb(db); 
     res.json(db.exitPermits); 
 });
@@ -316,8 +366,20 @@ app.get('/api/warehouse/transactions', (req, res) => {
 });
 app.post('/api/warehouse/transactions', (req, res) => { 
     const db = getDb(); 
+    const tx = req.body;
+
+    // --- DUPLICATE CHECK FOR OUT (BIJAK) ---
+    if (tx.type === 'OUT') {
+        const isDuplicate = db.warehouseTransactions && db.warehouseTransactions.some(t => 
+            t.type === 'OUT' &&
+            t.number === Number(tx.number) && 
+            t.company === tx.company
+        );
+        if (isDuplicate) return res.status(409).json({ error: "Duplicate bijak number" });
+    }
+
     if(!db.warehouseTransactions) db.warehouseTransactions=[]; 
-    db.warehouseTransactions.unshift(req.body); 
+    db.warehouseTransactions.unshift(tx); 
     saveDb(db); 
     res.json(db.warehouseTransactions); 
 });
@@ -647,7 +709,7 @@ app.post('/api/emergency-restore', (req, res) => {
     }
 });
 
-app.get('/api/version', (req, res) => { res.json({ version: '1.3.0' }); });
+app.get('/api/version', (req, res) => { res.json({ version: '1.3.1' }); });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 if (fs.existsSync(DIST_DIR)) {

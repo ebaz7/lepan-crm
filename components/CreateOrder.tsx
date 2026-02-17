@@ -313,7 +313,15 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
     } catch (error: any) { 
         const msg = error?.message || "خطا در ثبت دستور پرداخت. لطفا اتصال شبکه را بررسی کنید.";
-        alert(msg);
+        
+        // Handle Duplicate Error Gracefully
+        if (msg.includes("409") || msg.includes("Duplicate") || msg.includes("تکراری")) {
+            alert(`⚠️ شماره دستور ${trackingNumber} تکراری است. سیستم به صورت خودکار شماره جدیدی دریافت می‌کند.`);
+            // Automatically fetch next valid number
+            fetchNextNumber(payingCompany);
+        } else {
+            alert(msg);
+        }
         setIsSubmitting(false);
     }
   };

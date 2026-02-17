@@ -19,6 +19,17 @@ interface ChatRoomProps {
 
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
 
+interface ChannelItem {
+    type: 'public' | 'private' | 'group';
+    id: string;
+    name: string;
+    avatar: string | null;
+    isOnline: boolean;
+    lastSeen?: number;
+    lastMsg: ChatMessage | null;
+    unread: number;
+}
+
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(preloadedMessages || []);
@@ -196,8 +207,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     // --- Render Logic ---
-    const getSortedChannels = () => {
-        const list = [];
+    const getSortedChannels = (): ChannelItem[] => {
+        const list: ChannelItem[] = [];
 
         if (activeTab === 'CHATS') {
             const lastPub = getLastMessage('public', 'public');
@@ -209,10 +220,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             users.forEach(u => {
                 const last = getLastMessage(u.username, 'private');
-                const isOnline = u.lastSeen && (Date.now() - u.lastSeen) < 5 * 60 * 1000;
+                const isOnline = u.lastSeen ? (Date.now() - u.lastSeen) < 5 * 60 * 1000 : false;
                 list.push({
                     type: 'private', id: u.username, name: u.fullName,
-                    avatar: u.avatar, isOnline, lastSeen: u.lastSeen,
+                    avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
                     lastMsg: last, unread: getUnreadCount(u.username, 'private')
                 });
             });
@@ -571,7 +582,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {activeTab === 'TASKS' ? (
                         <div className="p-4 text-center text-gray-500 text-sm">بخش تسک‌ها</div>
-                    ) : getSortedChannels().map((item: any) => (
+                    ) : getSortedChannels().map((item: ChannelItem) => (
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 relative group">
                             <div className="relative">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
@@ -863,7 +874,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-2">
-                            {getSortedChannels().map((item: any) => (
+                            {getSortedChannels().map((item: ChannelItem) => (
                                 <div key={item.id} onClick={() => handleForward(item.id, item.type)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
                                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
                                         {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
