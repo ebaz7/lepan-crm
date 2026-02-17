@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'payment-sys-v9-share';
+const CACHE_NAME = 'payment-sys-v7-robust';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -26,57 +26,6 @@ self.addEventListener('activate', (event) => {
     })
   );
   return self.clients.claim();
-});
-
-// *** SHARE TARGET HANDLER ***
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Intercept the Share Target POST request
-  if (url.pathname === '/share-target/' && event.request.method === 'POST') {
-    event.respondWith(
-      (async () => {
-        const formData = await event.request.formData();
-        const mediaFiles = formData.getAll('media'); // Files
-        const text = formData.get('text'); // Shared text
-        const title = formData.get('title');
-
-        // Store in a specific cache for the frontend to retrieve
-        const shareCache = await caches.open('share-data');
-        
-        // We store data as a JSON blob response mapped to specific keys
-        const shareData = {
-            text: text || title || '',
-            files: mediaFiles.map(f => ({ name: f.name, type: f.type, lastModified: f.lastModified }))
-        };
-        
-        await shareCache.put('/shared-meta', new Response(JSON.stringify(shareData)));
-
-        // Store files individually if any
-        if (mediaFiles && mediaFiles.length > 0) {
-            for (let i = 0; i < mediaFiles.length; i++) {
-                await shareCache.put(`/shared-file-${i}`, new Response(mediaFiles[i]));
-            }
-        }
-
-        // Redirect to the app with a query param indicating a share happened
-        return Response.redirect('/#chat?action=share_received', 303);
-      })()
-    );
-    return;
-  }
-  
-  // Standard Cache Logic for other requests (Network First for API, Cache First for assets)
-  if (url.pathname.startsWith('/api')) {
-      return; // Let browser handle API network
-  }
-
-  // For PWA assets
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
 });
 
 // *** CORE PUSH NOTIFICATION LOGIC ***

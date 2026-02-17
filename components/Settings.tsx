@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -69,8 +69,7 @@ const Settings: React.FC = () => {
       insuranceCompanies: [],
       exitPermitNotificationGroup: '',
       printTemplates: [],
-      fiscalYears: [],
-      defaultChatBackground: ''
+      fiscalYears: []
   });
 
   const [loading, setLoading] = useState(false);
@@ -134,11 +133,6 @@ const Settings: React.FC = () => {
   const [newCommodity, setNewCommodity] = useState('');
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const iconInputRef = useRef<HTMLInputElement>(null);
-  
-  // Default Wallpaper Upload State
-  const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
-  const wallpaperInputRef = useRef<HTMLInputElement>(null);
-
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const isSecure = window.isSecureContext;
   
@@ -170,7 +164,6 @@ const Settings: React.FC = () => {
           if(!safeData.printTemplates) safeData.printTemplates = [];
           if(!safeData.fiscalYears) safeData.fiscalYears = [];
           if(!safeData.rolePermissions) safeData.rolePermissions = {}; // Ensure defined
-          if(!safeData.defaultChatBackground) safeData.defaultChatBackground = '';
 
           setSettings(safeData); 
       } catch (e) { console.error("Failed to load settings"); } 
@@ -371,17 +364,6 @@ const Settings: React.FC = () => {
   const handleRemoveInsuranceCompany = (name: string) => { setSettings({ ...settings, insuranceCompanies: (settings.insuranceCompanies || []).filter(c => c !== name) }); };
   
   const handleIconChange = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setUploadingIcon(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const res = await uploadFile(file.name, ev.target?.result as string); setSettings({ ...settings, pwaIcon: res.url }); } catch (error) { alert('خطا'); } finally { setUploadingIcon(false); } }; reader.readAsDataURL(file); };
-  
-  const handleDefaultWallpaperChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]; if (!file) return;
-      setUploadingWallpaper(true);
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-          try { const res = await uploadFile(file.name, ev.target?.result as string); setSettings({ ...settings, defaultChatBackground: res.url }); } catch (e) { alert('خطا'); } finally { setUploadingWallpaper(false); }
-      };
-      reader.readAsDataURL(file);
-  };
-
   const handleToggleNotifications = async () => { if (!isSecure && window.location.hostname !== 'localhost') { alert("برای فعال‌سازی نوتیفیکیشن نیاز به HTTPS است."); return; } const granted = await requestNotificationPermission(); if (granted) { setNotificationPreference(true); setNotificationsEnabled(true); alert("نوتیفیکیشن فعال شد. اتصال به سرور بروزرسانی شد."); } else { alert("دسترسی به نوتیفیکیشن مسدود است یا پشتیبانی نمی‌شود."); } };
   const handleTestNotification = async () => { try { const userStr = localStorage.getItem('app_current_user'); const username = userStr ? JSON.parse(userStr).username : 'test'; await apiCall('/send-test-push', 'POST', { username }); alert("درخواست تست ارسال شد."); } catch (e: any) { let msg = "خطا در ارسال تست"; if (e.message && e.message.includes('404')) { if (confirm("اشتراک نوتیفیکیشن شما در سرور یافت نشد. آیا می‌خواهید مجدداً فعال‌سازی کنید؟")) { handleToggleNotifications(); return; } msg = "اشتراک یافت نشد."; } else if (e.message) { msg += `: ${e.message}`; } alert(msg); } };
   const handleSaveTemplate = (template: PrintTemplate) => { const existing = settings.printTemplates || []; const updated = editingTemplate ? existing.map(t => t.id === template.id ? template : t) : [...existing, template]; setSettings({ ...settings, printTemplates: updated }); setShowDesigner(false); setEditingTemplate(null); };
@@ -440,20 +422,6 @@ const Settings: React.FC = () => {
                                     <button type="button" onClick={handleTestNotification} className="w-full px-4 py-2 rounded-lg border bg-blue-50 border-blue-200 text-blue-700 flex items-center justify-center gap-2 transition-colors hover:bg-blue-100">
                                         <Send size={18}/> <span>ارسال پیام تست</span>
                                     </button>
-                                </div>
-                                
-                                <div className="space-y-2 border-t pt-3 mt-2">
-                                     <label className="text-sm font-bold text-gray-700 flex items-center gap-2"><ImageIcon size={16}/> تصویر پیش‌فرض پس‌زمینه چت (برای همه کاربران)</label>
-                                     <div className="flex items-center gap-2">
-                                         <input type="file" ref={wallpaperInputRef} className="hidden" accept="image/*" onChange={handleDefaultWallpaperChange} disabled={uploadingWallpaper} />
-                                         <button type="button" onClick={() => wallpaperInputRef.current?.click()} className="text-xs bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 border flex items-center gap-1">
-                                             {uploadingWallpaper ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-                                             {settings.defaultChatBackground ? 'تغییر تصویر پیش‌فرض' : 'آپلود تصویر پیش‌فرض'}
-                                         </button>
-                                         {settings.defaultChatBackground && (
-                                             <button type="button" onClick={() => setSettings({...settings, defaultChatBackground: ''})} className="text-red-500 p-2 border rounded-lg hover:bg-red-50"><Trash2 size={16}/></button>
-                                         )}
-                                     </div>
                                 </div>
                             </div>
                             <div className="space-y-4">

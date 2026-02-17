@@ -16,7 +16,7 @@ import SecurityModule from './components/SecurityModule';
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
 import { getOrders, getSettings, getMessages } from './services/storageService'; 
-import { getCurrentUser, getUsers, updateUser } from './services/authService';
+import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
@@ -52,71 +52,16 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
-  // --- GLOBAL BACK BUTTON HANDLER ---
-  useEffect(() => {
-    // Initial handling of Hash on load
-    const handleInitialHash = () => {
-        const hash = window.location.hash.replace('#', '');
-        if (hash) {
-            // If hash is a tab, set it
-            const tabName = hash.split('/')[0]; // Handle nested like chat/user_id
-            if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(tabName)) {
-                setActiveTabState(tabName);
-            }
-        } else {
-            // Default to dashboard and set hash
-            try {
-                if (window.location.protocol !== 'blob:') {
-                    window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
-                } else {
-                    window.history.replaceState({ tab: 'dashboard' }, '');
-                }
-            } catch (e) {
-                // Fallback for strict environments
-                try { window.history.replaceState({ tab: 'dashboard' }, ''); } catch(e2) {}
-            }
-        }
-    };
-
-    handleInitialHash();
-
-    // Handle Back Button (PopState)
-    const handlePopState = (event: PopStateEvent) => {
-        // If we have state with a tab, use it
-        if (event.state && event.state.tab) {
-            setActiveTabState(event.state.tab);
-        } else {
-            // Fallback to parsing hash if state is missing (e.g. external link)
-            const hash = window.location.hash.replace('#', '');
-            if (hash && hash !== 'menu' && !hash.includes('/')) {
-                 setActiveTabState(hash);
-            } else if (!hash) {
-                 // If no hash, we might be at root, show dashboard
-                 setActiveTabState('dashboard');
-            }
-            // Note: We ignore 'menu' hash here because Layout.tsx handles closing the menu
-            // We ignore hashes with '/' (like chat/id) because components handle closing those views
-        }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Function to change tab and push history
-  const handleSetActiveTab = (tab: string) => {
-      setActiveTabState(tab);
-      // Push new state
-      try {
-          if (window.location.protocol !== 'blob:') {
-               window.history.pushState({ tab }, '', `#${tab}`);
-          } else {
-               window.history.pushState({ tab }, '');
-          }
-      } catch (e) {
-          try { window.history.pushState({ tab }, ''); } catch(e2) {}
-      }
+  const safePushState = (state: any, title: string, url?: string) => { 
+      if (isNative) return; 
+      try { if (url) window.history.pushState(state, title, url); else window.history.pushState(state, title); } catch (e) { try { window.history.pushState(state, title); } catch(e2) {} } 
   };
+  const safeReplaceState = (state: any, title: string, url?: string) => { 
+      if (isNative) return; 
+      try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
+  };
+  
+  const setActiveTab = (tab: string, addToHistory = true) => { setActiveTabState(tab); if (addToHistory) safePushState({ tab }, '', `#${tab}`); };
 
   useEffect(() => {
     if (isNative) {
@@ -125,25 +70,13 @@ function App() {
                 const data = notification.notification.data;
                 if (data && data.url) {
                     const target = data.url.replace('#', '');
-                    handleSetActiveTab(target);
+                    setActiveTab(target);
                 }
             });
         } catch(e) { console.error("Push Listener Error", e); }
     }
   }, []);
 
-  // --- HEARTBEAT FOR ONLINE STATUS ---
-  useEffect(() => {
-      if (currentUser) {
-          const heartbeat = setInterval(() => {
-              updateUser({ ...currentUser, lastSeen: Date.now() }).catch(err => console.error("Heartbeat fail", err));
-          }, 60000);
-          updateUser({ ...currentUser, lastSeen: Date.now() });
-          return () => clearInterval(heartbeat);
-      }
-  }, [currentUser]);
-
-  // ... (Background Jobs Logic - No Change) ...
   useEffect(() => {
       const handleJob = (e: CustomEvent) => { setBackgroundJobs(prev => [...prev, e.detail]); };
       window.addEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
@@ -183,8 +116,19 @@ function App() {
       processingJobRef.current = false;
   };
 
-  // ... (Rest of the component logic - No Change) ...
+  useEffect(() => {
+    if (isNative) return; 
+    const hash = window.location.hash.replace('#', '');
+    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(hash)) {
+        setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
+    } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
+    const handlePopState = (event: PopStateEvent) => { if (event.state && event.state.tab) setActiveTabState(event.state.tab); else setActiveTabState('dashboard'); };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
+
   const handleLogout = () => { setCurrentUser(null); isFirstLoad.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
 
   useEffect(() => {
@@ -200,17 +144,36 @@ function App() {
     }
   }, [currentUser]);
 
-  const playNotificationSound = () => { try { const beep = "data:audio/wav;base64,UklGRl9vT1dAVEfmt"; const audio = new Audio(beep); audio.volume = 1.0; audio.play().catch(e => console.log("Audio blocked")); } catch (e) { } };
-  const addAppNotification = (title: string, message: string, url: string = '/') => { setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); playNotificationSound(); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); setToast({ show: true, title, message }); toastTimeoutRef.current = setTimeout(() => setToast(null), 5000); sendNotification(title, message, url); };
+  const playNotificationSound = () => { 
+      try { 
+          // Offline-safe beep sound (Base64)
+          const beep = "data:audio/wav;base64,UklGRl9vT1dAVEfmt"; 
+          const audio = new Audio(beep); 
+          audio.volume = 1.0; 
+          audio.play().catch(e => console.log("Audio blocked")); 
+      } catch (e) { } 
+  };
+
+  const addAppNotification = (title: string, message: string) => { 
+      setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); 
+      playNotificationSound();
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      setToast({ show: true, title, message });
+      toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
+      sendNotification(title, message);
+  };
+
   const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
   const closeToast = () => { setToast(null); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
 
   const loadData = async (silent = false) => {
     if (!currentUser) return;
+    
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
         const cachedSettings = getLocalData<SystemSettings>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 } as any);
         const cachedMessages = getLocalData<ChatMessage[]>(LS_KEYS.CHAT, []); 
+        
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) setSettings(cachedSettings);
         if (cachedMessages.length > 0) {
@@ -218,49 +181,144 @@ function App() {
             if (cachedMessages.length > 0) lastChatMsgIdRef.current = cachedMessages[cachedMessages.length - 1].id;
         }
     }
+
     if (!silent && orders.length === 0) setLoading(true);
+
     try {
         const [ordersData, settingsData, messagesData] = await Promise.all([getOrders(), getSettings(), getMessages()]);
-        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({ ...o, paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [], attachments: Array.isArray(o.attachments) ? o.attachments : [] })) : [];
+        
+        // --- SAFE GUARD & DEEP SANITIZATION (The Fix) ---
+        // Recursively clean the data to ensure nested arrays are actually arrays.
+        // This fixes crashes where a backup might have 'paymentDetails: null'
+        
+        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
+            ...o,
+            // Deep clean paymentDetails
+            paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [],
+            // Deep clean attachments
+            attachments: Array.isArray(o.attachments) ? o.attachments : []
+        })) : [];
+
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
-        if (settingsData) { if (!Array.isArray(settingsData.companies)) settingsData.companies = []; if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = []; if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = []; if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = []; }
+        
+        // Also sanitize settings arrays just in case
+        if (settingsData) {
+            if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
+            if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
+            if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
+            if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
+        }
+
         setSettings(settingsData);
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
+        
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);
+        
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
             if (lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username) {
                 if (activeTab !== 'chat') {
                     let body = lastMsg.message || 'فایل ضمیمه';
                     if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
-                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, '#chat');
+                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body);
                 }
             }
             lastChatMsgIdRef.current = lastMsg.id;
         }
+
         if (isFirstLoad.current) { checkChequeAlerts(safeOrders); }
+        
         localStorage.setItem(NOTIFICATION_CHECK_KEY, Date.now().toString());
         isFirstLoad.current = false;
-    } catch (error) { console.error("Failed to load data", error); } finally { if (!silent) setLoading(false); }
+    } catch (error) { 
+        console.error("Failed to load data", error); 
+    } finally { 
+        if (!silent) setLoading(false); 
+    }
   };
 
-  const checkChequeAlerts = (list: PaymentOrder[]) => { const now = new Date(); let alertCount = 0; list.forEach(order => { if (order.paymentDetails && Array.isArray(order.paymentDetails)) { order.paymentDetails.forEach(detail => { if (detail.method === PaymentMethod.CHEQUE && detail.chequeDate) { const dueDate = parsePersianDate(detail.chequeDate); if (dueDate) { const diffTime = dueDate.getTime() - now.getTime(); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if (diffDays <= 2 && diffDays >= 0) { alertCount++; } } } }); } }); if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); } };
-  const checkForNotifications = (newList: PaymentOrder[], user: User, lastCheckTime: number) => { if (!Array.isArray(newList)) return; const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime); newEvents.forEach(newItem => { const status = newItem.status; const isAdmin = user.role === UserRole.ADMIN; if (isAdmin) { const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); } } if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); } else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); } else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); } else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } } else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); } }); };
+  const checkChequeAlerts = (list: PaymentOrder[]) => {
+      const now = new Date();
+      let alertCount = 0;
+      list.forEach(order => {
+          // Double check array existence even after sanitization
+          if (order.paymentDetails && Array.isArray(order.paymentDetails)) {
+              order.paymentDetails.forEach(detail => {
+                  if (detail.method === PaymentMethod.CHEQUE && detail.chequeDate) {
+                      const dueDate = parsePersianDate(detail.chequeDate);
+                      if (dueDate) {
+                          const diffTime = dueDate.getTime() - now.getTime();
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          if (diffDays <= 2 && diffDays >= 0) { alertCount++; }
+                      }
+                  }
+              });
+          }
+      });
+      if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); }
+  };
 
-  useEffect(() => { const handleAppStateChange = async (state: any) => { if (state.isActive && currentUser) { await loadData(true); } }; let listener: any; if (Capacitor.isNativePlatform()) { CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; }); } return () => { if (listener) listener.remove(); }; }, [currentUser]);
-  useEffect(() => { if (currentUser) { loadData(false); const intervalId = setInterval(() => loadData(true), 5000); return () => clearInterval(intervalId); } }, [currentUser]);
+  const checkForNotifications = (newList: PaymentOrder[], user: User, lastCheckTime: number) => {
+     // Safe guard against non-array input
+     if (!Array.isArray(newList)) return;
 
-  const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); handleSetActiveTab('manage'); };
-  const handleLogin = (user: User) => { setCurrentUser(user); handleSetActiveTab('dashboard'); };
-  const handleViewArchive = () => { setManageOrdersInitialTab('archive'); setDashboardStatusFilter(null); handleSetActiveTab('manage'); };
-  const handleDashboardFilter = (status: any) => { setDashboardStatusFilter(status); setManageOrdersInitialTab('current'); handleSetActiveTab('manage'); };
+     const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
+     newEvents.forEach(newItem => {
+        const status = newItem.status;
+        const isAdmin = user.role === UserRole.ADMIN;
+        if (isAdmin) {
+             const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
+             if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
+        }
+        if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); }
+        else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); }
+        else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
+        else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
+        else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
+     });
+  };
 
-  const handleGoToPaymentApprovals = () => { let filter: any = 'pending_all'; if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial'; else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager'; else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo'; setDashboardStatusFilter(filter); setManageOrdersInitialTab('current'); handleSetActiveTab('manage'); };
-  const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); handleSetActiveTab('manage-exit'); };
+  useEffect(() => {
+      const handleAppStateChange = async (state: any) => {
+          if (state.isActive && currentUser) {
+              await loadData(true);
+          }
+      };
+      let listener: any;
+      if (Capacitor.isNativePlatform()) {
+          CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; });
+      }
+      return () => { if (listener) listener.remove(); };
+  }, [currentUser]);
+
+  useEffect(() => { 
+      if (currentUser) { 
+          loadData(false); 
+          const intervalId = setInterval(() => loadData(true), 5000); 
+          return () => clearInterval(intervalId); 
+      } 
+  }, [currentUser]);
+
+  const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); setActiveTab('manage'); };
+  const handleLogin = (user: User) => { setCurrentUser(user); setActiveTab('dashboard'); };
+  const handleViewArchive = () => { setManageOrdersInitialTab('archive'); setDashboardStatusFilter(null); setActiveTab('manage'); };
+  const handleDashboardFilter = (status: any) => { setDashboardStatusFilter(status); setManageOrdersInitialTab('current'); setActiveTab('manage'); };
+
+  const handleGoToPaymentApprovals = () => {
+      let filter: any = 'pending_all';
+      if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial';
+      else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager';
+      else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo';
+      setDashboardStatusFilter(filter);
+      setManageOrdersInitialTab('current');
+      setActiveTab('manage');
+  };
+
+  const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
   const [warehouseInitialTab, setWarehouseInitialTab] = useState<'dashboard' | 'approvals'>('dashboard');
-  const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); handleSetActiveTab('warehouse'); };
+  const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); setActiveTab('warehouse'); };
 
   return (
     <>
@@ -269,7 +327,7 @@ function App() {
         ) : (
             <Layout 
             activeTab={activeTab} 
-            setActiveTab={(t) => { handleSetActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); }} 
+            setActiveTab={(t) => { setActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); }} 
             currentUser={currentUser} 
             onLogout={handleLogout} 
             notifications={notifications} 
@@ -309,7 +367,7 @@ function App() {
                     {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} />}
                     {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                     {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} />}
-                    {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => handleSetActiveTab('manage-exit')} currentUser={currentUser} />}
+                    {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
                     {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} />}
                     {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}

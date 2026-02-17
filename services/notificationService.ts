@@ -48,7 +48,7 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
-export const sendNotification = async (title: string, body: string, url: string = '/') => {
+export const sendNotification = async (title: string, body: string) => {
   if (!isNotificationEnabledInApp()) return;
 
   // On Native, we rely on the Background Push (FCM) primarily.
@@ -65,7 +65,7 @@ export const sendNotification = async (title: string, body: string, url: string 
                       sound: 'beep.wav', // Ensure this file exists in android/app/src/main/res/raw or standard sounds will play
                       smallIcon: 'ic_stat_icon_config_sample', 
                       actionTypeId: "",
-                      extra: { url: url }
+                      extra: null
                   }
               ]
           });
@@ -77,14 +77,7 @@ export const sendNotification = async (title: string, body: string, url: string 
 
   if (Notification.permission === "granted") {
       try {
-        const notif = new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa', data: { url: url } });
-        notif.onclick = (e) => {
-             e.preventDefault();
-             window.focus();
-             const targetUrl = (e.target as any).data?.url || '/';
-             window.location.href = targetUrl;
-             notif.close();
-        };
+        new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa' });
       } catch (e) {
           console.error("Web Notification Error:", e);
       }

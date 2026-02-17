@@ -49,6 +49,7 @@ export const getLocalData = <T>(key: string, defaultData: T): T => {
 export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> => {
     try {
         const controller = new AbortController();
+        // Increased timeout significantly for mobile networks AND large file uploads (60s)
         const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
         let baseUrl = '';
@@ -67,24 +68,16 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             }
         }
 
+        // Ensure endpoint starts with /
         const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-        
-        // Add cache busting for GET requests
-        const separator = safeEndpoint.includes('?') ? '&' : '?';
-        const urlWithCacheBuster = method === 'GET' ? `${safeEndpoint}${separator}_t=${Date.now()}` : safeEndpoint;
-        
-        const finalUrl = `${baseUrl}${urlWithCacheBuster}`;
+        // Prevent double //api/api if someone passes full path erroneously, though baseUrl handles prefix
+        const finalUrl = `${baseUrl}${safeEndpoint}`;
 
-        // console.log(`API calling: ${method} ${finalUrl}`); 
+        console.log(`API calling: ${method} ${finalUrl}`); 
 
         const response = await fetch(finalUrl, {
             method,
-            headers: { 
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: body ? JSON.stringify(body) : undefined,
             signal: controller.signal
         });
@@ -96,11 +89,11 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             if (contentType && contentType.includes("application/json")) {
                 data = await response.json();
             } else {
-                // If response is OK but not JSON (e.g. empty body), return simple success
                 data = { success: true } as unknown as T;
             }
 
-            // --- CACHING ENABLED (Write to LocalStorage for Offline Fallback) ---
+            // --- CACHING ENABLED ---
+            // Crucial for Android app to prevent "raw/empty" state if network fluctuates
             if (method === 'GET') {
                 try {
                     if (endpoint === '/orders') localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(data));
@@ -111,19 +104,22 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
                     else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
                 } catch (cacheError) {
-                    console.warn("Cache write failed", cacheError);
+                    console.warn("Cache write failed (storage full?)", cacheError);
                 }
             }
             
             return data;
         } else {
+            // Attempt to parse server error message
             let serverErrorMsg = `Server Error: ${response.status}`;
             try {
                 const errData = await response.json();
                 if (errData && errData.error) {
                     serverErrorMsg = errData.error;
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Response was not JSON or failed to parse
+            }
             throw new Error(serverErrorMsg);
         }
 
@@ -136,11 +132,14 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         console.warn(`API Error for ${endpoint}:`, error);
 
         if (endpoint === '/login' && method === 'POST') {
+             // Let login handle specific connection errors if needed, but usually we just throw
+             // If we are here, it means fetch failed completely (network) or server returned error
              if (error.message.includes("Server Error") || (error.message && error.message.includes("خطا"))) throw error; 
              throw new Error('اتصال به سرور برقرار نشد. آدرس سرور یا اینترنت را بررسی کنید.');
         }
 
         // --- CACHE FALLBACK (READ-ONLY) ---
+        // If network fails, return cached data to prevent empty UI
         if (method === 'GET') {
             if (endpoint === '/orders') return getLocalData<any>(LS_KEYS.ORDERS, INITIAL_ORDERS);
             if (endpoint === '/trade') return getLocalData<any>(LS_KEYS.TRADE, []);

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, PlusCircle, ListChecks, FileText, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Image as ImageIcon } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ListChecks, FileText, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu } from 'lucide-react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
@@ -50,9 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   });
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingWallpaper, setUploadingWallpaper] = useState(false); 
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const wallpaperInputRef = useRef<HTMLInputElement>(null); 
 
   // Update Detection State
   const [serverVersion, setServerVersion] = useState<string | null>(null);
@@ -149,30 +147,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showNotifDropdown]);
 
-  // --- HANDLE MOBILE MENU BACK NAVIGATION (Enhanced) ---
-  const toggleMobileMenu = () => {
-      if (!showMobileMenu) {
-          if (window.location.protocol !== 'blob:') {
-               window.history.pushState({ menu: 'open' }, '', '#menu');
-          } else {
-               window.history.pushState({ menu: 'open' }, '');
-          }
-          setShowMobileMenu(true);
-      } else {
-          window.history.back(); // This triggers popstate to close menu
-      }
-  };
-
-  useEffect(() => {
-      const handlePopState = (event: PopStateEvent) => {
-          if (showMobileMenu) {
-              setShowMobileMenu(false);
-          }
-      };
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
-  }, [showMobileMenu]);
-
   const handleLogout = () => { logout(); onLogout(); };
   
   const handleToggleNotif = async () => { 
@@ -252,21 +226,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           try { const result = await uploadFile(file.name, base64); await updateUser({ ...currentUser, avatar: result.url }); window.location.reload(); } catch (error) { alert('خطا در آپلود تصویر'); } finally { setUploadingAvatar(false); } 
       }; 
       reader.readAsDataURL(file); 
-  };
-  
-  const handleWallpaperChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]; if (!file) return;
-      setUploadingWallpaper(true);
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-          const base64 = ev.target?.result as string;
-          try { 
-              const result = await uploadFile(file.name, base64); 
-              await updateUser({ ...currentUser, chatBackground: result.url }); 
-              window.location.reload(); 
-          } catch (error) { alert('خطا در آپلود پس‌زمینه'); } finally { setUploadingWallpaper(false); }
-      };
-      reader.readAsDataURL(file);
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -361,7 +320,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Profile Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 flex flex-col items-center justify-center text-white relative">
                     <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={20}/></button>
                     <div className="relative group cursor-pointer mb-3" onClick={() => avatarInputRef.current?.click()}>
@@ -384,21 +343,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         </div>
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-500">شماره موبایل (واتساپ)</label><input type="tel" value={profileForm.phoneNumber} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="98912..."/></div>
                         
-                        {/* Wallpaper Setting */}
-                        <div className="space-y-1 border-t pt-3 mt-2">
-                             <label className="text-xs font-bold text-gray-500 flex items-center gap-1"><ImageIcon size={14}/> تصویر پس‌زمینه چت</label>
-                             <div className="flex items-center gap-2">
-                                 <input type="file" ref={wallpaperInputRef} className="hidden" accept="image/*" onChange={handleWallpaperChange} disabled={uploadingWallpaper} />
-                                 <button type="button" onClick={() => wallpaperInputRef.current?.click()} className="text-xs bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 border flex items-center gap-1 w-full justify-center">
-                                     {uploadingWallpaper ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14}/>}
-                                     {currentUser.chatBackground ? 'تغییر تصویر' : 'آپلود تصویر'}
-                                 </button>
-                                 {currentUser.chatBackground && (
-                                     <button type="button" onClick={async () => { if(confirm('حذف؟')) { await updateUser({...currentUser, chatBackground: ''}); window.location.reload(); } }} className="text-red-500 p-2 border rounded-lg hover:bg-red-50"><Trash2 size={16}/></button>
-                                 )}
-                             </div>
-                        </div>
-
                         <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 p-3 rounded-lg">
                             <input type="checkbox" checked={profileForm.receiveNotifications} onChange={e => setProfileForm({...profileForm, receiveNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
                             <span className="text-gray-700">دریافت پیام‌های اطلاع‌رسانی</span>
@@ -431,7 +375,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Mobile Drawer (Refined Design) */}
       {showMobileMenu && (
           <div className="fixed inset-0 z-[60] md:hidden animate-fade-in">
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => window.history.back()}></div>
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
               <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] max-h-[85vh] overflow-y-auto animate-slide-up pb-safe shadow-2xl flex flex-col">
                   {/* Header */}
                   <div className="p-5 border-b flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-[2rem]">
@@ -444,7 +388,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                               <div className="text-[10px] text-gray-500">{currentUser.fullName}</div>
                           </div>
                       </div>
-                      <button onClick={() => window.history.back()} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                      <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
                   </div>
                   
                   {/* Grid Menu */}
@@ -465,10 +409,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                       })}
                   </div>
 
-                  {/* Footer Actions (Minimal) */}
-                  <div className="mt-auto px-5 pb-8 pt-2">
-                      <button onClick={handleLogout} className="w-full py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors border-t border-gray-100 pt-4">
-                          <LogOut size={16} />
+                  {/* Footer Actions */}
+                  <div className="mt-auto p-5 border-t bg-gray-50/50 pb-8">
+                      <button onClick={handleLogout} className="w-full p-4 bg-white border border-red-100 text-red-600 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-sm active:bg-red-50 transition-colors">
+                          <LogOut size={20} />
                           خروج از حساب کاربری
                       </button>
                   </div>
@@ -494,7 +438,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         
         {/* Menu Button */}
         <button 
-            onClick={toggleMobileMenu} 
+            onClick={() => setShowMobileMenu(true)} 
             className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${showMobileMenu ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400'}`}
         >
             <Menu size={24} strokeWidth={showMobileMenu ? 2.5 : 2} />
