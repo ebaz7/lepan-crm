@@ -38,7 +38,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const [showForwardModal, setShowForwardModal] = useState(false);
-    const [forwardNoQuote, setForwardNoQuote] = useState(false); // NEW: Toggle state inside modal
+    const [forwardNoQuote, setForwardNoQuote] = useState(false);
     const [showImageViewer, setShowImageViewer] = useState<string | null>(null);
     const [contextMenuMsg, setContextMenuMsg] = useState<{msg: ChatMessage, x: number, y: number} | null>(null);
 
@@ -84,11 +84,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (activeChannel) {
             // Push a state so "Back" button closes chat instead of exiting app
-            window.history.pushState({ chatOpen: true }, '');
+            // We use a specific hash/state to avoid conflicting with main tabs
+            const state = { chatOpen: true };
+            window.history.pushState(state, '', window.location.pathname + '#chat');
             
             const handlePopState = (event: PopStateEvent) => {
                 // If user presses back, close chat
-                setActiveChannel(null);
+                // We check if the popped state doesn't have chatOpen anymore
+                if (!event.state?.chatOpen) {
+                    setActiveChannel(null);
+                }
             };
 
             window.addEventListener('popstate', handlePopState);
@@ -487,10 +492,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-[calc(100vh-80px)] bg-gray-100 rounded-xl overflow-hidden shadow-lg border border-gray-200 relative font-sans">
+        <div className="flex h-[calc(100vh-80px)] md:bg-gray-100 rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
-            <div className={`w-full md:w-80 bg-white border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
+            {/* On Mobile, if Chat is open, hide the list entirely to avoid scrolling issues, or use absolute positioning */}
+            <div className={`w-full md:w-80 bg-white border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-3 border-b bg-gray-50">
                     <div className="flex justify-between items-center mb-3">
@@ -537,15 +543,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`absolute inset-0 md:static flex-1 bg-[#8e98a3] z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+            {/* Using fixed positioning on mobile to ensure it covers everything and header stays on top */}
+            <div className={`fixed inset-0 md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
-                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-20 sticky top-0">
+                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-50 sticky top-0 safe-pt">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => window.history.back()} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
                                 <div className="flex flex-col cursor-pointer">
-                                    <h3 className="font-bold text-gray-800">
+                                    <h3 className="font-bold text-gray-800 text-sm">
                                         {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
                                          activeChannel.type === 'group' ? groups.find(g=>g.id===activeChannel.id)?.name : 'کانال عمومی'}
                                     </h3>
@@ -587,10 +594,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 return (
                                     <div 
                                         key={msg.id} 
-                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} ${selectionMode ? 'cursor-pointer' : ''}`}
+                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
                                         onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
                                         onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
                                     >
+                                        {/* Actions Button - LEFT for ME, RIGHT for OTHER */}
+                                        {isMe && (
+                                            <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
+                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
+                                            </div>
+                                        )}
+
                                         {selectionMode && (
                                             <div className={`mx-2 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-400 bg-white/50'}`}>
                                                 {isSelected && <Check size={12} className="text-white"/>}
@@ -652,15 +668,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
                                             )}
 
-                                            {/* Action Buttons (Bubble) - Visible on Hover/Mobile Tap */}
-                                            <div className={`absolute top-0 flex items-center gap-1 p-1 rounded-bl-lg transition-all opacity-0 group-hover:opacity-100 ${isMe ? 'left-0 bg-black/5' : 'right-0 bg-black/5'}`}>
-                                                <button onClick={() => setReplyingTo(msg)} className="p-1 hover:text-blue-600" title="پاسخ"><CornerUpLeft size={14}/></button>
-                                                <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1 hover:text-green-600" title="فوروارد"><Forward size={14}/></button>
-                                                {(msg.attachment || msg.audioUrl) && (
-                                                    <button onClick={() => handleNativeShare(msg)} className="p-1 hover:text-orange-600" title="اشتراک‌گذاری"><Share2 size={14}/></button>
-                                                )}
-                                            </div>
-
                                             {/* Footer */}
                                             <div className="flex justify-end items-center gap-1 mt-1 opacity-60 select-none">
                                                 {msg.isEdited && <span className="text-[9px]">ویرایش شده</span>}
@@ -668,6 +675,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 {isMe && <CheckCheck size={14} className={msg.readBy && msg.readBy.length > 0 ? "text-green-500" : "text-gray-500"}/>}
                                             </div>
                                         </div>
+
+                                        {/* Actions Button - LEFT for ME, RIGHT for OTHER */}
+                                        {!isMe && (
+                                            <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
+                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -675,7 +691,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         {/* Input Area */}
-                        <div className="bg-white p-2 flex items-end gap-2 border-t relative z-20">
+                        <div className="bg-white p-2 flex items-end gap-2 border-t relative z-20 pb-safe">
                             {/* Reply/Edit Preview */}
                             {(replyingTo || editingMessageId) && (
                                 <div className="absolute bottom-full left-0 right-0 bg-white border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
@@ -744,7 +760,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             
             {/* 1. Context Menu */}
             {contextMenuMsg && (
-                <div className="fixed inset-0 z-50" onClick={() => setContextMenuMsg(null)}>
+                <div className="fixed inset-0 z-[200]" onClick={() => setContextMenuMsg(null)}>
                     <div 
                         className="absolute bg-white rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
                         style={{ top: Math.min(contextMenuMsg.y, window.innerHeight - 200), left: Math.min(contextMenuMsg.x, window.innerWidth - 200) }}
@@ -766,7 +782,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 2. Image Viewer */}
             {showImageViewer && (
-                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
+                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
                     <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
                     <div className="absolute top-4 right-4 flex gap-4">
                         <a href={showImageViewer} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
@@ -777,7 +793,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 3. Forward Modal */}
             {showForwardModal && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                             <span className="font-bold">ارسال به...</span>
