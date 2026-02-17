@@ -438,7 +438,9 @@ const SecurityModule: React.FC<Props> = ({ currentUser }) => {
     const handleSupervisorDailySubmit = async () => {
         if (!confirm('آیا تایید می‌کنید؟ گزارش روزانه جهت بررسی به مدیر کارخانه ارسال می‌شود.')) return;
         const isoDate = getIsoSelectedDate();
-        const pendingLogs = logs.filter(l => l.date === isoDate && (l.status === SecurityStatus.PENDING_SUPERVISOR || l.status === '')); // Assuming initial state
+        // Fixed: removed comparison of enum with empty string
+        const pendingLogs = logs.filter(l => l.date === isoDate && l.status === SecurityStatus.PENDING_SUPERVISOR);
+        
         // In this simplified model, logs are created as PENDING_FACTORY (skip supervisor for simple flow) or PENDING_SUPERVISOR
         // Let's assume we update all PENDING_SUPERVISOR to PENDING_FACTORY
         const targetLogs = logs.filter(l => l.date === isoDate && l.status === SecurityStatus.PENDING_SUPERVISOR);

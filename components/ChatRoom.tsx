@@ -8,7 +8,7 @@ import {
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
-    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye
+    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
 
@@ -38,6 +38,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const [showForwardModal, setShowForwardModal] = useState(false);
+    const [forwardNoQuote, setForwardNoQuote] = useState(false); // NEW: Toggle state inside modal
     const [showImageViewer, setShowImageViewer] = useState<string | null>(null);
     const [contextMenuMsg, setContextMenuMsg] = useState<{msg: ChatMessage, x: number, y: number} | null>(null);
 
@@ -62,7 +63,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
-    const [newTaskTitle, setNewTaskTitle] = useState('');
 
     // --- Effects ---
     useEffect(() => { if (preloadedMessages) setMessages(preloadedMessages); }, [preloadedMessages]);
@@ -74,9 +74,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     }, []);
 
     useEffect(() => {
-        // Auto scroll only if at bottom or new message from me
-        if (activeChannel && !showInnerSearch) scrollToBottom();
+        // Auto scroll with timeout to ensure rendering is done (Fix for Desktop)
+        if (activeChannel && !showInnerSearch) {
+            setTimeout(scrollToBottom, 150); // Slight delay for desktop rendering
+        }
     }, [activeChannel, messages.length]);
+
+    // Handle Mobile Back Button Logic (Browser History)
+    useEffect(() => {
+        if (activeChannel) {
+            // Push a state so "Back" button closes chat instead of exiting app
+            window.history.pushState({ chatOpen: true }, '');
+            
+            const handlePopState = (event: PopStateEvent) => {
+                // If user presses back, close chat
+                setActiveChannel(null);
+            };
+
+            window.addEventListener('popstate', handlePopState);
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+            };
+        }
+    }, [activeChannel]);
 
     // Handle Document Visibility for Notifications
     useEffect(() => {
@@ -93,7 +113,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (messages.length > 0) {
             const lastMsg = messages[messages.length - 1];
             if (lastMsg.senderUsername !== currentUser.username && document.hidden) {
-                // Determine title based on chat type
                 let title = lastMsg.sender;
                 if (lastMsg.groupId) {
                     const grp = groups.find(g => g.id === lastMsg.groupId);
@@ -110,7 +129,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setUsers(usrList.filter(u => u.username !== currentUser.username));
             
             const grpList = await getGroups();
-            // Show all groups for simplicity or filter by membership
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setGroups(visibleGroups);
@@ -121,13 +139,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
     };
 
     // --- Helpers ---
     const getUnreadCount = (channelId: string, type: 'private' | 'group' | 'public') => {
-        // Logic for unread: count messages where readBy does not include currentUser.username
-        // Filter by channel
         return messages.filter(m => {
             if (m.senderUsername === currentUser.username) return false;
             const isRead = m.readBy?.includes(currentUser.username);
@@ -164,11 +182,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         });
 
         if (unreadMsgs.length > 0) {
-            // Update in local state instantly for responsiveness
             const updatedIds = new Set(unreadMsgs.map(m => m.id));
             setMessages(prev => prev.map(m => updatedIds.has(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUser.username] } : m));
             
-            // Sync to backend (one by one or batch if supported)
             for (const msg of unreadMsgs) {
                 const reads = msg.readBy || [];
                 if (!reads.includes(currentUser.username)) {
@@ -183,7 +199,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const list = [];
 
         if (activeTab === 'CHATS') {
-            // Public Channel
             const lastPub = getLastMessage('public', 'public');
             list.push({
                 type: 'public', id: 'public', name: 'کانال عمومی', 
@@ -191,10 +206,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 lastMsg: lastPub, unread: getUnreadCount('public', 'public')
             });
 
-            // Users (Private Chats)
             users.forEach(u => {
                 const last = getLastMessage(u.username, 'private');
-                const isOnline = u.lastSeen && (Date.now() - u.lastSeen) < 5 * 60 * 1000; // 5 mins threshold
+                const isOnline = u.lastSeen && (Date.now() - u.lastSeen) < 5 * 60 * 1000;
                 list.push({
                     type: 'private', id: u.username, name: u.fullName,
                     avatar: u.avatar, isOnline, lastSeen: u.lastSeen,
@@ -212,7 +226,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             });
         }
 
-        // Sort by Last Message Timestamp
         return list.filter(item => item.name.includes(searchTerm)).sort((a, b) => {
             const timeA = a.lastMsg?.timestamp || 0;
             const timeB = b.lastMsg?.timestamp || 0;
@@ -258,12 +271,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             await sendMessage(newMsg);
             setInputText('');
             setReplyingTo(null);
-            onRefresh(); // Trigger update
-            scrollToBottom();
+            onRefresh();
+            setTimeout(scrollToBottom, 150);
         } catch (e: any) { console.error("Send Error:", e); }
     };
 
     const startRecording = async () => {
+        if (isRecording) return; // Prevent double start
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
@@ -271,9 +285,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             audioChunksRef.current = [];
 
             mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+            
+            // FIX: Ensure clean stop logic
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                if (audioBlob.size < 1000) { setIsUploading(false); return; }
+                if (audioBlob.size < 2000) { 
+                    setIsUploading(false); 
+                    setIsRecording(false);
+                    return; 
+                }
                 
                 setIsUploading(true);
                 const reader = new FileReader();
@@ -296,7 +316,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         };
                         await sendMessage(newMsg);
                         onRefresh();
-                    } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); }
+                        setTimeout(scrollToBottom, 150);
+                    } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); setIsRecording(false); }
                 };
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -304,15 +325,50 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             mediaRecorder.start();
             setIsRecording(true);
             setRecordingTime(0);
+            if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
         } catch (err) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+            if(recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current);
+                recordingTimerRef.current = null;
+            }
+            // Do NOT set isRecording to false here; let onstop handle it to prevent race conditions or loops
+        }
+    };
+
+    // --- Native Share Function ---
+    const handleNativeShare = async (msg: ChatMessage) => {
+        if (navigator.share) {
+            try {
+                if (msg.attachment || msg.audioUrl) {
+                    await navigator.share({
+                        title: 'اشتراک‌گذاری فایل',
+                        text: `فایل ارسالی از طرف ${msg.sender}`,
+                        url: msg.attachment?.url || msg.audioUrl
+                    });
+                } else {
+                    await navigator.share({
+                        title: 'پیام',
+                        text: msg.message
+                    });
+                }
+            } catch (error) {
+                console.log('Error sharing:', error);
+            }
+        } else {
+            // Fallback
+            const url = msg.attachment?.url || msg.audioUrl || '';
+            if (url) {
+                window.open(url, '_blank');
+            } else {
+                navigator.clipboard.writeText(msg.message);
+                alert('متن پیام کپی شد');
+            }
         }
     };
 
@@ -339,6 +395,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 };
                 await sendMessage(newMsg);
                 onRefresh();
+                setTimeout(scrollToBottom, 150);
             } catch (error) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
         };
         reader.readAsDataURL(file);
@@ -351,26 +408,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         
         for (const id of ids) {
             if (forEveryone) {
-                // Real Delete
                 await deleteMessage(id);
                 setMessages(prev => prev.filter(m => m.id !== id));
             } else {
-                // Logical delete (hide for me) - Requires backend support for per-user delete.
-                // For now, simulating by just local filter or actual delete if admin
-                if (currentUser.role === UserRole.ADMIN) {
-                    await deleteMessage(id);
-                    setMessages(prev => prev.filter(m => m.id !== id));
-                } else {
-                    // Just removing from local view for session
-                    setMessages(prev => prev.filter(m => m.id !== id));
-                }
+                // Logical delete (simulated locally)
+                setMessages(prev => prev.filter(m => m.id !== id));
             }
         }
         setSelectionMode(false);
         setSelectedMessages(new Set());
     };
 
-    const handleForward = async (targetId: string, targetType: 'private' | 'group' | 'public', removeQuote: boolean) => {
+    // Corrected Forward Logic
+    const handleForward = async (targetId: string, targetType: 'private' | 'group' | 'public') => {
         const ids = Array.from(selectedMessages);
         for (const id of ids) {
             const original = messages.find(m => m.id === id);
@@ -387,7 +437,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     attachment: original.attachment,
                     audioUrl: original.audioUrl,
                     isForwarded: true,
-                    forwardFrom: removeQuote ? undefined : original.sender,
+                    // Use flag from modal
+                    forwardFrom: forwardNoQuote ? undefined : original.sender,
                     readBy: []
                 };
                 await sendMessage(newMsg);
@@ -396,9 +447,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setSelectionMode(false);
         setSelectedMessages(new Set());
         setShowForwardModal(false);
+        setForwardNoQuote(false); // Reset flag
+        
         // Navigate to target chat
         setActiveChannel({ type: targetType, id: targetId });
         onRefresh();
+        setTimeout(scrollToBottom, 150);
     };
 
     const toggleSelection = (id: string) => {
@@ -487,9 +541,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
-                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-10">
+                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-20 sticky top-0">
                             <div className="flex items-center gap-3">
-                                <button onClick={() => setActiveChannel(null)} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
+                                <button onClick={() => window.history.back()} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
                                 <div className="flex flex-col cursor-pointer">
                                     <h3 className="font-bold text-gray-800">
                                         {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
@@ -536,10 +590,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} ${selectionMode ? 'cursor-pointer' : ''}`}
                                         onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
                                         onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
-                                        onTouchStart={(e) => { 
-                                            // Simple long press simulation for mobile
-                                            // Ideally use a hook, but this is basic
-                                        }}
                                     >
                                         {selectionMode && (
                                             <div className={`mx-2 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-400 bg-white/50'}`}>
@@ -601,6 +651,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             ) : (
                                                 <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
                                             )}
+
+                                            {/* Action Buttons (Bubble) - Visible on Hover/Mobile Tap */}
+                                            <div className={`absolute top-0 flex items-center gap-1 p-1 rounded-bl-lg transition-all opacity-0 group-hover:opacity-100 ${isMe ? 'left-0 bg-black/5' : 'right-0 bg-black/5'}`}>
+                                                <button onClick={() => setReplyingTo(msg)} className="p-1 hover:text-blue-600" title="پاسخ"><CornerUpLeft size={14}/></button>
+                                                <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1 hover:text-green-600" title="فوروارد"><Forward size={14}/></button>
+                                                {(msg.attachment || msg.audioUrl) && (
+                                                    <button onClick={() => handleNativeShare(msg)} className="p-1 hover:text-orange-600" title="اشتراک‌گذاری"><Share2 size={14}/></button>
+                                                )}
+                                            </div>
 
                                             {/* Footer */}
                                             <div className="flex justify-end items-center gap-1 mt-1 opacity-60 select-none">
@@ -692,6 +751,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     >
                         <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
                         <button onClick={() => { navigator.clipboard.writeText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
+                        <button onClick={() => { handleNativeShare(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Share2 size={16}/> اشتراک‌گذاری</button>
                         <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setShowForwardModal(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Forward size={16}/> فوروارد</button>
                         {contextMenuMsg.msg.senderUsername === currentUser.username && (
                             <button onClick={() => { setEditingMessageId(contextMenuMsg.msg.id); setInputText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Edit2 size={16}/> ویرایش</button>
@@ -723,18 +783,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <span className="font-bold">ارسال به...</span>
                             <button onClick={() => setShowForwardModal(false)}><X size={20}/></button>
                         </div>
+                        
+                        {/* New Quote Toggle */}
+                        <div className="px-4 py-2 bg-yellow-50 border-b border-yellow-100">
+                             <label className="flex items-center gap-2 cursor-pointer text-sm text-yellow-800">
+                                 <input type="checkbox" checked={forwardNoQuote} onChange={e => setForwardNoQuote(e.target.checked)} className="w-4 h-4 rounded text-yellow-600"/>
+                                 ارسال بدون نقل قول (مخفی کردن نام فرستنده)
+                             </label>
+                        </div>
+
                         <div className="flex-1 overflow-y-auto p-2">
                             {getSortedChannels().map((item: any) => (
-                                <div key={item.id} onClick={() => handleForward(item.id, item.type, false)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
+                                <div key={item.id} onClick={() => handleForward(item.id, item.type)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
                                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
                                         {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
                                     </div>
                                     <div className="font-bold text-sm">{item.name}</div>
                                 </div>
                             ))}
-                        </div>
-                        <div className="p-3 border-t bg-gray-50 text-center">
-                            <button onClick={() => handleForward(activeChannel?.id || '', activeChannel?.type as any, true)} className="text-xs text-blue-600 hover:underline">ارسال بدون نقل قول (بدون نام فرستنده)</button>
                         </div>
                     </div>
                 </div>

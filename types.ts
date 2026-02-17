@@ -348,6 +348,7 @@ export interface WarehouseTransaction {
   driverName?: string;
   plateNumber?: string;
   destination?: string;
+  description?: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvedBy?: string;
   rejectionReason?: string;
@@ -515,7 +516,7 @@ export interface CurrencyTranche {
 }
 
 export interface GuaranteeCheque {
-    amount: string;
+    amount: number;
     bank: string;
     chequeNumber: string;
     dueDate: string;
