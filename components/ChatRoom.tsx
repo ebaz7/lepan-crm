@@ -258,7 +258,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     setEditingMessageId(null);
                     setInputText('');
                     onRefresh();
-                } catch(e) { alert("خطا در ویرایش پیام"); }
+                } catch(e: any) { alert("خطا در ویرایش پیام"); }
             }
             return;
         }
@@ -369,7 +369,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         await sendMessage(newMsg);
                         onRefresh();
                         setTimeout(scrollToBottom, 150);
-                    } catch (e) { 
+                    } catch (e: any) { 
                         alert('خطا در ارسال ویس'); 
                     } finally { 
                         setIsUploading(false); 
@@ -386,7 +386,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setRecordingTime(0);
             if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-        } catch (err) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); }
+        } catch (err: any) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); }
     };
 
     const stopRecording = () => {
@@ -436,7 +436,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         text: `فایل ارسالی از طرف ${msg.sender}`,
                         url: fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`
                     });
-                } catch(e) { console.log('Link share failed', e); }
+                } catch(e: any) { console.log('Link share failed', e); }
             } else {
                 // Last resort: Open in new tab
                 window.open(fileUrl, '_blank');
@@ -469,7 +469,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 await sendMessage(newMsg);
                 onRefresh();
                 setTimeout(scrollToBottom, 150);
-            } catch (error) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
+            } catch (error: any) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
         };
         reader.readAsDataURL(file);
         e.target.value = '';

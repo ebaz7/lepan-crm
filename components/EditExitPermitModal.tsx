@@ -133,7 +133,15 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
               onClose();
           }, 2000); // 2 seconds wait for reliable render
 
-      } catch (e) { alert('خطا در ذخیره تغییرات'); setIsSubmitting(false); }
+      } catch (e: any) { 
+          // Handle Duplicate Error from Server
+          if (e.message && (e.message.includes('409') || e.message.includes('Duplicate'))) {
+              alert(`⛔ خطا: شماره مجوز خروج ${permitNumber} برای شرکت "${permit.company}" تکراری است.`);
+          } else {
+              alert('خطا در ذخیره تغییرات: ' + (e.message || 'Unknown error'));
+          }
+          setIsSubmitting(false); 
+      }
   };
 
   const years = Array.from({ length: 11 }, (_, i) => 1400 + i);

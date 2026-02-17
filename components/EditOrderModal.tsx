@@ -320,8 +320,13 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
             onClose();
         }, 1500);
 
-    } catch (e) {
-        alert("خطا در ویرایش دستور پرداخت");
+    } catch (e: any) {
+        // Handle Duplicate Error from Server
+        if (e.message && (e.message.includes('409') || e.message.includes('Duplicate'))) {
+            alert(`⛔ خطا: شماره دستور پرداخت ${formData.trackingNumber} برای شرکت "${payingCompany}" تکراری است.`);
+        } else {
+            alert("خطا در ویرایش دستور پرداخت: " + (e.message || "Unknown error"));
+        }
         setIsSubmitting(false);
     }
   };

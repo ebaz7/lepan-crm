@@ -158,11 +158,8 @@ cron.schedule('0 */3 * * *', performAutoBackup);
 setTimeout(performAutoBackup, 10000); 
 
 // --- HELPER: Find Next Sequence Number (Filling Gaps) ---
-// This function finds the first missing integer in the sequence
 const findNextGapNumber = (items, company, field, settingsStart) => {
     let startNum = settingsStart || 1000;
-    
-    // 1. Filter items by company
     const relevantItems = items && Array.isArray(items) 
         ? items.filter(i => {
             const itemCompany = i.company || i.payingCompany || '';
@@ -171,40 +168,42 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
         })
         : [];
     
-    // 2. Extract and Sort existing numbers
     const existingNumbers = relevantItems
         .map(i => parseInt(i[field]))
-        .filter(n => !isNaN(n) && n >= startNum) // Only consider numbers >= startNum
+        .filter(n => !isNaN(n) && n >= startNum) 
         .sort((a, b) => a - b);
     
-    // 3. Find the first gap
-    let expected = startNum + 1; // e.g. 1001
-    
+    let expected = startNum + 1; 
     const numSet = new Set(existingNumbers);
-    
-    // Check sequentially
-    while (numSet.has(expected)) {
-        expected++;
-    }
-    
+    while (numSet.has(expected)) { expected++; }
     return expected;
+};
+
+// --- HELPER: Strict Duplicate Checker ---
+// Checks if (NumberField + Company) already exists.
+// excludeId is used for Edit (PUT) operations to ignore self.
+const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
+    if (!list || !Array.isArray(list)) return false;
+    return list.some(item => 
+        Number(item[numField]) === Number(numValue) &&
+        (item[companyField] || '') === (companyValue || '') &&
+        item.id !== excludeId
+    );
 };
 
 // --- API ROUTES ---
 
-// 1. SEQUENCE GENERATORS (UPDATED)
+// 1. SEQUENCE GENERATORS
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
-    
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startTrackingNumber || 1000;
         }
     } 
-    
     const nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
     res.json({ nextTrackingNumber: nextNum });
 });
@@ -213,14 +212,12 @@ app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
-    
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startExitPermitNumber || 1000;
         }
     }
-    
     const nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
     res.json({ nextNumber: nextNum });
 });
@@ -229,7 +226,6 @@ app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
-    
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
@@ -240,7 +236,6 @@ app.get('/api/next-bijak-number', (req, res) => {
             minStart = db.settings.warehouseSequences[company]; 
         }
     }
-    
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
     const nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
     res.json({ nextNumber: nextNum });
@@ -254,14 +249,9 @@ app.post('/api/orders', (req, res) => {
     const db = getDb(); 
     const order = req.body; 
     
-    // --- STRICT DUPLICATE CHECK ---
-    const isDuplicate = db.orders && db.orders.some(o => 
-        Number(o.trackingNumber) === Number(order.trackingNumber) && 
-        (o.payingCompany || '') === (order.payingCompany || '')
-    );
-
-    if (isDuplicate) {
-        return res.status(409).json({ error: "Duplicate tracking number" }); // 409 Conflict
+    // STRICT DUPLICATE CHECK (Create)
+    if (checkForDuplicate(db.orders, 'trackingNumber', order.trackingNumber, 'payingCompany', order.payingCompany)) {
+        return res.status(409).json({ error: "Duplicate tracking number" });
     }
 
     order.id = order.id || Date.now().toString(); 
@@ -275,6 +265,15 @@ app.put('/api/orders/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.orders.findIndex(o => o.id === req.params.id); 
     if(idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update)
+        const currentOrder = db.orders[idx];
+        const newTracking = req.body.trackingNumber !== undefined ? req.body.trackingNumber : currentOrder.trackingNumber;
+        const newCompany = req.body.payingCompany !== undefined ? req.body.payingCompany : currentOrder.payingCompany;
+
+        if (checkForDuplicate(db.orders, 'trackingNumber', newTracking, 'payingCompany', newCompany, req.params.id)) {
+            return res.status(409).json({ error: "Duplicate tracking number" });
+        }
+
         db.orders[idx] = { ...db.orders[idx], ...req.body }; 
         saveDb(db); 
         res.json(db.orders); 
@@ -295,12 +294,8 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
-    const isDuplicate = db.exitPermits && db.exitPermits.some(p => 
-        Number(p.permitNumber) === Number(permit.permitNumber) && 
-        (p.company || '') === (permit.company || '')
-    );
-
-    if (isDuplicate) {
+    // STRICT DUPLICATE CHECK (Create)
+    if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
         return res.status(409).json({ error: "Duplicate permit number" });
     }
 
@@ -313,6 +308,15 @@ app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
     if (idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update)
+        const currentPermit = db.exitPermits[idx];
+        const newPermitNum = req.body.permitNumber !== undefined ? req.body.permitNumber : currentPermit.permitNumber;
+        const newCompany = req.body.company !== undefined ? req.body.company : currentPermit.company;
+        
+        if (checkForDuplicate(db.exitPermits, 'permitNumber', newPermitNum, 'company', newCompany, req.params.id)) {
+             return res.status(409).json({ error: "Duplicate permit number" });
+        }
+
         db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
         saveDb(db); 
         res.json(db.exitPermits); 
@@ -359,14 +363,11 @@ app.post('/api/warehouse/transactions', (req, res) => {
     const db = getDb(); 
     const tx = req.body;
 
-    // --- DUPLICATE CHECK FOR OUT (BIJAK) ---
+    // STRICT DUPLICATE CHECK (Create - Bijak Only)
     if (tx.type === 'OUT') {
-        const isDuplicate = db.warehouseTransactions && db.warehouseTransactions.some(t => 
-            t.type === 'OUT' &&
-            Number(t.number) === Number(tx.number) && 
-            (t.company || '') === (tx.company || '')
-        );
-        if (isDuplicate) return res.status(409).json({ error: "Duplicate bijak number" });
+        if (checkForDuplicate(db.warehouseTransactions.filter(t => t.type === 'OUT'), 'number', tx.number, 'company', tx.company)) {
+             return res.status(409).json({ error: "Duplicate bijak number" });
+        }
     }
 
     if(!db.warehouseTransactions) db.warehouseTransactions=[]; 
@@ -378,6 +379,24 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); 
     if(idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update - Bijak Only)
+        const currentTx = db.warehouseTransactions[idx];
+        // Only check if it's an OUT transaction or becoming one (though type change is rare)
+        if (currentTx.type === 'OUT' || req.body.type === 'OUT') {
+            const newNumber = req.body.number !== undefined ? req.body.number : currentTx.number;
+            const newCompany = req.body.company !== undefined ? req.body.company : currentTx.company;
+            
+            // Pass the whole filtered list of OUT transactions to checker, BUT since checkForDuplicate takes a list,
+            // we should pass the whole list but the checker logic handles fields.
+            // However, we only care about uniqueness among OUT transactions usually for 'number'.
+            const outTransactions = db.warehouseTransactions.filter(t => t.type === 'OUT');
+            
+            // Check within OUT transactions context
+            if (checkForDuplicate(outTransactions, 'number', newNumber, 'company', newCompany, req.params.id)) {
+                 return res.status(409).json({ error: "Duplicate bijak number" });
+            }
+        }
+
         db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; 
         saveDb(db); 
         res.json(db.warehouseTransactions); 
