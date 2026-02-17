@@ -76,7 +76,12 @@ export const getSecurityIncidents = async (): Promise<SecurityIncident[]> => { c
 export const saveSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>('/security/incidents', 'POST', incident); };
 export const updateSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${incident.id}`, 'PUT', incident); };
 export const deleteSecurityIncident = async (id: string): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${id}`, 'DELETE'); };
-export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
+
+// Updated: Add cache busting to settings fetch as well
+export const getSettings = async (): Promise<SystemSettings> => { 
+    return await apiCall<SystemSettings>(`/settings?t=${Date.now()}`); 
+};
+
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
 
 // Updated: Accepts optional company parameter
