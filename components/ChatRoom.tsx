@@ -84,13 +84,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (activeChannel) {
             // Push a state so "Back" button closes chat instead of exiting app
-            // We use a specific hash/state to avoid conflicting with main tabs
             const state = { chatOpen: true };
             window.history.pushState(state, '', window.location.pathname + '#chat');
             
             const handlePopState = (event: PopStateEvent) => {
-                // If user presses back, close chat
-                // We check if the popped state doesn't have chatOpen anymore
                 if (!event.state?.chatOpen) {
                     setActiveChannel(null);
                 }
@@ -107,7 +104,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) return;
-            // Mark read logic could go here
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -282,19 +278,39 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const startRecording = async () => {
-        if (isRecording) return; // Prevent double start
+        if (isRecording) return; 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+            
+            // Detect compatible mimetype
+            let options = {};
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                options = { mimeType: 'audio/webm;codecs=opus' };
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                options = { mimeType: 'audio/mp4' };
+            }
+
+            const mediaRecorder = new MediaRecorder(stream, options);
             mediaRecorderRef.current = mediaRecorder;
             audioChunksRef.current = [];
 
-            mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+            mediaRecorder.ondataavailable = (event) => { 
+                if (event.data && event.data.size > 0) {
+                    audioChunksRef.current.push(event.data); 
+                }
+            };
             
-            // FIX: Ensure clean stop logic
             mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                if (audioBlob.size < 2000) { 
+                if (audioChunksRef.current.length === 0) {
+                    setIsRecording(false);
+                    return;
+                }
+
+                const mimeType = (mediaRecorder.mimeType || 'audio/webm') as string;
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                
+                // Only send if substantial data
+                if (audioBlob.size < 100) { 
                     setIsUploading(false); 
                     setIsRecording(false);
                     return; 
@@ -304,9 +320,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 const reader = new FileReader();
                 reader.readAsDataURL(audioBlob);
                 reader.onloadend = async () => {
-                    const base64 = reader.result as string;
+                    const base64 = (reader.result || '') as string;
                     try {
-                        const result = await uploadFile(`voice_${Date.now()}.webm`, base64);
+                        const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+                        const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
                         const newMsg: ChatMessage = {
                             id: generateUUID(),
                             sender: currentUser.fullName,
@@ -322,12 +339,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         await sendMessage(newMsg);
                         onRefresh();
                         setTimeout(scrollToBottom, 150);
-                    } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); setIsRecording(false); }
+                    } catch (e) { 
+                        alert('خطا در ارسال ویس'); 
+                    } finally { 
+                        setIsUploading(false); 
+                        setIsRecording(false); 
+                        audioChunksRef.current = []; // Clear buffer
+                    }
                 };
+                
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            mediaRecorder.start();
+            // Start with timeslice to ensure chunks are generated
+            mediaRecorder.start(1000); 
             setIsRecording(true);
             setRecordingTime(0);
             if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -342,37 +367,50 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 clearInterval(recordingTimerRef.current);
                 recordingTimerRef.current = null;
             }
-            // Do NOT set isRecording to false here; let onstop handle it to prevent race conditions or loops
         }
     };
 
-    // --- Native Share Function ---
+    // --- True File Sharing ---
     const handleNativeShare = async (msg: ChatMessage) => {
-        if (navigator.share) {
-            try {
-                if (msg.attachment || msg.audioUrl) {
+        const fileUrl = msg.attachment?.url || msg.audioUrl;
+        if (!fileUrl) return;
+
+        // Try to fetch blob for file sharing
+        try {
+            // Need absolute URL for fetch if it's relative
+            const fetchUrl = fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`;
+            
+            const response = await fetch(fetchUrl);
+            const blob = await response.blob();
+            
+            const fileName = msg.attachment?.fileName || `file_${Date.now()}.${blob.type.split('/')[1] || 'bin'}`;
+            const file = new File([blob], fileName, { type: blob.type });
+
+            // Check if can share files
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'اشتراک‌گذاری',
+                    text: msg.message || 'فایل ارسال شده'
+                });
+            } else {
+                throw new Error("Cannot share file directly");
+            }
+
+        } catch (error) {
+            console.log("File sharing failed, falling back to link share:", error);
+            // Fallback to Link Share
+            if (navigator.share) {
+                try {
                     await navigator.share({
                         title: 'اشتراک‌گذاری فایل',
                         text: `فایل ارسالی از طرف ${msg.sender}`,
-                        url: msg.attachment?.url || msg.audioUrl
+                        url: fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`
                     });
-                } else {
-                    await navigator.share({
-                        title: 'پیام',
-                        text: msg.message
-                    });
-                }
-            } catch (error) {
-                console.log('Error sharing:', error);
-            }
-        } else {
-            // Fallback
-            const url = msg.attachment?.url || msg.audioUrl || '';
-            if (url) {
-                window.open(url, '_blank');
+                } catch(e) { console.log('Link share failed', e); }
             } else {
-                navigator.clipboard.writeText(msg.message);
-                alert('متن پیام کپی شد');
+                // Last resort: Open in new tab
+                window.open(fileUrl, '_blank');
             }
         }
     };
@@ -495,7 +533,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         <div className="flex h-[calc(100vh-80px)] md:bg-gray-100 rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
-            {/* On Mobile, if Chat is open, hide the list entirely to avoid scrolling issues, or use absolute positioning */}
             <div className={`w-full md:w-80 bg-white border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-3 border-b bg-gray-50">
