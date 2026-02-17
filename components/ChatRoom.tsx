@@ -1,21 +1,24 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateGroup, updateMessage } from '../services/storageService';
+import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
 import { getUsers } from '../services/authService';
-import { generateUUID } from '../constants';
+import { generateUUID, formatDate } from '../constants';
 import { 
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
-    Check, CheckCheck, DownloadCloud, StopCircle
+    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye
 } from 'lucide-react';
+import { sendNotification } from '../services/notificationService';
 
 interface ChatRoomProps { 
     currentUser: User; 
     preloadedMessages: ChatMessage[]; 
     onRefresh: () => void; 
 }
+
+type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
@@ -25,39 +28,43 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [tasks, setTasks] = useState<GroupTask[]>([]);
     
     // --- UI State ---
-    const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group', id: string | null}>({ type: 'public', id: null });
-    const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat'); 
-    const [mobileShowChat, setMobileShowChat] = useState(false);
-    const [searchTerm, setSearchTerm] = useState(''); // Sidebar Search
-    
-    // --- Inner Chat Search State ---
+    const [activeTab, setActiveTab] = useState<TabType>('CHATS');
+    const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group', id: string | null} | null>(null);
+    const [searchTerm, setSearchTerm] = useState(''); // Main List Search
+    const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
-    const [innerSearchTerm, setInnerSearchTerm] = useState('');
+    
+    // --- Selection & Actions ---
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+    const [showForwardModal, setShowForwardModal] = useState(false);
+    const [showImageViewer, setShowImageViewer] = useState<string | null>(null);
+    const [contextMenuMsg, setContextMenuMsg] = useState<{msg: ChatMessage, x: number, y: number} | null>(null);
 
-    // --- Input & Action State ---
+    // --- Input & Recording ---
     const [inputText, setInputText] = useState('');
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    
-    // --- Voice Recording State ---
     const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<any>(null);
 
     // --- Refs ---
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
     const inputAreaRef = useRef<HTMLTextAreaElement>(null);
-    const innerSearchInputRef = useRef<HTMLInputElement>(null);
 
-    // --- Modal State ---
+    // --- Modals ---
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
     const [newTaskTitle, setNewTaskTitle] = useState('');
 
-    // --- Load Data & Effects ---
+    // --- Effects ---
     useEffect(() => { if (preloadedMessages) setMessages(preloadedMessages); }, [preloadedMessages]);
 
     useEffect(() => { 
@@ -67,30 +74,35 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     }, []);
 
     useEffect(() => {
-        // Only scroll if not searching history
-        if (!showInnerSearch) scrollToBottom();
-        
-        // Reset inputs on channel change
-        setReplyingTo(null);
-        setEditingMessageId(null);
-        setInputText('');
-        setShowInnerSearch(false);
-        setInnerSearchTerm('');
-    }, [activeChannel, mobileShowChat]);
+        // Auto scroll only if at bottom or new message from me
+        if (activeChannel && !showInnerSearch) scrollToBottom();
+    }, [activeChannel, messages.length]);
 
+    // Handle Document Visibility for Notifications
     useEffect(() => {
-        // Auto-scroll on new message if at bottom and not searching
-        if (!showInnerSearch && messages.length > 0) {
-             scrollToBottom();
+        const handleVisibilityChange = () => {
+            if (document.hidden) return;
+            // Mark read logic could go here
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
+    // Notification Trigger
+    useEffect(() => {
+        if (messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg.senderUsername !== currentUser.username && document.hidden) {
+                // Determine title based on chat type
+                let title = lastMsg.sender;
+                if (lastMsg.groupId) {
+                    const grp = groups.find(g => g.id === lastMsg.groupId);
+                    if (grp) title = `${lastMsg.sender} @ ${grp.name}`;
+                }
+                sendNotification(title, lastMsg.message || 'پیام جدید');
+            }
         }
     }, [messages.length]);
-    
-    // Auto Focus inner search
-    useEffect(() => {
-        if (showInnerSearch) {
-            setTimeout(() => innerSearchInputRef.current?.focus(), 100);
-        }
-    }, [showInnerSearch]);
 
     const loadMeta = async () => {
         try {
@@ -98,6 +110,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setUsers(usrList.filter(u => u.username !== currentUser.username));
             
             const grpList = await getGroups();
+            // Show all groups for simplicity or filter by membership
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setGroups(visibleGroups);
@@ -111,25 +124,103 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const getDisplayMessages = () => {
-        const list = messages.filter(msg => { 
-            if (activeChannel.type === 'public') return !msg.recipient && !msg.groupId; 
-            if (activeChannel.type === 'private') return (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id); 
-            if (activeChannel.type === 'group') return msg.groupId === activeChannel.id; 
-            return false; 
-        });
-
-        // Local Filter
-        if (innerSearchTerm.trim()) {
-            return list.filter(m => 
-                (m.message && m.message.includes(innerSearchTerm)) || 
-                (m.attachment && m.attachment.fileName.includes(innerSearchTerm)) ||
-                (m.sender && m.sender.includes(innerSearchTerm))
-            );
-        }
-        return list;
+    // --- Helpers ---
+    const getUnreadCount = (channelId: string, type: 'private' | 'group' | 'public') => {
+        // Logic for unread: count messages where readBy does not include currentUser.username
+        // Filter by channel
+        return messages.filter(m => {
+            if (m.senderUsername === currentUser.username) return false;
+            const isRead = m.readBy?.includes(currentUser.username);
+            if (isRead) return false;
+            
+            if (type === 'private') {
+                return (m.senderUsername === channelId && m.recipient === currentUser.username);
+            } else if (type === 'group') {
+                return m.groupId === channelId;
+            }
+            return false;
+        }).length;
     };
 
+    const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public') => {
+        const relevant = messages.filter(m => {
+            if (type === 'public') return !m.recipient && !m.groupId;
+            if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
+            if (type === 'group') return m.groupId === channelId;
+            return false;
+        });
+        return relevant.length > 0 ? relevant[relevant.length - 1] : null;
+    };
+
+    const markAsRead = async (channelId: string, type: 'private' | 'group' | 'public') => {
+        const unreadMsgs = messages.filter(m => {
+            if (m.senderUsername === currentUser.username) return false;
+            if (m.readBy?.includes(currentUser.username)) return false;
+            
+            if (type === 'public') return !m.recipient && !m.groupId;
+            if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username);
+            if (type === 'group') return m.groupId === channelId;
+            return false;
+        });
+
+        if (unreadMsgs.length > 0) {
+            // Update in local state instantly for responsiveness
+            const updatedIds = new Set(unreadMsgs.map(m => m.id));
+            setMessages(prev => prev.map(m => updatedIds.has(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUser.username] } : m));
+            
+            // Sync to backend (one by one or batch if supported)
+            for (const msg of unreadMsgs) {
+                const reads = msg.readBy || [];
+                if (!reads.includes(currentUser.username)) {
+                    await updateMessage({ ...msg, readBy: [...reads, currentUser.username] });
+                }
+            }
+        }
+    };
+
+    // --- Render Logic ---
+    const getSortedChannels = () => {
+        const list = [];
+
+        if (activeTab === 'CHATS') {
+            // Public Channel
+            const lastPub = getLastMessage('public', 'public');
+            list.push({
+                type: 'public', id: 'public', name: 'کانال عمومی', 
+                avatar: null, isOnline: true, 
+                lastMsg: lastPub, unread: getUnreadCount('public', 'public')
+            });
+
+            // Users (Private Chats)
+            users.forEach(u => {
+                const last = getLastMessage(u.username, 'private');
+                const isOnline = u.lastSeen && (Date.now() - u.lastSeen) < 5 * 60 * 1000; // 5 mins threshold
+                list.push({
+                    type: 'private', id: u.username, name: u.fullName,
+                    avatar: u.avatar, isOnline, lastSeen: u.lastSeen,
+                    lastMsg: last, unread: getUnreadCount(u.username, 'private')
+                });
+            });
+        } else if (activeTab === 'GROUPS') {
+            groups.forEach(g => {
+                const last = getLastMessage(g.id, 'group');
+                list.push({
+                    type: 'group', id: g.id, name: g.name,
+                    avatar: null, isOnline: false,
+                    lastMsg: last, unread: getUnreadCount(g.id, 'group')
+                });
+            });
+        }
+
+        // Sort by Last Message Timestamp
+        return list.filter(item => item.name.includes(searchTerm)).sort((a, b) => {
+            const timeA = a.lastMsg?.timestamp || 0;
+            const timeB = b.lastMsg?.timestamp || 0;
+            return timeB - timeA;
+        });
+    };
+
+    // --- Actions ---
     const handleSendMessage = async () => {
         if ((!inputText.trim()) || isUploading) return;
 
@@ -153,45 +244,87 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             role: currentUser.role,
             message: inputText,
             timestamp: Date.now(),
-            recipient: activeChannel.type === 'private' ? activeChannel.id! : undefined,
-            groupId: activeChannel.type === 'group' ? activeChannel.id! : undefined,
+            recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
+            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
             replyTo: replyingTo ? {
                 id: replyingTo.id,
                 sender: replyingTo.sender,
                 message: replyingTo.message || (replyingTo.audioUrl ? 'پیام صوتی' : 'فایل')
-            } : undefined
+            } : undefined,
+            readBy: []
         };
 
         try {
             await sendMessage(newMsg);
             setInputText('');
             setReplyingTo(null);
-            onRefresh();
+            onRefresh(); // Trigger update
             scrollToBottom();
-        } catch (e: any) {
-            console.error("Send Error:", e);
-            alert(`خطا در ارسال پیام: ${e.message}`);
+        } catch (e: any) { console.error("Send Error:", e); }
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                if (audioBlob.size < 1000) { setIsUploading(false); return; }
+                
+                setIsUploading(true);
+                const reader = new FileReader();
+                reader.readAsDataURL(audioBlob);
+                reader.onloadend = async () => {
+                    const base64 = reader.result as string;
+                    try {
+                        const result = await uploadFile(`voice_${Date.now()}.webm`, base64);
+                        const newMsg: ChatMessage = {
+                            id: generateUUID(),
+                            sender: currentUser.fullName,
+                            senderUsername: currentUser.username,
+                            role: currentUser.role,
+                            message: '',
+                            timestamp: Date.now(),
+                            recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
+                            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+                            audioUrl: result.url,
+                            readBy: []
+                        };
+                        await sendMessage(newMsg);
+                        onRefresh();
+                    } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); }
+                };
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+            recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+        } catch (err) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
         }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        // Increased limit for enterprise needs
-        if (file.size > 200 * 1024 * 1024) {
-            alert('حجم فایل نباید بیشتر از 200 مگابایت باشد.');
-            return;
-        }
-
         setIsUploading(true);
         const reader = new FileReader();
-        
         reader.onload = async (ev) => {
             try {
                 const base64 = ev.target?.result as string;
                 const result = await uploadFile(file.name, base64);
-                
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
                     sender: currentUser.fullName,
@@ -199,190 +332,150 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     role: currentUser.role,
                     message: '',
                     timestamp: Date.now(),
-                    recipient: activeChannel.type === 'private' ? activeChannel.id! : undefined,
-                    groupId: activeChannel.type === 'group' ? activeChannel.id! : undefined,
-                    attachment: { fileName: result.fileName, url: result.url }
+                    recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
+                    groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+                    attachment: { fileName: result.fileName, url: result.url },
+                    readBy: []
                 };
                 await sendMessage(newMsg);
                 onRefresh();
-            } catch (error) {
-                console.error("File Upload Error:", error);
-                alert('خطا در ارسال فایل. اتصال را بررسی کنید.');
-            } finally {
-                setIsUploading(false);
-            }
+            } catch (error) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
     };
-    
-    // ... (Voice logic same as before) ...
-    const toggleRecording = async () => {
-         if (isRecording) {
-            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                mediaRecorderRef.current.stop();
-                setIsRecording(false);
-            }
-        } else {
-            if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
-                alert("امکان ضبط صدا فقط در حالت امن (HTTPS) یا لوکال‌هاست وجود دارد.");
-                return;
-            }
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mediaRecorder = new MediaRecorder(stream);
-                mediaRecorderRef.current = mediaRecorder;
-                audioChunksRef.current = [];
 
-                mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                    if (audioBlob.size < 1000) { setIsUploading(false); return; }
+    const handleDelete = async (forEveryone: boolean) => {
+        if (!confirm(forEveryone ? "حذف دو طرفه؟" : "حذف برای من؟")) return;
+        const ids = Array.from(selectedMessages);
+        
+        for (const id of ids) {
+            if (forEveryone) {
+                // Real Delete
+                await deleteMessage(id);
+                setMessages(prev => prev.filter(m => m.id !== id));
+            } else {
+                // Logical delete (hide for me) - Requires backend support for per-user delete.
+                // For now, simulating by just local filter or actual delete if admin
+                if (currentUser.role === UserRole.ADMIN) {
+                    await deleteMessage(id);
+                    setMessages(prev => prev.filter(m => m.id !== id));
+                } else {
+                    // Just removing from local view for session
+                    setMessages(prev => prev.filter(m => m.id !== id));
+                }
+            }
+        }
+        setSelectionMode(false);
+        setSelectedMessages(new Set());
+    };
 
-                    setIsUploading(true);
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = async () => {
-                        const base64 = reader.result as string;
-                        try {
-                            const result = await uploadFile(`voice_${Date.now()}.webm`, base64);
-                            const newMsg: ChatMessage = {
-                                id: generateUUID(),
-                                sender: currentUser.fullName,
-                                senderUsername: currentUser.username,
-                                role: currentUser.role,
-                                message: '',
-                                timestamp: Date.now(),
-                                recipient: activeChannel.type === 'private' ? activeChannel.id! : undefined,
-                                groupId: activeChannel.type === 'group' ? activeChannel.id! : undefined,
-                                audioUrl: result.url
-                            };
-                            await sendMessage(newMsg);
-                            onRefresh();
-                        } catch (e) { alert('خطا در ارسال ویس'); } finally { setIsUploading(false); }
-                    };
-                    stream.getTracks().forEach(track => track.stop());
+    const handleForward = async (targetId: string, targetType: 'private' | 'group' | 'public', removeQuote: boolean) => {
+        const ids = Array.from(selectedMessages);
+        for (const id of ids) {
+            const original = messages.find(m => m.id === id);
+            if (original) {
+                const newMsg: ChatMessage = {
+                    id: generateUUID(),
+                    sender: currentUser.fullName,
+                    senderUsername: currentUser.username,
+                    role: currentUser.role,
+                    message: original.message,
+                    timestamp: Date.now(),
+                    recipient: targetType === 'private' ? targetId : undefined,
+                    groupId: targetType === 'group' ? targetId : undefined,
+                    attachment: original.attachment,
+                    audioUrl: original.audioUrl,
+                    isForwarded: true,
+                    forwardFrom: removeQuote ? undefined : original.sender,
+                    readBy: []
                 };
-                mediaRecorder.start();
-                setIsRecording(true);
-            } catch (err) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); setIsRecording(false); }
+                await sendMessage(newMsg);
+            }
         }
+        setSelectionMode(false);
+        setSelectedMessages(new Set());
+        setShowForwardModal(false);
+        // Navigate to target chat
+        setActiveChannel({ type: targetType, id: targetId });
+        onRefresh();
     };
 
-    const handleEditMessage = (msg: ChatMessage) => {
-        if (!msg.message) return;
-        setInputText(msg.message);
-        setEditingMessageId(msg.id);
-        setReplyingTo(null);
-        inputAreaRef.current?.focus();
+    const toggleSelection = (id: string) => {
+        const newSet = new Set(selectedMessages);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedMessages(newSet);
+        if (newSet.size === 0) setSelectionMode(false);
     };
 
-    const handleDeleteMessage = async (id: string) => {
-        if (confirm("آیا از حذف این پیام اطمینان دارید؟")) {
-            await deleteMessage(id);
-            setMessages(prev => prev.filter(m => m.id !== id));
-            onRefresh();
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    // --- Render Logic ---
+    if (!currentUser) return null;
+
+    const displayMessages = messages.filter(msg => {
+        if (!activeChannel) return false;
+        let match = false;
+        if (activeChannel.type === 'public') match = !msg.recipient && !msg.groupId;
+        else if (activeChannel.type === 'private') match = (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id);
+        else if (activeChannel.type === 'group') match = msg.groupId === activeChannel.id;
+        
+        if (!match) return false;
+        if (innerSearchTerm) {
+            return (msg.message?.includes(innerSearchTerm) || msg.sender?.includes(innerSearchTerm));
         }
-    };
-    
-    // Highlight logic
-    const renderMessageContent = (text: string) => {
-        if (!innerSearchTerm || !text) return text;
-        const parts = text.split(new RegExp(`(${innerSearchTerm})`, 'gi'));
-        return (
-            <span>
-                {parts.map((part, i) => 
-                    part.toLowerCase() === innerSearchTerm.toLowerCase() ? <span key={i} className="bg-yellow-200 text-black px-1 rounded">{part}</span> : part
-                )}
-            </span>
-        );
-    };
-
-    const filteredUsers = users.filter(u => u.fullName.includes(searchTerm));
-    const filteredGroups = groups.filter(g => g.name.includes(searchTerm));
-    const displayMsgs = getDisplayMessages();
+        return true;
+    });
 
     return (
-        <div className="flex h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] bg-white overflow-hidden rounded-xl border border-gray-200 shadow-sm relative">
+        <div className="flex h-[calc(100vh-80px)] bg-gray-100 rounded-xl overflow-hidden shadow-lg border border-gray-200 relative font-sans">
             
-            {/* --- SIDEBAR --- */}
-            <div className={`absolute inset-0 md:static md:w-80 bg-white border-l border-gray-200 flex flex-col z-20 transition-transform duration-300 ${mobileShowChat ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
-                {/* Sidebar Header */}
-                <div className="p-3 border-b flex flex-col gap-3 bg-gray-50">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200">
-                                {currentUser.fullName.charAt(0)}
-                            </div>
-                            <span className="font-bold text-gray-800">پیام‌رسان سازمانی</span>
+            {/* --- LIST SIDEBAR --- */}
+            <div className={`w-full md:w-80 bg-white border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
+                {/* Header */}
+                <div className="p-3 border-b bg-gray-50">
+                    <div className="flex justify-between items-center mb-3">
+                        <div className="flex gap-2 bg-gray-200 p-1 rounded-lg text-xs font-bold w-full">
+                            <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'CHATS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>گفتگوها</button>
+                            <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
+                            <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
                         </div>
-                        <button onClick={() => setShowGroupModal(true)} className="p-2 text-blue-600 bg-white rounded-full hover:bg-blue-50 shadow-sm transition-colors">
-                            <Edit2 size={18}/>
-                        </button>
+                        {activeTab === 'GROUPS' && <button onClick={() => setShowGroupModal(true)} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
                     </div>
-                    {/* Sidebar Search */}
                     <div className="relative">
-                        <Search size={16} className="absolute right-3 top-2.5 text-gray-400"/>
-                        <input 
-                            className="w-full bg-white border border-gray-200 rounded-xl py-2 pr-9 pl-3 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
-                            placeholder="جستجو در مخاطبین..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
+                        <input className="w-full bg-white border rounded-xl pl-8 pr-3 py-2 text-sm" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <Search size={16} className="absolute left-2.5 top-2.5 text-gray-400"/>
                     </div>
                 </div>
 
-                {/* Chat List */}
+                {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {/* Public Channel */}
-                    <div 
-                        onClick={() => { setActiveChannel({type: 'public', id: null}); setMobileShowChat(true); }}
-                        className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'public' ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                    >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md">
-                            <Users size={22}/>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="font-bold text-gray-800 text-sm">کانال عمومی</span>
-                                <span className="text-[10px] text-gray-400">همیشه</span>
-                            </div>
-                            <p className="text-xs text-gray-500 truncate">پیام‌های عمومی سیستم...</p>
-                        </div>
-                    </div>
-
-                    {/* Groups */}
-                    {filteredGroups.map(g => (
-                        <div key={g.id} 
-                            onClick={() => { setActiveChannel({type: 'group', id: g.id}); setMobileShowChat(true); }}
-                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'group' && activeChannel.id === g.id ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                        >
-                            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold border border-orange-200">
-                                {g.name.charAt(0)}
+                    {activeTab === 'TASKS' ? (
+                        <div className="p-4 text-center text-gray-500 text-sm">بخش تسک‌ها</div>
+                    ) : getSortedChannels().map((item: any) => (
+                        <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 relative group">
+                            <div className="relative">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
+                                    {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
+                                </div>
+                                {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-gray-800 text-sm truncate">{g.name}</span>
+                                    <span className="font-bold text-gray-800 text-sm truncate">{item.name}</span>
+                                    {item.lastMsg && <span className="text-[10px] text-gray-400">{new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>}
                                 </div>
-                                <p className="text-xs text-gray-500 truncate">گروه کاری</p>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Users */}
-                    {filteredUsers.map(u => (
-                        <div key={u.id} 
-                            onClick={() => { setActiveChannel({type: 'private', id: u.username}); setMobileShowChat(true); }}
-                            className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition-colors ${activeChannel.type === 'private' && activeChannel.id === u.username ? 'bg-blue-50 border-r-4 border-blue-600' : ''}`}
-                        >
-                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border border-gray-100">
-                                {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : <UserIcon className="text-gray-500"/>}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-gray-800 text-sm truncate">{u.fullName}</span>
+                                <div className="flex justify-between items-center">
+                                    <p className="text-xs text-gray-500 truncate max-w-[150px]">
+                                        {item.lastMsg ? (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : item.lastMsg.message) : 'پیامی نیست'}
+                                    </p>
+                                    {item.unread > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold shadow-sm">{item.unread}</span>}
                                 </div>
-                                <p className="text-xs text-gray-500 truncate">{u.role}</p>
                             </div>
                         </div>
                     ))}
@@ -390,223 +483,264 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`absolute inset-0 md:static flex-1 min-w-0 flex flex-col bg-[#8E98A3] z-30 transition-transform duration-300 ${mobileShowChat ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
-                
-                {/* Chat Background */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none" 
-                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
-                </div>
-
-                {/* Header */}
-                <div className="bg-white p-3 flex justify-between items-center shadow-sm z-10 sticky top-0">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setMobileShowChat(false)} className="md:hidden p-2 hover:bg-gray-100 rounded-full text-gray-600"><ArrowRight/></button>
-                        <div className="flex flex-col cursor-pointer" onClick={() => { if(activeChannel.type==='group') setActiveTab(activeTab==='chat'?'tasks':'chat') }}>
-                            <h3 className="font-bold text-gray-800 text-base">
-                                {activeChannel.type === 'public' ? 'کانال عمومی' : activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : groups.find(g=>g.id===activeChannel.id)?.name}
-                            </h3>
-                            <span className="text-xs text-blue-500 font-medium">
-                                {activeChannel.type === 'group' ? (activeTab === 'chat' ? 'بزنید برای تسک‌ها' : 'بزنید برای چت') : 'آنلاین'}
-                            </span>
+            <div className={`absolute inset-0 md:static flex-1 bg-[#8e98a3] z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+                {activeChannel ? (
+                    <>
+                        {/* Chat Header */}
+                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-10">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setActiveChannel(null)} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
+                                <div className="flex flex-col cursor-pointer">
+                                    <h3 className="font-bold text-gray-800">
+                                        {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
+                                         activeChannel.type === 'group' ? groups.find(g=>g.id===activeChannel.id)?.name : 'کانال عمومی'}
+                                    </h3>
+                                    <span className="text-[10px] text-blue-500">
+                                        {activeChannel.type === 'private' ? (
+                                            users.find(u=>u.username===activeChannel.id)?.lastSeen && (Date.now() - (users.find(u=>u.username===activeChannel.id)?.lastSeen || 0) < 300000) ? 'آنلاین' : 
+                                            `آخرین بازدید ${new Date(users.find(u=>u.username===activeChannel.id)?.lastSeen || 0).toLocaleTimeString('fa-IR')}`
+                                        ) : 'گروه'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                {selectionMode ? (
+                                    <div className="flex gap-2 animate-fade-in">
+                                        <button onClick={() => setShowForwardModal(true)} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100" title="فوروارد"><Forward size={18}/></button>
+                                        <button onClick={() => handleDelete(false)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100" title="حذف"><Trash2 size={18}/></button>
+                                        <button onClick={() => { setSelectionMode(false); setSelectedMessages(new Set()); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => setShowInnerSearch(!showInnerSearch)} className={`p-2 rounded-full ${showInnerSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}><Search size={20}/></button>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                        {/* SEARCH TOGGLE */}
-                        {activeTab === 'chat' && (
-                             <button onClick={() => { setShowInnerSearch(!showInnerSearch); setInnerSearchTerm(''); }} className={`p-2 rounded-full transition-colors ${showInnerSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'}`}>
-                                 <Search size={20}/>
-                             </button>
-                        )}
-                        {activeChannel.type === 'group' && (
-                            <div className="bg-gray-100 p-2 rounded-lg text-gray-600" onClick={() => setActiveTab(activeTab==='chat'?'tasks':'chat')}>
-                                {activeTab === 'chat' ? <ListTodo size={20}/> : <MessageSquare size={20}/>}
+
+                        {/* Inner Search */}
+                        {showInnerSearch && (
+                            <div className="bg-white p-2 border-b flex items-center gap-2 animate-slide-down">
+                                <input className="flex-1 bg-gray-100 border-none rounded-lg py-2 px-4 text-sm" placeholder="جستجو در پیام‌ها..." value={innerSearchTerm} onChange={e => setInnerSearchTerm(e.target.value)} autoFocus />
+                                <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }}><X size={20} className="text-gray-500"/></button>
                             </div>
                         )}
-                    </div>
-                </div>
 
-                {/* Inner Search Bar */}
-                {showInnerSearch && (
-                    <div className="bg-white p-2 border-b animate-slide-down flex items-center gap-2 z-10">
-                        <input 
-                            ref={innerSearchInputRef}
-                            className="flex-1 bg-gray-100 border-none rounded-lg py-2 px-4 text-sm focus:ring-2 focus:ring-blue-200 outline-none"
-                            placeholder="جستجو در این گفتگو..."
-                            value={innerSearchTerm}
-                            onChange={e => setInnerSearchTerm(e.target.value)}
-                        />
-                        <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }} className="p-2 text-gray-500 hover:text-red-500"><X size={20}/></button>
-                    </div>
-                )}
-
-                {/* Messages */}
-                {activeTab === 'chat' ? (
-                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative z-0 overflow-x-hidden pb-20">
-                        {displayMsgs.length === 0 && innerSearchTerm && (
-                            <div className="text-center text-gray-500 bg-white/80 p-2 rounded shadow-sm mx-auto w-fit">نتیجه‌ای یافت نشد</div>
-                        )}
-                        
-                        {displayMsgs.map((msg) => {
-                            const isMe = msg.senderUsername === currentUser.username;
-                            return (
-                                <div key={msg.id} id={`msg-${msg.id}`} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-1 group`}>
-                                    <div className={`relative max-w-[85%] md:max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 shadow-sm text-sm ${isMe ? 'bg-[#EEFFDE] rounded-tr-none' : 'bg-white rounded-tl-none'}`}>
+                        {/* Messages List */}
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
+                            {displayMessages.map(msg => {
+                                const isMe = msg.senderUsername === currentUser.username;
+                                const isSelected = selectedMessages.has(msg.id);
+                                
+                                return (
+                                    <div 
+                                        key={msg.id} 
+                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} ${selectionMode ? 'cursor-pointer' : ''}`}
+                                        onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
+                                        onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
+                                        onTouchStart={(e) => { 
+                                            // Simple long press simulation for mobile
+                                            // Ideally use a hook, but this is basic
+                                        }}
+                                    >
+                                        {selectionMode && (
+                                            <div className={`mx-2 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-400 bg-white/50'}`}>
+                                                {isSelected && <Check size={12} className="text-white"/>}
+                                            </div>
+                                        )}
                                         
-                                        {/* Reply Context */}
-                                        {msg.replyTo && (
-                                            <div className={`mb-1 px-2 py-1 rounded border-r-2 text-xs cursor-pointer ${isMe ? 'bg-[#dcf8c6] border-green-500' : 'bg-gray-50 border-blue-500'}`} onClick={() => {
-                                                document.getElementById(`msg-${msg.replyTo?.id}`)?.scrollIntoView({behavior: 'smooth', block: 'center'});
-                                            }}>
-                                                <div className="font-bold text-blue-600 opacity-80">{msg.replyTo.sender}</div>
-                                                <div className="truncate opacity-70">{msg.replyTo.message}</div>
-                                            </div>
-                                        )}
-
-                                        {!isMe && activeChannel.type !== 'private' && (
-                                            <div className="text-[11px] font-bold text-orange-600 mb-1">{msg.sender}</div>
-                                        )}
-
-                                        {/* Content: Voice */}
-                                        {msg.audioUrl && (
-                                            <div className="flex items-center gap-3 min-w-[160px] py-1">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm ${isMe ? 'bg-green-500' : 'bg-blue-500'}`}>
-                                                    <Play size={14} fill="currentColor" className="ml-0.5"/>
+                                        <div className={`relative max-w-[85%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+                                            
+                                            {/* Forward Header */}
+                                            {msg.isForwarded && msg.forwardFrom && (
+                                                <div className="text-[10px] text-blue-600 font-bold mb-1 flex items-center gap-1">
+                                                    <Forward size={10}/> نقل قول از {msg.forwardFrom}
                                                 </div>
-                                                <audio controls src={msg.audioUrl} className="h-8 w-40 opacity-80" />
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {/* Content: File */}
-                                        {msg.attachment && (
-                                            <div className="mb-1">
-                                                {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                    <a href={msg.attachment.url} target="_blank" className="block mb-1">
-                                                        <img src={msg.attachment.url} alt="attachment" className="max-w-full h-auto rounded-lg max-h-60 object-cover" />
-                                                    </a>
-                                                ) : (
-                                                    <div className="flex items-center gap-3 bg-black/5 p-2 rounded-lg max-w-full overflow-hidden">
-                                                        <div className={`p-2 rounded-full text-white shrink-0 ${isMe ? 'bg-green-500' : 'bg-blue-500'}`}><File size={18}/></div>
-                                                        <div className="overflow-hidden min-w-0">
-                                                            <div className="truncate font-bold text-xs">
-                                                                {renderMessageContent(msg.attachment.fileName)}
+                                            {/* Reply Header */}
+                                            {msg.replyTo && (
+                                                <div className={`mb-1 px-2 py-0.5 rounded border-r-2 text-[10px] bg-opacity-10 cursor-pointer ${isMe ? 'bg-green-600 border-green-600' : 'bg-blue-600 border-blue-600'}`}>
+                                                    <div className="font-bold opacity-80">{msg.replyTo.sender}</div>
+                                                    <div className="truncate opacity-70">{msg.replyTo.message.substring(0, 30)}...</div>
+                                                </div>
+                                            )}
+
+                                            {/* Sender Name in Group */}
+                                            {!isMe && activeChannel.type !== 'private' && (
+                                                <div className="text-[11px] font-bold text-[#e17076] mb-0.5">{msg.sender}</div>
+                                            )}
+
+                                            {/* Content */}
+                                            {msg.attachment ? (
+                                                <div className="mb-1">
+                                                    {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                        <img 
+                                                            src={msg.attachment.url} 
+                                                            className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
+                                                        />
+                                                    ) : (
+                                                        <a href={msg.attachment.url} target="_blank" className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors" onClick={e=>e.stopPropagation()}>
+                                                            <div className="bg-blue-500 p-2 rounded text-white"><File size={16}/></div>
+                                                            <div className="overflow-hidden">
+                                                                <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
+                                                                <div className="text-[10px] text-blue-600">دانلود فایل</div>
                                                             </div>
-                                                            <a href={msg.attachment.url} target="_blank" className="text-[10px] text-blue-600 font-bold flex items-center gap-1 mt-0.5">دانلود <DownloadCloud size={10}/></a>
-                                                        </div>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ) : msg.audioUrl ? (
+                                                <div className="flex items-center gap-2 min-w-[180px] py-1">
+                                                    <button className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${isMe ? 'bg-green-500' : 'bg-blue-500'}`}>
+                                                        <Play size={14} className="ml-0.5"/>
+                                                    </button>
+                                                    <div className="flex-1 h-1 bg-gray-300 rounded overflow-hidden">
+                                                        <div className="h-full w-1/3 bg-gray-500"></div> {/* Simulated Progress */}
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
+                                                    <span className="text-[10px] text-gray-500">0:00</span>
+                                                </div>
+                                            ) : (
+                                                <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
+                                            )}
 
-                                        {/* Content: Text */}
-                                        {msg.message && <div className="whitespace-pre-wrap leading-relaxed break-words break-all">{renderMessageContent(msg.message)}</div>}
-
-                                        {/* Meta & Actions */}
-                                        <div className="flex justify-between items-end mt-1 pt-1 border-t border-black/5">
-                                            <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
-                                                <button onClick={() => setReplyingTo(msg)} className="p-0.5 hover:text-blue-600"><Reply size={12}/></button>
-                                                {isMe && <button onClick={() => handleEditMessage(msg)} className="p-0.5 hover:text-green-600"><Edit2 size={12}/></button>}
-                                                {(isMe || currentUser.role === UserRole.ADMIN) && <button onClick={() => handleDeleteMessage(msg.id)} className="p-0.5 hover:text-red-600"><Trash2 size={12}/></button>}
-                                            </div>
-
-                                            <div className="flex items-center gap-1 opacity-50 select-none text-[10px]">
-                                                {msg.isEdited && <span className="text-[8px]">ویرایش شده</span>}
-                                                <span>{new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>
-                                                {isMe && <CheckCheck size={12} className="text-green-600"/>}
+                                            {/* Footer */}
+                                            <div className="flex justify-end items-center gap-1 mt-1 opacity-60 select-none">
+                                                {msg.isEdited && <span className="text-[9px]">ویرایش شده</span>}
+                                                <span className="text-[10px]">{new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>
+                                                {isMe && <CheckCheck size={14} className={msg.readBy && msg.readBy.length > 0 ? "text-green-500" : "text-gray-500"}/>}
                                             </div>
                                         </div>
                                     </div>
+                                );
+                            })}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="bg-white p-2 flex items-end gap-2 border-t relative z-20">
+                            {/* Reply/Edit Preview */}
+                            {(replyingTo || editingMessageId) && (
+                                <div className="absolute bottom-full left-0 right-0 bg-white border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
+                                    <div className="flex items-center gap-2 border-r-4 border-blue-500 pr-2">
+                                        {editingMessageId ? <Edit2 size={18} className="text-blue-500"/> : <Reply size={18} className="text-blue-500"/>}
+                                        <div className="flex flex-col text-xs">
+                                            <span className="font-bold text-blue-600">{editingMessageId ? 'ویرایش پیام' : `پاسخ به ${replyingTo?.sender}`}</span>
+                                            <span className="text-gray-500 truncate max-w-[200px]">{editingMessageId ? '...' : replyingTo?.message}</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => { setReplyingTo(null); setEditingMessageId(null); setInputText(''); }}><X size={18} className="text-gray-400 hover:text-red-500"/></button>
                                 </div>
-                            );
-                        })}
-                        <div ref={messagesEndRef} />
-                    </div>
+                            )}
+
+                            <button onClick={() => document.getElementById('chat-file-menu')?.classList.toggle('hidden')} className="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors mb-1 relative">
+                                <Paperclip size={24}/>
+                                {/* Attachment Menu */}
+                                <div id="chat-file-menu" className="hidden absolute bottom-14 right-0 bg-white shadow-xl rounded-xl border p-2 flex flex-col gap-2 min-w-[150px] animate-scale-in z-50">
+                                    <button onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded text-sm text-gray-700"><ImageIcon size={18} className="text-blue-500"/> گالری (عکس/فیلم)</button>
+                                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded text-sm text-gray-700"><File size={18} className="text-orange-500"/> فایل</button>
+                                </div>
+                            </button>
+                            
+                            <input type="file" ref={galleryInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileUpload}/>
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload}/>
+
+                            <div className="flex-1 bg-gray-100 rounded-3xl flex items-center px-4 py-2 min-h-[48px]">
+                                <textarea 
+                                    ref={inputAreaRef}
+                                    value={inputText}
+                                    onChange={e => setInputText(e.target.value)}
+                                    onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                                    placeholder="پیام..."
+                                    className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
+                                    rows={1}
+                                    style={{ height: 'auto', minHeight: '24px' }}
+                                />
+                            </div>
+
+                            {inputText.trim() || isUploading ? (
+                                <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
+                                    {isUploading ? <Loader2 size={24} className="animate-spin"/> : <Send size={24} className={document.dir==='rtl' ? 'rotate-180' : ''}/>}
+                                </button>
+                            ) : (
+                                <button 
+                                    onMouseDown={startRecording}
+                                    onMouseUp={stopRecording}
+                                    onTouchStart={startRecording}
+                                    onTouchEnd={stopRecording}
+                                    className={`p-3 rounded-full shadow-lg transition-all mb-1 ${isRecording ? 'bg-red-500 scale-110 shadow-red-200' : 'bg-blue-500 text-white'}`}
+                                >
+                                    {isRecording ? <div className="text-white font-mono text-xs">{formatTime(recordingTime)}</div> : <Mic size={24}/>}
+                                </button>
+                            )}
+                        </div>
+                    </>
                 ) : (
-                    /* ... (Tasks View Code - No Change) ... */
-                    <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
-                        <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
-                            <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-700"><CheckSquare className="text-green-600"/> تسک‌های گروه</h3>
-                            <div className="flex gap-2">
-                                <input className="flex-1 border rounded-lg p-2 text-sm" placeholder="تسک جدید..." value={newTaskTitle} onChange={e=>setNewTaskTitle(e.target.value)}/>
-                                <button onClick={async ()=>{ 
-                                    if(!newTaskTitle) return; 
-                                    await createTask({ id: generateUUID(), groupId: activeChannel.id!, title: newTaskTitle, isCompleted: false, createdBy: currentUser.username, createdAt: Date.now() }); 
-                                    setNewTaskTitle(''); loadMeta(); 
-                                }} className="bg-green-600 text-white px-4 rounded-lg font-bold">افزودن</button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            {tasks.filter(t => t.groupId === activeChannel.id).map(t => (
-                                <div key={t.id} className="bg-white p-3 rounded-lg shadow-sm flex items-center gap-3">
-                                    <button onClick={async ()=>{ await updateTask({...t, isCompleted: !t.isCompleted}); loadMeta(); }} className={t.isCompleted ? "text-green-500" : "text-gray-300"}>
-                                        {t.isCompleted ? <CheckSquare/> : <Square/>}
-                                    </button>
-                                    <span className={`flex-1 text-sm ${t.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{t.title}</span>
-                                    <button onClick={async ()=>{ if(confirm('حذف؟')) { await deleteTask(t.id); loadMeta(); } }} className="text-red-400 p-1"><Trash2 size={16}/></button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Input Area */}
-                {activeTab === 'chat' && (
-                    <div className="bg-white p-2 flex items-end gap-2 border-t relative z-20">
-                        {/* Reply Preview */}
-                        {replyingTo && (
-                            <div className="absolute bottom-full left-0 right-0 bg-white border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
-                                <div className="flex items-center gap-2 border-r-4 border-blue-500 pr-2">
-                                    <Reply size={20} className="text-blue-500"/>
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-blue-600 text-xs">پاسخ به {replyingTo.sender}</span>
-                                        <span className="text-xs text-gray-500 truncate max-w-[200px]">{replyingTo.message || 'رسانه'}</span>
-                                    </div>
-                                </div>
-                                <button onClick={() => { setReplyingTo(null); setEditingMessageId(null); setInputText(''); }} className="p-1 hover:bg-red-50 rounded-full text-gray-500 hover:text-red-500"><X size={18}/></button>
-                            </div>
-                        )}
-
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} disabled={isUploading}/>
-                        <button onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors mb-1">
-                            {isUploading ? <Loader2 size={24} className="animate-spin text-blue-500"/> : <Paperclip size={24}/>}
-                        </button>
-
-                        <div className="flex-1 bg-gray-100 rounded-3xl flex items-center px-4 py-2 min-h-[48px] border border-transparent focus-within:border-blue-400 focus-within:bg-white transition-all">
-                            <textarea 
-                                ref={inputAreaRef}
-                                value={inputText}
-                                onChange={e => setInputText(e.target.value)}
-                                onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                                placeholder={isRecording ? "در حال ضبط..." : "پیام خود را بنویسید..."}
-                                className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
-                                rows={1}
-                                style={{ height: 'auto', minHeight: '24px' }}
-                                disabled={isRecording}
-                            />
-                        </div>
-
-                        {inputText.trim() || isUploading || editingMessageId ? (
-                            <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1 animate-scale-in">
-                                {editingMessageId ? <Check size={20}/> : <Send size={20} className={document.dir === 'rtl' ? 'rotate-180' : ''}/>}
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={toggleRecording}
-                                className={`p-3 rounded-full shadow-lg transition-all mb-1 ${isRecording ? 'bg-red-500 scale-110 shadow-red-200' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-200'}`}
-                            >
-                                {isRecording ? (
-                                    <div className="flex items-center justify-center w-5 h-5 relative">
-                                        <div className="absolute animate-ping inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></div>
-                                        <div className="z-10"><Send size={20} className={document.dir === 'rtl' ? 'rotate-180 text-white' : 'text-white'}/></div>
-                                    </div>
-                                ) : <Mic size={20} className="text-white"/>}
-                            </button>
-                        )}
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-[#f0f2f5]">
+                        <div className="bg-gray-200 p-4 rounded-full mb-4"><MessageSquare size={48}/></div>
+                        <p>برای شروع گفتگو یک مخاطب را انتخاب کنید</p>
                     </div>
                 )}
             </div>
 
-            {/* Modal for Group Creation (kept same) */}
+            {/* --- OVERLAYS --- */}
+            
+            {/* 1. Context Menu */}
+            {contextMenuMsg && (
+                <div className="fixed inset-0 z-50" onClick={() => setContextMenuMsg(null)}>
+                    <div 
+                        className="absolute bg-white rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
+                        style={{ top: Math.min(contextMenuMsg.y, window.innerHeight - 200), left: Math.min(contextMenuMsg.x, window.innerWidth - 200) }}
+                    >
+                        <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
+                        <button onClick={() => { navigator.clipboard.writeText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
+                        <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setShowForwardModal(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Forward size={16}/> فوروارد</button>
+                        {contextMenuMsg.msg.senderUsername === currentUser.username && (
+                            <button onClick={() => { setEditingMessageId(contextMenuMsg.msg.id); setInputText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Edit2 size={16}/> ویرایش</button>
+                        )}
+                        <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setSelectionMode(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><CheckSquare size={16}/> انتخاب</button>
+                        {(contextMenuMsg.msg.senderUsername === currentUser.username || currentUser.role === UserRole.ADMIN) && (
+                            <button onClick={() => { deleteMessage(contextMenuMsg.msg.id); onRefresh(); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف</button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 2. Image Viewer */}
+            {showImageViewer && (
+                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
+                    <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
+                    <div className="absolute top-4 right-4 flex gap-4">
+                        <a href={showImageViewer} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
+                        <button onClick={() => setShowImageViewer(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
+                    </div>
+                </div>
+            )}
+
+            {/* 3. Forward Modal */}
+            {showForwardModal && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                            <span className="font-bold">ارسال به...</span>
+                            <button onClick={() => setShowForwardModal(false)}><X size={20}/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2">
+                            {getSortedChannels().map((item: any) => (
+                                <div key={item.id} onClick={() => handleForward(item.id, item.type, false)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
+                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
+                                        {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
+                                    </div>
+                                    <div className="font-bold text-sm">{item.name}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="p-3 border-t bg-gray-50 text-center">
+                            <button onClick={() => handleForward(activeChannel?.id || '', activeChannel?.type as any, true)} className="text-xs text-blue-600 hover:underline">ارسال بدون نقل قول (بدون نام فرستنده)</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 4. Group Modal (Keep existing) */}
             {showGroupModal && (
                 <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">

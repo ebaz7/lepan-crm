@@ -24,6 +24,7 @@ export interface User {
   baleChatId?: string;
   canManageTrade?: boolean;
   receiveNotifications?: boolean;
+  lastSeen?: number; // New: For online status
 }
 
 export interface AppNotification {
@@ -436,6 +437,10 @@ export interface ChatMessage {
     audioUrl?: string;
     replyTo?: { id: string, sender: string, message: string };
     isEdited?: boolean;
+    isForwarded?: boolean;
+    forwardFrom?: string;
+    readBy?: string[]; // Array of usernames who read it
+    isDeleted?: boolean; // Logical delete
 }
 
 export interface ChatGroup {
