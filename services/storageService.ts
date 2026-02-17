@@ -62,7 +62,7 @@ export const updateExitPermitStatus = async (id: string, status: ExitPermitStatu
 };
 
 export const deleteExitPermit = async (id: string): Promise<ExitPermit[]> => { return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'DELETE'); };
-export const getNextExitPermitNumber = async (): Promise<number> => { try { const response = await apiCall<{ nextNumber: number }>('/next-exit-permit-number'); return response.nextNumber; } catch(e) { return 1001; } };
+export const getNextExitPermitNumber = async (): Promise<number> => { try { const response = await apiCall<{ nextNumber: number }>(`/next-exit-permit-number?t=${Date.now()}`); return response.nextNumber; } catch(e) { return 1001; } };
 
 export const getSecurityLogs = async (): Promise<SecurityLog[]> => { const res = await apiCall<SecurityLog[]>('/security/logs'); return safeArray(res); };
 export const saveSecurityLog = async (log: SecurityLog): Promise<SecurityLog[]> => { return await apiCall<SecurityLog[]>('/security/logs', 'POST', log); };
@@ -82,7 +82,9 @@ export const saveSettings = async (settings: SystemSettings): Promise<SystemSett
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
     try { 
-        const url = company ? `/next-tracking-number?company=${encodeURIComponent(company)}` : '/next-tracking-number';
+        const url = company 
+            ? `/next-tracking-number?company=${encodeURIComponent(company)}&t=${Date.now()}` 
+            : `/next-tracking-number?t=${Date.now()}`;
         const response = await apiCall<{ nextTrackingNumber: number }>(url); 
         return response.nextTrackingNumber; 
     } catch (e) { 
@@ -121,7 +123,9 @@ export const updateWarehouseTransaction = async (tx: WarehouseTransaction): Prom
 export const deleteWarehouseTransaction = async (id: string): Promise<WarehouseTransaction[]> => { return await apiCall<WarehouseTransaction[]>(`/warehouse/transactions/${id}`, 'DELETE'); };
 export const getNextBijakNumber = async (company?: string): Promise<number> => { 
     try { 
-        const url = company ? `/next-bijak-number?company=${encodeURIComponent(company)}` : '/next-bijak-number';
+        const url = company 
+            ? `/next-bijak-number?company=${encodeURIComponent(company)}&t=${Date.now()}` 
+            : `/next-bijak-number?t=${Date.now()}`;
         const response = await apiCall<{ nextNumber: number }>(url); 
         return response.nextNumber; 
     } catch (e) { 
