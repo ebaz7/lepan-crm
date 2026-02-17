@@ -185,31 +185,31 @@ function App() {
     if (!silent && orders.length === 0) setLoading(true);
 
     try {
-        const [ordersData, settingsData, messagesData] = await Promise.all([getOrders(), getSettings(), getMessages()]);
+        // --- OPTIMIZATION: LOAD SETTINGS SEPARATELY FIRST ---
+        // This ensures the UI renders correctly (permissions etc.) even if heavy data lags
+        getSettings().then(settingsData => {
+            if (settingsData) {
+                // Sanitize settings arrays just in case
+                if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
+                if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
+                if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
+                if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
+                setSettings(settingsData);
+            }
+        }).catch(err => console.error("Settings load error", err));
+
+        // Load Heavy Data in Parallel
+        const [ordersData, messagesData] = await Promise.all([getOrders(), getMessages()]);
         
-        // --- SAFE GUARD & DEEP SANITIZATION (The Fix) ---
-        // Recursively clean the data to ensure nested arrays are actually arrays.
-        // This fixes crashes where a backup might have 'paymentDetails: null'
-        
+        // --- SAFE GUARD & DEEP SANITIZATION ---
         const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
             ...o,
-            // Deep clean paymentDetails
             paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [],
-            // Deep clean attachments
             attachments: Array.isArray(o.attachments) ? o.attachments : []
         })) : [];
 
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
         
-        // Also sanitize settings arrays just in case
-        if (settingsData) {
-            if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
-            if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
-            if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
-            if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
-        }
-
-        setSettings(settingsData);
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
         
@@ -296,7 +296,8 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          const intervalId = setInterval(() => loadData(true), 5000); 
+          // INCREASED INTERVAL TO 20 SECONDS TO REDUCE SERVER LOAD
+          const intervalId = setInterval(() => loadData(true), 20000); 
           return () => clearInterval(intervalId); 
       } 
   }, [currentUser]);

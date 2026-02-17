@@ -50,7 +50,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors()); 
-app.use(compression()); 
+// Maximum compression for speed
+app.use(compression({ level: 9 })); 
 // INCREASED LIMIT TO 1GB TO SUPPORT FULL SYSTEM RESTORE (Files + DB)
 app.use(express.json({ limit: '1024mb' })); 
 app.use(express.urlencoded({ limit: '1024mb', extended: true }));
@@ -64,10 +65,17 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
-// --- ROBUST DATABASE HANDLER (GUARANTEED DATA INTEGRITY) ---
+// --- ROBUST DATABASE HANDLER (IN-MEMORY CACHING FOR SPEED) ---
+let MEMORY_DB_CACHE = null;
+
 const getDb = () => {
+    // Return from RAM if available (Instant access)
+    if (MEMORY_DB_CACHE) {
+        return MEMORY_DB_CACHE;
+    }
+
     try {
         const defaultDb = { 
             settings: {}, 
@@ -85,13 +93,22 @@ const getDb = () => {
             tasks: [] 
         };
 
-        if (!fs.existsSync(DB_FILE)) return defaultDb;
+        if (!fs.existsSync(DB_FILE)) {
+            MEMORY_DB_CACHE = defaultDb;
+            return defaultDb;
+        }
         
         const fileContent = fs.readFileSync(DB_FILE, 'utf8');
-        if (!fileContent.trim()) return defaultDb;
+        if (!fileContent.trim()) {
+            MEMORY_DB_CACHE = defaultDb;
+            return defaultDb;
+        }
 
         const data = JSON.parse(fileContent);
-        return { ...defaultDb, ...data };
+        // Combine with defaults to ensure structure integrity
+        MEMORY_DB_CACHE = { ...defaultDb, ...data };
+        console.log(">>> Database loaded into memory.");
+        return MEMORY_DB_CACHE;
 
     } catch (e) { 
         console.error("Database Read Error:", e);
@@ -101,6 +118,9 @@ const getDb = () => {
 
 const saveDb = (data) => {
     try {
+        // Update Memory immediately
+        MEMORY_DB_CACHE = data;
+        // Write to disk
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch(e) {
         console.error("Database Save Error:", e);
@@ -180,8 +200,6 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
 };
 
 // --- HELPER: Strict Duplicate Checker ---
-// Checks if (NumberField + Company) already exists.
-// excludeId is used for Edit (PUT) operations to ignore self.
 const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
     if (!list || !Array.isArray(list)) return false;
     return list.some(item => 
@@ -308,7 +326,6 @@ app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
     if (idx > -1) { 
-        // STRICT DUPLICATE CHECK (Update)
         const currentPermit = db.exitPermits[idx];
         const newPermitNum = req.body.permitNumber !== undefined ? req.body.permitNumber : currentPermit.permitNumber;
         const newCompany = req.body.company !== undefined ? req.body.company : currentPermit.company;
@@ -363,7 +380,6 @@ app.post('/api/warehouse/transactions', (req, res) => {
     const db = getDb(); 
     const tx = req.body;
 
-    // STRICT DUPLICATE CHECK (Create - Bijak Only)
     if (tx.type === 'OUT') {
         if (checkForDuplicate(db.warehouseTransactions.filter(t => t.type === 'OUT'), 'number', tx.number, 'company', tx.company)) {
              return res.status(409).json({ error: "Duplicate bijak number" });
@@ -379,19 +395,12 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); 
     if(idx > -1) { 
-        // STRICT DUPLICATE CHECK (Update - Bijak Only)
         const currentTx = db.warehouseTransactions[idx];
-        // Only check if it's an OUT transaction or becoming one (though type change is rare)
         if (currentTx.type === 'OUT' || req.body.type === 'OUT') {
             const newNumber = req.body.number !== undefined ? req.body.number : currentTx.number;
             const newCompany = req.body.company !== undefined ? req.body.company : currentTx.company;
-            
-            // Pass the whole filtered list of OUT transactions to checker, BUT since checkForDuplicate takes a list,
-            // we should pass the whole list but the checker logic handles fields.
-            // However, we only care about uniqueness among OUT transactions usually for 'number'.
             const outTransactions = db.warehouseTransactions.filter(t => t.type === 'OUT');
             
-            // Check within OUT transactions context
             if (checkForDuplicate(outTransactions, 'number', newNumber, 'company', newCompany, req.params.id)) {
                  return res.status(409).json({ error: "Duplicate bijak number" });
             }
@@ -688,7 +697,10 @@ app.post('/api/emergency-restore', (req, res) => {
             // Extract database.json
             const dbEntry = zip.getEntry('database.json');
             if (dbEntry) {
-                fs.writeFileSync(DB_FILE, zip.readAsText(dbEntry));
+                const dbContent = zip.readAsText(dbEntry);
+                fs.writeFileSync(DB_FILE, dbContent);
+                // UPDATE MEMORY
+                MEMORY_DB_CACHE = JSON.parse(dbContent);
                 console.log("✅ Database restored.");
             }
             
@@ -705,7 +717,11 @@ app.post('/api/emergency-restore', (req, res) => {
             const jsonStr = buffer.toString('utf-8');
             const parsed = JSON.parse(jsonStr);
             if (!parsed.settings && !parsed.users) throw new Error("Invalid backup file");
+            
             fs.writeFileSync(DB_FILE, jsonStr);
+            // UPDATE MEMORY
+            MEMORY_DB_CACHE = parsed;
+            
             res.json({ success: true, mode: 'json' });
         }
     } catch (e) {
@@ -718,7 +734,7 @@ app.get('/api/version', (req, res) => { res.json({ version: '1.3.1' }); });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 if (fs.existsSync(DIST_DIR)) {
-    app.use(express.static(DIST_DIR));
+    app.use(express.static(DIST_DIR, { maxAge: '1d' })); // Cache static assets
     app.get('*', (req, res) => {
         if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API endpoint not found' });
         res.sendFile(path.join(DIST_DIR, 'index.html'));
@@ -729,7 +745,7 @@ if (fs.existsSync(DIST_DIR)) {
 
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on ${PORT}`);
-    const db = getDb();
+    const db = getDb(); // Initial load to memory
     if(db.settings?.telegramBotToken) {
         const tgModule = await safeImport('./backend/telegram.js');
         if(tgModule) tgModule.initTelegram(db.settings.telegramBotToken);

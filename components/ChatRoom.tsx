@@ -426,7 +426,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 throw new Error("Cannot share file directly");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.log("File sharing failed, falling back to link share:", error);
             // Fallback to Link Share
             if (navigator.share) {
@@ -453,7 +453,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             try {
                 // Use reader.result directly to ensure correct type
                 const base64 = reader.result as string;
-                const result = await uploadFile(file.name, base64);
+                // Ensure filename is string
+                const safeName = file.name || `unknown_${Date.now()}`;
+                const result = await uploadFile(safeName, base64);
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
                     sender: currentUser.fullName,
