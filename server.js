@@ -17,30 +17,37 @@ const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'database.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 
+console.log(`>>> Server Starting...`);
+console.log(`>>> Database Path: ${DB_PATH}`);
+console.log(`>>> Uploads Path: ${UPLOADS_DIR}`);
+
 // Ensure DB and Uploads exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
+
+const defaultDbStructure = { 
+    users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }],
+    orders: [],
+    exitPermits: [],
+    warehouseTransactions: [],
+    tradeRecords: [],
+    settings: { currentTrackingNumber: 1000, currentExitPermitNumber: 1000, companyNames: [] },
+    chat: [],
+    groups: [],
+    tasks: [],
+    warehouseItems: [],
+    securityLogs: [],
+    personnelDelays: [],
+    securityIncidents: []
+};
+
 if (!fs.existsSync(DB_PATH)) {
-    const defaultDb = { 
-        users: [{ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin' }],
-        orders: [],
-        exitPermits: [],
-        warehouseTransactions: [],
-        tradeRecords: [],
-        settings: { currentTrackingNumber: 1000, currentExitPermitNumber: 1000 },
-        chat: [],
-        groups: [],
-        tasks: [],
-        warehouseItems: [],
-        securityLogs: [],
-        personnelDelays: [],
-        securityIncidents: []
-    };
-    fs.writeFileSync(DB_PATH, JSON.stringify(defaultDb, null, 2));
+    console.log(">>> Creating new database.json");
+    fs.writeFileSync(DB_PATH, JSON.stringify(defaultDbStructure, null, 2));
 }
 
 // Middleware
 app.use(cors());
-app.options('*', cors()); // Enable Pre-Flight for all routes
+app.options('*', cors()); 
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -51,10 +58,12 @@ app.use(express.static(path.join(__dirname, 'dist')));
 const getDb = () => {
     try {
         const raw = fs.readFileSync(DB_PATH, 'utf8');
-        return JSON.parse(raw);
+        const data = JSON.parse(raw);
+        // Merge with default structure to ensure all keys exist
+        return { ...defaultDbStructure, ...data };
     } catch (e) {
-        console.error("DB Read Error:", e);
-        return { users: [], orders: [], exitPermits: [], warehouseTransactions: [], settings: {} };
+        console.error(">>> CRITICAL DB READ ERROR:", e);
+        return defaultDbStructure;
     }
 };
 
@@ -62,7 +71,7 @@ const saveDb = (data) => {
     try {
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
     } catch (e) {
-        console.error("DB Save Error:", e);
+        console.error(">>> CRITICAL DB SAVE ERROR:", e);
     }
 };
 
@@ -124,17 +133,12 @@ createCrudRoutes('security/delays', 'personnelDelays');
 createCrudRoutes('security/incidents', 'securityIncidents');
 
 // --- EXIT PERMITS (MANUAL ROUTES) ---
-// Note: We use manual routes for exit-permits to handle specific logic like counters and legacy ID support
-
-// GET
 app.get('/api/exit-permits', (req, res) => res.json(getDb().exitPermits || []));
 
-// POST
 app.post('/api/exit-permits', (req, res) => {
     const db = getDb();
     if (!db.exitPermits) db.exitPermits = [];
     db.exitPermits.push(req.body);
-    // Update counter if present
     if (db.settings && req.body.permitNumber > (db.settings.currentExitPermitNumber || 0)) {
         db.settings.currentExitPermitNumber = req.body.permitNumber;
     }
@@ -142,7 +146,6 @@ app.post('/api/exit-permits', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// PUT
 app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb();
     if (!db.exitPermits) db.exitPermits = [];
@@ -154,37 +157,29 @@ app.put('/api/exit-permits/:id', (req, res) => {
     res.json(db.exitPermits);
 });
 
-// DELETE
 app.delete('/api/exit-permits/:id', (req, res) => {
     try {
         const db = getDb();
         const idToDelete = String(req.params.id).trim(); 
         
-        console.log(`[Server] Deleting Exit Permit ID: ${idToDelete}`);
-
         if (!Array.isArray(db.exitPermits)) { db.exitPermits = []; }
 
         const initialLen = db.exitPermits.length;
-        // Filter out item by exact ID
         db.exitPermits = db.exitPermits.filter(p => String(p.id) !== idToDelete);
         
-        // Fallback: If nothing deleted by ID, check if it's a legacy numeric ID (permitNumber)
         if (db.exitPermits.length === initialLen) {
              if (!isNaN(Number(idToDelete))) {
-                 console.log(`[Server] ID not found, trying legacy permitNumber match for: ${idToDelete}`);
                  db.exitPermits = db.exitPermits.filter(p => String(p.permitNumber) !== idToDelete);
              }
         }
 
         saveDb(db);
-        // Return the fresh list - status 200
         res.json(db.exitPermits);
     } catch (e) {
         console.error("Delete Error:", e);
-        res.status(500).json({ error: "Server Delete Error: " + e.message });
+        res.status(500).json({ error: "Server Delete Error" });
     }
 });
-
 
 // Settings
 app.get('/api/settings', (req, res) => res.json(getDb().settings || {}));
@@ -295,7 +290,7 @@ app.post('/api/send-whatsapp', async (req, res) => {
 });
 
 // System
-app.get('/api/version', (req, res) => res.json({ version: '2.5.1' }));
+app.get('/api/version', (req, res) => res.json({ version: '2.5.2' }));
 
 app.post('/api/restart-bot', (req, res) => {
     const { type } = req.body;
@@ -329,7 +324,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`>>> Server running on port ${PORT}`);
     const db = getDb();
     if (db.settings) {
         if (db.settings.telegramBotToken) initTelegram(db.settings.telegramBotToken);
