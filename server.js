@@ -50,18 +50,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors()); 
-app.use(compression()); // Compress responses for speed
+app.use(compression()); 
 // INCREASED LIMIT TO 1GB TO SUPPORT FULL SYSTEM RESTORE (Files + DB)
 app.use(express.json({ limit: '1024mb' })); 
 app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 
+// --- ANTI-CACHE MIDDLEWARE (CRITICAL FIX) ---
+// This forces all clients to fetch fresh data every time, solving the stale number issue.
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    next();
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// --- PERFORMANCE OPTIMIZATION: IN-MEMORY CACHE ---
-// Instead of reading the file on every request, we keep it in memory.
-let MEMORY_DB = null;
-
-const loadDbIntoMemory = () => {
+// --- ROBUST DATABASE HANDLER (GUARANTEED DATA INTEGRITY) ---
+const getDb = () => {
     try {
         const defaultDb = { 
             settings: {}, 
@@ -79,40 +85,22 @@ const loadDbIntoMemory = () => {
             tasks: [] 
         };
 
-        if (!fs.existsSync(DB_FILE)) {
-            MEMORY_DB = defaultDb;
-            return;
-        }
+        if (!fs.existsSync(DB_FILE)) return defaultDb;
         
         const fileContent = fs.readFileSync(DB_FILE, 'utf8');
-        if (!fileContent.trim()) {
-            MEMORY_DB = defaultDb;
-            return;
-        }
+        if (!fileContent.trim()) return defaultDb;
 
         const data = JSON.parse(fileContent);
-        MEMORY_DB = { ...defaultDb, ...data };
-        console.log(">>> Database Loaded into Memory (Fast Mode)");
+        return { ...defaultDb, ...data };
 
     } catch (e) { 
         console.error("Database Read Error:", e);
-        MEMORY_DB = { settings: {}, users: [] }; 
+        return {}; 
     }
-};
-
-// Initial Load
-loadDbIntoMemory();
-
-const getDb = () => {
-    if (!MEMORY_DB) loadDbIntoMemory();
-    return MEMORY_DB;
 };
 
 const saveDb = (data) => {
     try {
-        // Update Memory
-        MEMORY_DB = data;
-        // Write to Disk (Sync to ensure safety, but OS buffers make it reasonably fast)
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch(e) {
         console.error("Database Save Error:", e);
@@ -192,6 +180,8 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
 };
 
 // --- HELPER: Strict Duplicate Checker ---
+// Checks if (NumberField + Company) already exists.
+// excludeId is used for Edit (PUT) operations to ignore self.
 const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
     if (!list || !Array.isArray(list)) return false;
     return list.some(item => 
@@ -275,6 +265,7 @@ app.put('/api/orders/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.orders.findIndex(o => o.id === req.params.id); 
     if(idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update)
         const currentOrder = db.orders[idx];
         const newTracking = req.body.trackingNumber !== undefined ? req.body.trackingNumber : currentOrder.trackingNumber;
         const newCompany = req.body.payingCompany !== undefined ? req.body.payingCompany : currentOrder.payingCompany;
@@ -303,6 +294,7 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
+    // STRICT DUPLICATE CHECK (Create)
     if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
         return res.status(409).json({ error: "Duplicate permit number" });
     }
@@ -316,6 +308,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
     if (idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update)
         const currentPermit = db.exitPermits[idx];
         const newPermitNum = req.body.permitNumber !== undefined ? req.body.permitNumber : currentPermit.permitNumber;
         const newCompany = req.body.company !== undefined ? req.body.company : currentPermit.company;
@@ -370,6 +363,7 @@ app.post('/api/warehouse/transactions', (req, res) => {
     const db = getDb(); 
     const tx = req.body;
 
+    // STRICT DUPLICATE CHECK (Create - Bijak Only)
     if (tx.type === 'OUT') {
         if (checkForDuplicate(db.warehouseTransactions.filter(t => t.type === 'OUT'), 'number', tx.number, 'company', tx.company)) {
              return res.status(409).json({ error: "Duplicate bijak number" });
@@ -385,12 +379,19 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
     const db = getDb(); 
     const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); 
     if(idx > -1) { 
+        // STRICT DUPLICATE CHECK (Update - Bijak Only)
         const currentTx = db.warehouseTransactions[idx];
+        // Only check if it's an OUT transaction or becoming one (though type change is rare)
         if (currentTx.type === 'OUT' || req.body.type === 'OUT') {
             const newNumber = req.body.number !== undefined ? req.body.number : currentTx.number;
             const newCompany = req.body.company !== undefined ? req.body.company : currentTx.company;
+            
+            // Pass the whole filtered list of OUT transactions to checker, BUT since checkForDuplicate takes a list,
+            // we should pass the whole list but the checker logic handles fields.
+            // However, we only care about uniqueness among OUT transactions usually for 'number'.
             const outTransactions = db.warehouseTransactions.filter(t => t.type === 'OUT');
             
+            // Check within OUT transactions context
             if (checkForDuplicate(outTransactions, 'number', newNumber, 'company', newCompany, req.params.id)) {
                  return res.status(409).json({ error: "Duplicate bijak number" });
             }
@@ -607,7 +608,7 @@ app.post('/api/upload', (req, res) => {
     });
 });
 
-// 10. BOTS
+// 10. BOTS (Telegram/Bale/WhatsApp)
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;
     const db = getDb();
@@ -645,6 +646,7 @@ app.get('/api/backups/download/:filename', (req, res) => {
     else res.status(404).send("Not found");
 });
 
+// FULL BACKUP (ZIP with DB + UPLOADS) - MANUAL TRIGGER
 app.get('/api/full-backup', (req, res) => {
     try {
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -664,6 +666,7 @@ app.get('/api/full-backup', (req, res) => {
     }
 });
 
+// FULL RESTORE (ZIP OR JSON) - SMART HANDLING
 app.post('/api/emergency-restore', (req, res) => {
     const { fileData } = req.body;
     if (!fileData) return res.status(400).json({ success: false, error: 'No data' });
@@ -672,6 +675,7 @@ app.post('/api/emergency-restore', (req, res) => {
         const base64Data = fileData.replace(/^data:.*,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         
+        // 1. Check Magic Number to see if ZIP (PK..)
         const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
 
         if (isZip) {
@@ -681,14 +685,14 @@ app.post('/api/emergency-restore', (req, res) => {
 
             const zip = new AdmZip(tempZip);
             
+            // Extract database.json
             const dbEntry = zip.getEntry('database.json');
             if (dbEntry) {
                 fs.writeFileSync(DB_FILE, zip.readAsText(dbEntry));
-                // Update memory cache immediately
-                loadDbIntoMemory();
                 console.log("✅ Database restored.");
             }
             
+            // Extract Uploads
             if (zip.getEntry('uploads/')) {
                 zip.extractEntryTo("uploads/", ROOT_DIR, true, true); 
                 console.log("✅ Uploads restored.");
@@ -702,8 +706,6 @@ app.post('/api/emergency-restore', (req, res) => {
             const parsed = JSON.parse(jsonStr);
             if (!parsed.settings && !parsed.users) throw new Error("Invalid backup file");
             fs.writeFileSync(DB_FILE, jsonStr);
-            // Update memory cache
-            loadDbIntoMemory();
             res.json({ success: true, mode: 'json' });
         }
     } catch (e) {
@@ -726,7 +728,7 @@ if (fs.existsSync(DIST_DIR)) {
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
-    console.log(`Server running on ${PORT} (Fast Mode)`);
+    console.log(`Server running on ${PORT}`);
     const db = getDb();
     if(db.settings?.telegramBotToken) {
         const tgModule = await safeImport('./backend/telegram.js');

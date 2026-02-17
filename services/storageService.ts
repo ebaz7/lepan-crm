@@ -62,7 +62,6 @@ export const updateExitPermitStatus = async (id: string, status: ExitPermitStatu
 };
 
 export const deleteExitPermit = async (id: string): Promise<ExitPermit[]> => { return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'DELETE'); };
-// Only critical next numbers need timestamp to avoid collision race condition
 export const getNextExitPermitNumber = async (): Promise<number> => { try { const response = await apiCall<{ nextNumber: number }>(`/next-exit-permit-number?t=${Date.now()}`); return response.nextNumber; } catch(e) { return 1001; } };
 
 export const getSecurityLogs = async (): Promise<SecurityLog[]> => { const res = await apiCall<SecurityLog[]>('/security/logs'); return safeArray(res); };
@@ -77,18 +76,12 @@ export const getSecurityIncidents = async (): Promise<SecurityIncident[]> => { c
 export const saveSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>('/security/incidents', 'POST', incident); };
 export const updateSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${incident.id}`, 'PUT', incident); };
 export const deleteSecurityIncident = async (id: string): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${id}`, 'DELETE'); };
-
-// Updated: REMOVED '?t=' to allow ETag caching for settings (massive speed boost)
-export const getSettings = async (): Promise<SystemSettings> => { 
-    return await apiCall<SystemSettings>(`/settings`); 
-};
-
+export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
 
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
     try { 
-        // Keep timestamp here as numbers change frequently
         const url = company 
             ? `/next-tracking-number?company=${encodeURIComponent(company)}&t=${Date.now()}` 
             : `/next-tracking-number?t=${Date.now()}`;

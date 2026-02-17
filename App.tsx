@@ -296,8 +296,7 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          // INCREASED INTERVAL TO 20 SECONDS TO REDUCE LOAD ON SLOW CONNECTIONS
-          const intervalId = setInterval(() => loadData(true), 20000); 
+          const intervalId = setInterval(() => loadData(true), 5000); 
           return () => clearInterval(intervalId); 
       } 
   }, [currentUser]);

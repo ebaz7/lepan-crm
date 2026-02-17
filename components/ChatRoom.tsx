@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
 import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
@@ -451,7 +452,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         reader.onload = async (ev) => {
             try {
                 // Use reader.result directly to ensure correct type
-                const base64 = (reader.result || '') as string; // Fixed: Ensuring string type with fallback
+                const base64 = reader.result as string;
                 const result = await uploadFile(file.name, base64);
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
