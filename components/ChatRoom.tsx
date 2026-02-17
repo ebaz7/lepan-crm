@@ -383,7 +383,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             mediaRecorder.start(); 
             setIsRecording(true);
             setRecordingTime(0);
-            if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+            if(recordingTimerRef.current) clearInterval(recordingTimerRef.current as any);
             recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
         } catch (err) { alert("دسترسی به میکروفون امکان‌پذیر نیست."); }
     };
@@ -392,7 +392,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
             if(recordingTimerRef.current) {
-                clearInterval(recordingTimerRef.current);
+                clearInterval(recordingTimerRef.current as any);
                 recordingTimerRef.current = null;
             }
         }
@@ -450,7 +450,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const reader = new FileReader();
         reader.onload = async (ev) => {
             try {
-                const base64 = ev.target?.result as string;
+                const target = ev.target as FileReader;
+                if (!target || !target.result) return;
+                
+                const base64 = target.result as string;
                 const result = await uploadFile(file.name, base64);
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
