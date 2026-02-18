@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
 import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
-import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, RefreshCw, FileSpreadsheet, WifiOff, Filter, Calendar } from 'lucide-react';
+import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar } from 'lucide-react';
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
@@ -113,8 +113,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     // Transaction State
     const currentShamsi = getCurrentShamsiDate();
     const [txDate, setTxDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
-    // Default to Lapan Baft
-    const [selectedCompany, setSelectedCompany] = useState('لپان بافت');
+    const [selectedCompany, setSelectedCompany] = useState('');
     const [txItems, setTxItems] = useState<Partial<WarehouseTransactionItem>[]>([{ itemId: '', quantity: 0, weight: 0, unitPrice: 0 }]);
     const [proformaNumber, setProformaNumber] = useState('');
     const [recipientName, setRecipientName] = useState('');

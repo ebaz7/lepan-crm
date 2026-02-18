@@ -21,8 +21,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const [formData, setFormData] = useState({ payee: '', description: '', });
   const [trackingNumber, setTrackingNumber] = useState<string>('');
   const [loadingNum, setLoadingNum] = useState(false); 
-  // Set default to Lapan Baft immediately
-  const [payingCompany, setPayingCompany] = useState('لپان بافت');
+  const [payingCompany, setPayingCompany] = useState('');
   
   const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
   const [availableBanks, setAvailableBanks] = useState<string[]>([]); 
@@ -72,37 +71,40 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
   // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
   const fetchNextNumber = (company?: string) => {
+    // Reset to a temporary loader state if needed, but keeping old value is often better UX.
+    // However, to indicate change:
     setLoadingNum(true);
     
     getNextTrackingNumber(company)
         .then(num => {
+            // FORCE A NUMBER. If API returns 0 or null, use 1001.
             const validNum = (num && num > 0) ? num : 1001;
             setTrackingNumber(validNum.toString());
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
+            // Fallback on error
             setTrackingNumber('1001');
         })
         .finally(() => setLoadingNum(false));
   };
 
   useEffect(() => {
-      // 1. Fetch IMMEDIATELY for default company 'لپان بافت'
-      fetchNextNumber('لپان بافت');
+      // 1. Fetch IMMEDIATELY (Global Sequence) to ensure field is never empty
+      fetchNextNumber();
 
-      // 2. Load settings
+      // 2. Then load settings and refine if default company exists
       getSettings().then((s) => {
           setSettings(s);
           const names = s.companies?.map(c => c.name) || s.companyNames || [];
           setAvailableCompanies(names);
           
-          // Only override if defaultCompany is set and NOT empty, but prioritize Lapan Baft if not found
-          const defCompany = s.defaultCompany || 'لپان بافت';
-          setPayingCompany(defCompany);
-          updateBanksForCompany(defCompany, s);
-          
-          if (defCompany !== 'لپان بافت') {
-             fetchNextNumber(defCompany);
+          const defCompany = s.defaultCompany || '';
+          if (defCompany) {
+              setPayingCompany(defCompany);
+              updateBanksForCompany(defCompany, s);
+              // 3. Re-fetch for specific company sequence if needed
+              fetchNextNumber(defCompany);
           }
       });
   }, []);

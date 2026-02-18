@@ -56,7 +56,8 @@ app.use(compression({ level: 9 }));
 app.use(express.json({ limit: '1024mb' })); 
 app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 
-// --- ANTI-CACHE MIDDLEWARE ---
+// --- ANTI-CACHE MIDDLEWARE (CRITICAL FIX) ---
+// This forces all clients to fetch fresh data every time, solving the stale number issue.
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
@@ -67,16 +68,14 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
 // --- ROBUST DATABASE HANDLER (IN-MEMORY CACHING FOR SPEED) ---
-// This fixes the slow loading issue on domains by serving from RAM instead of Disk for reads.
 let MEMORY_DB_CACHE = null;
 
 const getDb = () => {
-    // 1. Return from RAM if available (Instant access)
+    // Return from RAM if available (Instant access)
     if (MEMORY_DB_CACHE) {
         return MEMORY_DB_CACHE;
     }
 
-    // 2. Initial Load from Disk
     try {
         const defaultDb = { 
             settings: {}, 
@@ -108,7 +107,7 @@ const getDb = () => {
         const data = JSON.parse(fileContent);
         // Combine with defaults to ensure structure integrity
         MEMORY_DB_CACHE = { ...defaultDb, ...data };
-        console.log(">>> Database loaded into memory (Cache Init).");
+        console.log(">>> Database loaded into memory.");
         return MEMORY_DB_CACHE;
 
     } catch (e) { 
@@ -119,9 +118,9 @@ const getDb = () => {
 
 const saveDb = (data) => {
     try {
-        // 1. Update Memory immediately (UI gets fast response)
+        // Update Memory immediately
         MEMORY_DB_CACHE = data;
-        // 2. Write to disk (Persist)
+        // Write to disk
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch(e) {
         console.error("Database Save Error:", e);
