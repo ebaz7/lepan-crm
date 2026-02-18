@@ -11,7 +11,8 @@ import PrintExitPermit from './PrintExitPermit';
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [permitNumber, setPermitNumber] = useState('');
-    const [selectedCompany, setSelectedCompany] = useState('');
+    // Default to Lapan Baft
+    const [selectedCompany, setSelectedCompany] = useState('لپان بافت');
     const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
     
     const currentShamsi = getCurrentShamsiDate();
@@ -25,13 +26,19 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     useEffect(() => {
+        // Fetch next number for Lapan Baft immediately
+        fetchNextNumber('لپان بافت');
+
         getSettings().then(s => {
             const names = s.companies?.map(c => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
-            if (s.defaultCompany) {
-                setSelectedCompany(s.defaultCompany);
-                fetchNextNumber(s.defaultCompany);
-            }
+            
+            // Override with setting default if exists and user changed logic, 
+            // but prompt requested Lapan Baft as default.
+            // If defaultCompany in settings is NOT empty, we can use it, otherwise fallback to Lapan Baft.
+            const def = s.defaultCompany || 'لپان بافت';
+            setSelectedCompany(def);
+            if(def !== 'لپان بافت') fetchNextNumber(def);
         });
     }, []);
 
