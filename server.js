@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import cron from 'node-cron'; 
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
+import webpush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +46,22 @@ const BACKUPS_DIR = path.join(ROOT_DIR, 'backups');
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+
+// --- WEB PUSH SETUP ---
+const VAPID_FILE = path.join(ROOT_DIR, 'vapid.json');
+let vapidKeys;
+if (fs.existsSync(VAPID_FILE)) {
+    vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+} else {
+    vapidKeys = webpush.generateVAPIDKeys();
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys));
+}
+
+webpush.setVapidDetails(
+    'mailto:admin@example.com',
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -107,6 +124,7 @@ const getDb = () => {
         const data = JSON.parse(fileContent);
         // Combine with defaults to ensure structure integrity
         MEMORY_DB_CACHE = { ...defaultDb, ...data };
+        if (!MEMORY_DB_CACHE.subscriptions) MEMORY_DB_CACHE.subscriptions = [];
         console.log(">>> Database loaded into memory.");
         return MEMORY_DB_CACHE;
 
@@ -209,9 +227,66 @@ const checkForDuplicate = (list, numField, numValue, companyField, companyValue,
     );
 };
 
+// --- NOTIFICATION HELPER ---
+const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null) => {
+    const db = getDb();
+    const subs = db.subscriptions || [];
+    
+    console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
+
+    const payload = JSON.stringify({ title, body, url });
+
+    const sendPromises = subs.filter(sub => {
+        if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
+        if (targetRoles && !targetRoles.includes(sub.role)) return false;
+        return true;
+    }).map(sub => {
+        if (sub.type === 'android') {
+            // Native Android handled via FCM (if configured) or we can use a proxy
+            // For now, we assume WebPush works for PWA and we'd need FCM key for Native
+            return Promise.resolve();
+        }
+        return webpush.sendNotification(sub, payload).catch(err => {
+            if (err.statusCode === 404 || err.statusCode === 410) {
+                console.log(`Removing expired subscription for ${sub.username}`);
+                const db = getDb();
+                db.subscriptions = db.subscriptions.filter(s => s.endpoint !== sub.endpoint);
+                saveDb(db);
+            } else {
+                console.error("Push error:", err);
+            }
+        });
+    });
+
+    await Promise.all(sendPromises);
+};
+
 // --- API ROUTES ---
 
 // 1. SEQUENCE GENERATORS
+app.get('/api/vapid-key', (req, res) => {
+    res.json({ publicKey: vapidKeys.publicKey });
+});
+
+app.post('/api/subscribe', (req, res) => {
+    const db = getDb();
+    if (!db.subscriptions) db.subscriptions = [];
+    
+    const newSub = req.body;
+    // Prevent duplicates
+    const exists = db.subscriptions.find(s => s.endpoint === newSub.endpoint);
+    if (!exists) {
+        db.subscriptions.push(newSub);
+        saveDb(db);
+    } else {
+        // Update user info if changed
+        const idx = db.subscriptions.findIndex(s => s.endpoint === newSub.endpoint);
+        db.subscriptions[idx] = { ...db.subscriptions[idx], ...newSub };
+        saveDb(db);
+    }
+    res.status(201).json({});
+});
+
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
@@ -278,6 +353,14 @@ app.post('/api/orders', (req, res) => {
     
     saveDb(db); 
     res.json(db.orders); 
+
+    // Notify relevant roles
+    broadcastNotification(
+        'درخواست پرداخت جدید',
+        `${order.description || 'بدون شرح'} - مبلغ: ${order.amount.toLocaleString()} ریال`,
+        '/payment-approvals',
+        ['FINANCIAL', 'ADMIN']
+    );
 });
 app.put('/api/orders/:id', (req, res) => { 
     const db = getDb(); 
@@ -321,6 +404,13 @@ app.post('/api/exit-permits', (req, res) => {
     db.exitPermits.push(permit); 
     saveDb(db); 
     res.json(db.exitPermits); 
+
+    broadcastNotification(
+        'درخواست خروج کالا',
+        `مجوز شماره ${permit.permitNumber} برای ${permit.customerName}`,
+        '/exit-approvals',
+        ['CEO', 'ADMIN']
+    );
 });
 app.put('/api/exit-permits/:id', (req, res) => { 
     const db = getDb(); 
@@ -390,6 +480,15 @@ app.post('/api/warehouse/transactions', (req, res) => {
     db.warehouseTransactions.unshift(tx); 
     saveDb(db); 
     res.json(db.warehouseTransactions); 
+
+    if (tx.type === 'OUT') {
+        broadcastNotification(
+            'بیجک خروج جدید',
+            `بیجک شماره ${tx.number} ثبت شد و منتظر تایید است.`,
+            '/warehouse',
+            ['CEO', 'ADMIN']
+        );
+    }
 });
 app.put('/api/warehouse/transactions/:id', (req, res) => { 
     const db = getDb(); 
@@ -577,6 +676,36 @@ app.post('/api/chat', (req, res) => {
     db.messages.push(req.body); 
     saveDb(db); 
     res.json(db.messages); 
+
+    // Chat Notification
+    const msg = req.body;
+    if (msg.recipient) {
+        broadcastNotification(
+            `پیام از ${msg.sender}`,
+            msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+            '/chat',
+            null,
+            [msg.recipient]
+        );
+    } else if (msg.groupId) {
+        const group = db.groups?.find(g => g.id === msg.groupId);
+        if (group) {
+            broadcastNotification(
+                `${msg.sender} در ${group.name}`,
+                msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+                '/chat',
+                null,
+                group.members.filter(m => m !== msg.senderUsername)
+            );
+        }
+    } else {
+        // Public channel
+        broadcastNotification(
+            `پیام عمومی از ${msg.sender}`,
+            msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+            '/chat'
+        );
+    }
 });
 app.put('/api/chat/:id', (req, res) => { 
     const db = getDb(); 

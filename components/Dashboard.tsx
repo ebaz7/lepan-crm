@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks } from 'lucide-react';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions } from '../services/storageService';
 
@@ -213,13 +213,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, on
                         <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><PieChart size={20} className="text-blue-500"/> توزیع روش‌های پرداخت</h3>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
+                                <RechartsPieChart>
                                     <Pie data={methodData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="amount">
                                         {methodData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
                                     </Pie>
                                     <Tooltip formatter={(value: number) => formatCurrency(value)} />
                                     <Legend />
-                                </PieChart>
+                                </RechartsPieChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
@@ -231,13 +231,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, on
                         </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={bankStats.slice(0, 5)}>
+                                <RechartsBarChart data={bankStats.slice(0, 5)}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" tick={{fontSize: 10}} />
                                     <YAxis tick={{fontSize: 10}} tickFormatter={(value) => `${value/1000000}M`} />
                                     <Tooltip formatter={(value: number) => formatCurrency(value)} cursor={{fill: '#f3f4f6'}} />
                                     <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40} />
-                                </BarChart>
+                                </RechartsBarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>

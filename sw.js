@@ -45,14 +45,18 @@ self.addEventListener('push', (event) => {
       badge: '/pwa-192x192.png',
       dir: 'rtl',
       lang: 'fa',
-      vibrate: [100, 50, 100],
+      vibrate: [200, 100, 200, 100, 200], // Stronger vibration pattern
       data: {
         url: data.url || '/',
         timestamp: Date.now()
       },
-      tag: 'payment-sys-notification', // Groups notifications
-      renotify: true, // Play sound even if tag is same
-      requireInteraction: true // Keep notification until user interacts
+      tag: 'payment-sys-notification', 
+      renotify: true, 
+      requireInteraction: true,
+      actions: [
+        { action: 'open', title: 'مشاهده' },
+        { action: 'close', title: 'بستن' }
+      ]
     };
 
     event.waitUntil(

@@ -31,6 +31,61 @@ interface ChannelItem {
     unread: number;
 }
 
+const AudioPlayer: React.FC<{ url: string; isMe: boolean }> = ({ url, isMe }) => {
+    const [playing, setPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        
+        audio.onloadedmetadata = () => setDuration(audio.duration);
+        audio.ontimeupdate = () => setProgress((audio.currentTime / audio.duration) * 100);
+        audio.onended = () => { setPlaying(false); setProgress(0); };
+        
+        return () => {
+            audio.pause();
+            audio.src = '';
+        };
+    }, [url]);
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (playing) audioRef.current.pause();
+        else audioRef.current.play();
+        setPlaying(!playing);
+    };
+
+    const formatTime = (time: number) => {
+        if (isNaN(time)) return '0:00';
+        const mins = Math.floor(time / 60);
+        const secs = Math.floor(time % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    return (
+        <div className="flex items-center gap-2 flex-1">
+            <button 
+                onClick={togglePlay}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
+            >
+                {playing ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+            </button>
+            <div className="flex-1 h-1 bg-gray-300 rounded-full relative overflow-hidden">
+                <div 
+                    className={`absolute inset-y-0 left-0 transition-all duration-100 ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+            <span className="text-[10px] text-gray-500 min-w-[30px]">
+                {playing ? formatTime(audioRef.current?.currentTime || 0) : formatTime(duration)}
+            </span>
+        </div>
+    );
+};
+
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(preloadedMessages || []);
@@ -413,7 +468,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             const blob = await response.blob();
             
             const fileName = msg.attachment?.fileName || `file_${Date.now()}.${blob.type.split('/')[1] || 'bin'}`;
-            const file = new File([blob], fileName, { type: blob.type });
+            const file = new (window as any).File([blob], fileName, { type: blob.type });
 
             // Check if can share files
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -724,14 +779,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                     )}
                                                 </div>
                                             ) : msg.audioUrl ? (
-                                                <div className="flex items-center gap-2 min-w-[180px] py-1">
-                                                    <button className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${isMe ? 'bg-green-500' : 'bg-blue-500'}`}>
-                                                        <Play size={14} className="ml-0.5"/>
-                                                    </button>
-                                                    <div className="flex-1 h-1 bg-gray-300 rounded overflow-hidden">
-                                                        <div className="h-full w-1/3 bg-gray-500"></div> {/* Simulated Progress */}
-                                                    </div>
-                                                    <span className="text-[10px] text-gray-500">0:00</span>
+                                                <div className="flex items-center gap-2 min-w-[200px] py-1">
+                                                    <AudioPlayer url={msg.audioUrl} isMe={isMe} />
                                                 </div>
                                             ) : (
                                                 <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
