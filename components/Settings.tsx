@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -675,6 +675,25 @@ const Settings: React.FC = () => {
                                                                     setSettings({ ...settings, companyNotifications: newConf });
                                                                 }}
                                                             />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+                                                        <label className="text-[10px] font-bold text-gray-600 flex items-center gap-1">
+                                                            <FileClock size={12} className="text-blue-600"/> شماره شروع بیجک:
+                                                        </label>
+                                                        <div className="flex items-center gap-2">
+                                                            <input 
+                                                                type="number"
+                                                                className="w-20 border rounded p-1 text-[10px] text-center font-mono"
+                                                                value={settings.warehouseSequences?.[c.name] || ''}
+                                                                onChange={e => {
+                                                                    const newSequences = { ...(settings.warehouseSequences || {}), [c.name]: Number(e.target.value) };
+                                                                    setSettings({ ...settings, warehouseSequences: newSequences });
+                                                                }}
+                                                                placeholder="1000"
+                                                            />
+                                                            <span className="text-[9px] text-gray-400">پر کردن جاهای خالی از این عدد</span>
                                                         </div>
                                                     </div>
                                                 </div>

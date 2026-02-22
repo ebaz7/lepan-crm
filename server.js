@@ -193,7 +193,7 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
         .filter(n => !isNaN(n) && n >= startNum) 
         .sort((a, b) => a - b);
     
-    let expected = startNum + 1; 
+    let expected = startNum; 
     const numSet = new Set(existingNumbers);
     while (numSet.has(expected)) { expected++; }
     return expected;

@@ -50,7 +50,7 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {tx.type === 'OUT' && (
                             <>
-                                <div><label className="text-xs font-bold block mb-1">شماره بیجک</label><input className="w-full border rounded p-2 bg-gray-100" value={formData.number} readOnly /></div>
+                                <div><label className="text-xs font-bold block mb-1">شماره بیجک</label><input type="number" className="w-full border rounded p-2" value={formData.number} onChange={e => setFormData({...formData, number: Number(e.target.value)})} /></div>
                                 <div><label className="text-xs font-bold block mb-1">گیرنده</label><input className="w-full border rounded p-2" value={formData.recipientName || ''} onChange={e => setFormData({...formData, recipientName: e.target.value})} /></div>
                                 <div><label className="text-xs font-bold block mb-1">راننده</label><input className="w-full border rounded p-2" value={formData.driverName || ''} onChange={e => setFormData({...formData, driverName: e.target.value})} /></div>
                                 <div><label className="text-xs font-bold block mb-1">پلاک</label><input className="w-full border rounded p-2" value={formData.plateNumber || ''} onChange={e => setFormData({...formData, plateNumber: e.target.value})} /></div>
@@ -709,11 +709,23 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                     <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
                                 </div>
                             </div>
-                            <div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 bg-white" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div>
+                            <div>
+                                <label className="block text-xs font-bold mb-1 flex items-center gap-1">شماره بیجک {loadingBijakNum && <Loader2 size={12} className="animate-spin text-blue-500"/>}</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full border rounded p-2 bg-blue-50 font-bold text-red-600 text-center" 
+                                    value={nextBijakNum} 
+                                    onChange={e => setNextBijakNum(Number(e.target.value))}
+                                />
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 bg-white" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div>
                             <div><label className="block text-xs font-bold mb-1">راننده</label><input className="w-full border rounded p-2 bg-white" value={driverName} onChange={e=>setDriverName(e.target.value)}/></div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div><label className="block text-xs font-bold mb-1">پلاک</label><input className="w-full border rounded p-2 bg-white dir-ltr text-center" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/></div>
                             <div><label className="block text-xs font-bold mb-1">مقصد</label><input className="w-full border rounded p-2 bg-white" value={destination} onChange={e=>setDestination(e.target.value)}/></div>
                         </div>
