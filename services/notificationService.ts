@@ -2,6 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { apiCall } from './apiService';
 
 const PREF_KEY = 'app_notification_pref';
 
@@ -13,46 +14,93 @@ export const setNotificationPreference = (enabled: boolean) => {
     localStorage.setItem(PREF_KEY, String(enabled));
 };
 
+// Helper to convert VAPID key
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+ 
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+ 
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (Capacitor.isNativePlatform()) {
       try {
-          // 1. Request Permission
           const result = await PushNotifications.requestPermissions();
-          
           if (result.receive === 'granted') {
-              // 2. Register with FCM (This enables background notifications like Telegram)
-              // NOTE: This REQUIRES google-services.json to be present in android/app/ folder
               await PushNotifications.register();
               return true;
-          } else {
-              return false;
           }
+          return false;
       } catch (e) {
-          console.error("Push Registration Error (Check google-services.json):", e);
-          // Fallback to local if Push fails (prevents crash, but user needs to add config file)
-          try {
-             await LocalNotifications.requestPermissions();
-          } catch(err) {}
+          console.error("Push Registration Error:", e);
           return false;
       }
   }
 
   // Web Logic
   if (!("Notification" in window)) return false;
+  
   try {
       const permission = await Notification.requestPermission();
-      return permission === 'granted';
+      if (permission === 'granted') {
+          await subscribeToPushNotifications();
+          return true;
+      }
+      return false;
   } catch (e) {
       console.error("Web Permission Error:", e);
       return false;
   }
 };
 
+export const subscribeToPushNotifications = async () => {
+    if (Capacitor.isNativePlatform()) return; // Native handled by Capacitor plugin
+
+    try {
+        // 1. Get VAPID Key from Server
+        const { publicKey } = await apiCall<{publicKey: string}>('/vapid-key');
+        if (!publicKey) throw new Error("No VAPID key returned");
+
+        // 2. Get Service Worker Registration
+        const registration = await navigator.serviceWorker.ready;
+        if (!registration) throw new Error("Service Worker not ready");
+
+        // 3. Subscribe to Push Manager
+        const convertedVapidKey = urlBase64ToUint8Array(publicKey);
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedVapidKey
+        });
+
+        // 4. Send Subscription to Server
+        // We also send user info to allow targeting
+        const userStr = localStorage.getItem('currentUser');
+        const user = userStr ? JSON.parse(userStr) : null;
+
+        await apiCall('/subscribe', 'POST', {
+            ...subscription.toJSON(),
+            username: user?.username,
+            role: user?.role,
+            type: 'web'
+        });
+
+        console.log("✅ Web Push Subscribed Successfully");
+    } catch (e) {
+        console.error("Failed to subscribe to push:", e);
+    }
+};
+
 export const sendNotification = async (title: string, body: string) => {
   if (!isNotificationEnabledInApp()) return;
 
-  // On Native, we rely on the Background Push (FCM) primarily.
-  // But for immediate local alerts (like "Task Completed" while app is open), we use LocalNotifications.
   if (Capacitor.isNativePlatform()) {
       try {
           await LocalNotifications.schedule({
@@ -62,22 +110,32 @@ export const sendNotification = async (title: string, body: string) => {
                       body: body,
                       id: new Date().getTime(),
                       schedule: { at: new Date(Date.now() + 100) },
-                      sound: 'beep.wav', // Ensure this file exists in android/app/src/main/res/raw or standard sounds will play
+                      sound: 'beep.wav',
                       smallIcon: 'ic_stat_icon_config_sample', 
                       actionTypeId: "",
                       extra: null
                   }
               ]
           });
-      } catch (e) {
-          console.error("Local Notification Error:", e);
-      }
+      } catch (e) {}
       return;
   }
 
   if (Notification.permission === "granted") {
       try {
-        new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa' });
+          // Check if SW is active to show via SW (more reliable)
+          const registration = await navigator.serviceWorker.ready;
+          if (registration && registration.active) {
+              registration.showNotification(title, {
+                  body,
+                  icon: '/pwa-192x192.png',
+                  dir: 'rtl',
+                  lang: 'fa',
+                  vibrate: [200, 100, 200]
+              } as any);
+          } else {
+              new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa' });
+          }
       } catch (e) {
           console.error("Web Notification Error:", e);
       }
