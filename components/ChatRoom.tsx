@@ -41,7 +41,11 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     const waveform = useMemo(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 60) + 20), []);
 
     useEffect(() => {
-        const absoluteUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+        let absoluteUrl = url;
+        if (!url.startsWith('http') && !url.startsWith('blob')) {
+            absoluteUrl = `${window.location.origin}${url}`;
+        }
+        
         const audio = new Audio(absoluteUrl);
         audioRef.current = audio;
         
