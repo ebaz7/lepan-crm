@@ -31,10 +31,10 @@ interface ChannelItem {
     unread: number;
 }
 
-const AudioPlayer: React.FC<{ url: string; isMe: boolean }> = ({ url, isMe }) => {
+const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> = ({ url, isMe, duration: propDuration }) => {
     const [playing, setPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [duration, setDuration] = useState(0);
+    const [duration, setDuration] = useState(propDuration || 0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
@@ -42,15 +42,27 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean }> = ({ url, isMe }) =>
         const audio = new Audio(absoluteUrl);
         audioRef.current = audio;
         
-        audio.onloadedmetadata = () => setDuration(audio.duration);
-        audio.ontimeupdate = () => setProgress((audio.currentTime / audio.duration) * 100);
+        audio.onloadedmetadata = () => {
+            const d = audio.duration;
+            if (d && d !== Infinity && !isNaN(d)) {
+                setDuration(d);
+            }
+        };
+        audio.ontimeupdate = () => {
+            if (audio.duration && audio.duration !== Infinity) {
+                setProgress((audio.currentTime / audio.duration) * 100);
+            } else if (duration > 0) {
+                 // Fallback progress calculation
+                 setProgress((audio.currentTime / duration) * 100);
+            }
+        };
         audio.onended = () => { setPlaying(false); setProgress(0); };
         
         return () => {
             audio.pause();
             audio.src = '';
         };
-    }, [url]);
+    }, [url, duration]);
 
     const togglePlay = () => {
         if (!audioRef.current) return;
@@ -120,6 +132,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingTimerRef = useRef<any>(null);
     const recordedMimeTypeRef = useRef<string>('');
+    const recordingStartTimeRef = useRef<number>(0);
 
     // --- Refs ---
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -382,6 +395,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 const tracks = stream.getTracks();
                 tracks.forEach(track => track.stop());
 
+                const durationSec = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
+
                 if (audioChunksRef.current.length === 0) {
                     setIsRecording(false);
                     return;
@@ -420,6 +435,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
                             groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
                             audioUrl: result.url,
+                            audioDuration: durationSec,
                             readBy: []
                         };
                         await sendMessage(newMsg);
@@ -438,6 +454,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             // Start WITHOUT timeslice to let browser manage buffer and headers correctly.
             // This prevents corruption in some browsers (Safari/Mobile Chrome).
             mediaRecorder.start(); 
+            recordingStartTimeRef.current = Date.now();
             setIsRecording(true);
             setRecordingTime(0);
             if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -781,7 +798,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 </div>
                                             ) : msg.audioUrl ? (
                                                 <div className="flex items-center gap-2 min-w-[200px] py-1">
-                                                    <AudioPlayer url={msg.audioUrl} isMe={isMe} />
+                                                    <AudioPlayer url={msg.audioUrl} isMe={isMe} duration={msg.audioDuration} />
                                                 </div>
                                             ) : (
                                                 <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>

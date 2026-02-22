@@ -436,6 +436,7 @@ export interface ChatMessage {
     groupId?: string;
     attachment?: { fileName: string, url: string };
     audioUrl?: string;
+    audioDuration?: number;
     replyTo?: { id: string, sender: string, message: string };
     isEdited?: boolean;
     isForwarded?: boolean;
