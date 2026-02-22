@@ -42,11 +42,15 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
     useEffect(() => {
         let absoluteUrl = url;
+        // Fix for Desktop: Ensure URL is absolute if it's a relative path from server
         if (!url.startsWith('http') && !url.startsWith('blob')) {
-            absoluteUrl = `${window.location.origin}${url}`;
+            // Remove leading slash if present to avoid double slash, then add base
+            const cleanPath = url.startsWith('/') ? url : `/${url}`;
+            absoluteUrl = `${window.location.origin}${cleanPath}`;
         }
         
-        const audio = new Audio(absoluteUrl);
+        const audio = new Audio();
+        audio.src = absoluteUrl;
         audioRef.current = audio;
         
         audio.onloadedmetadata = () => {
@@ -173,7 +177,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         // Auto scroll with timeout to ensure rendering is done (Fix for Desktop)
         if (activeChannel && !showInnerSearch) {
-            setTimeout(scrollToBottom, 150); // Slight delay for desktop rendering
+            // Immediate scroll for better UX
+            if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+            }
+            // Follow up with smooth scroll to catch any layout shifts
+            setTimeout(scrollToBottom, 150); 
         }
     }, [activeChannel, messages.length]);
 

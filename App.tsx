@@ -298,7 +298,16 @@ function App() {
           loadData(false); 
           // INCREASED INTERVAL TO 20 SECONDS TO REDUCE SERVER LOAD
           const intervalId = setInterval(() => loadData(true), 20000); 
-          return () => clearInterval(intervalId); 
+          
+          // Heartbeat for Last Seen (Every 1 minute)
+          const heartbeatId = setInterval(() => {
+              apiCall('/heartbeat', 'POST', { username: currentUser.username }).catch(console.error);
+          }, 60000);
+
+          return () => { 
+              clearInterval(intervalId); 
+              clearInterval(heartbeatId);
+          }; 
       } 
   }, [currentUser]);
 

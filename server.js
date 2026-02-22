@@ -381,7 +381,32 @@ app.put('/api/orders/:id', (req, res) => {
             return res.status(409).json({ error: "Duplicate tracking number" });
         }
 
-        db.orders[idx] = { ...db.orders[idx], ...req.body }; 
+        const updatedOrder = { ...db.orders[idx], ...req.body };
+        
+        // Notification Logic for Status Change
+        if (currentOrder.status !== updatedOrder.status) {
+            // Notify Requestor
+            if (updatedOrder.createdBy) {
+                broadcastNotification(
+                    'تغییر وضعیت درخواست پرداخت',
+                    `درخواست شما به وضعیت ${updatedOrder.status === 'APPROVED' ? 'تایید شده' : updatedOrder.status === 'REJECTED' ? 'رد شده' : updatedOrder.status} تغییر یافت.`,
+                    '/payment-orders',
+                    null,
+                    [updatedOrder.createdBy]
+                );
+            }
+            // Notify Financial if Approved
+            if (updatedOrder.status === 'APPROVED') {
+                broadcastNotification(
+                    'تایید نهایی پرداخت',
+                    `درخواست پرداخت ${updatedOrder.trackingNumber} تایید شد.`,
+                    '/payment-orders',
+                    ['FINANCIAL']
+                );
+            }
+        }
+
+        db.orders[idx] = updatedOrder; 
         saveDb(db); 
         res.json(db.orders); 
     } else res.status(404).send('Not Found'); 
@@ -430,7 +455,32 @@ app.put('/api/exit-permits/:id', (req, res) => {
              return res.status(409).json({ error: "Duplicate permit number" });
         }
 
-        db.exitPermits[idx] = { ...db.exitPermits[idx], ...req.body }; 
+        const updatedPermit = { ...db.exitPermits[idx], ...req.body };
+
+        // Notification Logic
+        if (currentPermit.status !== updatedPermit.status) {
+            // Notify Requestor
+            if (updatedPermit.createdBy) {
+                broadcastNotification(
+                    'تغییر وضعیت مجوز خروج',
+                    `مجوز خروج ${updatedPermit.permitNumber} به وضعیت ${updatedPermit.status} تغییر یافت.`,
+                    '/exit-permits',
+                    null,
+                    [updatedPermit.createdBy]
+                );
+            }
+            // Notify Security if Approved
+            if (updatedPermit.status === 'APPROVED') {
+                broadcastNotification(
+                    'مجوز خروج تایید شده',
+                    `مجوز ${updatedPermit.permitNumber} تایید شد و آماده خروج است.`,
+                    '/security-panel',
+                    ['SECURITY', 'GUARD']
+                );
+            }
+        }
+
+        db.exitPermits[idx] = updatedPermit; 
         saveDb(db); 
         res.json(db.exitPermits); 
     } else res.status(404).send('Not Found'); 
@@ -677,6 +727,10 @@ app.post('/api/login', (req, res) => {
 
         const user = db.users.find(u => u.username === username && u.password === password);
         if (user) { 
+            // Update Last Seen
+            user.lastSeen = new Date().toISOString();
+            saveDb(db);
+
             const { password, ...userWithoutPass } = user; 
             res.json(userWithoutPass); 
         } else { 
@@ -686,6 +740,26 @@ app.post('/api/login', (req, res) => {
         console.error("Login Error:", e);
         res.status(500).json({ error: 'Internal Server Error' });
     }
+});
+
+// HEARTBEAT FOR LAST SEEN
+app.post('/api/heartbeat', (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).send('Missing username');
+    
+    const db = getDb();
+    const user = db.users.find(u => u.username === username);
+    if (user) {
+        user.lastSeen = new Date().toISOString();
+        // We don't save to disk on every heartbeat to avoid IO thrashing, 
+        // just update memory. Disk save happens on other actions or periodic backup.
+        // However, if we want persistence across restarts, we should save periodically.
+        // For now, let's save to memory only, and maybe trigger a debounced save?
+        // Or just save. It's low frequency per user (1 min).
+        // Let's save for accuracy.
+        saveDb(db);
+    }
+    res.json({ success: true });
 });
 
 // 8. CHAT & COMMUNICATION

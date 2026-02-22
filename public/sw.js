@@ -79,12 +79,16 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 1. Check if app is already open
+      // 1. Check if app is already open (Prioritize Standalone Mode)
       for (const client of clientList) {
-        // If url matches base, just focus it
+        const url = new URL(client.url);
+        if (url.pathname === targetUrl || (targetUrl === '/' && url.pathname === '/')) {
+             return client.focus();
+        }
+        // If just the app is open but on a different page, navigate and focus
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
-          if (targetUrl !== '/') client.navigate(targetUrl);
-          return client.focus();
+             if (targetUrl !== '/') client.navigate(targetUrl);
+             return client.focus();
         }
       }
       // 2. If not open, open a new window
