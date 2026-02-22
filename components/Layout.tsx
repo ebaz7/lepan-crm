@@ -388,7 +388,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                               <div className="text-[10px] text-gray-500">{currentUser.fullName}</div>
                           </div>
                       </div>
-                      <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                      <div className="flex items-center gap-2">
+                          <button onClick={handleLogout} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors" title="خروج">
+                              <LogOut size={20}/>
+                          </button>
+                          <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                      </div>
                   </div>
                   
                   {/* Grid Menu */}
@@ -407,14 +412,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                               </button>
                           );
                       })}
-                  </div>
-
-                  {/* Footer Actions */}
-                  <div className="mt-auto p-5 border-t bg-gray-50/50 pb-8">
-                      <button onClick={handleLogout} className="w-full p-4 bg-white border border-red-100 text-red-600 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-sm active:bg-red-50 transition-colors">
-                          <LogOut size={20} />
-                          خروج از حساب کاربری
-                      </button>
                   </div>
               </div>
           </div>

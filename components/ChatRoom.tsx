@@ -36,6 +36,9 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(propDuration || 0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    
+    // Generate random waveform bars (stable per instance)
+    const waveform = useMemo(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 60) + 20), []);
 
     useEffect(() => {
         const absoluteUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
@@ -52,7 +55,6 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
             if (audio.duration && audio.duration !== Infinity) {
                 setProgress((audio.currentTime / audio.duration) * 100);
             } else if (duration > 0) {
-                 // Fallback progress calculation
                  setProgress((audio.currentTime / duration) * 100);
             }
         };
@@ -79,20 +81,30 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     };
 
     return (
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-3 flex-1 px-1">
             <button 
                 onClick={togglePlay}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 shadow-sm ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
             >
-                {playing ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
             </button>
-            <div className="flex-1 h-1 bg-gray-300 rounded-full relative overflow-hidden">
-                <div 
-                    className={`absolute inset-y-0 left-0 transition-all duration-100 ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
-                    style={{ width: `${progress}%` }}
-                />
+            
+            {/* Waveform Visualization */}
+            <div className="flex items-center gap-[2px] h-8 flex-1 mx-2" dir="ltr">
+                {waveform.map((height, i) => {
+                    const barPercent = (i / waveform.length) * 100;
+                    const isPlayed = barPercent <= progress;
+                    return (
+                        <div 
+                            key={i}
+                            className={`w-[3px] rounded-full transition-colors duration-200 ${isPlayed ? (isMe ? 'bg-green-700' : 'bg-blue-700') : (isMe ? 'bg-green-300/50' : 'bg-blue-300/50')}`}
+                            style={{ height: `${height}%` }}
+                        />
+                    );
+                })}
             </div>
-            <span className="text-[10px] text-gray-500 min-w-[30px]">
+
+            <span className="text-[10px] font-mono opacity-80 min-w-[35px] text-right">
                 {playing ? formatTime(audioRef.current?.currentTime || 0) : formatTime(duration)}
             </span>
         </div>
@@ -349,13 +361,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             readBy: []
         };
 
+        // Optimistic UI Update
+        setMessages(prev => [...prev, newMsg]);
+        setInputText('');
+        setReplyingTo(null);
+        setTimeout(scrollToBottom, 50);
+
         try {
             await sendMessage(newMsg);
-            setInputText('');
-            setReplyingTo(null);
             onRefresh();
-            setTimeout(scrollToBottom, 150);
-        } catch (e: any) { console.error("Send Error:", e); }
+        } catch (e: any) { 
+            console.error("Send Error:", e);
+            // Optionally remove message or show error state here
+            alert("خطا در ارسال پیام");
+        }
     };
 
     const getBestMimeType = () => {
@@ -418,35 +437,47 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 reader.readAsDataURL(audioBlob);
                 reader.onloadend = async () => {
                     const base64 = (reader.result || '') as string;
+                    
+                    // Optimistic UI for Voice
+                    const tempId = generateUUID();
+                    const tempUrl = URL.createObjectURL(audioBlob);
+                    
+                    const tempMsg: ChatMessage = {
+                        id: tempId,
+                        sender: currentUser.fullName,
+                        senderUsername: currentUser.username,
+                        role: currentUser.role,
+                        message: '',
+                        timestamp: Date.now(),
+                        recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
+                        groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+                        audioUrl: tempUrl,
+                        audioDuration: durationSec,
+                        readBy: []
+                    };
+                    
+                    setMessages(prev => [...prev, tempMsg]);
+                    setTimeout(scrollToBottom, 50);
+                    setIsUploading(false); // Hide spinner, show message immediately
+                    setIsRecording(false);
+                    audioChunksRef.current = [];
+
                     try {
-                        // Determine extension based on mimeType for better playback compatibility
                         let ext = 'webm';
                         if (finalMime.includes('mp4') || finalMime.includes('aac')) ext = 'm4a';
                         else if (finalMime.includes('ogg')) ext = 'ogg';
 
                         const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
-                        const newMsg: ChatMessage = {
-                            id: generateUUID(),
-                            sender: currentUser.fullName,
-                            senderUsername: currentUser.username,
-                            role: currentUser.role,
-                            message: '',
-                            timestamp: Date.now(),
-                            recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
-                            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
-                            audioUrl: result.url,
-                            audioDuration: durationSec,
-                            readBy: []
-                        };
-                        await sendMessage(newMsg);
+                        
+                        // Update with real URL
+                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: result.url };
+                        await sendMessage(realMsg);
+                        
+                        // Remove temp, add real (or just refresh)
                         onRefresh();
-                        setTimeout(scrollToBottom, 150);
                     } catch (e: any) { 
                         alert('خطا در ارسال ویس'); 
-                    } finally { 
-                        setIsUploading(false); 
-                        setIsRecording(false); 
-                        audioChunksRef.current = []; // Clear buffer
+                        // Revert optimistic update if needed
                     }
                 };
             };

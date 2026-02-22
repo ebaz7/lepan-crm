@@ -124,7 +124,13 @@ const getDb = () => {
         const data = JSON.parse(fileContent);
         // Combine with defaults to ensure structure integrity
         MEMORY_DB_CACHE = { ...defaultDb, ...data };
+        
+        // CRITICAL FIX: Ensure arrays exist even if DB file has null/undefined
+        if (!Array.isArray(MEMORY_DB_CACHE.users)) MEMORY_DB_CACHE.users = [];
+        if (!Array.isArray(MEMORY_DB_CACHE.orders)) MEMORY_DB_CACHE.orders = [];
+        if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
         if (!MEMORY_DB_CACHE.subscriptions) MEMORY_DB_CACHE.subscriptions = [];
+        
         console.log(">>> Database loaded into memory.");
         return MEMORY_DB_CACHE;
 
@@ -659,11 +665,27 @@ app.delete('/api/users/:id', (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    const db = getDb();
-    const user = db.users.find(u => u.username === username && u.password === password);
-    if (user) { const { password, ...userWithoutPass } = user; res.json(userWithoutPass); } 
-    else { res.status(401).json({ error: 'Invalid credentials' }); }
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: 'Missing credentials' });
+
+        const db = getDb();
+        if (!db.users || !Array.isArray(db.users)) {
+            console.error("CRITICAL: Users table missing or invalid", db.users);
+            return res.status(500).json({ error: 'Database integrity error' });
+        }
+
+        const user = db.users.find(u => u.username === username && u.password === password);
+        if (user) { 
+            const { password, ...userWithoutPass } = user; 
+            res.json(userWithoutPass); 
+        } else { 
+            res.status(401).json({ error: 'Invalid credentials' }); 
+        }
+    } catch (e) {
+        console.error("Login Error:", e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 // 8. CHAT & COMMUNICATION
