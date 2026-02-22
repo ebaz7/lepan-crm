@@ -38,7 +38,8 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean }> = ({ url, isMe }) =>
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        const audio = new Audio(url);
+        const absoluteUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+        const audio = new Audio(absoluteUrl);
         audioRef.current = audio;
         
         audio.onloadedmetadata = () => setDuration(audio.duration);
