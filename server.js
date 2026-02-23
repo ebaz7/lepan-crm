@@ -324,6 +324,40 @@ app.post('/api/subscribe', (req, res) => {
     res.status(201).json({});
 });
 
+app.get('/api/next-numbers', (req, res) => {
+    const db = getDb();
+    const company = req.query.company;
+    if (!company) return res.status(400).json({ error: "Company is required" });
+
+    let trackingStart = 1000;
+    let exitStart = 1000;
+    let bijakStart = 1000;
+
+    if (db.settings.activeFiscalYearId) {
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+        if (year && year.companySequences && year.companySequences[company]) {
+            trackingStart = year.companySequences[company].startTrackingNumber || 1000;
+            exitStart = year.companySequences[company].startExitPermitNumber || 1000;
+            bijakStart = year.companySequences[company].startBijakNumber || 1000;
+        }
+    } else {
+        if (db.settings.warehouseSequences && db.settings.warehouseSequences[company]) { 
+            bijakStart = db.settings.warehouseSequences[company]; 
+        }
+    }
+
+    const nextTracking = findNextGapNumber(db.orders, company, 'trackingNumber', trackingStart);
+    const nextExit = findNextGapNumber(db.exitPermits, company, 'permitNumber', exitStart);
+    const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
+    const nextBijak = findNextGapNumber(outTxs, company, 'number', bijakStart);
+
+    res.json({
+        trackingNumber: nextTracking,
+        exitPermitNumber: nextExit,
+        bijakNumber: nextBijak
+    });
+});
+
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;

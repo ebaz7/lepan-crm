@@ -17,7 +17,7 @@ import PrintVoucher from './components/PrintVoucher';
 import NotificationController from './components/NotificationController'; 
 import { getOrders, getSettings, getMessages, getAppData } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
-import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
+import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, ExitPermit, WarehouseTransaction } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
 import { apiCall, getLocalData, LS_KEYS } from './services/apiService'; 
@@ -30,6 +30,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
+  const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
+  const [warehouseTransactions, setWarehouseTransactions] = useState<WarehouseTransaction[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [loading, setLoading] = useState(false);
@@ -174,6 +176,8 @@ function App() {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
         const cachedSettings = getLocalData<SystemSettings>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 } as any);
         const cachedMessages = getLocalData<ChatMessage[]>(LS_KEYS.CHAT, []); 
+        const cachedExits = getLocalData<ExitPermit[]>(LS_KEYS.WH_ITEMS, []); // Reusing key or adding new
+        const cachedTxs = getLocalData<WarehouseTransaction[]>(LS_KEYS.WH_TX, []);
         
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) setSettings(cachedSettings);
@@ -181,6 +185,8 @@ function App() {
             setChatMessages(cachedMessages);
             if (cachedMessages.length > 0) lastChatMsgIdRef.current = cachedMessages[cachedMessages.length - 1].id;
         }
+        if (cachedExits.length > 0) setExitPermits(cachedExits);
+        if (cachedTxs.length > 0) setWarehouseTransactions(cachedTxs);
     }
 
     if (!silent && orders.length === 0) setLoading(true);
@@ -204,6 +210,8 @@ function App() {
 
         const ordersData = data.orders;
         const messagesData = data.messages;
+        const exitPermitsData = data.exitPermits;
+        const warehouseTransactionsData = data.warehouseTransactions;
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
         const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
@@ -213,13 +221,19 @@ function App() {
         })) : [];
 
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
+        const safeExits = Array.isArray(exitPermitsData) ? exitPermitsData : [];
+        const safeTxs = Array.isArray(warehouseTransactionsData) ? warehouseTransactionsData : [];
         
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
+        setExitPermits(safeExits);
+        setWarehouseTransactions(safeTxs);
         
         // Cache for offline/fast load
         localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(safeOrders));
         localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(safeMessages));
+        localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(safeExits)); // Using WH_ITEMS key for exits for now
+        localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(safeTxs));
 
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);
@@ -382,12 +396,25 @@ function App() {
                 </div> 
             ) : (
                 <>
-                    {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} />}
+                    {activeTab === 'dashboard' && (
+                        <Dashboard 
+                            orders={orders} 
+                            exitPermitsProp={exitPermits}
+                            warehouseTxsProp={warehouseTransactions}
+                            settings={settings} 
+                            currentUser={currentUser} 
+                            onViewArchive={handleViewArchive} 
+                            onFilterByStatus={handleDashboardFilter} 
+                            onGoToPaymentApprovals={handleGoToPaymentApprovals} 
+                            onGoToExitApprovals={handleGoToExitApprovals} 
+                            onGoToBijakApprovals={handleGoToWarehouseApprovals} 
+                        />
+                    )}
                     {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                     {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} />}
                     {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} />}
-                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} />}
+                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} permitsProp={exitPermits} refreshData={() => loadData(true)} />}
+                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} transactionsProp={warehouseTransactions} refreshData={() => loadData(true)} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings />}

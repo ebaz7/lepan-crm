@@ -90,6 +90,10 @@ export const getAppData = async (): Promise<{
     return await apiCall('/app-data');
 };
 
+export const getNextNumbers = async (company: string) => {
+    return apiCall<{ trackingNumber: number, exitPermitNumber: number, bijakNumber: number }>(`/next-numbers?company=${encodeURIComponent(company)}&t=${Date.now()}`);
+};
+
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
     try { 

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole, SystemSettings } from '../types';
-import { saveExitPermit, getSettings } from '../services/storageService';
+import { saveExitPermit, getSettings, getNextNumbers } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
@@ -52,9 +52,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User, set
     const fetchNextNumber = (company?: string) => {
         if (!company) return;
         // Ensure API call is correct
-        apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
+        getNextNumbers(company)
             .then(res => {
-                if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
+                if (res && res.exitPermitNumber) setPermitNumber(res.exitPermitNumber.toString());
                 else setPermitNumber('1001');
             })
             .catch((e) => {

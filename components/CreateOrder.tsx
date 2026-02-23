@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PaymentMethod, OrderStatus, PaymentOrder, PaymentDetail, SystemSettings, UserRole, CompanyBank } from '../types';
-import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings } from '../services/storageService';
+import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings, getNextNumbers } from '../services/storageService';
 import { enhanceDescription } from '../services/geminiService';
 import { apiCall } from '../services/apiService';
 import { jalaliToGregorian, getCurrentShamsiDate, formatCurrency, generateUUID, normalizeInputNumber, formatNumberString, deformatNumberString, formatDate } from '../constants';
@@ -72,11 +72,15 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser, setti
 
   // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
   const fetchNextNumber = (company?: string) => {
+    if (!company) return;
     setLoadingNum(true);
-    getNextTrackingNumber(company)
-        .then(num => {
-            const validNum = (num && num > 0) ? num : 1001;
-            setTrackingNumber(validNum.toString());
+    getNextNumbers(company)
+        .then(res => {
+            if (res && res.trackingNumber) {
+                setTrackingNumber(res.trackingNumber.toString());
+            } else {
+                setTrackingNumber('1001');
+            }
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
