@@ -77,15 +77,9 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
 
         const response = await fetch(finalUrl, {
             method,
-            headers: { 
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: body ? JSON.stringify(body) : undefined,
-            signal: controller.signal,
-            cache: 'no-store'
+            signal: controller.signal
         });
         clearTimeout(timeoutId);
 

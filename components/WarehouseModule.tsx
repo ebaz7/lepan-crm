@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
-import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem, getNextNumbers } from '../services/storageService';
+import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
 import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar } from 'lucide-react';
 import PrintBijak from './PrintBijak';
@@ -15,8 +15,6 @@ interface Props {
     currentUser: User; 
     settings?: SystemSettings; 
     initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals';
-    transactionsProp?: WarehouseTransaction[];
-    refreshData?: () => void;
 }
 
 // Internal Edit Modal Component
@@ -96,12 +94,12 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
     );
 };
 
-const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 'dashboard', transactionsProp, refreshData }) => {
+const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 'dashboard' }) => {
     const isMobile = useIsMobile();
-    const [loadingData, setLoadingData] = useState(!transactionsProp);
+    const [loadingData, setLoadingData] = useState(true);
     const [activeTab, setActiveTab] = useState(initialTab);
     const [items, setItems] = useState<WarehouseItem[]>([]);
-    const [transactions, setTransactions] = useState<WarehouseTransaction[]>(transactionsProp || []);
+    const [transactions, setTransactions] = useState<WarehouseTransaction[]>([]);
     
     // New Item State
     const [newItemName, setNewItemName] = useState('');
@@ -142,21 +140,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [editedBijakForAutoSend, setEditedBijakForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [deletedTxForAutoSend, setDeletedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
 
-    useEffect(() => { 
-        if (!transactionsProp) loadData(); 
-        else {
-            setTransactions(transactionsProp);
-            // We still need to load items since they are not in transactionsProp
-            loadItemsOnly();
-        }
-    }, [transactionsProp]);
-
-    const loadItemsOnly = async () => {
-        try {
-            const i = await getWarehouseItems();
-            setItems(Array.isArray(i) ? i : []);
-        } catch(e) { console.error(e); }
-    };
+    useEffect(() => { loadData(); }, []);
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
     
     // Trigger update on company change
@@ -167,10 +151,6 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     }, [selectedCompany, activeTab]);
 
     const loadData = async () => { 
-        if (refreshData) {
-            refreshData();
-            return;
-        }
         setLoadingData(true); 
         try { 
             const [i, t] = await Promise.all([getWarehouseItems(), getWarehouseTransactions()]); 
@@ -189,10 +169,10 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         if(selectedCompany) { 
             setLoadingBijakNum(true);
             try {
-                // FORCE REFRESH: Use combined endpoint
-                const res = await getNextNumbers(selectedCompany);
-                if (res && res.bijakNumber) {
-                    setNextBijakNum(res.bijakNumber);
+                // FORCE REFRESH: Use apiCall with company param
+                const response = await apiCall<{ nextNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(selectedCompany)}&t=${Date.now()}`);
+                if (response && response.nextNumber) {
+                    setNextBijakNum(response.nextNumber);
                 }
             } catch(e) {
                 console.error("Bijak Num Error", e);

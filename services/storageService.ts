@@ -79,21 +79,6 @@ export const deleteSecurityIncident = async (id: string): Promise<SecurityIncide
 export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
 
-export const getAppData = async (): Promise<{
-    settings: SystemSettings,
-    orders: PaymentOrder[],
-    messages: ChatMessage[],
-    exitPermits: ExitPermit[],
-    warehouseTransactions: WarehouseTransaction[],
-    users: User[]
-}> => {
-    return await apiCall('/app-data');
-};
-
-export const getNextNumbers = async (company: string) => {
-    return apiCall<{ trackingNumber: number, exitPermitNumber: number, bijakNumber: number }>(`/next-numbers?company=${encodeURIComponent(company)}&t=${Date.now()}`);
-};
-
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
     try { 

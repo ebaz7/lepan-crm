@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PaymentMethod, OrderStatus, PaymentOrder, PaymentDetail, SystemSettings, UserRole, CompanyBank } from '../types';
-import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings, getNextNumbers } from '../services/storageService';
+import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings } from '../services/storageService';
 import { enhanceDescription } from '../services/geminiService';
 import { apiCall } from '../services/apiService';
 import { jalaliToGregorian, getCurrentShamsiDate, formatCurrency, generateUUID, normalizeInputNumber, formatNumberString, deformatNumberString, formatDate } from '../constants';
@@ -11,12 +11,11 @@ import { getUsers } from '../services/authService';
 interface CreateOrderProps {
   onSuccess: () => void;
   currentUser: any;
-  settings?: SystemSettings;
 }
 
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser, settings: initialSettings }) => {
+const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => {
   const currentShamsi = getCurrentShamsiDate();
   const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
   const [formData, setFormData] = useState({ payee: '', description: '', });
@@ -64,7 +63,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser, setti
   const [analysisResult, setAnalysisResult] = useState<{score: number, recommendation: string, reasons: string[]} | null>(null);
   const [uploading, setUploading] = useState(false);
   
-  const [settings, setSettings] = useState<SystemSettings | null>(initialSettings || null);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   const [showAddBankModal, setShowAddBankModal] = useState(false);
   const [newBankName, setNewBankName] = useState('');
@@ -72,57 +71,43 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser, setti
 
   // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
   const fetchNextNumber = (company?: string) => {
-    if (!company) return;
+    // Reset to a temporary loader state if needed, but keeping old value is often better UX.
+    // However, to indicate change:
     setLoadingNum(true);
-    getNextNumbers(company)
-        .then(res => {
-            if (res && res.trackingNumber) {
-                setTrackingNumber(res.trackingNumber.toString());
-            } else {
-                setTrackingNumber('1001');
-            }
+    
+    getNextTrackingNumber(company)
+        .then(num => {
+            // FORCE A NUMBER. If API returns 0 or null, use 1001.
+            const validNum = (num && num > 0) ? num : 1001;
+            setTrackingNumber(validNum.toString());
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
+            // Fallback on error
             setTrackingNumber('1001');
         })
         .finally(() => setLoadingNum(false));
   };
 
   useEffect(() => {
-      // If settings are passed as prop, use them immediately
-      if (initialSettings) {
-          setSettings(initialSettings);
-          const names = initialSettings.companies?.map(c => c.name) || initialSettings.companyNames || [];
+      // 1. Fetch IMMEDIATELY (Global Sequence) to ensure field is never empty
+      fetchNextNumber();
+
+      // 2. Then load settings and refine if default company exists
+      getSettings().then((s) => {
+          setSettings(s);
+          const names = s.companies?.map(c => c.name) || s.companyNames || [];
           setAvailableCompanies(names);
           
-          let defCompany = initialSettings.defaultCompany || '';
-          if (names.length > 0 && !defCompany) defCompany = names[0];
-          
+          const defCompany = s.defaultCompany || '';
           if (defCompany) {
               setPayingCompany(defCompany);
-              updateBanksForCompany(defCompany, initialSettings);
+              updateBanksForCompany(defCompany, s);
+              // 3. Re-fetch for specific company sequence if needed
               fetchNextNumber(defCompany);
-          } else {
-              fetchNextNumber();
           }
-      } else {
-          // Fallback if not passed
-          fetchNextNumber();
-          getSettings().then((s) => {
-              setSettings(s);
-              const names = s.companies?.map(c => c.name) || s.companyNames || [];
-              setAvailableCompanies(names);
-              
-              const defCompany = s.defaultCompany || '';
-              if (defCompany) {
-                  setPayingCompany(defCompany);
-                  updateBanksForCompany(defCompany, s);
-                  fetchNextNumber(defCompany);
-              }
-          });
-      }
-  }, [initialSettings]);
+      });
+  }, []);
 
   const updateBanksForCompany = (companyName: string, currentSettings: SystemSettings) => {
       const company = currentSettings.companies?.find(c => c.name === companyName);
