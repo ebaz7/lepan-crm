@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
+import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole, SystemSettings } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
@@ -8,7 +8,7 @@ import { getUsers } from '../services/authService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 
-const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
+const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User, settings?: SystemSettings }> = ({ onSuccess, currentUser, settings: initialSettings }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [permitNumber, setPermitNumber] = useState('');
     const [selectedCompany, setSelectedCompany] = useState('');
@@ -25,15 +25,29 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     useEffect(() => {
-        getSettings().then(s => {
-            const names = s.companies?.map(c => c.name) || s.companyNames || [];
+        if (initialSettings) {
+            const names = initialSettings.companies?.map(c => c.name) || initialSettings.companyNames || [];
             setAvailableCompanies(names);
-            if (s.defaultCompany) {
-                setSelectedCompany(s.defaultCompany);
-                fetchNextNumber(s.defaultCompany);
+            
+            let defCompany = initialSettings.defaultCompany || '';
+            if (names.length > 0 && !defCompany) defCompany = names[0];
+            
+            if (defCompany) {
+                setSelectedCompany(defCompany);
+                fetchNextNumber(defCompany);
             }
-        });
-    }, []);
+        } else {
+            getSettings().then(s => {
+                const names = s.companies?.map(c => c.name) || s.companyNames || [];
+                setAvailableCompanies(names);
+                const defCompany = s.defaultCompany || '';
+                if (defCompany) {
+                    setSelectedCompany(defCompany);
+                    fetchNextNumber(defCompany);
+                }
+            });
+        }
+    }, [initialSettings]);
 
     const fetchNextNumber = (company?: string) => {
         if (!company) return;

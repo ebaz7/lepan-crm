@@ -15,7 +15,7 @@ import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
-import { getOrders, getSettings, getMessages } from './services/storageService'; 
+import { getOrders, getSettings, getMessages, getAppData } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
@@ -169,6 +169,7 @@ function App() {
   const loadData = async (silent = false) => {
     if (!currentUser) return;
     
+    // 1. Initial Load from Cache (Instant UI)
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
         const cachedSettings = getLocalData<SystemSettings>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 } as any);
@@ -185,21 +186,24 @@ function App() {
     if (!silent && orders.length === 0) setLoading(true);
 
     try {
-        // --- OPTIMIZATION: LOAD SETTINGS SEPARATELY FIRST ---
-        // This ensures the UI renders correctly (permissions etc.) even if heavy data lags
-        getSettings().then(settingsData => {
-            if (settingsData) {
-                // Sanitize settings arrays just in case
-                if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
-                if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
-                if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
-                if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
-                setSettings(settingsData);
-            }
-        }).catch(err => console.error("Settings load error", err));
+        // --- OPTIMIZED BULK LOAD ---
+        // We fetch everything in ONE request to minimize CDN round-trips as requested.
+        const data = await getAppData();
+        
+        if (data.settings) {
+            const settingsData = data.settings;
+            // Sanitize settings arrays
+            if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
+            if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
+            if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
+            if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
+            setSettings(settingsData);
+            // Cache settings for next time
+            localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(settingsData));
+        }
 
-        // Load Heavy Data in Parallel
-        const [ordersData, messagesData] = await Promise.all([getOrders(), getMessages()]);
+        const ordersData = data.orders;
+        const messagesData = data.messages;
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
         const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
@@ -213,6 +217,10 @@ function App() {
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
         
+        // Cache for offline/fast load
+        localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(safeOrders));
+        localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(safeMessages));
+
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);
         
@@ -296,8 +304,8 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          // INCREASED INTERVAL TO 20 SECONDS TO REDUCE SERVER LOAD
-          const intervalId = setInterval(() => loadData(true), 20000); 
+          // REDUCED INTERVAL TO 10 SECONDS FOR FASTER RECORD UPDATES AS REQUESTED
+          const intervalId = setInterval(() => loadData(true), 10000); 
           
           // Heartbeat for Last Seen (Every 1 minute)
           const heartbeatId = setInterval(() => {

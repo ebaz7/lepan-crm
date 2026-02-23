@@ -10,6 +10,7 @@ import cron from 'node-cron';
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import webpush from 'web-push';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -234,35 +235,65 @@ const checkForDuplicate = (list, numField, numValue, companyField, companyValue,
 };
 
 // --- NOTIFICATION HELPER ---
+const sendTelegramNotification = async (botToken, chatId, message) => {
+    if (!botToken || !chatId) return;
+    try {
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        await axios.post(url, { chat_id: chatId, text: message, parse_mode: 'Markdown' });
+    } catch (e) { console.error("Telegram Notification Error:", e.response?.data || e.message); }
+};
+
+const sendBaleNotification = async (botToken, chatId, message) => {
+    if (!botToken || !chatId) return;
+    try {
+        const url = `https://tapi.bale.ai/bot${botToken}/sendMessage`;
+        await axios.post(url, { chat_id: chatId, text: message });
+    } catch (e) { console.error("Bale Notification Error:", e.response?.data || e.message); }
+};
+
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
+    const settings = db.settings || {};
     
     console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
 
     const payload = JSON.stringify({ title, body, url });
+    const fullMessage = `🔔 *${title}*\n\n${body}\n\n🔗 [مشاهده در سامانه](${process.env.APP_URL || ''}${url})`;
 
+    // 1. Web Push
     const sendPromises = subs.filter(sub => {
         if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
         if (targetRoles && !targetRoles.includes(sub.role)) return false;
         return true;
     }).map(sub => {
-        if (sub.type === 'android') {
-            // Native Android handled via FCM (if configured) or we can use a proxy
-            // For now, we assume WebPush works for PWA and we'd need FCM key for Native
-            return Promise.resolve();
-        }
         return webpush.sendNotification(sub, payload).catch(err => {
             if (err.statusCode === 404 || err.statusCode === 410) {
-                console.log(`Removing expired subscription for ${sub.username}`);
                 const db = getDb();
                 db.subscriptions = db.subscriptions.filter(s => s.endpoint !== sub.endpoint);
                 saveDb(db);
-            } else {
-                console.error("Push error:", err);
             }
         });
     });
+
+    // 2. Telegram & Bale (Individual)
+    if (targetUsernames) {
+        targetUsernames.forEach(username => {
+            const user = db.users.find(u => u.username === username);
+            if (user) {
+                if (user.telegramChatId) sendTelegramNotification(settings.telegramBotToken, user.telegramChatId, fullMessage);
+                if (user.baleChatId) sendBaleNotification(settings.baleBotToken, user.baleChatId, fullMessage);
+            }
+        });
+    }
+
+    // 3. Telegram & Bale (Role-based)
+    if (targetRoles) {
+        db.users.filter(u => targetRoles.includes(u.role)).forEach(user => {
+            if (user.telegramChatId) sendTelegramNotification(settings.telegramBotToken, user.telegramChatId, fullMessage);
+            if (user.baleChatId) sendBaleNotification(settings.baleBotToken, user.baleChatId, fullMessage);
+        });
+    }
 
     await Promise.all(sendPromises);
 };
@@ -680,6 +711,18 @@ app.delete('/api/security/incidents/:id', (req, res) => {
 });
 
 // 7. SYSTEM (Settings, Users, Login)
+app.get('/api/app-data', (req, res) => {
+    const db = getDb();
+    res.json({
+        settings: db.settings || {},
+        orders: db.orders || [],
+        messages: db.messages || [],
+        exitPermits: db.exitPermits || [],
+        warehouseTransactions: db.warehouseTransactions || [],
+        users: (db.users || []).map(u => { const { password, ...rest } = u; return rest; })
+    });
+});
+
 app.get('/api/settings', (req, res) => {
     res.json(getDb().settings);
 });
