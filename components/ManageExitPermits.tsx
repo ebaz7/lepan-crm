@@ -14,10 +14,10 @@ import WarehouseFinalizeModal from './WarehouseFinalizeModal';
 import EditExitPermitModal from './EditExitPermitModal';
 import useIsMobile from '../hooks/useIsMobile';
 
-const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any, permitsProp?: ExitPermit[], refreshData?: () => void }> = ({ currentUser, settings, statusFilter, permitsProp, refreshData }) => {
+const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any }> = ({ currentUser, settings, statusFilter }) => {
     const isMobile = useIsMobile();
-    const [permits, setPermits] = useState<ExitPermit[]>(permitsProp || []);
-    const [loading, setLoading] = useState(!permitsProp);
+    const [permits, setPermits] = useState<ExitPermit[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
@@ -26,13 +26,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [autoSendPermit, setAutoSendPermit] = useState<ExitPermit | null>(null);
 
-    useEffect(() => { 
-        if (!permitsProp) loadData(); 
-        else {
-            setPermits(permitsProp.sort((a, b) => b.createdAt - a.createdAt));
-            setLoading(false);
-        }
-    }, [permitsProp]);
+    useEffect(() => { loadData(); }, []);
     
     useEffect(() => {
         if (statusFilter) {
@@ -41,10 +35,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     }, [statusFilter]);
 
     const loadData = async () => {
-        if (refreshData) {
-            refreshData();
-            return;
-        }
         setLoading(true);
         try {
             const data = await getExitPermits();
@@ -93,9 +83,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         else source = archivePermits;
 
         return source.filter(p => 
-            p.permitNumber.toString().includes(searchTerm) || 
-            p.recipientName?.includes(searchTerm) || 
-            p.goodsName?.includes(searchTerm)
+            (p.permitNumber?.toString() || '').includes(searchTerm) || 
+            (p.recipientName || '').includes(searchTerm) || 
+            (p.goodsName || '').includes(searchTerm)
         );
     };
 
