@@ -1459,7 +1459,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     ))
                 ) : (
                     safeRecords
-                        .filter(r => (showArchived ? r.isArchived : !r.isArchived) && (r.company === selectedCompany) && (r.commodityGroup === selectedGroup) && (r.goodsName.includes(searchTerm) || r.fileNumber.includes(searchTerm)))
+                        .filter(r => (showArchived ? r.isArchived : !r.isArchived) && (r.company === selectedCompany) && (r.commodityGroup === selectedGroup) && ((r.goodsName || '').includes(searchTerm) || (r.fileNumber || '').includes(searchTerm)))
                         .map(record => (
                             <div key={record.id} onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500 relative">
                                 {/* DELETE BUTTON ADDED HERE - Moved to Right to avoid status overlap */}

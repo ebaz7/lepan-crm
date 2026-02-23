@@ -41,7 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, exitPermitsProp, warehous
   }, [warehouseTxsProp]);
 
   // Permission Check
-  const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canViewPaymentOrders: false };
+  const permissions = getRolePermissions(currentUser.role, settings, currentUser);
   const hasPaymentAccess = permissions.canViewPaymentOrders === true;
   const hasExitAccess = permissions.canViewExitPermits === true;
   const hasWarehouseAccess = permissions.canManageWarehouse === true || permissions.canApproveBijak === true;
