@@ -20,6 +20,9 @@ interface ManageOrdersProps {
 }
 
 const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, currentUser, initialTab = 'current', settings, statusFilter }) => {
+  // Restored Payment Records Component
+  if (!currentUser) return <div className="p-10 text-center text-red-500">Error: User not authenticated</div>;
+
   // CRITICAL FIX: Ensure orders is always an array to prevent "filter is not a function"
   const safeOrders = Array.isArray(orders) ? orders : [];
 
