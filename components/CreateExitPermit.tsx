@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
-import { saveExitPermit, getSettings } from '../services/storageService';
+import { saveExitPermit, getSettings, getInitFormData } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
@@ -24,23 +24,37 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
+    const [nextNumbersCache, setNextNumbersCache] = useState<Record<string, number>>({});
+
     useEffect(() => {
-        getSettings().then(s => {
-            const names = s.companies?.map(c => c.name) || s.companyNames || [];
+        getInitFormData().then(data => {
+            const s = data.settings;
+            setNextNumbersCache(data.nextExitPermitNumbers);
+            const names = s.companies?.map((c: any) => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
             if (s.defaultCompany) {
                 setSelectedCompany(s.defaultCompany);
-                fetchNextNumber(s.defaultCompany);
+                fetchNextNumber(s.defaultCompany, data.nextExitPermitNumbers);
             }
+        }).catch(err => {
+            console.error("Init Data Error", err);
         });
     }, []);
 
-    const fetchNextNumber = (company?: string) => {
+    const fetchNextNumber = (company?: string, cache?: Record<string, number>, forceRefresh: boolean = false) => {
         if (!company) return;
-        // Ensure API call is correct
+        const cacheToUse = cache || nextNumbersCache;
+        if (!forceRefresh && cacheToUse && cacheToUse[company] !== undefined) {
+            setPermitNumber(cacheToUse[company].toString());
+            return;
+        }
+        
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
-                if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
+                if (res && res.nextNumber) {
+                    setPermitNumber(res.nextNumber.toString());
+                    setNextNumbersCache(prev => ({...prev, [company]: res.nextNumber}));
+                }
                 else setPermitNumber('1001');
             })
             .catch((e) => {
@@ -130,7 +144,13 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
         } catch (e: any) {
             console.error("Submit Error:", e);
-            alert(`خطا در ثبت حواله: ${e.message || 'Server Error'}`);
+            const msg = e.message || 'Server Error';
+            if (msg.includes("409") || msg.includes("Duplicate") || msg.includes("تکراری")) {
+                alert(`⚠️ شماره حواله ${permitNumber} تکراری است. سیستم به صورت خودکار شماره جدیدی دریافت می‌کند.`);
+                fetchNextNumber(selectedCompany, undefined, true);
+            } else {
+                alert(`خطا در ثبت حواله: ${msg}`);
+            }
             setIsSubmitting(false);
         }
     };
@@ -176,9 +196,18 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
-                        <div>
+                        <div className="relative">
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">شماره حواله</label>
-                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} placeholder="0000" />
+                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none pr-10" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} placeholder="0000" />
+                            <button 
+                                type="button"
+                                onClick={() => fetchNextNumber(selectedCompany, undefined, true)} 
+                                disabled={loadingNum}
+                                className="absolute right-2 top-[34px] p-1.5 bg-white rounded-full text-teal-500 hover:bg-teal-50 transition-colors"
+                                title="بروزرسانی شماره از سرور"
+                            >
+                                <RefreshCcw size={16} className={loadingNum ? 'animate-spin' : ''}/>
+                            </button>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">تاریخ صدور</label>

@@ -33,6 +33,15 @@ const callApi = (method, data, isMultipart = false) => {
     });
 };
 
+export const sendBaleMessage = async (chatId, text) => {
+    if (!botToken || !chatId) return;
+    try {
+        await callApi('sendMessage', { chat_id: chatId, text: text });
+    } catch (e) {
+        console.error("Bale Send Msg Err:", e.message);
+    }
+};
+
 export const initBaleBot = (token) => {
     if (!token) return;
     botToken = token;

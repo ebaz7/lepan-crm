@@ -9,6 +9,8 @@ import { getExitPermits, getWarehouseTransactions } from '../services/storageSer
 
 interface DashboardProps {
   orders: PaymentOrder[];
+  exitPermitsProp?: ExitPermit[];
+  warehouseTxsProp?: WarehouseTransaction[];
   settings?: SystemSettings;
   currentUser: User;
   onViewArchive?: () => void;
@@ -21,22 +23,34 @@ interface DashboardProps {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders, exitPermitsProp, warehouseTxsProp, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals }) => {
   const [showBankReport, setShowBankReport] = useState(false);
   const [bankReportTab, setBankReportTab] = useState<'summary' | 'timeline'>('summary');
   
   // Data for additional counts
-  const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
-  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>([]);
+  const [exitPermits, setExitPermits] = useState<ExitPermit[]>(exitPermitsProp || []);
+  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>(warehouseTxsProp || []);
+
+  // Sync with props
+  useEffect(() => {
+      if (exitPermitsProp) setExitPermits(exitPermitsProp);
+  }, [exitPermitsProp]);
+
+  useEffect(() => {
+      if (warehouseTxsProp) setWarehouseTxs(warehouseTxsProp);
+  }, [warehouseTxsProp]);
 
   // Permission Check
-  const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canViewPaymentOrders: false };
+  const permissions = getRolePermissions(currentUser.role, settings, currentUser);
   const hasPaymentAccess = permissions.canViewPaymentOrders === true;
   const hasExitAccess = permissions.canViewExitPermits === true;
   const hasWarehouseAccess = permissions.canManageWarehouse === true || permissions.canApproveBijak === true;
 
   useEffect(() => {
       const fetchData = async () => {
+          // If props are provided, we don't need to fetch
+          if (exitPermitsProp && warehouseTxsProp) return;
+
           try {
               // Only fetch if has access to avoid unnecessary calls (though data might be preloaded in App.tsx)
               if (hasExitAccess || hasWarehouseAccess) {
@@ -51,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, on
           }
       };
       fetchData();
-  }, [hasExitAccess, hasWarehouseAccess]);
+  }, [hasExitAccess, hasWarehouseAccess, exitPermitsProp, warehouseTxsProp]);
 
 
   // --- CALC PENDING COUNTS FOR ACTION CARDS ---

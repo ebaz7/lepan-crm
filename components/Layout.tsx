@@ -230,7 +230,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
 
   const unreadCount = notifications.filter(n => !n.read).length;
   // Calculate Permissions
-  const perms = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canCreatePaymentOrder: false, canViewPaymentOrders: false };
+  const perms = getRolePermissions(currentUser.role, settings, currentUser);
   
   // Specific Access Flags
   const canCreatePayment = perms.canCreatePaymentOrder === true;

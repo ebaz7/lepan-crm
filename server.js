@@ -237,6 +237,7 @@ const checkForDuplicate = (list, numField, numValue, companyField, companyValue,
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
+    const users = db.users || [];
     
     console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
 
@@ -248,8 +249,6 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
         return true;
     }).map(sub => {
         if (sub.type === 'android') {
-            // Native Android handled via FCM (if configured) or we can use a proxy
-            // For now, we assume WebPush works for PWA and we'd need FCM key for Native
             return Promise.resolve();
         }
         return webpush.sendNotification(sub, payload).catch(err => {
@@ -262,6 +261,34 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                 console.error("Push error:", err);
             }
         });
+    });
+
+    // Send to Telegram and Bale
+    const targetUsers = users.filter(u => {
+        if (targetUsernames && !targetUsernames.includes(u.username)) return false;
+        if (targetRoles && !targetRoles.includes(u.role)) return false;
+        return true;
+    });
+
+    const botMessage = `🔔 ${title}\n\n${body}`;
+
+    targetUsers.forEach(async (u) => {
+        if (u.telegramChatId) {
+            try {
+                const tgModule = await safeImport('./backend/telegram.js');
+                if (tgModule && tgModule.sendTelegramMessage) {
+                    await tgModule.sendTelegramMessage(u.telegramChatId, botMessage);
+                }
+            } catch (e) { console.error("TG Notify Err:", e); }
+        }
+        if (u.baleChatId) {
+            try {
+                const baleModule = await safeImport('./backend/bale.js');
+                if (baleModule && baleModule.sendBaleMessage) {
+                    await baleModule.sendBaleMessage(u.baleChatId, botMessage);
+                }
+            } catch (e) { console.error("Bale Notify Err:", e); }
+        }
     });
 
     await Promise.all(sendPromises);
@@ -291,6 +318,58 @@ app.post('/api/subscribe', (req, res) => {
         saveDb(db);
     }
     res.status(201).json({});
+});
+
+app.get('/api/init-form-data', (req, res) => {
+    const db = getDb();
+    const settings = db.settings || {};
+    const companies = settings.companies?.map(c => c.name) || settings.companyNames || [];
+    
+    const nextTrackingNumbers = {};
+    const nextExitPermitNumbers = {};
+    const nextBijakNumbers = {};
+    
+    const activeYear = (settings.fiscalYears || []).find(y => y.id === settings.activeFiscalYearId);
+    const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
+    
+    companies.forEach(company => {
+        // Tracking Number
+        let minTracking = 1000;
+        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
+            minTracking = activeYear.companySequences[company].startTrackingNumber || 1000;
+        }
+        nextTrackingNumbers[company] = findNextGapNumber(db.orders, company, 'trackingNumber', minTracking);
+        
+        // Exit Permit Number
+        let minExit = 1000;
+        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
+            minExit = activeYear.companySequences[company].startExitPermitNumber || 1000;
+        }
+        nextExitPermitNumbers[company] = findNextGapNumber(db.exitPermits, company, 'permitNumber', minExit);
+        
+        // Bijak Number
+        let minBijak = 1000;
+        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
+            minBijak = activeYear.companySequences[company].startBijakNumber || 1000;
+        } else if (settings.warehouseSequences && settings.warehouseSequences[company]) {
+            minBijak = settings.warehouseSequences[company];
+        }
+        nextBijakNumbers[company] = findNextGapNumber(outTxs, company, 'number', minBijak);
+    });
+    
+    // Also calculate for empty company (global)
+    nextTrackingNumbers[''] = findNextGapNumber(db.orders, '', 'trackingNumber', 1000);
+    nextExitPermitNumbers[''] = findNextGapNumber(db.exitPermits, '', 'permitNumber', 1000);
+    nextBijakNumbers[''] = findNextGapNumber(outTxs, '', 'number', 1000);
+
+    // Cache control for 5 minutes (user requested longer cache)
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({
+        settings,
+        nextTrackingNumbers,
+        nextExitPermitNumbers,
+        nextBijakNumbers
+    });
 });
 
 app.get('/api/next-tracking-number', (req, res) => {
