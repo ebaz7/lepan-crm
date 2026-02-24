@@ -511,10 +511,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         if (finalMime.includes('mp4') || finalMime.includes('aac')) ext = 'm4a';
                         else if (finalMime.includes('ogg')) ext = 'ogg';
 
-                        const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
+                        const fileName = `voice_${Date.now()}.${ext}`;
+                        const result = await uploadFile(fileName, base64);
                         
                         // Update with real URL
-                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: result.url };
+                        // CRITICAL FIX: Ensure URL is absolute or correctly relative
+                        const audioUrl = result.url.startsWith('http') ? result.url : result.url;
+                        
+                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: audioUrl, attachment: { fileName, url: audioUrl } };
                         await sendMessage(realMsg);
                         
                         // Remove temp, add real (or just refresh)

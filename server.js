@@ -951,8 +951,13 @@ app.post('/api/upload', (req, res) => {
     const base64Data = fileData.replace(/^data:([A-Za-z-+/]+);base64,/, '');
     const uniqueName = `${Date.now()}_${fileName}`;
     const filePath = path.join(UPLOADS_DIR, uniqueName);
+    
     fs.writeFile(filePath, base64Data, 'base64', (err) => {
-        if (err) return res.status(500).send('Upload failed');
+        if (err) {
+            console.error("Upload Write Error:", err);
+            return res.status(500).send('Upload failed');
+        }
+        // Return relative URL that works with the static middleware
         res.json({ fileName, url: `/uploads/${uniqueName}` });
     });
 });
