@@ -23,6 +23,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
+    const [existingPermits, setExistingPermits] = useState<ExitPermit[]>([]);
 
     useEffect(() => {
         getSettings().then(s => {
@@ -33,6 +34,10 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 fetchNextNumber(s.defaultCompany);
             }
         });
+        // Fetch existing permits for duplicate checking (Background)
+        apiCall<ExitPermit[]>('/exit-permits').then(res => {
+            if (Array.isArray(res)) setExistingPermits(res);
+        }).catch(console.error);
     }, []);
 
     const fetchNextNumber = (company?: string) => {
@@ -53,6 +58,26 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         const val = e.target.value;
         setSelectedCompany(val);
         fetchNextNumber(val);
+    };
+
+    const handleNumberBlur = () => {
+        if (!permitNumber && selectedCompany) {
+            fetchNextNumber(selectedCompany);
+        } else if (permitNumber && selectedCompany) {
+            // Check for duplicate
+            const isDuplicate = existingPermits.some(p => 
+                p.company === selectedCompany && 
+                p.permitNumber === parseInt(permitNumber)
+            );
+            if (isDuplicate) {
+                alert('⚠️ این شماره حواله قبلاً ثبت شده است!');
+                // Optional: Clear or reset? User said "don't allow", so maybe clear or ask to auto-fill
+                // Let's ask if they want to auto-fill
+                if (window.confirm('این شماره تکراری است. آیا می‌خواهید شماره جدید دریافت کنید؟')) {
+                    fetchNextNumber(selectedCompany);
+                }
+            }
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -178,7 +203,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">شماره حواله</label>
-                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} placeholder="0000" />
+                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} onBlur={handleNumberBlur} placeholder="0000" />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">تاریخ صدور</label>

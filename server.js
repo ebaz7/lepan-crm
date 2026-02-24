@@ -73,12 +73,19 @@ app.use(compression({ level: 9 }));
 app.use(express.json({ limit: '1024mb' })); 
 app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 
-// --- ANTI-CACHE MIDDLEWARE (CRITICAL FIX) ---
-// This forces all clients to fetch fresh data every time, solving the stale number issue.
+// --- ANTI-CACHE MIDDLEWARE (OPTIMIZED) ---
+// We allow ETag/Last-Modified validation (no-cache) but remove no-store to allow 304 Not Modified.
+// This significantly speeds up reloads on CDNs/Domains by avoiding full data transfer if unchanged.
 app.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
+    if (req.method === 'GET') {
+        res.set('Cache-Control', 'no-cache, must-revalidate, private');
+        // Remove Pragma and Expires to allow ETag validation
+    } else {
+        // For mutations, we still want to be strict
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+    }
     next();
 });
 
@@ -201,25 +208,28 @@ const performAutoBackup = () => {
 cron.schedule('0 */3 * * *', performAutoBackup);
 setTimeout(performAutoBackup, 10000); 
 
-// --- HELPER: Find Next Sequence Number (Filling Gaps) ---
+// --- HELPER: Find Next Sequence Number (Optimized) ---
 const findNextGapNumber = (items, company, field, settingsStart) => {
     let startNum = settingsStart || 1000;
-    const relevantItems = items && Array.isArray(items) 
-        ? items.filter(i => {
+    
+    // Optimize: Single pass to filter and extract numbers, avoid sorting
+    const existingNumbers = new Set();
+    
+    if (items && Array.isArray(items)) {
+        for (const i of items) {
             const itemCompany = i.company || i.payingCompany || '';
             const targetCompany = company || '';
-            return itemCompany === targetCompany;
-        })
-        : [];
-    
-    const existingNumbers = relevantItems
-        .map(i => parseInt(i[field]))
-        .filter(n => !isNaN(n) && n >= startNum) 
-        .sort((a, b) => a - b);
+            if (itemCompany === targetCompany) {
+                const num = parseInt(i[field]);
+                if (!isNaN(num) && num >= startNum) {
+                    existingNumbers.add(num);
+                }
+            }
+        }
+    }
     
     let expected = startNum; 
-    const numSet = new Set(existingNumbers);
-    while (numSet.has(expected)) { expected++; }
+    while (existingNumbers.has(expected)) { expected++; }
     return expected;
 };
 

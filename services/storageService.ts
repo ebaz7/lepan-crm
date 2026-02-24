@@ -76,8 +76,36 @@ export const getSecurityIncidents = async (): Promise<SecurityIncident[]> => { c
 export const saveSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>('/security/incidents', 'POST', incident); };
 export const updateSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${incident.id}`, 'PUT', incident); };
 export const deleteSecurityIncident = async (id: string): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${id}`, 'DELETE'); };
-export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
-export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
+// Settings Cache with LocalStorage
+const SETTINGS_CACHE_KEY = 'app_settings_cache';
+const SETTINGS_CACHE_TTL = 300000; // 5 minutes (increased for better performance)
+
+export const getSettings = async (): Promise<SystemSettings> => { 
+    try {
+        const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
+        if (cached) {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < SETTINGS_CACHE_TTL) {
+                return data;
+            }
+        }
+    } catch (e) { console.error("Cache read error", e); }
+
+    const s = await apiCall<SystemSettings>('/settings'); 
+    
+    try {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ data: s, timestamp: Date.now() }));
+    } catch (e) { console.error("Cache write error", e); }
+    
+    return s;
+};
+export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { 
+    const s = await apiCall<SystemSettings>('/settings', 'POST', settings); 
+    try {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ data: s, timestamp: Date.now() }));
+    } catch (e) { console.error("Cache write error", e); }
+    return s;
+};
 
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
