@@ -214,11 +214,21 @@ function App() {
         const warehouseTransactionsData = data.warehouseTransactions;
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
-        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
+        let safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
             ...o,
             paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [],
             attachments: Array.isArray(o.attachments) ? o.attachments : []
         })) : [];
+
+        // FALLBACK: If bulk load returned empty orders, try fetching directly (legacy support)
+        if (safeOrders.length === 0) {
+            try {
+                const directOrders = await getOrders();
+                if (directOrders && directOrders.length > 0) {
+                    safeOrders = directOrders;
+                }
+            } catch (e) { console.error("Fallback orders fetch failed", e); }
+        }
 
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
         const safeExits = Array.isArray(exitPermitsData) ? exitPermitsData : [];

@@ -391,8 +391,11 @@ app.get('/api/init-form-data', (req, res) => {
     nextExitPermitNumbers[''] = findNextGapNumber(db.exitPermits, '', 'permitNumber', 1000);
     nextBijakNumbers[''] = findNextGapNumber(outTxs, '', 'number', 1000);
 
-    // Cache control for 5 minutes (user requested longer cache)
-    res.set('Cache-Control', 'public, max-age=300');
+    // Cache control: No cache to ensure fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     res.json({
         settings,
         nextTrackingNumbers,
