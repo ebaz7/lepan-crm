@@ -40,7 +40,6 @@ const safeImport = async (modulePath) => {
     }
 };
 
-const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
 const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 
@@ -87,6 +86,23 @@ app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache upl
 // --- ROBUST DATABASE HANDLER (IN-MEMORY CACHING FOR SPEED) ---
 let MEMORY_DB_CACHE = null;
 
+const getDbPath = () => {
+    const possiblePaths = [
+        path.join(ROOT_DIR, 'database.json'),
+        path.join(process.cwd(), 'database.json'),
+        '/app/database.json',
+        '/database.json'
+    ];
+    
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) return p;
+    }
+    return path.join(ROOT_DIR, 'database.json'); // Default fallback
+};
+
+const DB_FILE = getDbPath();
+console.log(`Using Database File: ${DB_FILE}`);
+
 const getDb = () => {
     // Return from RAM if available (Instant access)
     if (MEMORY_DB_CACHE) {
@@ -111,12 +127,14 @@ const getDb = () => {
         };
 
         if (!fs.existsSync(DB_FILE)) {
+            console.log("Database file not found, initializing default.");
             MEMORY_DB_CACHE = defaultDb;
             return defaultDb;
         }
         
         const fileContent = fs.readFileSync(DB_FILE, 'utf8');
         if (!fileContent.trim()) {
+            console.log("Database file empty, initializing default.");
             MEMORY_DB_CACHE = defaultDb;
             return defaultDb;
         }
@@ -131,17 +149,28 @@ const getDb = () => {
         if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
         if (!MEMORY_DB_CACHE.subscriptions) MEMORY_DB_CACHE.subscriptions = [];
         
-        console.log(">>> Database loaded into memory.");
+        console.log(`>>> Database loaded into memory. Orders count: ${MEMORY_DB_CACHE.orders.length}`);
         return MEMORY_DB_CACHE;
 
     } catch (e) { 
         console.error("Database Read Error:", e);
+        // Return null or throw to prevent overwriting with empty data if read failed but file exists
+        if (fs.existsSync(DB_FILE)) {
+             console.error("CRITICAL: Database exists but failed to read. Returning empty object to prevent overwrite.");
+             return {}; 
+        }
         return {}; 
     }
 };
 
 const saveDb = (data) => {
     try {
+        // Safety check: Don't save if data is empty but file exists (prevent overwrite)
+        if (!data || Object.keys(data).length === 0) {
+            console.error("Attempted to save empty database! Aborting.");
+            return;
+        }
+
         // Update Memory immediately
         MEMORY_DB_CACHE = data;
         // Write to disk
@@ -368,7 +397,12 @@ app.get('/api/init-form-data', (req, res) => {
         settings,
         nextTrackingNumbers,
         nextExitPermitNumbers,
-        nextBijakNumbers
+        nextBijakNumbers,
+        // Include Data for Bulk Load
+        orders: db.orders || [],
+        exitPermits: db.exitPermits || [],
+        messages: db.messages || [],
+        warehouseTransactions: db.warehouseTransactions || []
     });
 });
 

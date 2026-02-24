@@ -1,0 +1,54 @@
+{
+  "settings": {
+    "currentTrackingNumber": 1005,
+    "companyNames": ["شرکت فولاد", "بازرگانی آهن", "صنایع فلزی"],
+    "companies": [
+      { "id": "1", "name": "شرکت فولاد" },
+      { "id": "2", "name": "بازرگانی آهن" }
+    ]
+  },
+  "users": [
+    { "id": "1", "username": "admin", "password": "123", "fullName": "مدیر سیستم", "role": "ADMIN", "canManageTrade": true }
+  ],
+  "orders": [
+    {
+      "id": "1708765432100",
+      "trackingNumber": 1001,
+      "amount": 50000000,
+      "totalAmount": 50000000,
+      "payee": "علی محمدی",
+      "description": "خرید مواد اولیه",
+      "date": "2024-02-20",
+      "status": "APPROVED_CEO",
+      "requester": "مدیر سیستم",
+      "paymentDetails": [
+        { "method": "CASH", "amount": 50000000 }
+      ],
+      "createdAt": 1708765432100,
+      "updatedAt": 1708765432100
+    },
+    {
+      "id": "1708765432101",
+      "trackingNumber": 1002,
+      "amount": 12500000,
+      "totalAmount": 12500000,
+      "payee": "سرویس حمل و نقل",
+      "description": "کرایه بار",
+      "date": "2024-02-21",
+      "status": "PENDING",
+      "requester": "مدیر سیستم",
+      "paymentDetails": [
+        { "method": "CHEQUE", "amount": 12500000, "chequeDate": "1403/02/01", "bankName": "ملت" }
+      ],
+      "createdAt": 1708765432101,
+      "updatedAt": 1708765432101
+    }
+  ],
+  "exitPermits": [],
+  "chat": [],
+  "groups": [],
+  "tasks": [],
+  "trade": [],
+  "warehouseItems": [],
+  "warehouseTransactions": []
+}
