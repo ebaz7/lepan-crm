@@ -228,7 +228,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       return jalaliToGregorian(d.year, d.month, d.day);
   };
 
-  const getOrdersForTab = () => {
+  const getOrdersForTab = React.useCallback(() => {
       // Use safeOrders instead of orders
       let tabOrders = safeOrders;
       if (activeTab === 'archive') {
@@ -251,9 +251,9 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       
       if (permissions.canViewAll) return tabOrders;
       return tabOrders.filter(roleBasedFilter);
-  };
+  }, [activeTab, safeOrders, currentStatusFilter, currentUser, permissions]);
 
-  const filteredOrders = getOrdersForTab().filter(order => {
+  const filteredOrders = React.useMemo(() => getOrdersForTab().filter(order => {
     if (currentStatusFilter) {
         if (currentStatusFilter === 'pending_all') {
             if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.REJECTED || order.status === OrderStatus.REVOKED) return false;
@@ -293,7 +293,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
         if (orderDate < fromDate || orderDate > toDate) return false;
     }
     return true;
-  });
+  }), [getOrdersForTab, currentStatusFilter, companyFilter, searchTerm, amountRange, dateRange]);
 
   const totalFilteredAmount = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
   const totalFilteredCount = filteredOrders.length;

@@ -74,12 +74,13 @@ app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 
 // --- ANTI-CACHE MIDDLEWARE (CRITICAL FIX) ---
 // This forces all clients to fetch fresh data every time, solving the stale number issue.
-app.use((req, res, next) => {
+// MOVED TO SPECIFIC ROUTES TO IMPROVE PERFORMANCE
+const noCache = (req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     next();
-});
+};
 
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
@@ -391,10 +392,8 @@ app.get('/api/init-form-data', (req, res) => {
     nextExitPermitNumbers[''] = findNextGapNumber(db.exitPermits, '', 'permitNumber', 1000);
     nextBijakNumbers[''] = findNextGapNumber(outTxs, '', 'number', 1000);
 
-    // Cache control: No cache to ensure fresh data
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
+    // Cache control: Use ETag (public, max-age=0) for performance
+    res.set('Cache-Control', 'public, max-age=0, must-revalidate');
     
     res.json({
         settings,
@@ -409,7 +408,7 @@ app.get('/api/init-form-data', (req, res) => {
     });
 });
 
-app.get('/api/next-tracking-number', (req, res) => {
+app.get('/api/next-tracking-number', noCache, (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
@@ -423,7 +422,7 @@ app.get('/api/next-tracking-number', (req, res) => {
     res.json({ nextTrackingNumber: nextNum });
 });
 
-app.get('/api/next-exit-permit-number', (req, res) => {
+app.get('/api/next-exit-permit-number', noCache, (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
@@ -437,7 +436,7 @@ app.get('/api/next-exit-permit-number', (req, res) => {
     res.json({ nextNumber: nextNum });
 });
 
-app.get('/api/next-bijak-number', (req, res) => {
+app.get('/api/next-bijak-number', noCache, (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
