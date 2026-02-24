@@ -350,6 +350,21 @@ app.post('/api/subscribe', (req, res) => {
     res.status(201).json({});
 });
 
+// HELPER: Strip heavy data for list views
+const toLiteOrder = (order) => {
+    if (!order) return order;
+    return {
+        ...order,
+        attachments: order.attachments?.map(a => ({
+            fileName: a.fileName,
+            // Keep URL if it exists, but remove 'data' (base64) to save bandwidth
+            url: a.url, 
+            data: a.url ? undefined : (a.data ? (a.data.length > 1000 ? null : a.data) : undefined),
+            hasData: !!a.data // Flag to know if we need to fetch full
+        })) || []
+    };
+};
+
 app.get('/api/init-form-data', (req, res) => {
     const db = getDb();
     const settings = db.settings || {};
@@ -395,13 +410,16 @@ app.get('/api/init-form-data', (req, res) => {
     // Cache control: Use ETag (public, max-age=0) for performance
     res.set('Cache-Control', 'public, max-age=0, must-revalidate');
     
+    // OPTIMIZATION: Send LITE orders (no base64)
+    const liteOrders = (db.orders || []).map(toLiteOrder);
+
     res.json({
         settings,
         nextTrackingNumbers,
         nextExitPermitNumbers,
         nextBijakNumbers,
         // Include Data for Bulk Load
-        orders: db.orders || [],
+        orders: liteOrders,
         exitPermits: db.exitPermits || [],
         messages: db.messages || [],
         warehouseTransactions: db.warehouseTransactions || []
@@ -457,8 +475,20 @@ app.get('/api/next-bijak-number', noCache, (req, res) => {
 
 // 2. PAYMENT ORDERS
 app.get('/api/orders', (req, res) => {
-    res.json(getDb().orders || []);
+    // Return LITE orders by default for list view
+    const db = getDb();
+    const liteOrders = (db.orders || []).map(toLiteOrder);
+    res.json(liteOrders);
 });
+
+// NEW: Get Single Order (Full Details)
+app.get('/api/orders/:id', (req, res) => {
+    const db = getDb();
+    const order = db.orders.find(o => o.id === req.params.id);
+    if (order) res.json(order);
+    else res.status(404).send('Not Found');
+});
+
 app.post('/api/orders', (req, res) => { 
     const db = getDb(); 
     const order = req.body; 

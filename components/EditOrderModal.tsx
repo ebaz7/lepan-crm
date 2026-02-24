@@ -85,6 +85,21 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
               setAvailableBanks([]); // Default empty
           }
       }); 
+      
+      // NEW: Fetch full order if attachments are missing content (lite mode)
+      const checkAttachments = async () => {
+          if (order.attachments && order.attachments.some(a => !a.data && !a.url)) {
+              try {
+                  const fullOrder = await apiCall<PaymentOrder>(`/orders/${order.id}`);
+                  if (fullOrder && fullOrder.attachments) {
+                      setAttachments(fullOrder.attachments);
+                  }
+              } catch (e) {
+                  console.error("Failed to fetch full order details", e);
+              }
+          }
+      };
+      checkAttachments();
   }, []);
 
   const updateBanksForCompany = (companyName: string, currentSettings: SystemSettings) => {
