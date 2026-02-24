@@ -87,6 +87,7 @@ export const getInitFormData = async (): Promise<{
 
 export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
+export const getAppData = async (): Promise<any> => { return await apiCall<any>('/init-form-data'); };
 
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 
