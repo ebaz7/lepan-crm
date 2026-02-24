@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
 import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
 import { getUsers } from '../services/authService';
-import { getServerHost } from '../services/apiService';
 import { generateUUID, formatDate } from '../constants';
 import { 
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
@@ -43,54 +42,33 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
     useEffect(() => {
         let absoluteUrl = url;
-        // Fix for Desktop & Native: Ensure URL is absolute if it's a relative path from server
+        // Fix for Desktop: Ensure URL is absolute if it's a relative path from server
         if (!url.startsWith('http') && !url.startsWith('blob')) {
-            const host = getServerHost();
+            // Remove leading slash if present to avoid double slash, then add base
             const cleanPath = url.startsWith('/') ? url : `/${url}`;
-            
-            if (host) {
-                absoluteUrl = `${host}${cleanPath}`;
-            } else {
-                absoluteUrl = `${window.location.origin}${cleanPath}`;
-            }
+            absoluteUrl = `${window.location.origin}${cleanPath}`;
         }
         
         const audio = new Audio();
         audio.src = absoluteUrl;
-        audio.preload = 'metadata';
         audioRef.current = audio;
         
-        const handleLoadedMetadata = () => {
+        audio.onloadedmetadata = () => {
             const d = audio.duration;
             if (d && d !== Infinity && !isNaN(d)) {
                 setDuration(d);
             }
         };
-
-        const handleTimeUpdate = () => {
+        audio.ontimeupdate = () => {
             if (audio.duration && audio.duration !== Infinity) {
                 setProgress((audio.currentTime / audio.duration) * 100);
             } else if (duration > 0) {
                  setProgress((audio.currentTime / duration) * 100);
             }
         };
-
-        const handleEnded = () => { 
-            setPlaying(false); 
-            setProgress(0); 
-        };
-
-        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('ended', handleEnded);
-        
-        // Force load for some browsers
-        audio.load();
+        audio.onended = () => { setPlaying(false); setProgress(0); };
         
         return () => {
-            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('ended', handleEnded);
             audio.pause();
             audio.src = '';
         };
@@ -271,15 +249,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    };
-
-    const getAbsoluteUrl = (url: string) => {
-        if (!url) return '';
-        if (url.startsWith('http') || url.startsWith('blob') || url.startsWith('data:')) return url;
-        const host = getServerHost();
-        const cleanPath = url.startsWith('/') ? url : `/${url}`;
-        if (host) return `${host}${cleanPath}`;
-        return `${window.location.origin}${cleanPath}`;
     };
 
     // --- Helpers ---
@@ -511,14 +480,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         if (finalMime.includes('mp4') || finalMime.includes('aac')) ext = 'm4a';
                         else if (finalMime.includes('ogg')) ext = 'ogg';
 
-                        const fileName = `voice_${Date.now()}.${ext}`;
-                        const result = await uploadFile(fileName, base64);
+                        const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
                         
                         // Update with real URL
-                        // CRITICAL FIX: Ensure URL is absolute or correctly relative
-                        const audioUrl = result.url.startsWith('http') ? result.url : result.url;
-                        
-                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: audioUrl, attachment: { fileName, url: audioUrl } };
+                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: result.url };
                         await sendMessage(realMsg);
                         
                         // Remove temp, add real (or just refresh)
@@ -861,12 +826,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 <div className="mb-1">
                                                     {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                         <img 
-                                                            src={getAbsoluteUrl(msg.attachment.url)} 
+                                                            src={msg.attachment.url} 
                                                             className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
-                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(getAbsoluteUrl(msg.attachment!.url)); }}
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
                                                         />
                                                     ) : (
-                                                        <a href={getAbsoluteUrl(msg.attachment.url)} target="_blank" className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors" onClick={e=>e.stopPropagation()}>
+                                                        <a href={msg.attachment.url} target="_blank" className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors" onClick={e=>e.stopPropagation()}>
                                                             <div className="bg-blue-500 p-2 rounded text-white"><File size={16}/></div>
                                                             <div className="overflow-hidden">
                                                                 <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
@@ -998,9 +963,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* 2. Image Viewer */}
             {showImageViewer && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
-                    <img src={getAbsoluteUrl(showImageViewer)} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
+                    <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
                     <div className="absolute top-4 right-4 flex gap-4">
-                        <a href={getAbsoluteUrl(showImageViewer)} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
+                        <a href={showImageViewer} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
                         <button onClick={() => setShowImageViewer(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
                     </div>
                 </div>

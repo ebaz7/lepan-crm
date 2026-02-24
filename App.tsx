@@ -15,9 +15,9 @@ import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
-import { getOrders, getSettings, getMessages, getAppData } from './services/storageService'; 
+import { getOrders, getSettings, getMessages } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
-import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, ExitPermit, WarehouseTransaction } from './types';
+import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
 import { apiCall, getLocalData, LS_KEYS } from './services/apiService'; 
@@ -30,8 +30,6 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
-  const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
-  const [warehouseTransactions, setWarehouseTransactions] = useState<WarehouseTransaction[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [loading, setLoading] = useState(false);
@@ -171,13 +169,10 @@ function App() {
   const loadData = async (silent = false) => {
     if (!currentUser) return;
     
-    // 1. Initial Load from Cache (Instant UI)
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
         const cachedSettings = getLocalData<SystemSettings>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 } as any);
         const cachedMessages = getLocalData<ChatMessage[]>(LS_KEYS.CHAT, []); 
-        const cachedExits = getLocalData<ExitPermit[]>(LS_KEYS.WH_ITEMS, []); // Reusing key or adding new
-        const cachedTxs = getLocalData<WarehouseTransaction[]>(LS_KEYS.WH_TX, []);
         
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) setSettings(cachedSettings);
@@ -185,66 +180,39 @@ function App() {
             setChatMessages(cachedMessages);
             if (cachedMessages.length > 0) lastChatMsgIdRef.current = cachedMessages[cachedMessages.length - 1].id;
         }
-        if (cachedExits.length > 0) setExitPermits(cachedExits);
-        if (cachedTxs.length > 0) setWarehouseTransactions(cachedTxs);
     }
 
     if (!silent && orders.length === 0) setLoading(true);
 
     try {
-        // --- OPTIMIZED BULK LOAD ---
-        // We fetch everything in ONE request to minimize CDN round-trips as requested.
-        const data = await getAppData();
-        
-        if (data.settings) {
-            const settingsData = data.settings;
-            // Sanitize settings arrays
-            if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
-            if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
-            if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
-            if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
-            setSettings(settingsData);
-            // Cache settings for next time
-            localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(settingsData));
-        }
+        // --- OPTIMIZATION: LOAD SETTINGS SEPARATELY FIRST ---
+        // This ensures the UI renders correctly (permissions etc.) even if heavy data lags
+        getSettings().then(settingsData => {
+            if (settingsData) {
+                // Sanitize settings arrays just in case
+                if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
+                if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
+                if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
+                if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
+                setSettings(settingsData);
+            }
+        }).catch(err => console.error("Settings load error", err));
 
-        const ordersData = data.orders;
-        const messagesData = data.messages;
-        const exitPermitsData = data.exitPermits;
-        const warehouseTransactionsData = data.warehouseTransactions;
+        // Load Heavy Data in Parallel
+        const [ordersData, messagesData] = await Promise.all([getOrders(), getMessages()]);
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
-        let safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
+        const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
             ...o,
             paymentDetails: Array.isArray(o.paymentDetails) ? o.paymentDetails : [],
             attachments: Array.isArray(o.attachments) ? o.attachments : []
         })) : [];
 
-        // FALLBACK: If bulk load returned empty orders, try fetching directly (legacy support)
-        if (safeOrders.length === 0) {
-            try {
-                const directOrders = await getOrders();
-                if (directOrders && directOrders.length > 0) {
-                    safeOrders = directOrders;
-                }
-            } catch (e) { console.error("Fallback orders fetch failed", e); }
-        }
-
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
-        const safeExits = Array.isArray(exitPermitsData) ? exitPermitsData : [];
-        const safeTxs = Array.isArray(warehouseTransactionsData) ? warehouseTransactionsData : [];
         
         setOrders(safeOrders);
         setChatMessages(safeMessages); 
-        setExitPermits(safeExits);
-        setWarehouseTransactions(safeTxs);
         
-        // Cache for offline/fast load
-        localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(safeOrders));
-        localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(safeMessages));
-        localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(safeExits)); // Using WH_ITEMS key for exits for now
-        localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(safeTxs));
-
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);
         
@@ -328,8 +296,8 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          // REDUCED INTERVAL TO 10 SECONDS FOR FASTER RECORD UPDATES AS REQUESTED
-          const intervalId = setInterval(() => loadData(true), 10000); 
+          // INCREASED INTERVAL TO 20 SECONDS TO REDUCE SERVER LOAD
+          const intervalId = setInterval(() => loadData(true), 20000); 
           
           // Heartbeat for Last Seen (Every 1 minute)
           const heartbeatId = setInterval(() => {
@@ -406,25 +374,12 @@ function App() {
                 </div> 
             ) : (
                 <>
-                    {activeTab === 'dashboard' && (
-                        <Dashboard 
-                            orders={orders} 
-                            exitPermitsProp={exitPermits}
-                            warehouseTxsProp={warehouseTransactions}
-                            settings={settings} 
-                            currentUser={currentUser} 
-                            onViewArchive={handleViewArchive} 
-                            onFilterByStatus={handleDashboardFilter} 
-                            onGoToPaymentApprovals={handleGoToPaymentApprovals} 
-                            onGoToExitApprovals={handleGoToExitApprovals} 
-                            onGoToBijakApprovals={handleGoToWarehouseApprovals} 
-                        />
-                    )}
+                    {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} />}
                     {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                     {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} />}
                     {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} permitsProp={exitPermits} refreshData={() => loadData(true)} />}
-                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} transactionsProp={warehouseTransactions} refreshData={() => loadData(true)} />}
+                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} />}
+                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings />}

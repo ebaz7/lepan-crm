@@ -83,9 +83,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         else source = archivePermits;
 
         return source.filter(p => 
-            (p.permitNumber && p.permitNumber.toString().includes(searchTerm)) || 
-            (p.recipientName && p.recipientName.includes(searchTerm)) || 
-            (p.goodsName && p.goodsName.includes(searchTerm))
+            p.permitNumber.toString().includes(searchTerm) || 
+            p.recipientName?.includes(searchTerm) || 
+            p.goodsName?.includes(searchTerm)
         );
     };
 

@@ -40,6 +40,7 @@ const safeImport = async (modulePath) => {
     }
 };
 
+const DB_FILE = path.join(ROOT_DIR, 'database.json');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
 const BACKUPS_DIR = path.join(ROOT_DIR, 'backups'); 
 
@@ -74,35 +75,17 @@ app.use(express.urlencoded({ limit: '1024mb', extended: true }));
 
 // --- ANTI-CACHE MIDDLEWARE (CRITICAL FIX) ---
 // This forces all clients to fetch fresh data every time, solving the stale number issue.
-// MOVED TO SPECIFIC ROUTES TO IMPROVE PERFORMANCE
-const noCache = (req, res, next) => {
+app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     next();
-};
+});
 
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
 // --- ROBUST DATABASE HANDLER (IN-MEMORY CACHING FOR SPEED) ---
 let MEMORY_DB_CACHE = null;
-
-const getDbPath = () => {
-    const possiblePaths = [
-        path.join(ROOT_DIR, 'database.json'),
-        path.join(process.cwd(), 'database.json'),
-        '/app/database.json',
-        '/database.json'
-    ];
-    
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) return p;
-    }
-    return path.join(ROOT_DIR, 'database.json'); // Default fallback
-};
-
-const DB_FILE = getDbPath();
-console.log(`Using Database File: ${DB_FILE}`);
 
 const getDb = () => {
     // Return from RAM if available (Instant access)
@@ -128,14 +111,12 @@ const getDb = () => {
         };
 
         if (!fs.existsSync(DB_FILE)) {
-            console.log("Database file not found, initializing default.");
             MEMORY_DB_CACHE = defaultDb;
             return defaultDb;
         }
         
         const fileContent = fs.readFileSync(DB_FILE, 'utf8');
         if (!fileContent.trim()) {
-            console.log("Database file empty, initializing default.");
             MEMORY_DB_CACHE = defaultDb;
             return defaultDb;
         }
@@ -150,28 +131,17 @@ const getDb = () => {
         if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
         if (!MEMORY_DB_CACHE.subscriptions) MEMORY_DB_CACHE.subscriptions = [];
         
-        console.log(`>>> Database loaded into memory. Orders count: ${MEMORY_DB_CACHE.orders.length}`);
+        console.log(">>> Database loaded into memory.");
         return MEMORY_DB_CACHE;
 
     } catch (e) { 
         console.error("Database Read Error:", e);
-        // Return null or throw to prevent overwriting with empty data if read failed but file exists
-        if (fs.existsSync(DB_FILE)) {
-             console.error("CRITICAL: Database exists but failed to read. Returning empty object to prevent overwrite.");
-             return {}; 
-        }
         return {}; 
     }
 };
 
 const saveDb = (data) => {
     try {
-        // Safety check: Don't save if data is empty but file exists (prevent overwrite)
-        if (!data || Object.keys(data).length === 0) {
-            console.error("Attempted to save empty database! Aborting.");
-            return;
-        }
-
         // Update Memory immediately
         MEMORY_DB_CACHE = data;
         // Write to disk
@@ -267,7 +237,6 @@ const checkForDuplicate = (list, numField, numValue, companyField, companyValue,
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
-    const users = db.users || [];
     
     console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
 
@@ -279,6 +248,8 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
         return true;
     }).map(sub => {
         if (sub.type === 'android') {
+            // Native Android handled via FCM (if configured) or we can use a proxy
+            // For now, we assume WebPush works for PWA and we'd need FCM key for Native
             return Promise.resolve();
         }
         return webpush.sendNotification(sub, payload).catch(err => {
@@ -291,34 +262,6 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                 console.error("Push error:", err);
             }
         });
-    });
-
-    // Send to Telegram and Bale
-    const targetUsers = users.filter(u => {
-        if (targetUsernames && !targetUsernames.includes(u.username)) return false;
-        if (targetRoles && !targetRoles.includes(u.role)) return false;
-        return true;
-    });
-
-    const botMessage = `🔔 ${title}\n\n${body}`;
-
-    targetUsers.forEach(async (u) => {
-        if (u.telegramChatId) {
-            try {
-                const tgModule = await safeImport('./backend/telegram.js');
-                if (tgModule && tgModule.sendTelegramMessage) {
-                    await tgModule.sendTelegramMessage(u.telegramChatId, botMessage);
-                }
-            } catch (e) { console.error("TG Notify Err:", e); }
-        }
-        if (u.baleChatId) {
-            try {
-                const baleModule = await safeImport('./backend/bale.js');
-                if (baleModule && baleModule.sendBaleMessage) {
-                    await baleModule.sendBaleMessage(u.baleChatId, botMessage);
-                }
-            } catch (e) { console.error("Bale Notify Err:", e); }
-        }
     });
 
     await Promise.all(sendPromises);
@@ -350,83 +293,7 @@ app.post('/api/subscribe', (req, res) => {
     res.status(201).json({});
 });
 
-// HELPER: Strip heavy data for list views
-const toLiteOrder = (order) => {
-    if (!order) return order;
-    return {
-        ...order,
-        attachments: order.attachments?.map(a => ({
-            fileName: a.fileName,
-            // Keep URL if it exists, but remove 'data' (base64) to save bandwidth
-            url: a.url, 
-            data: a.url ? undefined : (a.data ? (a.data.length > 1000 ? null : a.data) : undefined),
-            hasData: !!a.data // Flag to know if we need to fetch full
-        })) || []
-    };
-};
-
-app.get('/api/init-form-data', (req, res) => {
-    const db = getDb();
-    const settings = db.settings || {};
-    const companies = settings.companies?.map(c => c.name) || settings.companyNames || [];
-    
-    const nextTrackingNumbers = {};
-    const nextExitPermitNumbers = {};
-    const nextBijakNumbers = {};
-    
-    const activeYear = (settings.fiscalYears || []).find(y => y.id === settings.activeFiscalYearId);
-    const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    
-    companies.forEach(company => {
-        // Tracking Number
-        let minTracking = 1000;
-        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
-            minTracking = activeYear.companySequences[company].startTrackingNumber || 1000;
-        }
-        nextTrackingNumbers[company] = findNextGapNumber(db.orders, company, 'trackingNumber', minTracking);
-        
-        // Exit Permit Number
-        let minExit = 1000;
-        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
-            minExit = activeYear.companySequences[company].startExitPermitNumber || 1000;
-        }
-        nextExitPermitNumbers[company] = findNextGapNumber(db.exitPermits, company, 'permitNumber', minExit);
-        
-        // Bijak Number
-        let minBijak = 1000;
-        if (activeYear && activeYear.companySequences && activeYear.companySequences[company]) {
-            minBijak = activeYear.companySequences[company].startBijakNumber || 1000;
-        } else if (settings.warehouseSequences && settings.warehouseSequences[company]) {
-            minBijak = settings.warehouseSequences[company];
-        }
-        nextBijakNumbers[company] = findNextGapNumber(outTxs, company, 'number', minBijak);
-    });
-    
-    // Also calculate for empty company (global)
-    nextTrackingNumbers[''] = findNextGapNumber(db.orders, '', 'trackingNumber', 1000);
-    nextExitPermitNumbers[''] = findNextGapNumber(db.exitPermits, '', 'permitNumber', 1000);
-    nextBijakNumbers[''] = findNextGapNumber(outTxs, '', 'number', 1000);
-
-    // Cache control: Use ETag (public, max-age=0) for performance
-    res.set('Cache-Control', 'public, max-age=0, must-revalidate');
-    
-    // OPTIMIZATION: Send LITE orders (no base64)
-    const liteOrders = (db.orders || []).map(toLiteOrder);
-
-    res.json({
-        settings,
-        nextTrackingNumbers,
-        nextExitPermitNumbers,
-        nextBijakNumbers,
-        // Include Data for Bulk Load
-        orders: liteOrders,
-        exitPermits: db.exitPermits || [],
-        messages: db.messages || [],
-        warehouseTransactions: db.warehouseTransactions || []
-    });
-});
-
-app.get('/api/next-tracking-number', noCache, (req, res) => {
+app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
@@ -440,7 +307,7 @@ app.get('/api/next-tracking-number', noCache, (req, res) => {
     res.json({ nextTrackingNumber: nextNum });
 });
 
-app.get('/api/next-exit-permit-number', noCache, (req, res) => {
+app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
@@ -454,7 +321,7 @@ app.get('/api/next-exit-permit-number', noCache, (req, res) => {
     res.json({ nextNumber: nextNum });
 });
 
-app.get('/api/next-bijak-number', noCache, (req, res) => {
+app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company;
     let minStart = 1000;
@@ -475,20 +342,8 @@ app.get('/api/next-bijak-number', noCache, (req, res) => {
 
 // 2. PAYMENT ORDERS
 app.get('/api/orders', (req, res) => {
-    // Return LITE orders by default for list view
-    const db = getDb();
-    const liteOrders = (db.orders || []).map(toLiteOrder);
-    res.json(liteOrders);
+    res.json(getDb().orders || []);
 });
-
-// NEW: Get Single Order (Full Details)
-app.get('/api/orders/:id', (req, res) => {
-    const db = getDb();
-    const order = db.orders.find(o => o.id === req.params.id);
-    if (order) res.json(order);
-    else res.status(404).send('Not Found');
-});
-
 app.post('/api/orders', (req, res) => { 
     const db = getDb(); 
     const order = req.body; 
@@ -981,13 +836,8 @@ app.post('/api/upload', (req, res) => {
     const base64Data = fileData.replace(/^data:([A-Za-z-+/]+);base64,/, '');
     const uniqueName = `${Date.now()}_${fileName}`;
     const filePath = path.join(UPLOADS_DIR, uniqueName);
-    
     fs.writeFile(filePath, base64Data, 'base64', (err) => {
-        if (err) {
-            console.error("Upload Write Error:", err);
-            return res.status(500).send('Upload failed');
-        }
-        // Return relative URL that works with the static middleware
+        if (err) return res.status(500).send('Upload failed');
         res.json({ fileName, url: `/uploads/${uniqueName}` });
     });
 });

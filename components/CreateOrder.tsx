@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PaymentMethod, OrderStatus, PaymentOrder, PaymentDetail, SystemSettings, UserRole, CompanyBank } from '../types';
-import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings, getInitFormData } from '../services/storageService';
+import { saveOrder, getNextTrackingNumber, uploadFile, getSettings, saveSettings } from '../services/storageService';
 import { enhanceDescription } from '../services/geminiService';
 import { apiCall } from '../services/apiService';
 import { jalaliToGregorian, getCurrentShamsiDate, formatCurrency, generateUUID, normalizeInputNumber, formatNumberString, deformatNumberString, formatDate } from '../constants';
@@ -69,55 +69,44 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const [newBankName, setNewBankName] = useState('');
   const [newBankAccount, setNewBankAccount] = useState('');
 
-  const [nextNumbersCache, setNextNumbersCache] = useState<Record<string, number>>({});
-
   // Function to fetch next number - EXPLICITLY PER COMPANY OR GLOBAL
-  const fetchNextNumber = (company?: string, cache?: Record<string, number>, forceRefresh: boolean = false) => {
-    const targetCompany = company || '';
-    const cacheToUse = cache || nextNumbersCache;
-    
-    if (!forceRefresh && cacheToUse && cacheToUse[targetCompany] !== undefined) {
-        setTrackingNumber(cacheToUse[targetCompany].toString());
-        return;
-    }
-
+  const fetchNextNumber = (company?: string) => {
+    // Reset to a temporary loader state if needed, but keeping old value is often better UX.
+    // However, to indicate change:
     setLoadingNum(true);
+    
     getNextTrackingNumber(company)
         .then(num => {
+            // FORCE A NUMBER. If API returns 0 or null, use 1001.
             const validNum = (num && num > 0) ? num : 1001;
             setTrackingNumber(validNum.toString());
-            // Update cache so subsequent renders don't revert
-            setNextNumbersCache(prev => ({...prev, [targetCompany]: validNum}));
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
+            // Fallback on error
             setTrackingNumber('1001');
         })
         .finally(() => setLoadingNum(false));
   };
 
   useEffect(() => {
-      setLoadingNum(true);
-      getInitFormData().then((data) => {
-          const s = data.settings;
+      // 1. Fetch IMMEDIATELY (Global Sequence) to ensure field is never empty
+      fetchNextNumber();
+
+      // 2. Then load settings and refine if default company exists
+      getSettings().then((s) => {
           setSettings(s);
-          setNextNumbersCache(data.nextTrackingNumbers);
-          
-          const names = s.companies?.map((c: any) => c.name) || s.companyNames || [];
+          const names = s.companies?.map(c => c.name) || s.companyNames || [];
           setAvailableCompanies(names);
           
           const defCompany = s.defaultCompany || '';
           if (defCompany) {
               setPayingCompany(defCompany);
               updateBanksForCompany(defCompany, s);
-              fetchNextNumber(defCompany, data.nextTrackingNumbers);
-          } else {
-              fetchNextNumber('', data.nextTrackingNumbers);
+              // 3. Re-fetch for specific company sequence if needed
+              fetchNextNumber(defCompany);
           }
-      }).catch(err => {
-          console.error("Init Data Error", err);
-          fetchNextNumber();
-      }).finally(() => setLoadingNum(false));
+      });
   }, []);
 
   const updateBanksForCompany = (companyName: string, currentSettings: SystemSettings) => {
@@ -329,7 +318,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
         if (msg.includes("409") || msg.includes("Duplicate") || msg.includes("تکراری")) {
             alert(`⚠️ شماره دستور ${trackingNumber} تکراری است. سیستم به صورت خودکار شماره جدیدی دریافت می‌کند.`);
             // Automatically fetch next valid number
-            fetchNextNumber(payingCompany, undefined, true);
+            fetchNextNumber(payingCompany);
         } else {
             alert(msg);
         }
@@ -378,7 +367,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                         <input required type="number" className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 font-mono font-bold text-blue-600 dir-ltr text-left" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} onKeyDown={handleKeyDown} placeholder="در حال دریافت..." />
                         <button 
                             type="button"
-                            onClick={() => fetchNextNumber(payingCompany, undefined, true)} 
+                            onClick={() => fetchNextNumber(payingCompany)} 
                             disabled={loadingNum}
                             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
                             title="بروزرسانی شماره از سرور"

@@ -21,7 +21,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
   const currentShamsi = getCurrentShamsiDate();
   const initialShamsi = getShamsiDateFromIso(order.date);
   const [shamsiDate, setShamsiDate] = useState({ year: initialShamsi.year, month: initialShamsi.month, day: initialShamsi.day });
-  const [formData, setFormData] = useState({ payee: order.payee, totalAmount: order.totalAmount ? order.totalAmount.toString() : '0', description: order.description, trackingNumber: order.trackingNumber ? order.trackingNumber.toString() : '' });
+  const [formData, setFormData] = useState({ payee: order.payee, totalAmount: order.totalAmount.toString(), description: order.description, trackingNumber: order.trackingNumber.toString() });
   const [payingCompany, setPayingCompany] = useState(order.payingCompany || '');
   
   const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
@@ -85,21 +85,6 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
               setAvailableBanks([]); // Default empty
           }
       }); 
-      
-      // NEW: Fetch full order if attachments are missing content (lite mode)
-      const checkAttachments = async () => {
-          if (order.attachments && order.attachments.some(a => !a.data && !a.url)) {
-              try {
-                  const fullOrder = await apiCall<PaymentOrder>(`/orders/${order.id}`);
-                  if (fullOrder && fullOrder.attachments) {
-                      setAttachments(fullOrder.attachments);
-                  }
-              } catch (e) {
-                  console.error("Failed to fetch full order details", e);
-              }
-          }
-      };
-      checkAttachments();
   }, []);
 
   const updateBanksForCompany = (companyName: string, currentSettings: SystemSettings) => {

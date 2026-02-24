@@ -76,18 +76,8 @@ export const getSecurityIncidents = async (): Promise<SecurityIncident[]> => { c
 export const saveSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>('/security/incidents', 'POST', incident); };
 export const updateSecurityIncident = async (incident: SecurityIncident): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${incident.id}`, 'PUT', incident); };
 export const deleteSecurityIncident = async (id: string): Promise<SecurityIncident[]> => { return await apiCall<SecurityIncident[]>(`/security/incidents/${id}`, 'DELETE'); };
-export const getInitFormData = async (): Promise<{
-    settings: SystemSettings,
-    nextTrackingNumbers: Record<string, number>,
-    nextExitPermitNumbers: Record<string, number>,
-    nextBijakNumbers: Record<string, number>
-}> => {
-    return await apiCall<any>('/init-form-data');
-};
-
 export const getSettings = async (): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings'); };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { return await apiCall<SystemSettings>('/settings', 'POST', settings); };
-export const getAppData = async (): Promise<any> => { return await apiCall<any>('/init-form-data'); };
 
 // Updated: Accepts optional company parameter
 export const getNextTrackingNumber = async (company?: string): Promise<number> => { 

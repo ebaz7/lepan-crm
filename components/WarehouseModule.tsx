@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
-import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem, getInitFormData } from '../services/storageService';
+import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
 import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar } from 'lucide-react';
 import PrintBijak from './PrintBijak';
@@ -140,31 +140,22 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [editedBijakForAutoSend, setEditedBijakForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [deletedTxForAutoSend, setDeletedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
 
-    const [nextNumbersCache, setNextNumbersCache] = useState<Record<string, number>>({});
-
     useEffect(() => { loadData(); }, []);
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
     
     // Trigger update on company change
     useEffect(() => { 
         if(selectedCompany && activeTab === 'exit') { 
-            updateNextBijak(selectedCompany, nextNumbersCache); 
+            updateNextBijak(); 
         } 
-    }, [selectedCompany, activeTab, nextNumbersCache]);
+    }, [selectedCompany, activeTab]);
 
     const loadData = async () => { 
         setLoadingData(true); 
         try { 
-            const [i, t, initData] = await Promise.all([
-                getWarehouseItems(), 
-                getWarehouseTransactions(),
-                getInitFormData()
-            ]); 
+            const [i, t] = await Promise.all([getWarehouseItems(), getWarehouseTransactions()]); 
             setItems(Array.isArray(i) ? i : []); 
             setTransactions(Array.isArray(t) ? t : []); 
-            if (initData) {
-                setNextNumbersCache(initData.nextBijakNumbers);
-            }
         } catch (e) { 
             console.error(e); 
             setItems([]);
@@ -174,22 +165,14 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         } 
     };
     
-    const updateNextBijak = async (company?: string, cache?: Record<string, number>, forceRefresh: boolean = false) => { 
-        const targetCompany = company || selectedCompany;
-        if(targetCompany) { 
-            const cacheToUse = cache || nextNumbersCache;
-            if (!forceRefresh && cacheToUse && cacheToUse[targetCompany] !== undefined) {
-                setNextBijakNum(cacheToUse[targetCompany]);
-                return;
-            }
-
+    const updateNextBijak = async () => { 
+        if(selectedCompany) { 
             setLoadingBijakNum(true);
             try {
                 // FORCE REFRESH: Use apiCall with company param
-                const response = await apiCall<{ nextNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(targetCompany)}&t=${Date.now()}`);
+                const response = await apiCall<{ nextNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(selectedCompany)}&t=${Date.now()}`);
                 if (response && response.nextNumber) {
                     setNextBijakNum(response.nextNumber);
-                    setNextNumbersCache(prev => ({...prev, [targetCompany]: response.nextNumber}));
                 }
             } catch(e) {
                 console.error("Bijak Num Error", e);
@@ -265,7 +248,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         try {
             await saveWarehouseTransaction(tx);
             await loadData();
-            if(type === 'OUT') updateNextBijak(selectedCompany, undefined);
+            if(type === 'OUT') updateNextBijak();
             
             if(type === 'OUT') {
                 alert('بیجک ثبت شد و جهت تایید به مدیریت ارسال گردید.');
@@ -275,13 +258,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             }
             setTxItems([{ itemId: '', quantity: 0, weight: 0, unitPrice: 0 }]);
         } catch (e: any) {
-            const msg = e.message || 'Server Error';
-            if (msg.includes("409") || msg.includes("Duplicate") || msg.includes("تکراری")) {
-                alert(`⚠️ شماره بیجک ${nextBijakNum} تکراری است. سیستم به صورت خودکار شماره جدیدی دریافت می‌کند.`);
-                updateNextBijak(selectedCompany, undefined, true);
-            } else {
-                alert(`خطا در ثبت اطلاعات: ${msg}`);
-            }
+            alert('خطا در ثبت اطلاعات.');
         }
     };
 
@@ -718,7 +695,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 <label className="block text-xs font-bold mb-1">شماره بیجک</label>
                                 <div className="bg-white p-2 rounded border font-mono text-center text-red-600 font-bold flex justify-center items-center gap-2 h-[42px]">
                                     {loadingBijakNum ? <Loader2 className="animate-spin" size={16}/> : (nextBijakNum > 0 ? nextBijakNum : '---')}
-                                    <button type="button" onClick={() => updateNextBijak(selectedCompany, undefined, true)} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500"><RefreshCcw size={14}/></button>
+                                    <button type="button" onClick={updateNextBijak} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500"><RefreshCcw size={14}/></button>
                                 </div>
                             </div>
                         </div>

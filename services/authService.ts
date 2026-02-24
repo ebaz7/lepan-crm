@@ -125,8 +125,6 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             
         case UserRole.USER:
             perms.canCreatePaymentOrder = true;
-            perms.canViewPaymentOrders = true; // Allow viewing own orders
-            perms.canViewExitPermits = true;   // Allow viewing own exit permits
             break;
     }
 

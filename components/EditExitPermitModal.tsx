@@ -19,7 +19,7 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
   const currentShamsi = getCurrentShamsiDate();
   const initialShamsi = getShamsiDateFromIso(permit.date);
   const [shamsiDate, setShamsiDate] = useState({ year: initialShamsi.year, month: initialShamsi.month, day: initialShamsi.day });
-  const [permitNumber, setPermitNumber] = useState(permit.permitNumber ? permit.permitNumber.toString() : '');
+  const [permitNumber, setPermitNumber] = useState(permit.permitNumber.toString());
   
   const [items, setItems] = useState<ExitPermitItem[]>(permit.items && permit.items.length > 0 ? permit.items : [{ id: generateUUID(), goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0 }]);
   const [destinations, setDestinations] = useState<ExitPermitDestination[]>(permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: generateUUID(), recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }]);

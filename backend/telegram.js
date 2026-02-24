@@ -4,15 +4,6 @@ import * as BotCore from './bot-core.js';
 
 let bot = null;
 
-export const sendTelegramMessage = async (chatId, text) => {
-    if (!bot || !chatId) return;
-    try {
-        await bot.sendMessage(chatId, text);
-    } catch (e) {
-        console.error("TG Send Msg Err:", e.message);
-    }
-};
-
 export const initTelegram = async (token) => {
     if (!token) return;
     if (bot) try { await bot.stopPolling(); } catch(e){}

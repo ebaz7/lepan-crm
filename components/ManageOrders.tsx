@@ -20,9 +20,6 @@ interface ManageOrdersProps {
 }
 
 const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, currentUser, initialTab = 'current', settings, statusFilter }) => {
-  // Restored Payment Records Component
-  if (!currentUser) return <div className="p-10 text-center text-red-500">Error: User not authenticated</div>;
-
   // CRITICAL FIX: Ensure orders is always an array to prevent "filter is not a function"
   const safeOrders = Array.isArray(orders) ? orders : [];
 
@@ -228,7 +225,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       return jalaliToGregorian(d.year, d.month, d.day);
   };
 
-  const getOrdersForTab = React.useCallback(() => {
+  const getOrdersForTab = () => {
       // Use safeOrders instead of orders
       let tabOrders = safeOrders;
       if (activeTab === 'archive') {
@@ -251,9 +248,9 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       
       if (permissions.canViewAll) return tabOrders;
       return tabOrders.filter(roleBasedFilter);
-  }, [activeTab, safeOrders, currentStatusFilter, currentUser, permissions]);
+  };
 
-  const filteredOrders = React.useMemo(() => getOrdersForTab().filter(order => {
+  const filteredOrders = getOrdersForTab().filter(order => {
     if (currentStatusFilter) {
         if (currentStatusFilter === 'pending_all') {
             if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.REJECTED || order.status === OrderStatus.REVOKED) return false;
@@ -293,7 +290,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
         if (orderDate < fromDate || orderDate > toDate) return false;
     }
     return true;
-  }), [getOrdersForTab, currentStatusFilter, companyFilter, searchTerm, amountRange, dateRange]);
+  });
 
   const totalFilteredAmount = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
   const totalFilteredCount = filteredOrders.length;
@@ -424,44 +421,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                           <tr key={order.id} className={rowClass}>
                             <td className="px-6 py-4 font-mono text-gray-500">#{order.trackingNumber}</td>
                             <td className="px-6 py-4 text-gray-700">{formatDate(order.date)}</td>
-                            <td className="px-6 py-4 font-medium text-gray-900 max-w-[200px]">
-                                <div className="truncate font-bold">{order.payee}</div>
-                                <div className="text-xs text-gray-500 truncate mt-1">{order.description}</div>
-                                <div className="flex gap-1 mt-1">
-                                    {order.attachments?.map((a, i) => {
-                                        const hasContent = a.url || a.data;
-                                        return (
-                                            <a 
-                                                key={i} 
-                                                href={hasContent ? (a.url || a.data) : '#'} 
-                                                target={hasContent ? "_blank" : "_self"}
-                                                onClick={async (e) => {
-                                                    if (!hasContent) {
-                                                        e.preventDefault();
-                                                        try {
-                                                            // Fetch full order to get attachment data
-                                                            const fullOrder = await apiCall(`/orders/${order.id}`);
-                                                            if (fullOrder && fullOrder.attachments && fullOrder.attachments[i]) {
-                                                                const fullAtt = fullOrder.attachments[i];
-                                                                const target = fullAtt.url || fullAtt.data;
-                                                                if (target) window.open(target, '_blank');
-                                                                else alert('فایل یافت نشد');
-                                                            }
-                                                        } catch (err) {
-                                                            console.error(err);
-                                                            alert('خطا در دریافت فایل');
-                                                        }
-                                                    }
-                                                }}
-                                                className={`text-blue-500 text-[10px] bg-blue-50 px-1 rounded flex items-center ${!hasContent ? 'cursor-pointer hover:bg-blue-100' : ''}`}
-                                                title={a.fileName}
-                                            >
-                                                <Paperclip size={10}/>
-                                            </a>
-                                        );
-                                    })}
-                                </div>
-                            </td>
+                            <td className="px-6 py-4 font-medium text-gray-900 max-w-[200px]"><div className="truncate font-bold">{order.payee}</div><div className="text-xs text-gray-500 truncate mt-1">{order.description}</div><div className="flex gap-1 mt-1">{order.attachments?.map((a,i) => <a key={i} href={a.data} target="_blank" className="text-blue-500 text-[10px] bg-blue-50 px-1 rounded flex items-center"><Paperclip size={10}/></a>)}</div></td>
                             <td className="px-6 py-4 text-xs font-bold text-gray-700">{order.payingCompany || '-'}</td>
                             <td className="px-6 py-4 text-xs text-gray-600">
                                 {paymentDetails.map((d, i) => (

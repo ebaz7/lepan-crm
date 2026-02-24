@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
-import { saveExitPermit, getSettings, getInitFormData } from '../services/storageService';
+import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft, RefreshCcw } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
@@ -24,47 +24,28 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
-    const [nextNumbersCache, setNextNumbersCache] = useState<Record<string, number>>({});
-    const [loadingNum, setLoadingNum] = useState(false);
-
     useEffect(() => {
-        getInitFormData().then(data => {
-            const s = data.settings;
-            setNextNumbersCache(data.nextExitPermitNumbers);
-            const names = s.companies?.map((c: any) => c.name) || s.companyNames || [];
+        getSettings().then(s => {
+            const names = s.companies?.map(c => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
             if (s.defaultCompany) {
                 setSelectedCompany(s.defaultCompany);
-                fetchNextNumber(s.defaultCompany, data.nextExitPermitNumbers);
+                fetchNextNumber(s.defaultCompany);
             }
-        }).catch(err => {
-            console.error("Init Data Error", err);
         });
     }, []);
 
-    const fetchNextNumber = (company?: string, cache?: Record<string, number>, forceRefresh: boolean = false) => {
+    const fetchNextNumber = (company?: string) => {
         if (!company) return;
-        const cacheToUse = cache || nextNumbersCache;
-        if (!forceRefresh && cacheToUse && cacheToUse[company] !== undefined) {
-            setPermitNumber(cacheToUse[company].toString());
-            return;
-        }
-        
-        setLoadingNum(true);
+        // Ensure API call is correct
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
-                if (res && res.nextNumber) {
-                    setPermitNumber(res.nextNumber.toString());
-                    setNextNumbersCache(prev => ({...prev, [company]: res.nextNumber}));
-                }
+                if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
                 else setPermitNumber('1001');
             })
             .catch((e) => {
                 console.error("Fetch Number Error", e);
                 setPermitNumber('1001');
-            })
-            .finally(() => {
-                setLoadingNum(false);
             });
     };
 
@@ -149,13 +130,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
         } catch (e: any) {
             console.error("Submit Error:", e);
-            const msg = e.message || 'Server Error';
-            if (msg.includes("409") || msg.includes("Duplicate") || msg.includes("تکراری")) {
-                alert(`⚠️ شماره حواله ${permitNumber} تکراری است. سیستم به صورت خودکار شماره جدیدی دریافت می‌کند.`);
-                fetchNextNumber(selectedCompany, undefined, true);
-            } else {
-                alert(`خطا در ثبت حواله: ${msg}`);
-            }
+            alert(`خطا در ثبت حواله: ${e.message || 'Server Error'}`);
             setIsSubmitting(false);
         }
     };
@@ -201,18 +176,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
-                        <div className="relative">
+                        <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">شماره حواله</label>
-                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none pr-10" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} placeholder="0000" />
-                            <button 
-                                type="button"
-                                onClick={() => fetchNextNumber(selectedCompany, undefined, true)} 
-                                disabled={loadingNum}
-                                className="absolute right-2 top-[34px] p-1.5 bg-white rounded-full text-teal-500 hover:bg-teal-50 transition-colors"
-                                title="بروزرسانی شماره از سرور"
-                            >
-                                <RefreshCcw size={16} className={loadingNum ? 'animate-spin' : ''}/>
-                            </button>
+                            <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold text-center dir-ltr focus:ring-2 focus:ring-teal-500 outline-none" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} placeholder="0000" />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">تاریخ صدور</label>
