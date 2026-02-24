@@ -5,7 +5,7 @@ import { saveExitPermit, getSettings, getInitFormData } from '../services/storag
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft, RefreshCcw } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
@@ -25,6 +25,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
 
     const [nextNumbersCache, setNextNumbersCache] = useState<Record<string, number>>({});
+    const [loadingNum, setLoadingNum] = useState(false);
 
     useEffect(() => {
         getInitFormData().then(data => {
@@ -49,6 +50,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             return;
         }
         
+        setLoadingNum(true);
         apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(company)}&t=${Date.now()}`)
             .then(res => {
                 if (res && res.nextNumber) {
@@ -60,6 +62,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             .catch((e) => {
                 console.error("Fetch Number Error", e);
                 setPermitNumber('1001');
+            })
+            .finally(() => {
+                setLoadingNum(false);
             });
     };
 
