@@ -29,6 +29,23 @@ const saveDb = (data) => {
     }
 };
 
+const findNextGapNumber = (items, company, field, settingsStart) => {
+    let startNum = settingsStart || 1000;
+    const existingNumbers = new Set();
+    if (items && Array.isArray(items)) {
+        for (const i of items) {
+            const itemCompany = i.company || i.payingCompany || '';
+            if (!company || itemCompany === company) {
+                const num = parseInt(i[field]);
+                if (!isNaN(num) && num >= startNum) existingNumbers.add(num);
+            }
+        }
+    }
+    let expected = startNum; 
+    while (existingNumbers.has(expected)) { expected++; }
+    return expected;
+};
+
 const resolveUser = (db, platform, chatId) => {
     if (platform === 'telegram') return db.users.find(u => u.telegramChatId == chatId);
     if (platform === 'bale') return db.users.find(u => u.baleChatId == chatId);
@@ -296,11 +313,21 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "🔢 تعداد/مقدار را وارد کنید:");
     }
     if (session.state === 'EXIT_COUNT') {
+        const company = session.data.company || db.settings.defaultCompany;
+        let minStart = 1000;
+        if (db.settings.activeFiscalYearId && company) {
+            const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+            if (year && year.companySequences && year.companySequences[company]) {
+                minStart = year.companySequences[company].startExitPermitNumber || 1000;
+            }
+        }
+        const nextPermitNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+
         const permit = {
             id: Date.now().toString(),
-            permitNumber: (db.settings.currentExitPermitNumber || 1000) + 1,
+            permitNumber: nextPermitNum,
             date: new Date().toISOString().split('T')[0],
-            company: session.data.company || db.settings.defaultCompany,
+            company: company,
             requester: user.fullName,
             recipientName: session.data.recipient,
             goodsName: session.data.item,

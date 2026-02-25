@@ -2,12 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
-import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, normalizeInputNumber } from '../constants';
+import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
-import html2canvas from 'html2canvas';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,29 +60,19 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         fetchNextNumber(val);
     };
 
-    const handleNumberBlur = async () => {
-        const normalized = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
-        if (normalized !== permitNumber) setPermitNumber(normalized);
-
-        if (!normalized && selectedCompany) {
+    const handleNumberBlur = () => {
+        if (!permitNumber && selectedCompany) {
             fetchNextNumber(selectedCompany);
-        } else if (normalized && selectedCompany) {
-            // Re-fetch latest permits to ensure we have the most recent data
-            try {
-                const latest = await apiCall<ExitPermit[]>('/exit-permits');
-                if (Array.isArray(latest)) {
-                    setExistingPermits(latest);
-                    const isDuplicate = latest.some(p => 
-                        p.company.trim() === selectedCompany.trim() && 
-                        Number(p.permitNumber) === Number(normalized)
-                    );
-                    if (isDuplicate) {
-                        alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
-                        fetchNextNumber(selectedCompany);
-                    }
-                }
-            } catch (e) {
-                console.error("Error checking duplicates on blur", e);
+        } else if (permitNumber && selectedCompany) {
+            // Check for duplicate locally first for instant feedback
+            const isDuplicate = existingPermits.some(p => 
+                p.company === selectedCompany && 
+                p.permitNumber === parseInt(permitNumber)
+            );
+            if (isDuplicate) {
+                // Automatically fetch next available number (gap)
+                alert(`⚠️ شماره ${permitNumber} قبلاً ثبت شده است. سیستم به طور خودکار اولین شماره خالی (Gap) را جایگزین می‌کند.`);
+                fetchNextNumber(selectedCompany);
             }
         }
     };
@@ -91,21 +80,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCompany) return alert('لطفا شرکت صادرکننده را انتخاب کنید');
-        
-        const normalizedNum = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
-        if (!normalizedNum) return alert('شماره حواله الزامی است');
-        
-        // Final duplicate check before submission
-        const isDuplicate = existingPermits.some(p => 
-            p.company.trim() === selectedCompany.trim() && 
-            Number(p.permitNumber) === Number(normalizedNum)
-        );
-        if (isDuplicate) {
-            alert('⚠️ شماره حواله تکراری است. لطفا شماره دیگری انتخاب کنید.');
-            fetchNextNumber(selectedCompany);
-            return;
-        }
-
+        if (!permitNumber) return alert('شماره حواله الزامی است');
         if (items.some(i => !i.goodsName)) return alert('نام کالا الزامی است');
         if (destinations.some(d => !d.recipientName)) return alert('نام گیرنده الزامی است');
 
@@ -120,7 +95,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
-                permitNumber: parseInt(normalizedNum) || 0,
+                permitNumber: parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0,
                 company: selectedCompany,
                 date: isoDate,
                 requester: currentUser.fullName,
@@ -143,36 +118,37 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             // Initiate Auto-Send Process
             setTempPermit(newPermit);
             
-            // Give a small delay for the DOM to update with the hidden print element
             setTimeout(async () => {
+                // Ensure element exists
                 const elementId = `print-permit-create-${newPermit.id}`;
                 const element = document.getElementById(elementId);
                 
                 if (element) {
                     try {
-                        const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                        // @ts-ignore
+                        const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         
                         const users = await getUsers();
                         const ceo = users.find(u => u.role === UserRole.CEO);
                         
-                        if (ceo && ceo.phoneNumber) {
+                        if (ceo) {
                             const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             
-                            await apiCall('/send-whatsapp', 'POST', { 
-                                number: ceo.phoneNumber, 
-                                message: caption, 
-                                mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
-                            });
+                            if (ceo.phoneNumber) {
+                                await apiCall('/send-whatsapp', 'POST', { 
+                                    number: ceo.phoneNumber, 
+                                    message: caption, 
+                                    mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
+                                });
+                            }
                         }
-                    } catch (e) { 
-                        console.error("Notification Error", e);
-                    }
+                    } catch (e) { console.error("Notification Error", e); }
                 }
                 
                 // Clear and navigate
                 onSuccess();
-            }, 1000);
+            }, 2000);
 
         } catch (e: any) {
             console.error("Submit Error:", e);
