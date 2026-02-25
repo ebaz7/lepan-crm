@@ -44,6 +44,23 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
 
       setIsSubmitting(true);
       
+      // Final duplicate check
+      try {
+          const latest = await apiCall<ExitPermit[]>('/exit-permits');
+          const isDuplicate = latest.some(p => 
+              p.id !== permit.id &&
+              p.company.trim() === permit.company.trim() && 
+              Number(p.permitNumber) === Number(permitNumber)
+          );
+          if (isDuplicate) {
+              alert(`⚠️ شماره حواله ${permitNumber} تکراری است. لطفا شماره دیگری انتخاب کنید.`);
+              setIsSubmitting(false);
+              return;
+          }
+      } catch (e) {
+          console.error("Duplicate check failed", e);
+      }
+
       const updatedPermit: ExitPermit = {
           ...permit,
           permitNumber: Number(permitNumber),

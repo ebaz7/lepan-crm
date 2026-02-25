@@ -236,11 +236,20 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
 // --- HELPER: Strict Duplicate Checker ---
 const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
     if (!list || !Array.isArray(list)) return false;
-    return list.some(item => 
-        Number(item[numField]) === Number(numValue) &&
-        (item[companyField] || '') === (companyValue || '') &&
-        item.id !== excludeId
-    );
+    const targetNum = Number(numValue);
+    const targetCompany = (companyValue || '').toString().trim();
+    
+    if (isNaN(targetNum)) return false;
+
+    return list.some(item => {
+        if (!item) return false;
+        const itemNum = Number(item[numField]);
+        const itemCompany = (item[companyField] || '').toString().trim();
+        
+        return itemNum === targetNum && 
+               itemCompany === targetCompany && 
+               item.id !== excludeId;
+    });
 };
 
 // --- NOTIFICATION HELPER ---
@@ -441,9 +450,13 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
+    // Ensure permitNumber is a number
+    permit.permitNumber = Number(permit.permitNumber);
+
     // STRICT DUPLICATE CHECK (Create)
     if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
-        return res.status(409).json({ error: "Duplicate permit number" });
+        console.warn(`>>> Duplicate Exit Permit Attempt: ${permit.permitNumber} for ${permit.company}`);
+        return res.status(409).json({ error: `شماره مجوز ${permit.permitNumber} برای شرکت ${permit.company} قبلاً ثبت شده است.` });
     }
 
     if(!db.exitPermits) db.exitPermits = []; 
@@ -463,14 +476,14 @@ app.put('/api/exit-permits/:id', (req, res) => {
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
     if (idx > -1) { 
         const currentPermit = db.exitPermits[idx];
-        const newPermitNum = req.body.permitNumber !== undefined ? req.body.permitNumber : currentPermit.permitNumber;
-        const newCompany = req.body.company !== undefined ? req.body.company : currentPermit.company;
+        const newPermitNum = req.body.permitNumber !== undefined ? Number(req.body.permitNumber) : currentPermit.permitNumber;
+        const newCompany = req.body.company !== undefined ? req.body.company.toString().trim() : currentPermit.company;
         
         if (checkForDuplicate(db.exitPermits, 'permitNumber', newPermitNum, 'company', newCompany, req.params.id)) {
-             return res.status(409).json({ error: "Duplicate permit number" });
+             return res.status(409).json({ error: `شماره مجوز ${newPermitNum} برای شرکت ${newCompany} قبلاً ثبت شده است.` });
         }
 
-        const updatedPermit = { ...db.exitPermits[idx], ...req.body };
+        const updatedPermit = { ...db.exitPermits[idx], ...req.body, permitNumber: newPermitNum, company: newCompany };
 
         // Notification Logic
         if (currentPermit.status !== updatedPermit.status) {

@@ -60,19 +60,26 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         fetchNextNumber(val);
     };
 
-    const handleNumberBlur = () => {
+    const handleNumberBlur = async () => {
         if (!permitNumber && selectedCompany) {
             fetchNextNumber(selectedCompany);
         } else if (permitNumber && selectedCompany) {
-            // Check for duplicate
-            const isDuplicate = existingPermits.some(p => 
-                p.company === selectedCompany && 
-                p.permitNumber === parseInt(permitNumber)
-            );
-            if (isDuplicate) {
-                // Automatically fetch next available number (gap)
-                alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
-                fetchNextNumber(selectedCompany);
+            // Re-fetch latest permits to ensure we have the most recent data
+            try {
+                const latest = await apiCall<ExitPermit[]>('/exit-permits');
+                if (Array.isArray(latest)) {
+                    setExistingPermits(latest);
+                    const isDuplicate = latest.some(p => 
+                        p.company.trim() === selectedCompany.trim() && 
+                        Number(p.permitNumber) === Number(permitNumber)
+                    );
+                    if (isDuplicate) {
+                        alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
+                        fetchNextNumber(selectedCompany);
+                    }
+                }
+            } catch (e) {
+                console.error("Error checking duplicates on blur", e);
             }
         }
     };
@@ -81,6 +88,18 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         e.preventDefault();
         if (!selectedCompany) return alert('لطفا شرکت صادرکننده را انتخاب کنید');
         if (!permitNumber) return alert('شماره حواله الزامی است');
+        
+        // Final duplicate check before submission
+        const isDuplicate = existingPermits.some(p => 
+            p.company.trim() === selectedCompany.trim() && 
+            Number(p.permitNumber) === Number(permitNumber)
+        );
+        if (isDuplicate) {
+            alert('⚠️ شماره حواله تکراری است. لطفا شماره دیگری انتخاب کنید.');
+            fetchNextNumber(selectedCompany);
+            return;
+        }
+
         if (items.some(i => !i.goodsName)) return alert('نام کالا الزامی است');
         if (destinations.some(d => !d.recipientName)) return alert('نام گیرنده الزامی است');
 
