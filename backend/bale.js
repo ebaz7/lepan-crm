@@ -39,6 +39,14 @@ export const initBaleBot = (token) => {
     pollingActive = true;
     poll();
     console.log(">>> Bale Bot Started ✅");
+
+    // Try to set commands for Bale (similar to Telegram)
+    callApi('setMyCommands', {
+        commands: [
+            { command: 'start', description: 'شروع و منوی اصلی' },
+            { command: 'menu', description: 'نمایش منو' }
+        ]
+    }).catch(() => {});
 };
 
 const poll = async () => {
@@ -71,6 +79,12 @@ const poll = async () => {
 
                 try {
                     if (u.message && u.message.text) {
+                        // Ignore group messages for command processing in Bale
+                        // In Bale, group IDs are usually negative or have a specific structure.
+                        // We check if it's a private chat. If 'type' is not available, we can't be 100% sure without more info,
+                        // but usually bots only respond to private messages if configured so.
+                        if (u.message.chat.type && u.message.chat.type !== 'private') return;
+                        
                         await BotCore.handleMessage('bale', u.message.chat.id, u.message.text, sendFn, sendPhotoFn, sendDocFn);
                     } else if (u.callback_query) {
                         await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
@@ -82,4 +96,17 @@ const poll = async () => {
         }
     } catch (e) { /* Ignore poll errors */ }
     setTimeout(poll, 2000);
+};
+
+export const sendBotMessage = (chatId, text, opts) => {
+    return callApi('sendMessage', { chat_id: chatId, text: text, ...opts });
+};
+
+export const sendBotPhoto = (chatId, buffer, caption, opts) => {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    form.append('photo', buffer, { filename: 'image.png' });
+    form.append('caption', caption);
+    if (opts && opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
+    return callApi('sendPhoto', form, true);
 };

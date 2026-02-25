@@ -15,6 +15,12 @@ export const initTelegram = async (token) => {
         bot = new TelegramBot(token, { polling: true, request: requestOptions });
         console.log(">>> Telegram Bot Started ✅");
 
+        // Set Persistent Menu Commands
+        bot.setMyCommands([
+            { command: 'start', description: 'شروع و منوی اصلی' },
+            { command: 'menu', description: 'نمایش منو' }
+        ]).catch(e => console.error("TG SetCommands Err:", e.message));
+
         const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts).catch(e => console.error("TG Send Err:", e.message));
         const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts }).catch(e => console.error("TG Photo Err:", e.message));
         
@@ -30,6 +36,8 @@ export const initTelegram = async (token) => {
         bot.on('message', async (msg) => {
             try {
                 if (!msg.text) return;
+                // Ignore group messages for command processing
+                if (msg.chat.type !== 'private') return;
                 await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
             } catch (e) {
                 console.error("TG Msg Handle Error:", e);
@@ -52,4 +60,14 @@ export const initTelegram = async (token) => {
         });
 
     } catch (e) { console.error("Telegram Init Error", e); }
+};
+
+export const sendBotMessage = (chatId, text, opts) => {
+    if (!bot) return Promise.reject("Bot not initialized");
+    return bot.sendMessage(chatId, text, opts);
+};
+
+export const sendBotPhoto = (chatId, buffer, caption, opts) => {
+    if (!bot) return Promise.reject("Bot not initialized");
+    return bot.sendPhoto(chatId, buffer, { caption, ...opts });
 };

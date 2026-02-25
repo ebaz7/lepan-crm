@@ -253,6 +253,9 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
     const payload = JSON.stringify({ title, body, url });
 
     const sendPromises = subs.filter(sub => {
+        // ALWAYS NOTIFY ADMIN
+        if (sub.role === 'admin') return true;
+        
         if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
         if (targetRoles && !targetRoles.includes(sub.role)) return false;
         return true;
@@ -396,23 +399,25 @@ app.put('/api/orders/:id', (req, res) => {
         // Notification Logic for Status Change
         if (currentOrder.status !== updatedOrder.status) {
             // Notify Requestor
-            if (updatedOrder.createdBy) {
+            if (updatedOrder.requester) {
                 broadcastNotification(
                     'تغییر وضعیت درخواست پرداخت',
-                    `درخواست شما به وضعیت ${updatedOrder.status === 'APPROVED' ? 'تایید شده' : updatedOrder.status === 'REJECTED' ? 'رد شده' : updatedOrder.status} تغییر یافت.`,
+                    `درخواست پرداخت #${updatedOrder.trackingNumber} به وضعیت "${updatedOrder.status}" تغییر یافت.`,
                     '/payment-orders',
                     null,
-                    [updatedOrder.createdBy]
+                    [updatedOrder.requester]
                 );
             }
-            // Notify Financial if Approved
-            if (updatedOrder.status === 'APPROVED') {
-                broadcastNotification(
-                    'تایید نهایی پرداخت',
-                    `درخواست پرداخت ${updatedOrder.trackingNumber} تایید شد.`,
-                    '/payment-orders',
-                    ['FINANCIAL']
-                );
+
+            // Workflow Notifications
+            if (updatedOrder.status === 'تایید مالی / در انتظار مدیریت') {
+                broadcastNotification('تایید مالی پرداخت', `سند #${updatedOrder.trackingNumber} تایید مالی شد و در انتظار تایید مدیریت است.`, '/payment-approvals', ['MANAGER']);
+            } else if (updatedOrder.status === 'تایید مدیریت / در انتظار مدیرعامل') {
+                broadcastNotification('تایید مدیریت پرداخت', `سند #${updatedOrder.trackingNumber} تایید مدیریت شد و در انتظار تایید مدیرعامل است.`, '/payment-approvals', ['CEO']);
+            } else if (updatedOrder.status === 'تایید نهایی') {
+                broadcastNotification('تایید نهایی پرداخت', `سند #${updatedOrder.trackingNumber} تایید نهایی شد. لطفا نسبت به پرداخت اقدام کنید.`, '/payment-orders', ['FINANCIAL']);
+            } else if (updatedOrder.status === 'رد شده') {
+                broadcastNotification('رد درخواست پرداخت', `سند #${updatedOrder.trackingNumber} رد شد.`, '/payment-orders');
             }
         }
 
@@ -470,23 +475,27 @@ app.put('/api/exit-permits/:id', (req, res) => {
         // Notification Logic
         if (currentPermit.status !== updatedPermit.status) {
             // Notify Requestor
-            if (updatedPermit.createdBy) {
+            if (updatedPermit.requester) {
                 broadcastNotification(
                     'تغییر وضعیت مجوز خروج',
-                    `مجوز خروج ${updatedPermit.permitNumber} به وضعیت ${updatedPermit.status} تغییر یافت.`,
+                    `مجوز خروج ${updatedPermit.permitNumber} به وضعیت "${updatedPermit.status}" تغییر یافت.`,
                     '/exit-permits',
                     null,
-                    [updatedPermit.createdBy]
+                    [updatedPermit.requester]
                 );
             }
-            // Notify Security if Approved
-            if (updatedPermit.status === 'APPROVED') {
-                broadcastNotification(
-                    'مجوز خروج تایید شده',
-                    `مجوز ${updatedPermit.permitNumber} تایید شد و آماده خروج است.`,
-                    '/security-panel',
-                    ['SECURITY', 'GUARD']
-                );
+
+            // Workflow Notifications
+            if (updatedPermit.status === 'در انتظار مدیر کارخانه') {
+                broadcastNotification('تایید مدیرعامل خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیرعامل شد و در انتظار مدیر کارخانه است.`, '/exit-approvals', ['FACTORY_MANAGER']);
+            } else if (updatedPermit.status === 'در انتظار تایید انبار') {
+                broadcastNotification('تایید مدیر کارخانه خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیر کارخانه شد و در انتظار تایید انبار است.`, '/exit-approvals', ['WAREHOUSE_KEEPER']);
+            } else if (updatedPermit.status === 'در انتظار خروج') {
+                broadcastNotification('تایید انبار خروج', `مجوز #${updatedPermit.permitNumber} تایید انبار شد و در انتظار خروج است.`, '/security-panel', ['SECURITY_HEAD', 'SECURITY_GUARD']);
+            } else if (updatedPermit.status === 'خارج شده (بایگانی)') {
+                broadcastNotification('خروج نهایی کالا', `مجوز #${updatedPermit.permitNumber} از کارخانه خارج شد.`, '/exit-permits');
+            } else if (updatedPermit.status === 'رد شده') {
+                broadcastNotification('رد مجوز خروج', `مجوز #${updatedPermit.permitNumber} رد شد.`, '/exit-permits');
             }
         }
 
@@ -843,7 +852,8 @@ app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.t
 app.post('/api/upload', (req, res) => {
     const { fileName, fileData } = req.body;
     if (!fileName || !fileData) return res.status(400).send('Missing data');
-    const base64Data = fileData.replace(/^data:([A-Za-z-+/]+);base64,/, '');
+    // Fix Regex to handle complex MIME types (e.g. audio/webm;codecs=opus)
+    const base64Data = fileData.replace(/^data:.*;base64,/, '');
     const uniqueName = `${Date.now()}_${fileName}`;
     const filePath = path.join(UPLOADS_DIR, uniqueName);
     fs.writeFile(filePath, base64Data, 'base64', (err) => {
@@ -863,7 +873,30 @@ app.post('/api/restart-bot', async (req, res) => {
 });
 
 app.post('/api/send-bot-message', async (req, res) => {
-    res.json({ success: true }); 
+    const { platform, chatId, caption, mediaData } = req.body;
+    try {
+        if (platform === 'telegram') {
+            const tg = await safeImport('./backend/telegram.js');
+            if (tg && tg.sendBotPhoto && mediaData) {
+                const buffer = Buffer.from(mediaData.data, 'base64');
+                await tg.sendBotPhoto(chatId, buffer, caption);
+            } else if (tg && tg.sendBotMessage) {
+                await tg.sendBotMessage(chatId, caption);
+            }
+        } else if (platform === 'bale') {
+            const bale = await safeImport('./backend/bale.js');
+            if (bale && bale.sendBotPhoto && mediaData) {
+                const buffer = Buffer.from(mediaData.data, 'base64');
+                await bale.sendBotPhoto(chatId, buffer, caption);
+            } else if (bale && bale.sendBotMessage) {
+                await bale.sendBotMessage(chatId, caption);
+            }
+        }
+        res.json({ success: true });
+    } catch (e) {
+        console.error("Bot Send Error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // --- UPDATED BACKUP ENDPOINTS ---

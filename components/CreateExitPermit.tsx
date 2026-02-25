@@ -70,12 +70,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 p.permitNumber === parseInt(permitNumber)
             );
             if (isDuplicate) {
-                alert('⚠️ این شماره حواله قبلاً ثبت شده است!');
-                // Optional: Clear or reset? User said "don't allow", so maybe clear or ask to auto-fill
-                // Let's ask if they want to auto-fill
-                if (window.confirm('این شماره تکراری است. آیا می‌خواهید شماره جدید دریافت کنید؟')) {
-                    fetchNextNumber(selectedCompany);
-                }
+                // Automatically fetch next available number (gap)
+                alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
+                fetchNextNumber(selectedCompany);
             }
         }
     };

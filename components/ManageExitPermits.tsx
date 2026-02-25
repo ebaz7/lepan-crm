@@ -203,22 +203,41 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             // ... (Target logic same as previous) ...
             const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
-            let g1WA = companyConfig?.warehouseGroup;
-            let g1Bale = companyConfig?.baleChannelId;
-            let g1Tg = companyConfig?.telegramChannelId;
-            if (!g1WA) g1WA = settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
-            if (!g1Bale) g1Bale = settings?.exitPermitNotificationBaleId;
-            if (!g1Tg) g1Tg = settings?.exitPermitNotificationTelegramId;
+            
+            // Group 1 IDs
+            let g1WA = companyConfig?.warehouseGroup || settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
+            let g1Bale = companyConfig?.baleChannelId || settings?.exitPermitNotificationBaleId;
+            let g1Tg = companyConfig?.telegramChannelId || settings?.exitPermitNotificationTelegramId;
 
-            if (g1WA) targets.push({ group: g1WA });
-            if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
-            if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
-
+            // Group 2 IDs
             const g2Config = settings?.exitPermitSecondGroupConfig;
-            if (g2Config && g2Config.activeStatuses.includes(permit.status)) {
-                if (g2Config.groupId) targets.push({ group: g2Config.groupId });
-                if (g2Config.baleId) targets.push({ platform: 'bale', id: g2Config.baleId });
-                if (g2Config.telegramId) targets.push({ platform: 'telegram', id: g2Config.telegramId });
+            let g2WA = g2Config?.groupId;
+            let g2Bale = g2Config?.baleId;
+            let g2Tg = g2Config?.telegramId;
+
+            // Routing Logic based on user request:
+            // 1. CEO Approval (prevStatus was PENDING_CEO, now PENDING_FACTORY) -> Group 1
+            // 2. Factory Manager Approval (prevStatus was PENDING_FACTORY, now PENDING_WAREHOUSE) -> Group 2
+            // 3. Warehouse Supervisor Approval (prevStatus was PENDING_WAREHOUSE, now PENDING_SECURITY) -> Group 2
+            // 4. Security Guard Exit (prevStatus was PENDING_SECURITY, now EXITED) -> BOTH Group 1 & Group 2
+
+            const isCEOApproved = prevStatus === ExitPermitStatus.PENDING_CEO;
+            const isFactoryApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY;
+            const isWarehouseApproved = prevStatus === ExitPermitStatus.PENDING_WAREHOUSE;
+            const isSecurityApproved = prevStatus === ExitPermitStatus.PENDING_SECURITY;
+
+            // Add Group 1 if CEO Approved or Security Approved
+            if (isCEOApproved || isSecurityApproved) {
+                if (g1WA) targets.push({ group: g1WA });
+                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+            }
+
+            // Add Group 2 if Factory Approved, Warehouse Approved, or Security Approved
+            if (isFactoryApproved || isWarehouseApproved || isSecurityApproved) {
+                if (g2WA) targets.push({ group: g2WA });
+                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
             }
 
             let captionTitle = '';
