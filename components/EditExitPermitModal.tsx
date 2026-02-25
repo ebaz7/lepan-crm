@@ -2,12 +2,13 @@
 import React, { useState } from 'react';
 import { ExitPermit, ExitPermitStatus, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { editExitPermit } from '../services/storageService';
-import { generateUUID, getShamsiDateFromIso, jalaliToGregorian, getCurrentShamsiDate } from '../constants';
+import { generateUUID, getShamsiDateFromIso, jalaliToGregorian, getCurrentShamsiDate, normalizeInputNumber } from '../constants';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, X, AlertTriangle } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
 import { getSettings } from '../services/storageService'; 
+import html2canvas from 'html2canvas';
 
 interface EditExitPermitModalProps {
   permit: ExitPermit;
@@ -46,14 +47,15 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
       
       // Final duplicate check
       try {
+          const normalizedNum = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
           const latest = await apiCall<ExitPermit[]>('/exit-permits');
           const isDuplicate = latest.some(p => 
               p.id !== permit.id &&
               p.company.trim() === permit.company.trim() && 
-              Number(p.permitNumber) === Number(permitNumber)
+              Number(p.permitNumber) === Number(normalizedNum)
           );
           if (isDuplicate) {
-              alert(`⚠️ شماره حواله ${permitNumber} تکراری است. لطفا شماره دیگری انتخاب کنید.`);
+              alert(`⚠️ شماره حواله ${normalizedNum} تکراری است. لطفا شماره دیگری انتخاب کنید.`);
               setIsSubmitting(false);
               return;
           }
@@ -61,9 +63,10 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
           console.error("Duplicate check failed", e);
       }
 
+      const normalizedNum = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
       const updatedPermit: ExitPermit = {
           ...permit,
-          permitNumber: Number(permitNumber),
+          permitNumber: Number(normalizedNum),
           date: getIsoDate(),
           items: items,
           destinations: destinations,
@@ -101,8 +104,7 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
               
               if (element) {
                   try {
-                      // @ts-ignore
-                      const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
                       const base64 = canvas.toDataURL('image/png').split(',')[1];
 
                       const users = await getUsers();

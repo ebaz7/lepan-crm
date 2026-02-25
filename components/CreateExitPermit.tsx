@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
-import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
+import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, normalizeInputNumber } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
+import html2canvas from 'html2canvas';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,9 +62,12 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     };
 
     const handleNumberBlur = async () => {
-        if (!permitNumber && selectedCompany) {
+        const normalized = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
+        if (normalized !== permitNumber) setPermitNumber(normalized);
+
+        if (!normalized && selectedCompany) {
             fetchNextNumber(selectedCompany);
-        } else if (permitNumber && selectedCompany) {
+        } else if (normalized && selectedCompany) {
             // Re-fetch latest permits to ensure we have the most recent data
             try {
                 const latest = await apiCall<ExitPermit[]>('/exit-permits');
@@ -71,7 +75,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     setExistingPermits(latest);
                     const isDuplicate = latest.some(p => 
                         p.company.trim() === selectedCompany.trim() && 
-                        Number(p.permitNumber) === Number(permitNumber)
+                        Number(p.permitNumber) === Number(normalized)
                     );
                     if (isDuplicate) {
                         alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
@@ -87,12 +91,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCompany) return alert('لطفا شرکت صادرکننده را انتخاب کنید');
-        if (!permitNumber) return alert('شماره حواله الزامی است');
+        
+        const normalizedNum = normalizeInputNumber(permitNumber).replace(/[^0-9]/g, '');
+        if (!normalizedNum) return alert('شماره حواله الزامی است');
         
         // Final duplicate check before submission
         const isDuplicate = existingPermits.some(p => 
             p.company.trim() === selectedCompany.trim() && 
-            Number(p.permitNumber) === Number(permitNumber)
+            Number(p.permitNumber) === Number(normalizedNum)
         );
         if (isDuplicate) {
             alert('⚠️ شماره حواله تکراری است. لطفا شماره دیگری انتخاب کنید.');
@@ -114,7 +120,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
-                permitNumber: parseInt(permitNumber.replace(/[^0-9]/g, '')) || 0,
+                permitNumber: parseInt(normalizedNum) || 0,
                 company: selectedCompany,
                 date: isoDate,
                 requester: currentUser.fullName,
@@ -137,37 +143,36 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             // Initiate Auto-Send Process
             setTempPermit(newPermit);
             
+            // Give a small delay for the DOM to update with the hidden print element
             setTimeout(async () => {
-                // Ensure element exists
                 const elementId = `print-permit-create-${newPermit.id}`;
                 const element = document.getElementById(elementId);
                 
                 if (element) {
                     try {
-                        // @ts-ignore
-                        const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                        const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         
                         const users = await getUsers();
                         const ceo = users.find(u => u.role === UserRole.CEO);
                         
-                        if (ceo) {
+                        if (ceo && ceo.phoneNumber) {
                             const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             
-                            if (ceo.phoneNumber) {
-                                await apiCall('/send-whatsapp', 'POST', { 
-                                    number: ceo.phoneNumber, 
-                                    message: caption, 
-                                    mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
-                                });
-                            }
+                            await apiCall('/send-whatsapp', 'POST', { 
+                                number: ceo.phoneNumber, 
+                                message: caption, 
+                                mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
+                            });
                         }
-                    } catch (e) { console.error("Notification Error", e); }
+                    } catch (e) { 
+                        console.error("Notification Error", e);
+                    }
                 }
                 
                 // Clear and navigate
                 onSuccess();
-            }, 2000);
+            }, 1000);
 
         } catch (e: any) {
             console.error("Submit Error:", e);
