@@ -14,23 +14,6 @@ const saveDb = (data) => {
     } catch (e) { console.error("DB Write Error", e); }
 };
 
-const findNextGapNumber = (items, company, field, settingsStart) => {
-    let startNum = settingsStart || 1000;
-    const existingNumbers = new Set();
-    if (items && Array.isArray(items)) {
-        for (const i of items) {
-            const itemCompany = i.company || i.payingCompany || '';
-            if (!company || itemCompany === company) {
-                const num = parseInt(i[field]);
-                if (!isNaN(num) && num >= startNum) existingNumbers.add(num);
-            }
-        }
-    }
-    let expected = startNum; 
-    while (existingNumbers.has(expected)) { expected++; }
-    return expected;
-};
-
 const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 const formatCurrency = (amount) => new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
 const formatDate = () => new Date().toLocaleDateString('fa-IR');
@@ -38,15 +21,7 @@ const formatDate = () => new Date().toLocaleDateString('fa-IR');
 // --- ACTIONS ---
 
 export const handleCreatePayment = (db, args) => {
-    const company = db.settings.defaultCompany || 'نامشخص';
-    let minStart = 1000;
-    if (db.settings.activeFiscalYearId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
-        if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startTrackingNumber || 1000;
-        }
-    }
-    const trackingNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+    const trackingNum = (db.settings.currentTrackingNumber || 1000) + 1;
     db.settings.currentTrackingNumber = trackingNum;
     
     const amount = typeof args.amount === 'string' ? parseInt(args.amount.replace(/[^0-9]/g, '')) : args.amount;
@@ -119,23 +94,14 @@ export const handleCreateBijak = (db, args) => {
 
 // NEW: Create Exit Permit (Sales Order)
 export const handleCreateExitPermit = (db, args) => {
-    const company = db.settings.defaultCompany || 'نامشخص';
-    let minStart = 1000;
-    if (db.settings.activeFiscalYearId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
-        if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startExitPermitNumber || 1000;
-        }
-    }
-    const nextPermitNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+    const nextPermitNum = (db.settings.currentExitPermitNumber || 1000) + 1;
     db.settings.currentExitPermitNumber = nextPermitNum;
 
     const newPermit = {
         id: generateUUID(),
         permitNumber: nextPermitNum,
         date: new Date().toISOString().split('T')[0],
-        company: company,
-        requester: 'WhatsApp Bot',
+        requester: 'Telegram Bot',
         items: [{
             id: generateUUID(),
             goodsName: args.itemName,
@@ -148,8 +114,8 @@ export const handleCreateExitPermit = (db, args) => {
             address: 'ثبت شده توسط ربات',
             phone: ''
         }],
-        goodsName: args.itemName, 
-        recipientName: args.recipient, 
+        goodsName: args.itemName, // Legacy field support
+        recipientName: args.recipient, // Legacy field support
         cartonCount: Number(args.count) || 0,
         status: 'در انتظار تایید مدیرعامل',
         createdAt: Date.now()

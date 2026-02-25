@@ -212,15 +212,14 @@ setTimeout(performAutoBackup, 10000);
 const findNextGapNumber = (items, company, field, settingsStart) => {
     let startNum = settingsStart || 1000;
     
-    // Optimize: Single pass to filter and extract numbers
+    // Optimize: Single pass to filter and extract numbers, avoid sorting
     const existingNumbers = new Set();
     
     if (items && Array.isArray(items)) {
         for (const i of items) {
             const itemCompany = i.company || i.payingCompany || '';
             const targetCompany = company || '';
-            // If company is provided, filter by it. If not, consider all (global sequence)
-            if (!company || itemCompany === targetCompany) {
+            if (itemCompany === targetCompany) {
                 const num = parseInt(i[field]);
                 if (!isNaN(num) && num >= startNum) {
                     existingNumbers.add(num);
@@ -442,22 +441,9 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
-    // STRICT DUPLICATE CHECK & AUTO-FIX (Create)
+    // STRICT DUPLICATE CHECK (Create)
     if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
-        // If duplicate, find the next available gap automatically
-        let minStart = 1000;
-        if (db.settings.activeFiscalYearId && permit.company) {
-            const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
-            if (year && year.companySequences && year.companySequences[permit.company]) {
-                minStart = year.companySequences[permit.company].startExitPermitNumber || 1000;
-            }
-        }
-        const nextGap = findNextGapNumber(db.exitPermits, permit.company, 'permitNumber', minStart);
-        permit.permitNumber = nextGap;
-        // Update settings to reflect the latest number if it's higher
-        if (nextGap > (db.settings.currentExitPermitNumber || 0)) {
-            db.settings.currentExitPermitNumber = nextGap;
-        }
+        return res.status(409).json({ error: "Duplicate permit number" });
     }
 
     if(!db.exitPermits) db.exitPermits = []; 

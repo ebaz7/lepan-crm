@@ -25,30 +25,6 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
   const [destinations, setDestinations] = useState<ExitPermitDestination[]>(permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: generateUUID(), recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }]);
   const [driverInfo, setDriverInfo] = useState({ plateNumber: permit.plateNumber || '', driverName: permit.driverName || '', description: permit.description || '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [existingPermits, setExistingPermits] = useState<ExitPermit[]>([]);
-
-  React.useEffect(() => {
-    apiCall<ExitPermit[]>('/exit-permits').then(res => {
-        if (Array.isArray(res)) setExistingPermits(res);
-    }).catch(console.error);
-  }, []);
-
-  const handleNumberBlur = () => {
-    if (permitNumber && permit.company) {
-        const isDuplicate = existingPermits.some(p => 
-            p.id !== permit.id &&
-            p.company === permit.company && 
-            p.permitNumber === parseInt(permitNumber)
-        );
-        if (isDuplicate) {
-            alert(`⚠️ شماره ${permitNumber} قبلاً برای شرکت ${permit.company} ثبت شده است. در حال جستجوی اولین شماره خالی...`);
-            apiCall<{ nextNumber: number }>(`/next-exit-permit-number?company=${encodeURIComponent(permit.company)}&t=${Date.now()}`)
-                .then(res => {
-                    if (res && res.nextNumber) setPermitNumber(res.nextNumber.toString());
-                });
-        }
-    }
-  };
   
   // State for rendering the hidden invoice for auto-send
   const [tempPermitForCapture, setTempPermitForCapture] = useState<ExitPermit | null>(null);
@@ -209,7 +185,7 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <div><label className="text-sm font-bold block mb-1 flex items-center gap-1"><Hash size={16}/> شماره مجوز</label><input type="number" className="w-full border rounded-xl p-3 bg-white text-left dir-ltr font-bold text-orange-600" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} onBlur={handleNumberBlur} required /></div>
+                    <div><label className="text-sm font-bold block mb-1 flex items-center gap-1"><Hash size={16}/> شماره مجوز</label><input type="number" className="w-full border rounded-xl p-3 bg-white text-left dir-ltr font-bold text-orange-600" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} required /></div>
                     <div><label className="text-sm font-bold block mb-1">تاریخ خروج</label><div className="flex gap-2"><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: Number(e.target.value)})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: Number(e.target.value)})}>{months.map((m, i) => <option key={i} value={i+1}>{m}</option>)}</select><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: Number(e.target.value)})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
                 </div>
                 <div className="space-y-4">
