@@ -211,6 +211,7 @@ export const generateRecordImage = async (record, type) => {
             title = 'مجوز خروج کالا';
             htmlData = `
                 <div class="row"><span class="label">شماره مجوز:</span><span class="value">#${record.permitNumber}</span></div>
+                <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
                 <div class="row"><span class="label">گیرنده:</span><span class="value">${record.recipientName}</span></div>
                 <div class="row"><span class="label">کالا:</span><span class="value">${record.goodsName}</span></div>
                 <div class="row"><span class="label">تعداد/وزن:</span><span class="value">${record.cartonCount} کارتن / ${record.weight} KG</span></div>

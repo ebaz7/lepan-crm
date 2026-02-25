@@ -296,11 +296,19 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "🔢 تعداد/مقدار را وارد کنید:");
     }
     if (session.state === 'EXIT_COUNT') {
+        const company = session.data.company || db.settings.defaultCompany;
+        
+        // Ensure unique permit number
+        let nextNum = (db.settings.currentExitPermitNumber || 1000) + 1;
+        while (db.exitPermits && db.exitPermits.some(p => p.permitNumber === nextNum && p.company === company)) {
+            nextNum++;
+        }
+
         const permit = {
             id: Date.now().toString(),
-            permitNumber: (db.settings.currentExitPermitNumber || 1000) + 1,
+            permitNumber: nextNum,
             date: new Date().toISOString().split('T')[0],
-            company: session.data.company || db.settings.defaultCompany,
+            company: company,
             requester: user.fullName,
             recipientName: session.data.recipient,
             goodsName: session.data.item,
@@ -569,7 +577,7 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
                 try {
                     const img = await Renderer.generateRecordImage(p, 'EXIT');
                     // Detailed Caption matching the card content
-                    const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n⚖️ وزن: ${p.weight} KG\n✅ تایید شده توسط مدیرعامل`;
+                    const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n⚖️ وزن: ${p.weight} KG\n✅ تایید شده توسط مدیرعامل`;
                     
                     // Send to Approver (CEO)
                     await sendPhotoFn(platform, chatId, img, caption);
@@ -578,16 +586,36 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
                     const tgGroupId = db.settings.telegramReportsGroupId || db.settings.reportsGroupId;
                     const baleGroupId = db.settings.baleReportsGroupId || db.settings.reportsGroupId;
 
-                    // Send to CURRENT platform's group
-                    let targetGroupId = null;
-                    if (platform === 'telegram') targetGroupId = tgGroupId;
-                    if (platform === 'bale') targetGroupId = baleGroupId;
+                    // 1. Send to Telegram Group (if configured and token exists)
+                    if (tgGroupId && db.settings.telegramBotToken) {
+                        console.log(`Sending Exit Photo to Telegram Group: ${tgGroupId}`);
+                        if (platform === 'telegram') {
+                            await sendPhotoFn('telegram', tgGroupId, img, caption);
+                        } else {
+                            // Cross-platform send
+                            try {
+                                const tgModule = await import('./telegram.js');
+                                if (tgModule && tgModule.sendBotPhoto) {
+                                    await tgModule.sendBotPhoto(tgGroupId, img, caption);
+                                }
+                            } catch (err) { console.error("TG Cross-Send Error:", err); }
+                        }
+                    }
 
-                    if (targetGroupId) {
-                        console.log(`Sending Exit Photo to ${platform} Group: ${targetGroupId}`);
-                        await sendPhotoFn(platform, targetGroupId, img, caption);
-                    } else {
-                        console.log(`No report group ID found for ${platform}`);
+                    // 2. Send to Bale Group (if configured and token exists)
+                    if (baleGroupId && db.settings.baleBotToken) {
+                        console.log(`Sending Exit Photo to Bale Group: ${baleGroupId}`);
+                        if (platform === 'bale') {
+                            await sendPhotoFn('bale', baleGroupId, img, caption);
+                        } else {
+                            // Cross-platform send
+                            try {
+                                const baleModule = await import('./bale.js');
+                                if (baleModule && baleModule.sendBotPhoto) {
+                                    await baleModule.sendBotPhoto(baleGroupId, img, caption);
+                                }
+                            } catch (err) { console.error("Bale Cross-Send Error:", err); }
+                        }
                     }
 
                 } catch (e) {
