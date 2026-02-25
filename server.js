@@ -446,16 +446,9 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
-    // SMART DUPLICATE HANDLING (Gap Filling)
+    // STRICT DUPLICATE CHECK (Create)
     if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
-        console.log(`⚠️ Duplicate Permit Number ${permit.permitNumber} detected. Finding next available gap...`);
-        const nextNum = findNextGapNumber(db.exitPermits, permit.company, 'permitNumber', 1000);
-        permit.permitNumber = nextNum;
-        
-        // Update global counter if needed to avoid immediate next collision
-        if (db.settings.currentExitPermitNumber && db.settings.currentExitPermitNumber < nextNum) {
-            db.settings.currentExitPermitNumber = nextNum;
-        }
+        return res.status(409).json({ error: "Duplicate permit number" });
     }
 
     if(!db.exitPermits) db.exitPermits = []; 

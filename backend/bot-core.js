@@ -568,15 +568,28 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
             if (oldStatus === 'در انتظار تایید مدیرعامل' && p.status === 'در انتظار مدیر کارخانه') {
                 try {
                     const img = await Renderer.generateRecordImage(p, 'EXIT');
-                    const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount}\n✅ تایید شده توسط مدیرعامل`;
+                    // Detailed Caption matching the card content
+                    const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n⚖️ وزن: ${p.weight} KG\n✅ تایید شده توسط مدیرعامل`;
                     
                     // Send to Approver (CEO)
                     await sendPhotoFn(platform, chatId, img, caption);
 
-                    // Send to Log Group (if configured)
-                    if (db.settings.reportsGroupId) {
-                         await sendPhotoFn(platform, db.settings.reportsGroupId, img, caption);
+                    // Send to Log Groups (Telegram & Bale)
+                    const tgGroupId = db.settings.telegramReportsGroupId || db.settings.reportsGroupId;
+                    const baleGroupId = db.settings.baleReportsGroupId || db.settings.reportsGroupId;
+
+                    // Send to CURRENT platform's group
+                    let targetGroupId = null;
+                    if (platform === 'telegram') targetGroupId = tgGroupId;
+                    if (platform === 'bale') targetGroupId = baleGroupId;
+
+                    if (targetGroupId) {
+                        console.log(`Sending Exit Photo to ${platform} Group: ${targetGroupId}`);
+                        await sendPhotoFn(platform, targetGroupId, img, caption);
+                    } else {
+                        console.log(`No report group ID found for ${platform}`);
                     }
+
                 } catch (e) {
                     console.error("Failed to generate/send exit photo:", e);
                     sendFn(chatId, "⚠️ خطا در ارسال تصویر مجوز.");
