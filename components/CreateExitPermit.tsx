@@ -64,14 +64,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         if (!permitNumber && selectedCompany) {
             fetchNextNumber(selectedCompany);
         } else if (permitNumber && selectedCompany) {
-            // Check for duplicate
+            // Check for duplicate locally first for instant feedback
             const isDuplicate = existingPermits.some(p => 
                 p.company === selectedCompany && 
                 p.permitNumber === parseInt(permitNumber)
             );
             if (isDuplicate) {
                 // Automatically fetch next available number (gap)
-                alert('⚠️ این شماره تکراری است. سیستم به طور خودکار اولین شماره خالی را جایگزین می‌کند.');
+                alert(`⚠️ شماره ${permitNumber} قبلاً ثبت شده است. سیستم به طور خودکار اولین شماره خالی (Gap) را جایگزین می‌کند.`);
                 fetchNextNumber(selectedCompany);
             }
         }

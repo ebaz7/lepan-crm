@@ -13,6 +13,7 @@ import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
 import EditExitPermitModal from './EditExitPermitModal';
 import useIsMobile from '../hooks/useIsMobile';
+import html2canvas from 'html2canvas';
 
 const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any }> = ({ currentUser, settings, statusFilter }) => {
     const isMobile = useIsMobile();
@@ -196,8 +197,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         const element = document.getElementById(`print-permit-autosend-${permit.id}`);
         if (!element) return;
         try {
-             // @ts-ignore
-            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
             const base64 = canvas.toDataURL('image/png').split(',')[1];
             
             // ... (Target logic same as previous) ...

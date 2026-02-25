@@ -555,12 +555,33 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const id = data.replace('APP_EXIT_', '');
         const p = db.exitPermits.find(x => x.id === id);
         if (p) {
+            const oldStatus = p.status;
             if (p.status === 'در انتظار تایید مدیرعامل') p.status = 'در انتظار مدیر کارخانه';
             else if (p.status === 'در انتظار مدیر کارخانه') p.status = 'در انتظار تایید انبار';
             else if (p.status === 'در انتظار تایید انبار') p.status = 'در انتظار خروج';
             else if (p.status === 'در انتظار خروج') p.status = 'خارج شده (بایگانی)';
+            
             saveDb(db);
             sendFn(chatId, `✅ مجوز #${p.permitNumber} تایید شد.`);
+
+            // NEW: Send Photo to Groups (if CEO approved)
+            if (oldStatus === 'در انتظار تایید مدیرعامل' && p.status === 'در انتظار مدیر کارخانه') {
+                try {
+                    const img = await Renderer.generateRecordImage(p, 'EXIT');
+                    const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount}\n✅ تایید شده توسط مدیرعامل`;
+                    
+                    // Send to Approver (CEO)
+                    await sendPhotoFn(platform, chatId, img, caption);
+
+                    // Send to Log Group (if configured)
+                    if (db.settings.reportsGroupId) {
+                         await sendPhotoFn(platform, db.settings.reportsGroupId, img, caption);
+                    }
+                } catch (e) {
+                    console.error("Failed to generate/send exit photo:", e);
+                    sendFn(chatId, "⚠️ خطا در ارسال تصویر مجوز.");
+                }
+            }
         }
         return;
     }

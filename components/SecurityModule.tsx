@@ -253,31 +253,65 @@ const SecurityModule: React.FC<Props> = ({ currentUser }) => {
         if (!logForm.origin || !logForm.driverName) return;
         const isoDate = getIsoSelectedDate();
         resetDailyApprovalIfNeeded(isoDate); // Reset approval if modifying
+        
         if (editingId) {
             await updateSecurityLog({ ...logs.find(l => l.id === editingId)!, ...logForm } as SecurityLog);
         } else {
-            await saveSecurityLog({
-                id: generateUUID(),
-                rowNumber: logs.filter(l => l.date === isoDate).length + 1,
-                date: isoDate,
-                shift: '', 
-                origin: logForm.origin || '',
-                entryTime: logForm.entryTime || '',
-                exitTime: logForm.exitTime || '',
-                driverName: logForm.driverName || '',
-                plateNumber: logForm.plateNumber || '',
-                goodsName: logForm.goodsName || '',
-                quantity: logForm.quantity || '',
-                destination: logForm.destination || '',
-                receiver: logForm.receiver || '',
-                workDescription: logForm.workDescription || '',
-                permitProvider: logForm.permitProvider || '',
-                registrant: currentUser.fullName,
-                status: SecurityStatus.PENDING_FACTORY, // Direct to Factory for daily logs usually, or Supervisor? Let's assume Guard -> Supervisor check -> Factory
-                // Actually daily logs usually batch approved. Let's set to PENDING_FACTORY as standard flow for daily sheet.
-                // Or if you want supervisor check: PENDING_SUPERVISOR
-                createdAt: Date.now()
-            });
+            // CHECK FOR EXISTING OPEN ENTRY (To prevent duplicate rows on exit)
+            // If we are registering an Exit (exitTime is present), look for a record with same Plate/Driver that has Entry but NO Exit.
+            let existingOpenLog = null;
+            if (logForm.exitTime) {
+                existingOpenLog = logs.find(l => 
+                    l.date === isoDate && 
+                    // Match Plate (preferred) or Driver
+                    (
+                        (logForm.plateNumber && l.plateNumber === logForm.plateNumber) ||
+                        (!logForm.plateNumber && l.driverName === logForm.driverName)
+                    ) &&
+                    l.entryTime && // Has Entry
+                    !l.exitTime // No Exit
+                );
+            }
+
+            if (existingOpenLog) {
+                // Update the existing record instead of creating new
+                await updateSecurityLog({
+                    ...existingOpenLog,
+                    exitTime: logForm.exitTime,
+                    // Update other fields if provided, otherwise keep existing
+                    origin: logForm.origin || existingOpenLog.origin,
+                    destination: logForm.destination || existingOpenLog.destination,
+                    goodsName: logForm.goodsName || existingOpenLog.goodsName,
+                    quantity: logForm.quantity || existingOpenLog.quantity,
+                    receiver: logForm.receiver || existingOpenLog.receiver,
+                    workDescription: logForm.workDescription || existingOpenLog.workDescription,
+                    permitProvider: logForm.permitProvider || existingOpenLog.permitProvider,
+                    driverName: logForm.driverName || existingOpenLog.driverName,
+                    plateNumber: logForm.plateNumber || existingOpenLog.plateNumber,
+                } as SecurityLog);
+            } else {
+                // Create New
+                await saveSecurityLog({
+                    id: generateUUID(),
+                    rowNumber: logs.filter(l => l.date === isoDate).length + 1,
+                    date: isoDate,
+                    shift: '', 
+                    origin: logForm.origin || '',
+                    entryTime: logForm.entryTime || '',
+                    exitTime: logForm.exitTime || '',
+                    driverName: logForm.driverName || '',
+                    plateNumber: logForm.plateNumber || '',
+                    goodsName: logForm.goodsName || '',
+                    quantity: logForm.quantity || '',
+                    destination: logForm.destination || '',
+                    receiver: logForm.receiver || '',
+                    workDescription: logForm.workDescription || '',
+                    permitProvider: logForm.permitProvider || '',
+                    registrant: currentUser.fullName,
+                    status: SecurityStatus.PENDING_FACTORY, 
+                    createdAt: Date.now()
+                });
+            }
         }
         resetForms();
         loadData();

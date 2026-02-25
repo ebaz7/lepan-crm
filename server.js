@@ -244,7 +244,7 @@ const checkForDuplicate = (list, numField, numValue, companyField, companyValue,
 };
 
 // --- NOTIFICATION HELPER ---
-const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null) => {
+const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
     
@@ -253,16 +253,19 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
     const payload = JSON.stringify({ title, body, url });
 
     const sendPromises = subs.filter(sub => {
-        // ALWAYS NOTIFY ADMIN
+        // 1. EXPLICIT EXCLUSION (e.g. Sender)
+        if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
+
+        // 2. ALWAYS NOTIFY ADMIN (Unless explicitly excluded above)
         if (sub.role === 'admin') return true;
         
+        // 3. TARGET FILTERING
         if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
         if (targetRoles && !targetRoles.includes(sub.role)) return false;
+        
         return true;
     }).map(sub => {
         if (sub.type === 'android') {
-            // Native Android handled via FCM (if configured) or we can use a proxy
-            // For now, we assume WebPush works for PWA and we'd need FCM key for Native
             return Promise.resolve();
         }
         return webpush.sendNotification(sub, payload).catch(err => {
@@ -378,7 +381,9 @@ app.post('/api/orders', (req, res) => {
         'درخواست پرداخت جدید',
         `${order.description || 'بدون شرح'} - مبلغ: ${order.amount.toLocaleString()} ریال`,
         '/payment-approvals',
-        ['FINANCIAL', 'ADMIN']
+        ['FINANCIAL', 'ADMIN'],
+        null,
+        [order.requester] // Exclude requester
     );
 });
 app.put('/api/orders/:id', (req, res) => { 
@@ -441,9 +446,16 @@ app.post('/api/exit-permits', (req, res) => {
     const db = getDb(); 
     const permit = req.body;
 
-    // STRICT DUPLICATE CHECK (Create)
+    // SMART DUPLICATE HANDLING (Gap Filling)
     if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
-        return res.status(409).json({ error: "Duplicate permit number" });
+        console.log(`⚠️ Duplicate Permit Number ${permit.permitNumber} detected. Finding next available gap...`);
+        const nextNum = findNextGapNumber(db.exitPermits, permit.company, 'permitNumber', 1000);
+        permit.permitNumber = nextNum;
+        
+        // Update global counter if needed to avoid immediate next collision
+        if (db.settings.currentExitPermitNumber && db.settings.currentExitPermitNumber < nextNum) {
+            db.settings.currentExitPermitNumber = nextNum;
+        }
     }
 
     if(!db.exitPermits) db.exitPermits = []; 
@@ -455,7 +467,9 @@ app.post('/api/exit-permits', (req, res) => {
         'درخواست خروج کالا',
         `مجوز شماره ${permit.permitNumber} برای ${permit.customerName}`,
         '/exit-approvals',
-        ['CEO', 'ADMIN']
+        ['CEO', 'ADMIN'],
+        null,
+        [permit.requester] // Exclude requester
     );
 });
 app.put('/api/exit-permits/:id', (req, res) => { 
@@ -800,7 +814,8 @@ app.post('/api/chat', (req, res) => {
             msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
             '/chat',
             null,
-            [msg.recipient]
+            [msg.recipient],
+            [msg.senderUsername] // Exclude sender
         );
     } else if (msg.groupId) {
         const group = db.groups?.find(g => g.id === msg.groupId);
@@ -810,7 +825,8 @@ app.post('/api/chat', (req, res) => {
                 msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
                 '/chat',
                 null,
-                group.members.filter(m => m !== msg.senderUsername)
+                group.members.filter(m => m !== msg.senderUsername),
+                [msg.senderUsername] // Exclude sender
             );
         }
     } else {
@@ -818,7 +834,10 @@ app.post('/api/chat', (req, res) => {
         broadcastNotification(
             `پیام عمومی از ${msg.sender}`,
             msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
-            '/chat'
+            '/chat',
+            null,
+            null,
+            [msg.senderUsername] // Exclude sender
         );
     }
 });
