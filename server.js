@@ -236,11 +236,18 @@ const findNextGapNumber = (items, company, field, settingsStart) => {
 // --- HELPER: Strict Duplicate Checker ---
 const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
     if (!list || !Array.isArray(list)) return false;
-    return list.some(item => 
-        Number(item[numField]) === Number(numValue) &&
-        (item[companyField] || '') === (companyValue || '') &&
-        item.id !== excludeId
-    );
+    
+    const targetNum = Number(numValue);
+    const targetCompany = (companyValue || '').toString().trim();
+
+    return list.some(item => {
+        if (item.id === excludeId) return false;
+        
+        const itemNum = Number(item[numField]);
+        const itemCompany = (item[companyField] || '').toString().trim();
+        
+        return itemNum === targetNum && itemCompany === targetCompany;
+    });
 };
 
 // --- NOTIFICATION HELPER ---
@@ -711,7 +718,27 @@ app.get('/api/settings', (req, res) => {
 });
 app.post('/api/settings', (req, res) => { 
     const db = getDb(); 
-    db.settings = { ...db.settings, ...req.body }; 
+    const newSettings = { ...req.body };
+
+    // Sanitize Group IDs (Handle "123-" typo from RTL input)
+    const sanitizeId = (id) => {
+        if (!id) return '';
+        let str = id.toString().trim();
+        // If ends with minus, move it to front
+        if (str.endsWith('-')) {
+            str = '-' + str.slice(0, -1);
+        }
+        // Remove any other non-numeric chars (except minus at start)
+        // This regex allows optional minus at start, then digits
+        const match = str.match(/^-?\d+/);
+        return match ? match[0] : str;
+    };
+
+    if (newSettings.reportsGroupId) newSettings.reportsGroupId = sanitizeId(newSettings.reportsGroupId);
+    if (newSettings.telegramReportsGroupId) newSettings.telegramReportsGroupId = sanitizeId(newSettings.telegramReportsGroupId);
+    if (newSettings.baleReportsGroupId) newSettings.baleReportsGroupId = sanitizeId(newSettings.baleReportsGroupId);
+
+    db.settings = { ...db.settings, ...newSettings }; 
     saveDb(db); 
     res.json(db.settings); 
 });
