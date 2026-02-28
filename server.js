@@ -47,6 +47,8 @@ const BACKUPS_DIR = path.join(ROOT_DIR, 'backups');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
+import * as Renderer from './backend/renderer.js';
+
 // --- WEB PUSH SETUP ---
 const VAPID_FILE = path.join(ROOT_DIR, 'vapid.json');
 let vapidKeys;
@@ -502,6 +504,47 @@ app.put('/api/exit-permits/:id', (req, res) => {
             // Workflow Notifications
             if (updatedPermit.status === 'در انتظار مدیر کارخانه') {
                 broadcastNotification('تایید مدیرعامل خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیرعامل شد و در انتظار مدیر کارخانه است.`, '/exit-approvals', ['FACTORY_MANAGER']);
+                
+                // NEW: Send Image to Groups (Async)
+                (async () => {
+                    try {
+                        console.log(`>>> Generating Exit Image for #${updatedPermit.permitNumber}...`);
+                        const imgBuffer = await Renderer.generateRecordImage(updatedPermit, 'EXIT');
+                        // Format Date for Caption
+                        const dateStr = new Date(updatedPermit.date).toLocaleDateString('fa-IR');
+                        const caption = `🚛 *مجوز خروج #${updatedPermit.permitNumber}*\n🏢 شرکت: ${updatedPermit.company}\n📅 تاریخ: ${dateStr}\n👤 گیرنده: ${updatedPermit.recipientName}\n📦 کالا: ${updatedPermit.goodsName}\n✅ تایید شده توسط مدیرعامل`;
+                        
+                        const db = getDb();
+                        
+                        // 1. Telegram
+                        if (db.settings.telegramReportsGroupId && db.settings.telegramBotToken) {
+                             const tg = await safeImport('./backend/telegram.js');
+                             if (tg && tg.sendBotPhoto) await tg.sendBotPhoto(db.settings.telegramReportsGroupId, imgBuffer, caption);
+                        }
+
+                        // 2. Bale
+                        if (db.settings.baleReportsGroupId && db.settings.baleBotToken) {
+                             const bale = await safeImport('./backend/bale.js');
+                             if (bale && bale.sendBotPhoto) await bale.sendBotPhoto(db.settings.baleReportsGroupId, imgBuffer, caption);
+                        }
+                        
+                        // 3. WhatsApp (if configured)
+                        if (db.settings.reportsGroupId && db.settings.reportsGroupId.includes('@g.us')) {
+                             const wa = await safeImport('./backend/whatsapp.js');
+                             if (wa && wa.sendMessage) {
+                                 await wa.sendMessage(db.settings.reportsGroupId, caption, { 
+                                     data: imgBuffer.toString('base64'), 
+                                     mimeType: 'image/png', 
+                                     filename: 'exit_permit.png' 
+                                 });
+                             }
+                        }
+                        
+                        console.log(`>>> Exit Image Sent to Groups for #${updatedPermit.permitNumber}`);
+                    } catch (e) {
+                        console.error("Failed to send exit image to groups:", e);
+                    }
+                })();
             } else if (updatedPermit.status === 'در انتظار تایید انبار') {
                 broadcastNotification('تایید مدیر کارخانه خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیر کارخانه شد و در انتظار تایید انبار است.`, '/exit-approvals', ['WAREHOUSE_KEEPER']);
             } else if (updatedPermit.status === 'در انتظار خروج') {

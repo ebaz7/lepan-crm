@@ -772,7 +772,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         )}
 
                         {/* Messages List */}
-                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[#e5ddd5]">
                             {displayMessages.map((msg: ChatMessage) => {
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);

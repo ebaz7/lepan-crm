@@ -13,28 +13,42 @@ import SecondExitGroupSettings from './settings/SecondExitGroupSettings';
 import RolePermissionsEditor from './settings/RolePermissionsEditor';
 import BackupManager from './settings/BackupManager'; 
 import BotManager from './settings/BotManager'; 
+import QRCodeLib from 'qrcode';
 
 // Internal QRCode Component with Error Handling
 const QRCode = ({ value, size }: { value: string, size: number }) => { 
+    const [src, setSrc] = useState('');
     const [error, setError] = useState(false);
+
+    useEffect(() => {
+        QRCodeLib.toDataURL(value, { width: size, margin: 1 }, (err, url) => {
+            if (err) {
+                console.error(err);
+                setError(true);
+            } else {
+                setSrc(url);
+            }
+        });
+    }, [value, size]);
     
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center text-gray-400 text-xs border-2 border-dashed border-gray-300 rounded-lg p-2" style={{width: size, height: size}}>
                 <WifiOff size={24} className="mb-2"/>
-                <span className="text-center">امکان نمایش QR وجود ندارد (آفلاین)</span>
+                <span className="text-center">امکان نمایش QR وجود ندارد</span>
             </div>
         );
     }
 
+    if (!src) return <div className="flex items-center justify-center" style={{width: size, height: size}}><Loader2 className="animate-spin text-gray-400" /></div>;
+
     return (
         <img 
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}`} 
+            src={src} 
             alt="QR Code" 
             width={size} 
             height={size} 
             className="mix-blend-multiply" 
-            onError={() => setError(true)}
         />
     ); 
 };
