@@ -98,8 +98,14 @@ export const initWhatsApp = (authDir) => {
             } catch (error) { console.error("Message Error:", error); }
         });
 
-        client.initialize().catch(e => console.error("WA Init Fail:", e.message));
-    } catch (e) { console.error("WA Module Error:", e.message); }
+        client.initialize().catch(e => {
+            console.error(">>> WhatsApp Initialization Failed (Likely Network/Proxy Issue):", e.message);
+            isReady = false;
+        });
+    } catch (e) { 
+        console.error(">>> WhatsApp Module Critical Error:", e.message); 
+        isReady = false;
+    }
 };
 
 export const getStatus = () => ({ ready: isReady, qr: qrCode, user: clientInfo });
