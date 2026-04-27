@@ -1,35 +1,10 @@
 
-// Helper to save DB
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// Actions for WhatsApp Bot
+import * as dbManager from '../db-manager.js';
+import * as utils from '../utils.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, '..', '..', 'database.json');
-
-const saveDb = (data) => {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    } catch (e) { console.error("DB Write Error", e); }
-};
-
-const findNextGapNumber = (items, company, field, settingsStart) => {
-    let startNum = settingsStart || 1000;
-    const existingNumbers = new Set();
-    if (items && Array.isArray(items)) {
-        for (const i of items) {
-            const itemCompany = i.company || i.payingCompany || '';
-            if (!company || itemCompany === company) {
-                const num = parseInt(i[field]);
-                if (!isNaN(num) && num >= startNum) existingNumbers.add(num);
-            }
-        }
-    }
-    let expected = startNum; 
-    while (existingNumbers.has(expected)) { expected++; }
-    return expected;
-};
+const saveDb = dbManager.saveDb;
+const findNextGapNumber = utils.findNextGapNumber;
 
 const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 const formatCurrency = (amount) => new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
@@ -81,9 +56,14 @@ export const handleCreatePayment = (db, args) => {
 
 export const handleCreateBijak = (db, args) => {
     const company = db.settings.defaultCompany || 'نامشخص';
-    const nextSeq = (db.settings.warehouseSequences?.[company] || 1000) + 1;
-    if (!db.settings.warehouseSequences) db.settings.warehouseSequences = {};
-    db.settings.warehouseSequences = { ...db.settings.warehouseSequences, [company]: nextSeq };
+    let minStart = 1000;
+    if (db.settings.activeFiscalYearId && company) {
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+        if (year && year.companySequences && year.companySequences[company]) {
+            minStart = year.companySequences[company].startBijakNumber || 1000;
+        }
+    }
+    const nextSeq = findNextGapNumber(db.warehouseTransactions, company, 'number', minStart);
     
     const newTx = { 
         id: generateUUID(), 

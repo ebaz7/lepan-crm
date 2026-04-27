@@ -10,10 +10,17 @@ import cron from 'node-cron';
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import webpush from 'web-push';
+import * as dbManager from './backend/db-manager.js';
+import * as utils from './backend/utils.js';
+
+const getDb = dbManager.getDb;
+const saveDb = dbManager.saveDb;
+const findNextGapNumber = utils.findNextGapNumber;
+const checkForDuplicate = utils.checkForDuplicate;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT_DIR = __dirname; 
+const ROOT_DIR = process.cwd(); 
 
 // --- CRITICAL FIX FOR PUPPETEER PATH ---
 const PUPPETEER_CACHE = path.join(ROOT_DIR, '.puppeteer');
@@ -46,8 +53,6 @@ const BACKUPS_DIR = path.join(ROOT_DIR, 'backups');
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
-
-import * as Renderer from './backend/renderer.js';
 
 // --- WEB PUSH SETUP ---
 const VAPID_FILE = path.join(ROOT_DIR, 'vapid.json');
@@ -93,72 +98,7 @@ app.use((req, res, next) => {
 
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
-// --- ROBUST DATABASE HANDLER (IN-MEMORY CACHING FOR SPEED) ---
-let MEMORY_DB_CACHE = null;
-
-const getDb = () => {
-    // Return from RAM if available (Instant access)
-    if (MEMORY_DB_CACHE) {
-        return MEMORY_DB_CACHE;
-    }
-
-    try {
-        const defaultDb = { 
-            settings: {}, 
-            users: [],
-            orders: [], 
-            exitPermits: [], 
-            warehouseItems: [], 
-            warehouseTransactions: [], 
-            tradeRecords: [], 
-            securityLogs: [], 
-            personnelDelays: [], 
-            securityIncidents: [],
-            messages: [], 
-            groups: [], 
-            tasks: [] 
-        };
-
-        if (!fs.existsSync(DB_FILE)) {
-            MEMORY_DB_CACHE = defaultDb;
-            return defaultDb;
-        }
-        
-        const fileContent = fs.readFileSync(DB_FILE, 'utf8');
-        if (!fileContent.trim()) {
-            MEMORY_DB_CACHE = defaultDb;
-            return defaultDb;
-        }
-
-        const data = JSON.parse(fileContent);
-        // Combine with defaults to ensure structure integrity
-        MEMORY_DB_CACHE = { ...defaultDb, ...data };
-        
-        // CRITICAL FIX: Ensure arrays exist even if DB file has null/undefined
-        if (!Array.isArray(MEMORY_DB_CACHE.users)) MEMORY_DB_CACHE.users = [];
-        if (!Array.isArray(MEMORY_DB_CACHE.orders)) MEMORY_DB_CACHE.orders = [];
-        if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
-        if (!MEMORY_DB_CACHE.subscriptions) MEMORY_DB_CACHE.subscriptions = [];
-        
-        console.log(">>> Database loaded into memory.");
-        return MEMORY_DB_CACHE;
-
-    } catch (e) { 
-        console.error("Database Read Error:", e);
-        return {}; 
-    }
-};
-
-const saveDb = (data) => {
-    try {
-        // Update Memory immediately
-        MEMORY_DB_CACHE = data;
-        // Write to disk
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-    } catch(e) {
-        console.error("Database Save Error:", e);
-    }
-};
+// Shared data logic moved to db-manager.js and utils.js
 
 // --- AUTOMATIC FULL BACKUP LOGIC (ZIP) ---
 const performAutoBackup = () => {
@@ -210,47 +150,7 @@ const performAutoBackup = () => {
 cron.schedule('0 */3 * * *', performAutoBackup);
 setTimeout(performAutoBackup, 10000); 
 
-// --- HELPER: Find Next Sequence Number (Optimized) ---
-const findNextGapNumber = (items, company, field, settingsStart) => {
-    let startNum = settingsStart || 1000;
-    
-    // Optimize: Single pass to filter and extract numbers, avoid sorting
-    const existingNumbers = new Set();
-    
-    if (items && Array.isArray(items)) {
-        for (const i of items) {
-            const itemCompany = i.company || i.payingCompany || '';
-            const targetCompany = company || '';
-            if (itemCompany === targetCompany) {
-                const num = parseInt(i[field]);
-                if (!isNaN(num) && num >= startNum) {
-                    existingNumbers.add(num);
-                }
-            }
-        }
-    }
-    
-    let expected = startNum; 
-    while (existingNumbers.has(expected)) { expected++; }
-    return expected;
-};
-
-// --- HELPER: Strict Duplicate Checker ---
-const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
-    if (!list || !Array.isArray(list)) return false;
-    
-    const targetNum = Number(numValue);
-    const targetCompany = (companyValue || '').toString().trim();
-
-    return list.some(item => {
-        if (item.id === excludeId) return false;
-        
-        const itemNum = Number(item[numField]);
-        const itemCompany = (item[companyField] || '').toString().trim();
-        
-        return itemNum === targetNum && itemCompany === targetCompany;
-    });
-};
+// Shared helpers moved to utils.js
 
 // --- NOTIFICATION HELPER ---
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
@@ -504,47 +404,6 @@ app.put('/api/exit-permits/:id', (req, res) => {
             // Workflow Notifications
             if (updatedPermit.status === 'در انتظار مدیر کارخانه') {
                 broadcastNotification('تایید مدیرعامل خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیرعامل شد و در انتظار مدیر کارخانه است.`, '/exit-approvals', ['FACTORY_MANAGER']);
-                
-                // NEW: Send Image to Groups (Async)
-                (async () => {
-                    try {
-                        console.log(`>>> Generating Exit Image for #${updatedPermit.permitNumber}...`);
-                        const imgBuffer = await Renderer.generateRecordImage(updatedPermit, 'EXIT');
-                        // Format Date for Caption
-                        const dateStr = new Date(updatedPermit.date).toLocaleDateString('fa-IR');
-                        const caption = `🚛 *مجوز خروج #${updatedPermit.permitNumber}*\n🏢 شرکت: ${updatedPermit.company}\n📅 تاریخ: ${dateStr}\n👤 گیرنده: ${updatedPermit.recipientName}\n📦 کالا: ${updatedPermit.goodsName}\n✅ تایید شده توسط مدیرعامل`;
-                        
-                        const db = getDb();
-                        
-                        // 1. Telegram
-                        if (db.settings.telegramReportsGroupId && db.settings.telegramBotToken) {
-                             const tg = await safeImport('./backend/telegram.js');
-                             if (tg && tg.sendBotPhoto) await tg.sendBotPhoto(db.settings.telegramReportsGroupId, imgBuffer, caption);
-                        }
-
-                        // 2. Bale
-                        if (db.settings.baleReportsGroupId && db.settings.baleBotToken) {
-                             const bale = await safeImport('./backend/bale.js');
-                             if (bale && bale.sendBotPhoto) await bale.sendBotPhoto(db.settings.baleReportsGroupId, imgBuffer, caption);
-                        }
-                        
-                        // 3. WhatsApp (if configured)
-                        if (db.settings.reportsGroupId && db.settings.reportsGroupId.includes('@g.us')) {
-                             const wa = await safeImport('./backend/whatsapp.js');
-                             if (wa && wa.sendMessage) {
-                                 await wa.sendMessage(db.settings.reportsGroupId, caption, { 
-                                     data: imgBuffer.toString('base64'), 
-                                     mimeType: 'image/png', 
-                                     filename: 'exit_permit.png' 
-                                 });
-                             }
-                        }
-                        
-                        console.log(`>>> Exit Image Sent to Groups for #${updatedPermit.permitNumber}`);
-                    } catch (e) {
-                        console.error("Failed to send exit image to groups:", e);
-                    }
-                })();
             } else if (updatedPermit.status === 'در انتظار تایید انبار') {
                 broadcastNotification('تایید مدیر کارخانه خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیر کارخانه شد و در انتظار تایید انبار است.`, '/exit-approvals', ['WAREHOUSE_KEEPER']);
             } else if (updatedPermit.status === 'در انتظار خروج') {
@@ -777,9 +636,14 @@ app.post('/api/settings', (req, res) => {
         return match ? match[0] : str;
     };
 
-    if (newSettings.reportsGroupId) newSettings.reportsGroupId = sanitizeId(newSettings.reportsGroupId);
-    if (newSettings.telegramReportsGroupId) newSettings.telegramReportsGroupId = sanitizeId(newSettings.telegramReportsGroupId);
-    if (newSettings.baleReportsGroupId) newSettings.baleReportsGroupId = sanitizeId(newSettings.baleReportsGroupId);
+    if (newSettings.reportsGroupId) newSettings.reportsGroupId = utils.sanitizeGroupId(newSettings.reportsGroupId);
+    if (newSettings.telegramReportsGroupId) newSettings.telegramReportsGroupId = utils.sanitizeGroupId(newSettings.telegramReportsGroupId);
+    if (newSettings.baleReportsGroupId) newSettings.baleReportsGroupId = utils.sanitizeGroupId(newSettings.baleReportsGroupId);
+    
+    if (newSettings.reportsGroupId2) newSettings.reportsGroupId2 = utils.sanitizeGroupId(newSettings.reportsGroupId2);
+    if (newSettings.telegramReportsGroupId2) newSettings.telegramReportsGroupId2 = utils.sanitizeGroupId(newSettings.telegramReportsGroupId2);
+    if (newSettings.baleReportsGroupId2) newSettings.baleReportsGroupId2 = utils.sanitizeGroupId(newSettings.baleReportsGroupId2);
+    if (newSettings.whatsappReportsGroupId2) newSettings.whatsappReportsGroupId2 = utils.sanitizeGroupId(newSettings.whatsappReportsGroupId2);
 
     db.settings = { ...db.settings, ...newSettings }; 
     saveDb(db); 

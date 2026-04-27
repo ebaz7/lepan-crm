@@ -6,24 +6,19 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseMessage } from './whatsapp/parser.js';
 import * as Actions from './whatsapp/actions.js';
+import * as dbManager from './db-manager.js';
 
 const { Client, LocalAuth, MessageMedia } = wwebjs;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, '..', 'database.json');
 
 let client = null;
 let isReady = false;
 let qrCode = null;
 let clientInfo = null;
 
-const getDb = () => {
-    try {
-        if (fs.existsSync(DB_PATH)) return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    } catch (e) { console.error("DB Read Error", e); }
-    return null;
-};
+const getDb = dbManager.getDb;
 
 export const initWhatsApp = (authDir) => {
     try {
@@ -52,7 +47,8 @@ export const initWhatsApp = (authDir) => {
                 headless: true,
                 args: puppeteerArgs,
                 authTimeoutMs: 60000,
-            }
+            },
+            webVersionCache: { type: 'remote', remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html' }
         });
 
         client.on('qr', (qr) => { 
@@ -98,14 +94,8 @@ export const initWhatsApp = (authDir) => {
             } catch (error) { console.error("Message Error:", error); }
         });
 
-        client.initialize().catch(e => {
-            console.error(">>> WhatsApp Initialization Failed (Likely Network/Proxy Issue):", e.message);
-            isReady = false;
-        });
-    } catch (e) { 
-        console.error(">>> WhatsApp Module Critical Error:", e.message); 
-        isReady = false;
-    }
+        client.initialize().catch(e => console.error("WA Init Fail:", e.message));
+    } catch (e) { console.error("WA Module Error:", e.message); }
 };
 
 export const getStatus = () => ({ ready: isReady, qr: qrCode, user: clientInfo });
@@ -113,7 +103,15 @@ export const logout = async () => { if (client) { await client.logout(); isReady
 export const getGroups = async () => { if (!client || !isReady) return []; const chats = await client.getChats(); return chats.filter(c => c.isGroup).map(c => ({ id: c.id._serialized, name: c.name })); };
 export const sendMessage = async (number, text, mediaData) => {
     if (!client || !isReady) throw new Error("WhatsApp not ready");
-    let chatId = number.includes('@') ? number : `${number.replace(/\D/g, '').replace(/^0/, '98')}@c.us`;
+    let chatId = number;
+    if (!chatId.includes('@')) {
+        // If it's a long numeric string likely to be a group ID or needs @c.us
+        if (chatId.length > 15) {
+             chatId = `${chatId}@g.us`;
+        } else {
+             chatId = `${chatId.replace(/\D/g, '').replace(/^0/, '98')}@c.us`;
+        }
+    }
     if (mediaData && mediaData.data) {
         const media = new MessageMedia(mediaData.mimeType, mediaData.data, mediaData.filename);
         await client.sendMessage(chatId, media, { caption: text || '' });
