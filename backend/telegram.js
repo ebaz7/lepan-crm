@@ -45,7 +45,7 @@ export const initTelegram = async (token) => {
                 // Allow registration only in private chat
                 const isPrivate = msg.chat.type === 'private';
                 const isCommand = msg.text.startsWith('/');
-                const hasActiveSession = sessions[msg.chat.id] && sessions[msg.chat.id].state !== 'IDLE';
+                const hasActiveSession = BotCore.sessions[msg.chat.id] && BotCore.sessions[msg.chat.id].state !== 'IDLE';
 
                 if (isPrivate || isCommand || hasActiveSession) {
                     await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
@@ -58,7 +58,7 @@ export const initTelegram = async (token) => {
 
         bot.on('callback_query', async (query) => {
             try {
-                await BotCore.handleCallback('telegram', query.message.chat.id, query.data, sendFn, sendPhotoFn, sendDocFn);
+                await BotCore.handleCallback('telegram', query.message.chat.id, query.from.id, query.data, sendFn, sendPhotoFn, sendDocFn);
                 await bot.answerCallbackQuery(query.id);
             } catch (e) {
                 console.error("TG Callback Handle Error:", e);

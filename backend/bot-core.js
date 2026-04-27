@@ -182,17 +182,25 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n(این کد را کپی کرده و در بخش تنظیمات در مقابل نام خود وارد کنید)`);
     }
 
+    if (text.startsWith('/start') || text === 'شروع' || text === 'منو') {
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        const session = sessions[chatId];
+        session.state = 'IDLE';
+        session.data = {};
+        
+        const user = resolveUser(db, platform, chatId);
+        if (!user) {
+            return sendFn(chatId, `👋 خوش آمدید.\nشناسه چت شما: \`${chatId}\`\n\n⛔ این شناسه هنوز در سیستم ثبت نشده است. لطفاً آن را به مدیر سیستم اعلام کنید تا دسترسی شما فعال شود.\n(پس از ثبت، مجدداً /start را بزنید)`);
+        }
+        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
+    }
+
     const user = resolveUser(db, platform, chatId);
-    if (!user) return sendFn(chatId, `⛔ دسترسی غیرمجاز. شناسه شما (\`${chatId}\`) در سیستم ثبت نشده است. لطفاً آن را به مدیر اعلام کنید.`);
+    if (!user) return sendFn(chatId, `⛔ دسترسی غیرمجاز. شناسه شما (\`${chatId}\`) در سیستم ثبت نشده است.`);
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
-    if (text === '/start' || text === 'شروع' || text === 'منو') {
-        session.state = 'IDLE';
-        session.data = {};
-        return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
-    }
 
     // --- SEARCH BY ID HANDLER ---
     if (session.state === 'WAIT_FOR_SEARCH_ID') {
@@ -389,9 +397,8 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
-        const Renderer = (await import('./renderer.js'));
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n✅ تایید مرحله: ${stepName}\n⏳ وضعیت فعلی: ${p.status}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}`;
+        const caption = `🏗️ *خروج کالا از کارخانه - زوال*\n\n🔹 *شماره مجوز:* ${p.permitNumber}\n🏢 *شرکت:* ${p.company}\n📅 *تاریخ:* ${toShamsiFull(p.date)}\n👤 *تحویل‌گیرنده:* ${p.recipientName}\n📦 *شرح کالا:* ${p.goodsName}\n🔢 *تعداد:* ${p.cartonCount} کارتن\n\n✅ *مرحله:* ${stepName}\n🔄 *آخرین وضعیت:* ${p.status}${p.exitTime ? `\n🕒 *زمان خروج:* ${p.exitTime}` : ''}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -448,13 +455,15 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
     } catch (e) { console.error("Notification Helper Error:", e); }
 };
 
-export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn, sendDocFn) => {
+export const handleCallback = async (platform, chatId, userId, data, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
-    const user = resolveUser(db, platform, chatId);
-    if (!user) return;
+    const user = resolveUser(db, platform, userId);
+    if (!user) {
+        return sendFn(userId, `⛔ امکان انجام این عملیات وجود ندارد. شناسه شما (\`${userId}\`) ثبت نشده است.`);
+    }
 
-    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-    const session = sessions[chatId];
+    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+    const session = sessions[userId];
 
     // --- NAVIGATION ---
     if (data === 'MENU_MAIN') { session.state = 'IDLE'; return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN }); }
@@ -582,6 +591,13 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const id = data.replace('APP_PAY_', '');
         const order = db.orders.find(o => o.id === id);
         if (order) {
+            let canApprove = false;
+            if (order.status === 'در انتظار بررسی مالی' && ['financial', 'admin'].includes(user.role)) canApprove = true;
+            else if (order.status === 'تایید مالی / در انتظار مدیریت' && ['manager', 'admin'].includes(user.role)) canApprove = true;
+            else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canApprove = true;
+
+            if (!canApprove) return sendFn(userId, "⛔ شما دسترسی لازم برای این مرحله را ندارید.");
+
             if (order.status === 'در انتظار بررسی مالی') order.status = 'تایید مالی / در انتظار مدیریت';
             else if (order.status === 'تایید مالی / در انتظار مدیریت') order.status = 'تایید مدیریت / در انتظار مدیرعامل';
             else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') order.status = 'تایید نهایی';
@@ -595,6 +611,13 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const id = data.replace('REJ_PAY_', '');
         const order = db.orders.find(o => o.id === id);
         if (order) {
+            let canReject = false;
+            if (order.status === 'در انتظار بررسی مالی' && ['financial', 'admin'].includes(user.role)) canReject = true;
+            else if (order.status === 'تایید مالی / در انتظار مدیریت' && ['manager', 'admin'].includes(user.role)) canReject = true;
+            else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canReject = true;
+
+            if (!canReject) return sendFn(userId, "⛔ شما دسترسی لازم برای رد این مرحله را ندارید.");
+
             order.status = 'رد شده';
             saveDb(db);
             sendFn(chatId, `❌ سند #${order.trackingNumber} رد شد.`);
@@ -637,6 +660,16 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const id = data.replace('APP_EXIT_', '');
         const p = db.exitPermits.find(x => x.id === id);
         if (p) {
+            let canApprove = false;
+            if (p.status === 'در انتظار تایید مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canApprove = true;
+            else if (p.status === 'در انتظار مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canApprove = true;
+            else if (p.status === 'در انتظار تایید انبار' && ['warehouse_keeper', 'admin'].includes(user.role)) canApprove = true;
+            else if (p.status === 'در انتظار خروج' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canApprove = true;
+
+            if (!canApprove) {
+                return sendFn(userId, "⛔ شما دسترسی لازم برای تایید این مرحله را ندارید.");
+            }
+
             const oldStatus = p.status;
             let stepName = '';
 
@@ -669,6 +702,16 @@ export const handleCallback = async (platform, chatId, data, sendFn, sendPhotoFn
         const id = data.replace('REJ_EXIT_', '');
         const p = db.exitPermits.find(x => x.id === id);
         if (p) {
+            let canReject = false;
+            if (p.status === 'در انتظار تایید مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canReject = true;
+            else if (p.status === 'در انتظار مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canReject = true;
+            else if (p.status === 'در انتظار تایید انبار' && ['warehouse_keeper', 'admin'].includes(user.role)) canReject = true;
+            else if (p.status === 'در انتظار خروج' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canReject = true;
+
+            if (!canReject) {
+                return sendFn(userId, "⛔ شما دسترسی لازم برای رد این مرحله را ندارید.");
+            }
+
             p.status = 'رد شده';
             saveDb(db);
             sendFn(chatId, `❌ مجوز #${p.permitNumber} رد شد.`);

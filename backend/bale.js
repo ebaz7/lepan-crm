@@ -84,17 +84,19 @@ const poll = async () => {
 
                         // Allow /id in groups
                         if (text.startsWith('/id') || text === 'آیدی') {
-                            return sendFn(chatId, `🆔 شناسه این چت: ${chatId}`);
+                            sendFn(chatId, `🆔 شناسه این چت: ${chatId}`);
+                            continue;
                         }
 
-                        const hasActiveSession = (await import('./bot-core.js')).sessions[chatId]?.state !== 'IDLE';
+                        const hasActiveSession = BotCore.sessions[chatId] && BotCore.sessions[chatId].state !== 'IDLE';
 
                         // Ignore group messages unless it's a command or part of an active session
                         if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) return;
                         
                         await BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn);
                     } else if (u.callback_query) {
-                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
+                        const userId = u.callback_query.from ? u.callback_query.from.id : u.callback_query.message.chat.id;
+                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
                     }
                 } catch (err) {
                     console.error("Bale Message Handler Error:", err);
