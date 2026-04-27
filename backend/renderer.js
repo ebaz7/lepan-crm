@@ -324,6 +324,11 @@ export const generateRecordImage = async (record, type) => {
             await page.setViewport({ width: 900, height: 1200, deviceScaleFactor: 2 });
             await page.setContent(html, { waitUntil: 'networkidle0' });
             
+            // Wait for Tailwind to inject its stylesheet
+            try { await page.waitForSelector('style[id="tailwindcss-stylesheet"]', { timeout: 3000 }); } catch (e) {}
+            // Small delay to ensure render tree is updated
+            await new Promise(r => setTimeout(r, 500));
+            
             const card = await page.$('#capture-wrapper');
             const buffer = await card.screenshot({ type: 'png' });
             await page.close();
