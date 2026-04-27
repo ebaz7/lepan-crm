@@ -66,9 +66,9 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
           <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto bg-gray-50">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm text-center">
+        <div className="p-4 md:p-6 overflow-y-auto bg-gray-50">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+            <table className="w-full text-sm text-center min-w-[800px]">
               <thead className="bg-gray-100 text-gray-700 font-bold">
                 <tr><th className="p-3 w-10">#</th><th className="p-3 text-right">شرح کالا</th><th className="p-3 w-28 bg-blue-50 text-blue-800 border-l border-white">تعداد درخواستی</th><th className="p-3 w-28 bg-green-50 text-green-800">تعداد خروجی</th><th className="p-3 w-28 bg-blue-50 text-blue-800 border-l border-white">وزن درخواستی</th><th className="p-3 w-28 bg-green-50 text-green-800">وزن خروجی</th><th className="p-3 w-10"></th></tr>
               </thead>

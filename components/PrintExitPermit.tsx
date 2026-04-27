@@ -19,9 +19,8 @@ interface Props {
 }
 
 export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark }: Props) {
-  const [sharing, setSharing] = useState(false);
+  const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [showContactSelect, setShowContactSelect] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
 
   // Scaling State
@@ -85,18 +84,17 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
       });
   };
 
-  const handleSendToWhatsApp = async (targetNumber: string) => {
-      if (!targetNumber) return;
-      setSharing(true);
+  const handleShare = async (targetId: string) => {
+      if (!targetId || !sharePlatform) return;
       
       const element = document.getElementById(containerId);
       if (!element) { 
           alert("خطا: المان چاپ پیدا نشد."); 
-          setSharing(false); 
           return; 
       }
       
       try {
+          setProcessing(true);
           // @ts-ignore
           const canvas = await window.html2canvas(element, { 
               scale: 2, 
@@ -129,20 +127,29 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
           caption += `تعداد: ${permit.cartonCount || 0} کارتن\n`;
           caption += `وزن: ${permit.weight || 0} کیلوگرم`;
 
-          await apiCall('/send-whatsapp', 'POST', {
-              number: targetNumber,
-              message: caption,
-              mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` }
-          });
+          if (sharePlatform === 'whatsapp') {
+             await apiCall('/send-whatsapp', 'POST', {
+                 number: targetId,
+                 message: caption,
+                 mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` }
+             });
+          } else {
+             await apiCall('/send-bot-message', 'POST', {
+                 platform: sharePlatform,
+                 chatId: targetId,
+                 caption: caption,
+                 mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` }
+             });
+          }
           
           if (!embed) alert('ارسال شد.');
-          setShowContactSelect(false);
+          setSharePlatform(null);
           
       } catch(e: any) { 
-          console.error("WhatsApp Send Error:", e);
+          console.error("Share Error:", e);
           alert('خطا در ارسال: ' + (e.message || 'Unknown error')); 
       } finally { 
-          setSharing(false); 
+          setProcessing(false); 
       }
   };
 
@@ -304,12 +311,18 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 {(onApprove || onReject) && (<div className="flex gap-2 mb-1">{onApprove && <button onClick={onApprove} className="flex-1 bg-green-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-green-700 transition-colors shadow-sm">تایید</button>}{onReject && <button onClick={onReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm">رد</button>}</div>)}
                 {onEdit && <button onClick={onEdit} className="w-full bg-amber-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-600 flex items-center justify-center gap-1 mb-1"><Edit size={14}/> اصلاح مجوز</button>}
                 <div className="flex gap-2"><button onClick={handleDownloadPDF} disabled={processing} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دانلود PDF</button><button onClick={() => window.print()} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 flex items-center justify-center gap-1"><Printer size={14}/> چاپ</button></div>
-                <button onClick={() => setShowContactSelect(!showContactSelect)} className="w-full bg-white border border-gray-300 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-50 flex items-center justify-center gap-1"><Share2 size={14}/> ارسال به واتساپ</button>
-                {showContactSelect && (
-                     <div className="absolute top-full right-0 mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-200 z-[60] overflow-hidden animate-scale-in">
-                         <div className="p-2 border-b"><input className="w-full text-xs p-1 border rounded" placeholder="جستجو..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
-                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => (<button key={c.id} onClick={() => handleSendToWhatsApp(c.number)} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px]">{c.name}</span><span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">ارسال</span></button>))}</div>
-                         <div className="p-2 border-t"><button onClick={() => { const n = prompt('شماره:'); if(n) handleSendToWhatsApp(n); }} className="w-full text-center text-xs text-blue-600 font-bold hover:underline">شماره دستی</button></div>
+                <div className="border-t mt-2 pt-2 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+                </div>
+                {sharePlatform && (
+                     <div className="absolute top-0 right-full mr-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-[60] overflow-hidden animate-scale-in">
+                         <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
+                         <div className="p-2 border-b"><input className="w-full text-xs p-1.5 border rounded outline-none" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
+                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => (<button key={c.id} onClick={() => handleShare(c.number)} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[10px]">بازدید</span></button>))}</div>
+                         <div className="p-2 border-t bg-gray-50"><button onClick={() => { const n = prompt('شناسه یا شماره:'); if(n) handleShare(n); }} className="w-full text-center text-xs text-blue-600 font-bold hover:underline">شماره/شناسه دستی</button></div>
                      </div>
                 )}
             </div>

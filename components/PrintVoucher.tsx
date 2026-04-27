@@ -20,7 +20,7 @@ interface PrintVoucherProps {
 const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, onApprove, onReject, onEdit, onRevoke, embed }) => {
   const [processing, setProcessing] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [showContactSelect, setShowContactSelect] = useState(false);
+  const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [contactSearch, setContactSearch] = useState('');
   
   // Toggle between Internal Receipt and Bank Form Fill
@@ -228,23 +228,35 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       await generatePdf(opts);
   };
 
-  const handleSendToWhatsApp = async (targetNumber: string) => {
-      if (!targetNumber) return;
-      setSharing(true);
+  const handleShare = async (targetId: string) => {
+      if (!targetId || !sharePlatform) return;
+      setProcessing(true);
       const element = document.getElementById(printAreaId);
-      if (!element) { setSharing(false); return; }
+      if (!element) { setProcessing(false); return; }
       try {
           // @ts-ignore
           const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
           const base64 = canvas.toDataURL('image/png').split(',')[1];
-          await apiCall('/send-whatsapp', 'POST', {
-              number: targetNumber,
-              message: `🧾 *رسید پرداخت وجه*\n🏢 شرکت: ${order.payingCompany}\n👤 ذینفع: ${order.payee}\n💰 مبلغ: ${formatCurrency(order.totalAmount)}`,
-              mediaData: { data: base64, mimeType: 'image/png', filename: `Order_${order.trackingNumber}.png` }
-          });
-          alert('ارسال شد.');
-          setShowContactSelect(false);
-      } catch(e) { alert('خطا در ارسال'); } finally { setSharing(false); }
+          const caption = `🧾 *رسید پرداخت وجه*\n🏢 شرکت: ${order.payingCompany}\n👤 ذینفع: ${order.payee}\n💰 مبلغ: ${formatCurrency(order.totalAmount)}`;
+
+          if (sharePlatform === 'whatsapp') {
+              await apiCall('/send-whatsapp', 'POST', {
+                  number: targetId,
+                  message: caption,
+                  mediaData: { data: base64, mimeType: 'image/png', filename: `Order_${order.trackingNumber}.png` }
+              });
+          } else {
+              await apiCall('/send-bot-message', 'POST', {
+                  platform: sharePlatform,
+                  chatId: targetId,
+                  caption: caption,
+                  mediaData: { data: base64, filename: `Order_${order.trackingNumber}.png` }
+              });
+          }
+
+          if (!embed) alert('ارسال شد.');
+          setSharePlatform(null);
+      } catch(e) { alert('خطا در ارسال'); } finally { setProcessing(false); }
   };
 
   const filteredContacts = settings?.savedContacts?.filter(c => 
@@ -502,11 +514,26 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
              </div>)}
              
              {/* Print Actions */}
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 relative">
+             <div className="grid grid-cols-2 md:grid-cols-2 gap-2 relative">
                  <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-colors">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14} />} PDF</button>
                  <button onClick={handlePrint} disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-colors shadow-sm">{processing ? <Loader2 size={14} className="animate-spin"/> : <Printer size={14} />} چاپ</button>
-                 <button onClick={() => setShowContactSelect(!showContactSelect)} disabled={sharing} className={`bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-colors shadow-sm ${showContactSelect ? 'ring-2 ring-green-300' : ''}`}>{sharing ? <Loader2 size={14} className="animate-spin"/> : <Share2 size={14} />} واتساپ</button>
+
+                 <div className="col-span-2 border-t mt-2 pt-2 flex flex-col gap-1">
+                     <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+                 </div>
                  
+                 {sharePlatform && (
+                     <div className="col-span-2 mt-2 bg-white rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
+                         <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
+                         <div className="p-2 border-b"><input className="w-full text-xs p-1 border rounded" placeholder="جستجو..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
+                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => (<button key={c.id} onClick={() => handleShare(c.number)} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={()=>handleShare(c.number)} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>))}</div>
+                         <div className="p-2 bg-gray-50 border-t"><button onClick={()=>{const n=prompt("شماره یا شناسه دستی:"); if(n) handleShare(n);}} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:bg-white rounded border border-blue-100 transition-colors">ارسال به شماره دستی...</button></div>
+                     </div>
+                 )}
+
                  {/* Bank Form Toggle */}
                  {canPrintBankForm && (
                      <button 

@@ -20,7 +20,7 @@ interface PrintBijakProps {
 const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, forceHidePrices, onApprove, onReject }) => {
   const [processing, setProcessing] = useState(false);
   const [hidePrices, setHidePrices] = useState(forceHidePrices || false);
-  const [showContactSelect, setShowContactSelect] = useState(false);
+  const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [allContacts, setAllContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -82,8 +82,8 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
             setContactsLoading(false);
           }
       };
-      if (showContactSelect) loadContacts();
-  }, [settings, showContactSelect]);
+      if (sharePlatform) loadContacts();
+  }, [settings, sharePlatform]);
   
   const companyConfig = settings?.companyNotifications?.[tx.company];
   const warehouseTarget = companyConfig?.warehouseGroup || settings?.defaultWarehouseGroup;
@@ -112,7 +112,7 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
       });
   };
 
-  const generateAndSend = async (target: string, shouldHidePrice: boolean, captionPrefix: string) => {
+  const generateAndSend = async (target: string, shouldHidePrice: boolean, captionPrefix: string, platform?: 'whatsapp' | 'telegram' | 'bale') => {
       if (!target) { alert("شماره مخاطب/مدیر برای این شرکت تنظیم نشده است. لطفا در تنظیمات انبار بررسی کنید."); return; }
       setProcessing(true);
       const originalState = hidePrices;
@@ -129,17 +129,27 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
 
               let caption = `${captionPrefix}\nشماره: ${tx.number}\nگیرنده: ${tx.recipientName}\nتعداد: ${tx.items.length} قلم`;
 
-              await apiCall('/send-whatsapp', 'POST', {
-                  number: target,
-                  message: caption,
-                  mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${tx.number}.png` }
-              });
+              const p = platform || 'whatsapp';
+              if (p === 'whatsapp') {
+                  await apiCall('/send-whatsapp', 'POST', {
+                      number: target,
+                      message: caption,
+                      mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${tx.number}.png` }
+                  });
+              } else {
+                  await apiCall('/send-bot-message', 'POST', {
+                      platform: p,
+                      chatId: target,
+                      caption: caption,
+                      mediaData: { data: base64, filename: `Bijak_${tx.number}.png` }
+                  });
+              }
               if (!embed) alert('ارسال شد ✅');
           } catch (e) { console.error(e); if (!embed) alert('خطا در ارسال ❌'); } 
           finally { 
               setHidePrices(originalState); 
               setProcessing(false); 
-              setShowContactSelect(false);
+              setSharePlatform(null);
           }
       }, 1500); 
   };
@@ -203,10 +213,16 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
             <div className="border-t pt-2 mt-1 space-y-2">
                 <button onClick={() => { if(warehouseTarget) generateAndSend(warehouseTarget, true, "📦 *حواله خروج (نسخه انبار)*"); else alert(`شماره گروه انبار برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="w-full bg-orange-100 text-orange-700 p-2 rounded text-xs hover:bg-orange-200 flex items-center justify-center gap-2 border border-orange-200">{processing ? <Loader2 size={14} className="animate-spin"/> : 'ارسال به انبار (بدون فی)'}</button>
                 <button onClick={() => { if(managerTarget) generateAndSend(managerTarget, false, "📑 *حواله خروج (نسخه مدیریت)*"); else alert(`شماره مدیر فروش برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="w-full bg-green-100 text-green-700 p-2 rounded text-xs hover:bg-green-200 flex items-center justify-center gap-2 border border-green-200">{processing ? <Loader2 size={14} className="animate-spin"/> : 'ارسال به مدیر (با فی)'}</button>
-                <button onClick={() => setShowContactSelect(true)} className="w-full bg-white border text-gray-700 p-2 rounded text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Share2 size={14}/> انتخاب مخاطب</button>
+                
+                <div className="border-t mt-2 pt-2 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+                </div>
             </div>
         </div>
-        {showContactSelect && (<div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col h-[70vh] animate-fade-in"><div className="p-3 border-b bg-gray-50 flex items-center justify-between"><span className="font-bold text-gray-800">انتخاب مخاطب برای ارسال</span><button onClick={() => setShowContactSelect(false)} className="bg-red-100 text-red-600 rounded-lg p-1.5 hover:bg-red-200"><X size={18}/></button></div><div className="p-3 border-b"><div className="bg-gray-100 rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-gray-400 ml-2"/><input className="bg-transparent w-full outline-none text-sm" placeholder="جستجو نام یا شماره..." autoFocus value={contactSearch} onChange={e => setContactSearch(e.target.value)}/></div></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{contactsLoading ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Loader2 size={32} className="animate-spin"/> <span>در حال دریافت لیست...</span></div>) : filteredContacts.length === 0 ? (<div className="text-center text-gray-400 mt-10">مخاطبی یافت نشد</div>) : (filteredContacts.map(c => (<button key={c.id} onClick={() => generateAndSend(c.number, hidePrices, "📄 *بیجک ارسالی*")} className="w-full text-right p-3 hover:bg-blue-50 rounded-xl border border-transparent hover:border-blue-100 flex items-center gap-3 transition-colors group"><div className={`p-2 rounded-full ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={18}/> : <Smartphone size={18}/>}</div><div className="flex-1"><div className="font-bold text-gray-800 text-sm group-hover:text-blue-700">{c.name}</div><div className="text-xs text-gray-500 font-mono mt-0.5">{c.number}</div></div><div className="bg-gray-100 px-3 py-1 rounded-lg text-xs font-bold text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">ارسال</div></button>)))}</div><div className="p-3 border-t bg-gray-50"><button onClick={() => { const num = prompt("شماره را وارد کنید (مثال: 98912...):"); if(num) generateAndSend(num, hidePrices, "📄 *بیجک ارسالی*"); }} className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors">ورود شماره دستی</button></div></div></div>)}
+        {sharePlatform && (<div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col h-[70vh] animate-fade-in"><div className="p-3 border-b bg-gray-50 flex items-center justify-between"><span className="font-bold text-gray-800">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)} className="bg-red-100 text-red-600 rounded-lg p-1.5 hover:bg-red-200"><X size={18}/></button></div><div className="p-3 border-b"><div className="bg-gray-100 rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-gray-400 ml-2"/><input className="bg-transparent w-full outline-none text-sm" placeholder="جستجو نام یا شماره..." autoFocus value={contactSearch} onChange={e => setContactSearch(e.target.value)}/></div></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{contactsLoading ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Loader2 size={32} className="animate-spin"/> <span>در حال دریافت لیست...</span></div>) : filteredContacts.length === 0 ? (<div className="text-center text-gray-400 mt-10">مخاطبی یافت نشد</div>) : (filteredContacts.map(c => (<button key={c.id} onClick={() => generateAndSend(c.number, hidePrices, "📄 *بیجک ارسالی*", sharePlatform)} className="w-full text-right p-3 hover:bg-blue-50 rounded-xl border border-transparent hover:border-blue-100 flex items-center gap-3 transition-colors group"><div className={`p-2 rounded-full ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={18}/> : <Smartphone size={18}/>}</div><div className="flex-1"><div className="font-bold text-gray-800 text-sm group-hover:text-blue-700">{c.name}</div><div className="text-xs text-gray-500 font-mono mt-0.5">{c.number}</div></div><div className="bg-gray-100 px-3 py-1 rounded-lg text-xs font-bold text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">ارسال</div></button>)))}</div><div className="p-3 border-t bg-gray-50"><button onClick={() => { const num = prompt("شماره یا شناسه را وارد کنید:"); if(num) generateAndSend(num, hidePrices, "📄 *بیجک ارسالی*", sharePlatform); }} className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors">ورود دستی</button></div></div></div>)}
         <div className="order-2 w-full flex justify-center pb-10" ref={containerWrapperRef}>
             <div style={{ 
               width: '148mm', 
