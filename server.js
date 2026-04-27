@@ -220,12 +220,12 @@ app.post('/api/subscribe', (req, res) => {
 
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
-    const company = req.query.company;
-    let minStart = 1000;
+    const company = req.query.company || '';
+    let minStart = db.settings.currentTrackingNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startTrackingNumber || 1000;
+            minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
     } 
     const nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
@@ -234,12 +234,12 @@ app.get('/api/next-tracking-number', (req, res) => {
 
 app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
-    const company = req.query.company;
-    let minStart = 1000;
+    const company = req.query.company || '';
+    let minStart = db.settings.currentExitPermitNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startExitPermitNumber || 1000;
+            minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
     }
     const nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
@@ -248,7 +248,7 @@ app.get('/api/next-exit-permit-number', (req, res) => {
 
 app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
-    const company = req.query.company;
+    const company = req.query.company || '';
     let minStart = 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);

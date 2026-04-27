@@ -229,18 +229,24 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "📝 بابت (شرح پرداخت) را وارد کنید:");
     }
     if (session.state === 'PAY_DESC') {
-        const company = session.data.company || db.settings.defaultCompany || '-';
-        let minStart = 1000;
+        const company = session.data.company || db.settings.defaultCompany || '';
+        let minStart = db.settings.currentTrackingNumber || 1000;
         if (db.settings.activeFiscalYearId && company) {
             const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
             if (year && year.companySequences && year.companySequences[company]) {
-                minStart = year.companySequences[company].startTrackingNumber || 1000;
+                minStart = year.companySequences[company].startTrackingNumber || minStart;
             }
         }
-        const trackingNumber = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+        
+        let trackingNumber = utils.findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+        
+        // Final Duplicate Check
+        while (utils.checkForDuplicate(db.orders, 'trackingNumber', trackingNumber, 'payingCompany', company)) {
+            trackingNumber++;
+        }
 
         const order = {
-            id: Date.now().toString(),
+            id: generateUUID(),
             trackingNumber: trackingNumber,
             date: new Date().toISOString().split('T')[0],
             payee: session.data.payee,
@@ -250,11 +256,11 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             requester: user.fullName,
             payingCompany: company,
             createdAt: Date.now(),
-            paymentDetails: [{ id: Date.now().toString(), method: 'حواله بانکی', amount: session.data.amount }]
+            paymentDetails: [{ id: generateUUID(), method: 'حواله بانکی', amount: session.data.amount }]
         };
         if(!db.orders) db.orders = [];
         db.orders.unshift(order);
-        saveDb(db);
+        dbManager.saveDb(db);
         session.state = 'IDLE';
         await sendFn(chatId, `✅ دستور پرداخت #${order.trackingNumber} با موفقیت ثبت شد.`);
         return;
@@ -272,19 +278,25 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "🔢 تعداد/مقدار را وارد کنید:");
     }
     if (session.state === 'EXIT_COUNT') {
-        const company = session.data.company || db.settings.defaultCompany;
+        const company = session.data.company || db.settings.defaultCompany || '';
         
-        let minStart = 1000;
+        let minStart = db.settings.currentExitPermitNumber || 1000;
         if (db.settings.activeFiscalYearId && company) {
             const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
             if (year && year.companySequences && year.companySequences[company]) {
-                minStart = year.companySequences[company].startExitPermitNumber || 1000;
+                minStart = year.companySequences[company].startExitPermitNumber || minStart;
             }
         }
-        const permitNumber = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+        
+        let permitNumber = utils.findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+        
+        // Final Duplicate Check
+        while (utils.checkForDuplicate(db.exitPermits, 'permitNumber', permitNumber, 'company', company)) {
+            permitNumber++;
+        }
 
         const permit = {
-            id: Date.now().toString(),
+            id: generateUUID(),
             permitNumber: permitNumber,
             date: new Date().toISOString().split('T')[0],
             company: company,
@@ -295,12 +307,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             weight: 0,
             status: 'در انتظار تایید مدیرعامل',
             createdAt: Date.now(),
-            items: [{ id: Date.now().toString(), goodsName: session.data.item, cartonCount: parseInt(text) || 0, weight: 0 }],
-            destinations: [{ id: Date.now().toString(), recipientName: session.data.recipient, address: '', phone: '' }]
+            items: [{ id: generateUUID(), goodsName: session.data.item, cartonCount: parseInt(text) || 0, weight: 0 }],
+            destinations: [{ id: generateUUID(), recipientName: session.data.recipient, address: '', phone: '' }]
         };
         if(!db.exitPermits) db.exitPermits = [];
         db.exitPermits.push(permit);
-        saveDb(db);
+        dbManager.saveDb(db);
         session.state = 'IDLE';
         return sendFn(chatId, `✅ مجوز خروج #${permit.permitNumber} ثبت شد.`);
     }
@@ -319,7 +331,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "👤 نام تحویل گیرنده:");
     }
     if (session.state === 'WH_BIJAK_RECIPIENT') {
-        const company = session.data.company || db.settings.defaultCompany;
+        const company = session.data.company || db.settings.defaultCompany || '';
         let minStart = 1000;
         if (db.settings.activeFiscalYearId && company) {
             const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
@@ -327,10 +339,15 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 minStart = year.companySequences[company].startBijakNumber || 1000;
             }
         }
-        const nextSeq = findNextGapNumber(db.warehouseTransactions, company, 'number', minStart);
+        let nextSeq = utils.findNextGapNumber(db.warehouseTransactions, company, 'number', minStart);
+        
+        // Final Duplicate Check
+        while (utils.checkForDuplicate(db.warehouseTransactions, 'number', nextSeq, 'company', company)) {
+            nextSeq++;
+        }
 
         const tx = {
-            id: Date.now().toString(),
+            id: generateUUID(),
             type: 'OUT',
             date: new Date().toISOString(),
             company: company,
@@ -349,7 +366,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         };
         if(!db.warehouseTransactions) db.warehouseTransactions = [];
         db.warehouseTransactions.unshift(tx);
-        saveDb(db);
+        dbManager.saveDb(db);
         session.state = 'IDLE';
         return sendFn(chatId, `✅ بیجک خروج #${nextSeq} ثبت شد.`);
     }
@@ -360,39 +377,55 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n⚖️ وزن: ${p.weight} KG\n✅ تایید مرحله: ${stepName}\n⏳ وضعیت فعلی: ${p.status}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}`;
+        const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n✅ تایید مرحله: ${stepName}\n⏳ وضعیت فعلی: ${p.status}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}`;
         
         await sendPhotoFn(platform, chatId, img, caption);
 
+        // Notify groups based on step
         let targetGroups = [];
         if (stepName === 'مدیرعامل') targetGroups = [1];
         else if (stepName === 'مدیر کارخانه') targetGroups = [2];
         else if (stepName === 'سرپرست انبار') targetGroups = [2];
         else if (stepName === 'انتظامات') targetGroups = [1, 2];
 
-        for (const gNum of targetGroups) {
-            const suffix = gNum === 1 ? '' : '2';
-            const tgGroupId = sanitizeGroupId(db.settings[`telegramReportsGroupId${suffix}`] || db.settings[`reportsGroupId${suffix}`]);
-            const baleGroupId = sanitizeGroupId(db.settings[`baleReportsGroupId${suffix}`] || db.settings[`reportsGroupId${suffix}`]);
-            const waGroupId = db.settings[`whatsappReportsGroupId${suffix}`] || db.settings[`reportsGroupId${suffix}`];
+        const settings = db.settings || {};
+        const companyConfig = settings.companyNotifications?.[p.company];
 
-            if (tgGroupId && db.settings.telegramBotToken) {
-                try {
-                    if (platform === 'telegram') await sendPhotoFn('telegram', tgGroupId, img, caption);
-                    else { const mod = await import('./telegram.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(tgGroupId, img, caption); }
-                } catch(e){}
+        for (const gNum of targetGroups) {
+            let tgGroupId = '';
+            let baleGroupId = '';
+            let waGroupId = '';
+
+            if (gNum === 1) {
+                tgGroupId = companyConfig?.telegramChannelId || settings.exitPermitNotificationTelegramId;
+                baleGroupId = companyConfig?.baleChannelId || settings.exitPermitNotificationBaleId;
+                waGroupId = companyConfig?.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup;
+            } else {
+                const g2 = settings.exitPermitSecondGroupConfig || {};
+                tgGroupId = g2.telegramId;
+                baleGroupId = g2.baleId;
+                waGroupId = g2.groupId;
             }
-            if (baleGroupId && db.settings.baleBotToken) {
+
+            if (tgGroupId && settings.telegramBotToken) {
                 try {
-                    if (platform === 'bale') await sendPhotoFn('bale', baleGroupId, img, caption);
-                    else { const mod = await import('./bale.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(baleGroupId, img, caption); }
-                } catch(e){}
+                    const cleanId = sanitizeGroupId(tgGroupId);
+                    if (platform === 'telegram') await sendPhotoFn('telegram', cleanId, img, caption);
+                    else { const mod = await import('./telegram.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption); }
+                } catch(e){ console.error("TG Notify Error:", e); }
             }
-            if (waGroupId && db.settings.whatsappEnabled) {
+            if (baleGroupId && settings.baleBotToken) {
+                try {
+                    const cleanId = sanitizeGroupId(baleGroupId);
+                    if (platform === 'bale') await sendPhotoFn('bale', cleanId, img, caption);
+                    else { const mod = await import('./bale.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption); }
+                } catch(e){ console.error("Bale Notify Error:", e); }
+            }
+            if (waGroupId && settings.whatsappEnabled) {
                 try {
                     const mod = await import('./whatsapp.js');
                     if (mod?.sendMessage) await mod.sendMessage(waGroupId, caption, { data: img.toString('base64'), mimeType: 'image/png', filename: 'permit.png' });
-                } catch(e){}
+                } catch(e){ console.error("WA Notify Error:", e); }
             }
         }
     } catch (e) { console.error("Notification Helper Error:", e); }

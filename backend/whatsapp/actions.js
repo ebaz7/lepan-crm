@@ -13,30 +13,35 @@ const formatDate = () => new Date().toLocaleDateString('fa-IR');
 // --- ACTIONS ---
 
 export const handleCreatePayment = (db, args) => {
-    const company = db.settings.defaultCompany || 'نامشخص';
-    let minStart = 1000;
+    const company = db.settings.defaultCompany || '';
+    let minStart = db.settings.currentTrackingNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startTrackingNumber || 1000;
+            minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
     }
     const trackingNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
-    db.settings.currentTrackingNumber = trackingNum;
     
+    // Duplicate check
+    let finalNum = trackingNum;
+    while (utils.checkForDuplicate(db.orders, 'trackingNumber', finalNum, 'payingCompany', company)) {
+        finalNum++;
+    }
+
     const amount = typeof args.amount === 'string' ? parseInt(args.amount.replace(/[^0-9]/g, '')) : args.amount;
     
     // Create detailed payment structure exactly like UI
     const newOrder = { 
         id: generateUUID(), 
-        trackingNumber: trackingNum, 
+        trackingNumber: finalNum, 
         date: new Date().toISOString().split('T')[0], 
         payee: args.payee, 
         totalAmount: amount, 
         description: args.description || 'ثبت از طریق واتساپ', 
         status: 'در انتظار بررسی مالی', 
         requester: 'WhatsApp', 
-        payingCompany: db.settings.defaultCompany, 
+        payingCompany: company, 
         paymentDetails: [
             {
                 id: generateUUID(), 
@@ -51,11 +56,11 @@ export const handleCreatePayment = (db, args) => {
     
     db.orders.unshift(newOrder);
     saveDb(db);
-    return `✅ *دستور پرداخت ثبت شد*\n🔹 شماره: ${trackingNum}\n💰 مبلغ: ${formatCurrency(amount)}\n👤 ذینفع: ${args.payee}\n🏦 بانک: ${args.bank || '-'}`;
+    return `✅ *دستور پرداخت ثبت شد*\n🔹 شماره: ${finalNum}\n💰 مبلغ: ${formatCurrency(amount)}\n👤 ذینفع: ${args.payee}\n🏦 بانک: ${args.bank || '-'}`;
 };
 
 export const handleCreateBijak = (db, args) => {
-    const company = db.settings.defaultCompany || 'نامشخص';
+    const company = db.settings.defaultCompany || '';
     let minStart = 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
@@ -65,12 +70,18 @@ export const handleCreateBijak = (db, args) => {
     }
     const nextSeq = findNextGapNumber(db.warehouseTransactions, company, 'number', minStart);
     
+    // Duplicate check
+    let finalSeq = nextSeq;
+    while (checkForDuplicate(db.warehouseTransactions, 'number', finalSeq, 'company', company)) {
+        finalSeq++;
+    }
+
     const newTx = { 
         id: generateUUID(), 
         type: 'OUT', 
         date: new Date().toISOString(), 
         company: company, 
-        number: nextSeq, 
+        number: finalSeq, 
         recipientName: args.recipient,
         driverName: args.driver || '',   // Capture Driver
         plateNumber: args.plate || '',   // Capture Plate
@@ -91,7 +102,7 @@ export const handleCreateBijak = (db, args) => {
     db.warehouseTransactions.unshift(newTx);
     saveDb(db);
     
-    let msg = `📦 *حواله خروج (بیجک) صادر شد*\n🔹 شماره: ${nextSeq}\n📦 کالا: ${args.count} عدد ${args.itemName}\n👤 گیرنده: ${args.recipient}`;
+    let msg = `📦 *حواله خروج (بیجک) صادر شد*\n🔹 شماره: ${finalSeq}\n📦 کالا: ${args.count} عدد ${args.itemName}\n👤 گیرنده: ${args.recipient}`;
     if (args.driver) msg += `\n🚛 راننده: ${args.driver}`;
     if (args.plate) msg += `\n🔢 پلاک: ${args.plate}`;
     return msg;
@@ -99,20 +110,25 @@ export const handleCreateBijak = (db, args) => {
 
 // NEW: Create Exit Permit (Sales Order)
 export const handleCreateExitPermit = (db, args) => {
-    const company = db.settings.defaultCompany || 'نامشخص';
-    let minStart = 1000;
+    const company = db.settings.defaultCompany || '';
+    let minStart = db.settings.currentExitPermitNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
         const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startExitPermitNumber || 1000;
+            minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
     }
     const nextPermitNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
-    db.settings.currentExitPermitNumber = nextPermitNum;
+    
+    // Duplicate check
+    let finalNum = nextPermitNum;
+    while (checkForDuplicate(db.exitPermits, 'permitNumber', finalNum, 'company', company)) {
+        finalNum++;
+    }
 
     const newPermit = {
         id: generateUUID(),
-        permitNumber: nextPermitNum,
+        permitNumber: finalNum,
         date: new Date().toISOString().split('T')[0],
         company: company,
         requester: 'WhatsApp Bot',
@@ -138,7 +154,7 @@ export const handleCreateExitPermit = (db, args) => {
     db.exitPermits.push(newPermit);
     saveDb(db);
 
-    return `🚛 *درخواست خروج (حواله فروش) ثبت شد*\n🔹 شماره مجوز: ${nextPermitNum}\n📦 کالا: ${args.itemName} (${args.count})\n👤 گیرنده: ${args.recipient}\n⏳ وضعیت: در انتظار تایید`;
+    return `🚛 *درخواست خروج (حواله فروش) ثبت شد*\n🔹 شماره مجوز: ${finalNum}\n📦 کالا: ${args.itemName} (${args.count})\n👤 گیرنده: ${args.recipient}\n⏳ وضعیت: در انتظار تایید`;
 };
 
 // NEW: Trade Report
