@@ -5,8 +5,8 @@ import * as utils from '../utils.js';
 
 const saveDb = dbManager.saveDb;
 const findNextGapNumber = utils.findNextGapNumber;
+const generateUUID = utils.generateUUID;
 
-const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 const formatCurrency = (amount) => new Intl.NumberFormat('fa-IR').format(amount) + ' ریال';
 const formatDate = () => new Date().toLocaleDateString('fa-IR');
 
@@ -72,7 +72,7 @@ export const handleCreateBijak = (db, args) => {
     
     // Duplicate check
     let finalSeq = nextSeq;
-    while (checkForDuplicate(db.warehouseTransactions, 'number', finalSeq, 'company', company)) {
+    while (utils.checkForDuplicate(db.warehouseTransactions, 'number', finalSeq, 'company', company)) {
         finalSeq++;
     }
 
@@ -122,7 +122,7 @@ export const handleCreateExitPermit = (db, args) => {
     
     // Duplicate check
     let finalNum = nextPermitNum;
-    while (checkForDuplicate(db.exitPermits, 'permitNumber', finalNum, 'company', company)) {
+    while (utils.checkForDuplicate(db.exitPermits, 'permitNumber', finalNum, 'company', company)) {
         finalNum++;
     }
 

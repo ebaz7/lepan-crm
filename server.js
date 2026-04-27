@@ -12,6 +12,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
+import { notifyExitPermitStep } from './backend/bot-core.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -228,7 +229,10 @@ app.get('/api/next-tracking-number', (req, res) => {
             minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
     } 
-    const nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+    let nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+    while (checkForDuplicate(db.orders, 'trackingNumber', nextNum, 'payingCompany', company)) {
+        nextNum++;
+    }
     res.json({ nextTrackingNumber: nextNum });
 });
 
@@ -242,7 +246,10 @@ app.get('/api/next-exit-permit-number', (req, res) => {
             minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
     }
-    const nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+    let nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+    while (checkForDuplicate(db.exitPermits, 'permitNumber', nextNum, 'company', company)) {
+        nextNum++;
+    }
     res.json({ nextNumber: nextNum });
 });
 
@@ -261,7 +268,10 @@ app.get('/api/next-bijak-number', (req, res) => {
         }
     }
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    const nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
+    let nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
+    while (checkForDuplicate(outTxs, 'number', nextNum, 'company', company)) {
+        nextNum++;
+    }
     res.json({ nextNumber: nextNum });
 });
 
@@ -365,6 +375,11 @@ app.post('/api/exit-permits', (req, res) => {
     saveDb(db); 
     res.json(db.exitPermits); 
 
+    // Bot Group Notification
+    try {
+        notifyExitPermitStep(permit, null, null, null, db, 'ثبت اولیه');
+    } catch(e) { console.error("Bot Notify Creation Error:", e); }
+
     broadcastNotification(
         'درخواست خروج کالا',
         `مجوز شماره ${permit.permitNumber} برای ${permit.customerName}`,
@@ -390,7 +405,12 @@ app.put('/api/exit-permits/:id', (req, res) => {
 
         // Notification Logic
         if (currentPermit.status !== updatedPermit.status) {
-            // Notify Requestor
+            // 1. Bot Group Notifications
+            try {
+                notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status);
+            } catch(e) { console.error("Bot Notify Error in server.js:", e); }
+
+            // 2. Web Browser Push Notifications
             if (updatedPermit.requester) {
                 broadcastNotification(
                     'تغییر وضعیت مجوز خروج',

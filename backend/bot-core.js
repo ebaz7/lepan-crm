@@ -12,9 +12,11 @@ const toShamsiYearMonth = utils.toShamsiYearMonth;
 const toShamsiFull = utils.toShamsiFull;
 const findNextGapNumber = utils.findNextGapNumber;
 const sanitizeGroupId = utils.sanitizeGroupId;
+const generateUUID = utils.generateUUID;
 
 // Session memory
 const sessions = {}; 
+const lastSentIds = new Set(); // Simple de-duplication for notifications
 
 const resolveUser = (db, platform, chatId) => {
     if (platform === 'telegram') return db.users.find(u => u.telegramChatId == chatId);
@@ -175,13 +177,17 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
 
 export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn) => {
     const db = getDb();
+
+    if (text === '/id' || text === 'آیدی') {
+        return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n(این کد را کپی کرده و در بخش تنظیمات در مقابل نام خود وارد کنید)`);
+    }
+
     const user = resolveUser(db, platform, chatId);
-    if (!user) return sendFn(chatId, "⛔ دسترسی غیرمجاز. شناسه شما در سیستم ثبت نشده است.");
+    if (!user) return sendFn(chatId, `⛔ دسترسی غیرمجاز. شناسه شما (\`${chatId}\`) در سیستم ثبت نشده است. لطفاً آن را به مدیر اعلام کنید.`);
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
 
-    // --- RESET COMMANDS ---
     if (text === '/start' || text === 'شروع' || text === 'منو') {
         session.state = 'IDLE';
         session.data = {};
@@ -314,6 +320,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         db.exitPermits.push(permit);
         dbManager.saveDb(db);
         session.state = 'IDLE';
+
+        // Notify first step (CEO)
+        try {
+            await notifyExitPermitStep(permit, platform, chatId, sendPhotoFn, db, 'ثبت توسط ربات');
+        } catch (e) { console.error("Initial Notify Error:", e); }
+
         return sendFn(chatId, `✅ مجوز خروج #${permit.permitNumber} ثبت شد.`);
     }
 
@@ -374,19 +386,22 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
 
-const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
+export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
+        const Renderer = (await import('./renderer.js'));
         const img = await Renderer.generateRecordImage(p, 'EXIT');
         const caption = `🚛 *مجوز خروج #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n✅ تایید مرحله: ${stepName}\n⏳ وضعیت فعلی: ${p.status}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}`;
         
-        await sendPhotoFn(platform, chatId, img, caption);
+        // Notify the user who did the action (if possible)
+        if (chatId && sendPhotoFn) {
+            try { await sendPhotoFn(platform, chatId, img, caption); } catch(err){}
+        }
 
         // Notify groups based on step
         let targetGroups = [];
-        if (stepName === 'مدیرعامل') targetGroups = [1];
-        else if (stepName === 'مدیر کارخانه') targetGroups = [2];
-        else if (stepName === 'سرپرست انبار') targetGroups = [2];
-        else if (stepName === 'انتظامات') targetGroups = [1, 2];
+        if (stepName === 'ثبت اولیه' || stepName === 'مدیرعامل') targetGroups = [1];
+        else if (stepName === 'مدیر کارخانه' || stepName === 'تایید نهایی' || stepName === 'خروج از کارخانه') targetGroups = [2];
+        else targetGroups = [1, 2];
 
         const settings = db.settings || {};
         const companyConfig = settings.companyNotifications?.[p.company];
@@ -410,15 +425,15 @@ const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepNa
             if (tgGroupId && settings.telegramBotToken) {
                 try {
                     const cleanId = sanitizeGroupId(tgGroupId);
-                    if (platform === 'telegram') await sendPhotoFn('telegram', cleanId, img, caption);
-                    else { const mod = await import('./telegram.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption); }
+                    const mod = await import('./telegram.js'); 
+                    if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption);
                 } catch(e){ console.error("TG Notify Error:", e); }
             }
             if (baleGroupId && settings.baleBotToken) {
                 try {
                     const cleanId = sanitizeGroupId(baleGroupId);
-                    if (platform === 'bale') await sendPhotoFn('bale', cleanId, img, caption);
-                    else { const mod = await import('./bale.js'); if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption); }
+                    const mod = await import('./bale.js'); 
+                    if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption);
                 } catch(e){ console.error("Bale Notify Error:", e); }
             }
             if (waGroupId && settings.whatsappEnabled) {
