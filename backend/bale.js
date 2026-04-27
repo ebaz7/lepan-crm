@@ -20,18 +20,7 @@ const callApi = (method, data, isMultipart = false) => {
         const req = https.request(options, (res) => {
             let body = '';
             res.on('data', c => body += c);
-            res.on('end', () => { 
-                try { 
-                    const parsed = JSON.parse(body);
-                    if (parsed.ok === false) {
-                        reject(new Error("Bale API Error: " + (parsed.description || JSON.stringify(parsed))));
-                    } else {
-                        resolve(parsed);
-                    }
-                } catch(e) { 
-                    resolve({}); 
-                } 
-            });
+            res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e){ resolve({}); } });
         });
 
         req.on('error', (e) => reject(e));

@@ -853,12 +853,6 @@ app.post('/api/send-bot-message', async (req, res) => {
             } else if (bale && bale.sendBotMessage) {
                 await bale.sendBotMessage(chatId, caption);
             }
-        } else if (platform === 'whatsapp') {
-            const wa = await safeImport('./backend/whatsapp.js');
-            if (wa && wa.sendMessage) {
-                if (mediaData) mediaData.mimeType = mediaData.mimeType || 'image/png';
-                await wa.sendMessage(chatId, caption, mediaData);
-            }
         }
         res.json({ success: true });
     } catch (e) {
