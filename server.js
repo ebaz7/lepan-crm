@@ -229,8 +229,8 @@ app.get('/api/next-tracking-number', (req, res) => {
             minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
     } 
-    let nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart, 'fiscalYearId', db.settings.activeFiscalYearId);
-    while (checkForDuplicate(db.orders, 'trackingNumber', nextNum, 'payingCompany', company, 'fiscalYearId', db.settings.activeFiscalYearId)) {
+    let nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+    while (checkForDuplicate(db.orders, 'trackingNumber', nextNum, 'payingCompany', company)) {
         nextNum++;
     }
     res.json({ nextTrackingNumber: nextNum });
@@ -246,8 +246,8 @@ app.get('/api/next-exit-permit-number', (req, res) => {
             minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
     }
-    let nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart, 'fiscalYearId', db.settings.activeFiscalYearId);
-    while (checkForDuplicate(db.exitPermits, 'permitNumber', nextNum, 'company', company, 'fiscalYearId', db.settings.activeFiscalYearId)) {
+    let nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+    while (checkForDuplicate(db.exitPermits, 'permitNumber', nextNum, 'company', company)) {
         nextNum++;
     }
     res.json({ nextNumber: nextNum });
@@ -268,8 +268,8 @@ app.get('/api/next-bijak-number', (req, res) => {
         }
     }
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    let nextNum = findNextGapNumber(outTxs, company, 'number', minStart, 'fiscalYearId', db.settings.activeFiscalYearId);
-    while (checkForDuplicate(outTxs, 'number', nextNum, 'company', company, 'fiscalYearId', db.settings.activeFiscalYearId)) {
+    let nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
+    while (checkForDuplicate(outTxs, 'number', nextNum, 'company', company)) {
         nextNum++;
     }
     res.json({ nextNumber: nextNum });

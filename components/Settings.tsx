@@ -124,8 +124,7 @@ const Settings: React.FC = () => {
   // Contact States
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
-  const [contactTelegramChatId, setContactTelegramChatId] = useState('');
-  const [contactBaleChatId, setContactBaleChatId] = useState('');
+  const [contactBaleId, setContactBaleId] = useState('');
   const [isGroupContact, setIsGroupContact] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null); 
   
@@ -307,8 +306,7 @@ const Settings: React.FC = () => {
           id: editingContactId || generateUUID(), 
           name: contactName.trim(), 
           number: contactNumber.trim(), 
-          telegramChatId: contactTelegramChatId.trim(),
-          baleChatId: contactBaleChatId.trim(),
+          baleId: contactBaleId.trim(),
           isGroup: isGroupContact 
       }; 
       
@@ -327,8 +325,7 @@ const Settings: React.FC = () => {
       setEditingContactId(c.id);
       setContactName(c.name);
       setContactNumber(c.number);
-      setContactTelegramChatId(c.telegramChatId || '');
-      setContactBaleChatId(c.baleChatId || '');
+      setContactBaleId(c.baleId || '');
       setIsGroupContact(c.isGroup);
   };
 
@@ -342,8 +339,7 @@ const Settings: React.FC = () => {
   const resetContactForm = () => {
       setContactName(''); 
       setContactNumber(''); 
-      setContactTelegramChatId('');
-      setContactBaleChatId('');
+      setContactBaleId('');
       setIsGroupContact(false); 
       setEditingContactId(null);
   };
@@ -522,8 +518,7 @@ const Settings: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 items-end bg-gray-50 p-4 rounded-xl">
                                     <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">نام مخاطب / گروه</label><input className="w-full border rounded-lg p-2 text-sm" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="مثال: مدیر مالی"/></div>
                                     <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شماره / شناسه گروه (واتساپ)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="98912... / 123@g.us"/></div>
-                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شناسه تلگرام</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactTelegramChatId} onChange={e => setContactTelegramChatId(e.target.value)} placeholder="@id / ID"/></div>
-                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شناسه بله</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactBaleChatId} onChange={e => setContactBaleChatId(e.target.value)} placeholder="@id / ID"/></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">آیدی بله (اختیاری)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactBaleId} onChange={e => setContactBaleId(e.target.value)} placeholder="@id"/></div>
                                     <div className="flex items-center gap-2 mb-2"><input type="checkbox" id="isGroup" checked={isGroupContact} onChange={e => setIsGroupContact(e.target.checked)} className="w-4 h-4"/><label htmlFor="isGroup" className="text-xs font-bold text-gray-600">این یک گروه است</label></div>
                                     <div className="flex gap-2 w-full md:w-auto">{editingContactId && <button type="button" onClick={resetContactForm} className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={18}/></button>}<button type="button" onClick={handleAddOrUpdateContact} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex-1">{editingContactId ? 'ویرایش' : 'افزودن'}</button></div>
                                 </div>

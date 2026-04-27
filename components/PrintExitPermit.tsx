@@ -84,16 +84,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
       });
   };
 
-  const handleShare = async (contact: Contact | string) => {
-      let targetId = '';
-      if (typeof contact === 'string') {
-          targetId = contact;
-      } else {
-          if (sharePlatform === 'whatsapp') targetId = contact.number;
-          else if (sharePlatform === 'bale') targetId = contact.baleChatId || contact.baleId || '';
-          else if (sharePlatform === 'telegram') targetId = contact.telegramChatId || '';
-      }
-      
+  const handleShare = async (targetId: string) => {
       if (!targetId || !sharePlatform) return;
       
       const element = document.getElementById(containerId);
