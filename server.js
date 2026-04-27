@@ -376,9 +376,7 @@ app.post('/api/exit-permits', (req, res) => {
     res.json(db.exitPermits); 
 
     // Bot Group Notification
-    try {
-        notifyExitPermitStep(permit, null, null, null, db, 'ثبت اولیه');
-    } catch(e) { console.error("Bot Notify Creation Error:", e); }
+    notifyExitPermitStep(permit, null, null, null, db, 'ثبت اولیه').catch(e => console.error("Bot Notify Creation Error:", e));
 
     broadcastNotification(
         'درخواست خروج کالا',
@@ -406,9 +404,7 @@ app.put('/api/exit-permits/:id', (req, res) => {
         // Notification Logic
         if (currentPermit.status !== updatedPermit.status) {
             // 1. Bot Group Notifications
-            try {
-                notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status);
-            } catch(e) { console.error("Bot Notify Error in server.js:", e); }
+            notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status).catch(e => console.error("Bot Notify Error in server.js:", e));
 
             // 2. Web Browser Push Notifications
             if (updatedPermit.requester) {

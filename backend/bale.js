@@ -79,13 +79,20 @@ const poll = async () => {
 
                 try {
                     if (u.message && u.message.text) {
-                        // Ignore group messages for command processing in Bale
-                        // In Bale, group IDs are usually negative or have a specific structure.
-                        // We check if it's a private chat. If 'type' is not available, we can't be 100% sure without more info,
-                        // but usually bots only respond to private messages if configured so.
-                        if (u.message.chat.type && u.message.chat.type !== 'private') return;
+                        const text = u.message.text;
+                        const chatId = u.message.chat.id;
+
+                        // Allow /id in groups
+                        if (text.startsWith('/id') || text === 'آیدی') {
+                            return sendFn(chatId, `🆔 شناسه این چت: ${chatId}`);
+                        }
+
+                        const hasActiveSession = (await import('./bot-core.js')).sessions[chatId]?.state !== 'IDLE';
+
+                        // Ignore group messages unless it's a command or part of an active session
+                        if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) return;
                         
-                        await BotCore.handleMessage('bale', u.message.chat.id, u.message.text, sendFn, sendPhotoFn, sendDocFn);
+                        await BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn);
                     } else if (u.callback_query) {
                         await BotCore.handleCallback('bale', u.callback_query.message.chat.id, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
                     }

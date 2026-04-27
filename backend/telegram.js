@@ -36,9 +36,20 @@ export const initTelegram = async (token) => {
         bot.on('message', async (msg) => {
             try {
                 if (!msg.text) return;
-                // Ignore group messages for command processing
-                if (msg.chat.type !== 'private') return;
-                await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
+                
+                // Allow /id command in groups
+                if (msg.text.startsWith('/id') || msg.text === 'آیدی') {
+                    return bot.sendMessage(msg.chat.id, `🆔 شناسه این چت: \`${msg.chat.id}\``, { parse_mode: 'Markdown' });
+                }
+
+                // Allow registration only in private chat
+                const isPrivate = msg.chat.type === 'private';
+                const isCommand = msg.text.startsWith('/');
+                const hasActiveSession = sessions[msg.chat.id] && sessions[msg.chat.id].state !== 'IDLE';
+
+                if (isPrivate || isCommand || hasActiveSession) {
+                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
+                }
             } catch (e) {
                 console.error("TG Msg Handle Error:", e);
                 bot.sendMessage(msg.chat.id, "⚠️ خطا در پردازش درخواست.").catch(()=>{});

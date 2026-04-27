@@ -15,7 +15,7 @@ const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
 
 // Session memory
-const sessions = {}; 
+export const sessions = {}; 
 const lastSentIds = new Set(); // Simple de-duplication for notifications
 
 const resolveUser = (db, platform, chatId) => {
@@ -259,7 +259,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             totalAmount: session.data.amount,
             description: text,
             status: 'در انتظار بررسی مالی',
-            requester: user.fullName,
+            requester: user ? user.fullName : 'کاربر ربات',
             payingCompany: company,
             createdAt: Date.now(),
             paymentDetails: [{ id: generateUUID(), method: 'حواله بانکی', amount: session.data.amount }]
@@ -267,6 +267,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         if(!db.orders) db.orders = [];
         db.orders.unshift(order);
         dbManager.saveDb(db);
+        console.log(`[Bot] Registered Payment #${order.trackingNumber} for user ${user ? user.fullName : chatId}`);
         session.state = 'IDLE';
         await sendFn(chatId, `✅ دستور پرداخت #${order.trackingNumber} با موفقیت ثبت شد.`);
         return;
@@ -400,7 +401,8 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         // Notify groups based on step
         let targetGroups = [];
         if (stepName === 'ثبت اولیه' || stepName === 'مدیرعامل') targetGroups = [1];
-        else if (stepName === 'مدیر کارخانه' || stepName === 'تایید نهایی' || stepName === 'خروج از کارخانه') targetGroups = [2];
+        else if (stepName === 'خروج از کارخانه') targetGroups = [1, 2]; // Both groups for final exit
+        else if (stepName === 'مدیر کارخانه' || stepName === 'تایید نهایی') targetGroups = [2];
         else targetGroups = [1, 2];
 
         const settings = db.settings || {};
