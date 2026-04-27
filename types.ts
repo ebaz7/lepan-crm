@@ -196,6 +196,7 @@ export interface SystemSettings {
   defaultSalesManager?: string;
   insuranceCompanies?: string[];
   exitPermitNotificationGroup?: string; // Legacy field
+  exitPermitFirstGroupConfig?: ExitPermitGroupConfig;
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];

@@ -7,19 +7,31 @@ interface Props {
     settings: SystemSettings;
     setSettings: (s: SystemSettings) => void;
     contacts: Contact[];
+    configKey: 'exitPermitFirstGroupConfig' | 'exitPermitSecondGroupConfig';
+    title: string;
+    bgColor?: string;
+    borderColor?: string;
+    colorClasses?: string;
+    iconColorClass?: string;
 }
 
-const SecondExitGroupSettings: React.FC<Props> = ({ settings, setSettings, contacts }) => {
+const SecondExitGroupSettings: React.FC<Props> = ({ 
+    settings, setSettings, contacts, configKey, title,
+    bgColor = 'bg-orange-100/50',
+    borderColor = 'border-orange-200',
+    colorClasses = 'text-orange-900',
+    iconColorClass = 'text-orange-700'
+}) => {
     
-    const config = settings.exitPermitSecondGroupConfig || { groupId: '', activeStatuses: [] };
+    const config = settings[configKey] || { groupId: '', activeStatuses: [] };
 
     const updateConfig = (key: string, value: any) => {
         const newConfig = { ...config, [key]: value };
-        setSettings({ ...settings, exitPermitSecondGroupConfig: newConfig });
+        setSettings({ ...settings, [configKey]: newConfig });
     };
 
     const toggleStatus = (status: string) => {
-        let newStatuses = [...config.activeStatuses];
+        let newStatuses = [...(config.activeStatuses || [])];
         if (newStatuses.includes(status)) {
             newStatuses = newStatuses.filter(s => s !== status);
         } else {
@@ -29,33 +41,34 @@ const SecondExitGroupSettings: React.FC<Props> = ({ settings, setSettings, conta
     };
 
     const statusOptions = [
-        { value: ExitPermitStatus.PENDING_FACTORY, label: 'پس از تایید مدیرعامل (ارسال به کارخانه)' },
-        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: 'پس از تایید مدیر کارخانه (ارسال به انبار)' },
-        { value: ExitPermitStatus.PENDING_SECURITY, label: 'پس از تایید انبار (ارسال به انتظامات)' },
+        { value: ExitPermitStatus.PENDING_CEO, label: 'ثبت اولیه (ارسال به مدیرعامل)' },
+        { value: ExitPermitStatus.PENDING_FACTORY, label: 'تایید مدیرعامل (ارسال به کارخانه)' },
+        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: 'تایید کارخانه (ارسال به انبار)' },
+        { value: ExitPermitStatus.PENDING_SECURITY, label: 'تایید انبار (ارسال به انتظامات)' },
         { value: ExitPermitStatus.EXITED, label: 'خروج نهایی (تایید انتظامات)' },
     ];
 
     return (
-        <div className="mt-4 border-t-2 border-orange-200 pt-4 bg-orange-100/50 p-4 rounded-lg">
-            <div className="flex items-center gap-2 mb-3 text-orange-900 font-bold text-sm">
+        <div className={`mt-4 border-t-2 ${borderColor} pt-4 ${bgColor} p-4 rounded-lg`}>
+            <div className={`flex items-center gap-2 mb-3 ${colorClasses} font-bold text-sm`}>
                 <Users size={18}/>
-                تنظیمات گروه دوم (ارسال سفارشی)
+                {title}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 {/* WhatsApp */}
-                <div className="bg-white p-2 rounded border border-orange-200">
+                <div className={`bg-white p-2 rounded border ${borderColor}`}>
                     <div className="flex items-center gap-1 mb-1 text-green-700 font-bold text-[10px]">
                         <MessageCircle size={12}/> واتساپ
                     </div>
                     <select 
                         className="w-full border rounded p-1.5 text-xs bg-white" 
-                        value={config.groupId} 
+                        value={config.groupId || ''} 
                         onChange={e => updateConfig('groupId', e.target.value)}
                     >
                         <option value="">-- انتخاب --</option>
                         {contacts.map(c => (
-                            <option key={`sec_group_${c.number}`} value={c.number}>
+                            <option key={`group_${configKey}_${c.number}`} value={c.number}>
                                 {c.name} {c.isGroup ? '(گروه)' : ''}
                             </option>
                         ))}
@@ -63,9 +76,9 @@ const SecondExitGroupSettings: React.FC<Props> = ({ settings, setSettings, conta
                 </div>
 
                 {/* Bale */}
-                <div className="bg-white p-2 rounded border border-orange-200">
+                <div className={`bg-white p-2 rounded border ${borderColor}`}>
                     <div className="flex items-center gap-1 mb-1 text-cyan-700 font-bold text-[10px]">
-                        <Send size={12}/> بله (شناسه)
+                        <Send size={12}/> بله (شناسه گروه‌ها)
                     </div>
                     <input 
                         className="w-full border rounded p-1.5 text-xs dir-ltr" 
@@ -76,7 +89,7 @@ const SecondExitGroupSettings: React.FC<Props> = ({ settings, setSettings, conta
                 </div>
 
                 {/* Telegram */}
-                <div className="bg-white p-2 rounded border border-orange-200">
+                <div className={`bg-white p-2 rounded border ${borderColor}`}>
                     <div className="flex items-center gap-1 mb-1 text-blue-700 font-bold text-[10px]">
                         <Send size={12}/> تلگرام (Chat ID)
                     </div>
@@ -91,24 +104,24 @@ const SecondExitGroupSettings: React.FC<Props> = ({ settings, setSettings, conta
 
             {(config.groupId || config.baleId || config.telegramId) && (
                 <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-2">در چه مراحلی پیام ارسال شود؟</label>
+                    <label className="text-xs font-bold text-gray-700 block mb-2">در چه مراحلی پیام به این گروه اعمال شود؟</label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {statusOptions.map(opt => {
-                            const isChecked = config.activeStatuses.includes(opt.value);
+                            const isChecked = (config.activeStatuses || []).includes(opt.value);
                             return (
                                 <div 
                                     key={opt.value} 
                                     onClick={() => toggleStatus(opt.value)}
-                                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${isChecked ? 'bg-orange-200 border-orange-400' : 'bg-white border-gray-300'}`}
+                                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${isChecked ? 'bg-white border-blue-400 font-bold' : 'bg-white border-gray-200'}`}
                                 >
-                                    {isChecked ? <CheckSquare size={16} className="text-orange-700"/> : <Square size={16} className="text-gray-400"/>}
-                                    <span className="text-xs text-gray-800">{opt.label}</span>
+                                    {isChecked ? <CheckSquare size={16} className={iconColorClass}/> : <Square size={16} className="text-gray-300"/>}
+                                    <span className={`text-xs ${isChecked ? 'text-blue-900':'text-gray-600'}`}>{opt.label}</span>
                                 </div>
                             );
                         })}
                     </div>
                     <p className="text-[10px] text-gray-500 mt-2">
-                        * پیام فقط در مراحل انتخاب شده برای این گروه ارسال خواهد شد.
+                        * سیستم فقط در مراحل انتخاب شده مدارک را به این گروه ارسال می‌کند.
                     </p>
                 </div>
             )}

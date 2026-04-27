@@ -34,11 +34,20 @@ const callApi = (method, data, isMultipart = false) => {
 };
 
 export const initBaleBot = (token) => {
-    if (!token) return;
+    if (!token) {
+        pollingActive = false;
+        botToken = null;
+        return;
+    }
+    if (botToken === token && pollingActive) return;
+
     botToken = token;
-    pollingActive = true;
-    poll();
-    console.log(">>> Bale Bot Started ✅");
+    
+    if (!pollingActive) {
+        pollingActive = true;
+        poll();
+        console.log(">>> Bale Bot Started ✅");
+    }
 
     // Try to set commands for Bale (similar to Telegram)
     callApi('setMyCommands', {

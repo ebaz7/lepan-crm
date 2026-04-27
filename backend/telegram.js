@@ -4,9 +4,27 @@ import * as BotCore from './bot-core.js';
 
 let bot = null;
 
+let currentToken = null;
+
 export const initTelegram = async (token) => {
-    if (!token) return;
-    if (bot) try { await bot.stopPolling(); } catch(e){}
+    if (!token) {
+        if(bot) {
+            try { await bot.stopPolling(); bot = null; currentToken = null; } catch(e){}
+        }
+        return;
+    }
+    
+    // Do not restart if token is unchanged
+    if (bot && currentToken === token) {
+        return;
+    }
+
+    if (bot) {
+        try { await bot.stopPolling(); } catch(e){ console.error("Error stopping old bot", e); }
+        bot = null;
+    }
+
+    currentToken = token;
 
     const requestOptions = { agentOptions: { keepAlive: true, family: 4 }, timeout: 30000 };
     if (process.env.PROXY_URL) requestOptions.proxy = process.env.PROXY_URL;

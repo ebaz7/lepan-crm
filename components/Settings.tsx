@@ -704,6 +704,20 @@ const Settings: React.FC = () => {
                             </div>
                             
                             <SecondExitGroupSettings 
+                                title="گروه اول (پیش‌فرض سیستم)"
+                                configKey="exitPermitFirstGroupConfig"
+                                bgColor="bg-blue-50"
+                                borderColor="border-blue-200"
+                                colorClasses="text-blue-900"
+                                iconColorClass="text-blue-700"
+                                settings={settings} 
+                                setSettings={setSettings} 
+                                contacts={[...(settings.savedContacts || []), ...appUsers as Contact[]]} 
+                            />
+                            
+                            <SecondExitGroupSettings 
+                                title="تنظیمات گروه دوم (ارسال سفارشی)"
+                                configKey="exitPermitSecondGroupConfig"
                                 settings={settings} 
                                 setSettings={setSettings} 
                                 contacts={[...(settings.savedContacts || []), ...appUsers as Contact[]]} 
