@@ -1,15 +1,18 @@
 
 export const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-export const findNextGapNumber = (items, company, field, settingsStart) => {
+export const findNextGapNumber = (items, company, field, settingsStart, fiscalYearField, fiscalYearValue) => {
     let startNum = settingsStart || 1000;
     const existingNumbers = new Set();
+    const targetFiscalYear = fiscalYearValue || 'DEFAULT';
     
     if (items && Array.isArray(items)) {
         for (const i of items) {
             const itemCompany = i.company || i.payingCompany || '';
             const targetCompany = company || '';
-            if (itemCompany === targetCompany) {
+            const itemFiscalYear = i[fiscalYearField] || 'DEFAULT';
+            
+            if (itemCompany === targetCompany && itemFiscalYear === targetFiscalYear) {
                 const num = parseInt(i[field]);
                 if (!isNaN(num) && num >= startNum) {
                     existingNumbers.add(num);
@@ -23,17 +26,19 @@ export const findNextGapNumber = (items, company, field, settingsStart) => {
     return expected;
 };
 
-export const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
+export const checkForDuplicate = (list, numField, numValue, companyField, companyValue, fiscalYearField, fiscalYearValue, excludeId = null) => {
     if (!list || !Array.isArray(list)) return false;
     
     const targetNum = Number(numValue);
     const targetCompany = (companyValue || '').toString().trim();
+    const targetFiscalYear = (fiscalYearValue || 'DEFAULT').toString().trim();
 
     return list.some(item => {
         if (item.id === excludeId) return false;
         const itemNum = Number(item[numField]);
         const itemCompany = (item[companyField] || '').toString().trim();
-        return itemNum === targetNum && itemCompany === targetCompany;
+        const itemFiscalYear = (item[fiscalYearField] || 'DEFAULT').toString().trim();
+        return itemNum === targetNum && itemCompany === targetCompany && itemFiscalYear === targetFiscalYear;
     });
 };
 

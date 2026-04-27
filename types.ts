@@ -69,6 +69,8 @@ export interface Contact {
   number: string;
   isGroup: boolean;
   baleId?: string;
+  telegramChatId?: string;
+  baleChatId?: string;
 }
 
 export interface PrintField {
