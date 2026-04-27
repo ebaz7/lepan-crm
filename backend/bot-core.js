@@ -398,58 +398,74 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🏗️ *خروج کالا از کارخانه - زوال*\n\n🔹 *شماره مجوز:* ${p.permitNumber}\n🏢 *شرکت:* ${p.company}\n📅 *تاریخ:* ${toShamsiFull(p.date)}\n👤 *تحویل‌گیرنده:* ${p.recipientName}\n📦 *شرح کالا:* ${p.goodsName}\n🔢 *تعداد:* ${p.cartonCount} کارتن\n\n✅ *مرحله:* ${stepName}\n🔄 *آخرین وضعیت:* ${p.status}${p.exitTime ? `\n🕒 *زمان خروج:* ${p.exitTime}` : ''}`;
+        const caption = `🏗️ *خروج کالا از کارخانه*\n\n🔹 *شماره مجوز:* ${p.permitNumber}\n🏢 *شرکت:* ${p.company}\n📅 *تاریخ:* ${toShamsiFull(p.date)}\n👤 *تحویل‌گیرنده:* ${p.recipientName}\n📦 *شرح کالا:* ${p.goodsName}\n🔢 *تعداد:* ${p.cartonCount} کارتن\n\n✅ *مرحله:* ${stepName}\n🔄 *آخرین وضعیت:* ${p.status}${p.exitTime ? `\n🕒 *زمان خروج:* ${p.exitTime}` : ''}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
-            try { await sendPhotoFn(platform, chatId, img, caption); } catch(err){}
+            sendPhotoFn(platform, chatId, img, caption).catch(e => console.error("User Notify Error:", e));
         }
 
-        // Notify groups based on step
-        let targetGroups = [];
-        if (stepName === 'ثبت اولیه' || stepName === 'مدیرعامل') targetGroups = [1];
-        else if (stepName === 'خروج از کارخانه') targetGroups = [1, 2]; // Both groups for final exit
-        else if (stepName === 'مدیر کارخانه' || stepName === 'تایید نهایی') targetGroups = [2];
-        else targetGroups = [1, 2];
-
         const settings = db.settings || {};
-        const companyConfig = settings.companyNotifications?.[p.company];
+        let targetGroups = [];
 
+        // Group 1 logic (Default routing strictly as expected by typical logic)
+        if (p.status === 'در انتظار بررسی' ||
+            p.status === 'در انتظار تایید مدیرعامل' || 
+            p.status === 'در انتظار مدیر کارخانه' || 
+            p.status === 'خارج شد' || 
+            p.status.includes('رد')) {
+            targetGroups.push(1);
+        }
+        
+        // Group 2 logic (Settings-based routing)
+        const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
+        if (g2Config.activeStatuses && g2Config.activeStatuses.includes(p.status)) {
+            targetGroups.push(2);
+        }
+
+        // Distinctly and separately fire off to all targets, without await to prevent blocking
         for (const gNum of targetGroups) {
             let tgGroupId = '';
             let baleGroupId = '';
             let waGroupId = '';
+            let companyConfig = settings.companyNotifications?.[p.company] || {};
 
             if (gNum === 1) {
-                tgGroupId = companyConfig?.telegramChannelId || settings.exitPermitNotificationTelegramId;
-                baleGroupId = companyConfig?.baleChannelId || settings.exitPermitNotificationBaleId;
-                waGroupId = companyConfig?.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup;
+                tgGroupId = companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId;
+                baleGroupId = companyConfig.baleChannelId || settings.exitPermitNotificationBaleId;
+                waGroupId = companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup;
             } else {
-                const g2 = settings.exitPermitSecondGroupConfig || {};
-                tgGroupId = g2.telegramId;
-                baleGroupId = g2.baleId;
-                waGroupId = g2.groupId;
+                tgGroupId = g2Config.telegramId;
+                baleGroupId = g2Config.baleId;
+                waGroupId = g2Config.groupId;
             }
 
+            // Fire Telegram
             if (tgGroupId && settings.telegramBotToken) {
-                try {
-                    const cleanId = sanitizeGroupId(tgGroupId);
-                    const mod = await import('./telegram.js'); 
-                    if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption);
-                } catch(e){ console.error("TG Notify Error:", e); }
+                const cleanId = sanitizeGroupId(tgGroupId);
+                import('./telegram.js').then(mod => {
+                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, img, caption).catch(e => console.error("TG Group Notify Error:", e));
+                }).catch(e => console.error("TG Import Error", e));
             }
+
+            // Fire Bale
             if (baleGroupId && settings.baleBotToken) {
-                try {
-                    const cleanId = sanitizeGroupId(baleGroupId);
-                    const mod = await import('./bale.js'); 
-                    if (mod?.sendBotPhoto) await mod.sendBotPhoto(cleanId, img, caption);
-                } catch(e){ console.error("Bale Notify Error:", e); }
+                const cleanId = sanitizeGroupId(baleGroupId);
+                import('./bale.js').then(mod => {
+                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, img, caption).catch(e => console.error("Bale Group Notify Error:", e));
+                }).catch(e => console.error("Bale Import Error", e));
             }
+
+            // Fire WhatsApp
             if (waGroupId && settings.whatsappEnabled) {
-                try {
-                    const mod = await import('./whatsapp.js');
-                    if (mod?.sendMessage) await mod.sendMessage(waGroupId, caption, { data: img.toString('base64'), mimeType: 'image/png', filename: 'permit.png' });
-                } catch(e){ console.error("WA Notify Error:", e); }
+                import('./whatsapp.js').then(mod => {
+                    if (mod?.sendMessage) {
+                        const buffer = Buffer.from(img);
+                        const b64 = buffer.toString('base64');
+                        mod.sendMessage(waGroupId, caption, { data: b64, mimeType: 'image/png', filename: 'permit.png' })
+                            .catch(e => console.error("WA Group Notify Error:", e));
+                    }
+                }).catch(e => console.error("WA Import Error", e));
             }
         }
     } catch (e) { console.error("Notification Helper Error:", e); }
