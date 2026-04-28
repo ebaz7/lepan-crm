@@ -14,7 +14,8 @@ const callApi = (method, data, isMultipart = false) => {
             hostname: 'tapi.bale.ai',
             path: `/bot${botToken}/${method}`,
             method: 'POST',
-            headers: isMultipart ? data.getHeaders() : { 'Content-Type': 'application/json' }
+            headers: isMultipart ? data.getHeaders() : { 'Content-Type': 'application/json' },
+            timeout: 15000 // 15 seconds timeout
         };
 
         const req = https.request(options, (res) => {
@@ -24,6 +25,10 @@ const callApi = (method, data, isMultipart = false) => {
         });
 
         req.on('error', (e) => reject(e));
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error("Request timeout"));
+        });
 
         if (isMultipart) data.pipe(req);
         else {
@@ -100,7 +105,7 @@ const poll = async () => {
                         const hasActiveSession = BotCore.sessions[chatId] && BotCore.sessions[chatId].state !== 'IDLE';
 
                         // Ignore group messages unless it's a command or part of an active session
-                        if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) return;
+                        if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) continue;
                         
                         await BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn);
                     } else if (u.callback_query) {
