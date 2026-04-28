@@ -144,10 +144,10 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
             let pdfCallback = '';
 
             if (type === 'PAYMENT') {
-                caption = `📄 *سند پرداخت #${item.trackingNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()}\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}`;
+                caption = `📄 *سند پرداخت #${item.trackingNumber}*\n🏢 شرکت: ${item.payingCompany || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_ORDER_${item.id}`;
             } else if (type === 'EXIT') {
-                caption = `🚛 *مجوز خروج #${item.permitNumber}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n🔄 وضعیت: ${item.status}`;
+                caption = `🚛 *مجوز خروج کالا #${item.permitNumber}*\n🏢 شرکت: ${item.company || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n🔢 تعداد: ${item.cartonCount} کارتن\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_EXIT_${item.id}`;
             } else if (type === 'WH_OUT' || type === 'WH_BIJAK') {
                 caption = `📦 *حواله انبار (بیجک) #${item.number}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n🚛 راننده: ${item.driverName||'-'}`;
@@ -180,6 +180,22 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
     if (text === '/id' || text === 'آیدی') {
         return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n(این کد را کپی کرده و در بخش تنظیمات در مقابل نام خود وارد کنید)`);
+    }
+
+    if (text.startsWith('/daily_report') || text.startsWith('/report')) {
+        const today = new Date().toISOString().split('T')[0];
+        const finalExits = (db.exitPermits || []).filter(p => p.date === today && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+        
+        if (finalExits.length === 0) {
+            return sendFn(chatId, "📭 امروز هنوز خروج نهایی ثبت نشده است.");
+        }
+        
+        let reportMsg = `🚛 *گزارش خروج‌های نهایی امروز* (${toShamsiFull(new Date())})\n\n`;
+        finalExits.forEach((p, idx) => {
+            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName} (${p.cartonCount} کارتن)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+        });
+        
+        return sendFn(chatId, reportMsg);
     }
 
     if (text.startsWith('/start') || text === 'شروع' || text === 'منو') {
@@ -398,7 +414,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🏗️ *خروج کالا از کارخانه*\n\n🔹 *شماره مجوز:* ${p.permitNumber}\n🏢 *شرکت:* ${p.company}\n📅 *تاریخ:* ${toShamsiFull(p.date)}\n👤 *تحویل‌گیرنده:* ${p.recipientName}\n📦 *شرح کالا:* ${p.goodsName}\n🔢 *تعداد:* ${p.cartonCount} کارتن\n\n✅ *مرحله:* ${stepName}\n🔄 *آخرین وضعیت:* ${p.status}${p.exitTime ? `\n🕒 *زمان خروج:* ${p.exitTime}` : ''}`;
+        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {

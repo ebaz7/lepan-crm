@@ -245,11 +245,21 @@ export const generateRecordImage = async (record, type) => {
             <style>
                 ${fontFaceRule}
                 body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; }
-                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; }
+                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; shadow: 0 1px 2px rgba(0,0,0,0.05); }
                 .stamp.black { border-color: black; color: black; }
                 .stamp-title { font-size: 10px; font-weight: bold; border-bottom: 1px solid currentColor; margin-bottom: 4px; padding-bottom: 4px; }
                 .stamp-name { font-size: 14px; font-weight: 900; }
-                #capture-wrapper { padding: 40px; margin: 0 auto; width: 210mm; background: white; direction: rtl; }
+                #capture-wrapper { 
+                    padding: 10mm; 
+                    margin: 0 auto; 
+                    width: 210mm; 
+                    height: 296mm;
+                    background: white; 
+                    direction: rtl; 
+                    display: flex;
+                    flex-direction: column;
+                    box-sizing: border-box;
+                }
             </style>
             </head><body>
             <div id="capture-wrapper">
@@ -311,17 +321,18 @@ export const generateRecordImage = async (record, type) => {
                     ${record.description ? `<div><h3 class="font-black text-lg mb-1">توضیحات</h3><div class="border-2 border-black rounded-xl p-3 bg-white text-sm">${record.description}</div></div>` : ''}
                 </div>
 
-                <div class="mt-8 pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end h-[120px]">
-                    <div class="flex flex-col items-center justify-between h-full"><div class="mb-2 h-full"><div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div></div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">درخواست کننده</div></div>
-                    <div class="flex flex-col items-center justify-between h-full"><div class="mb-2 h-full">${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<span class="text-gray-300">-</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرعامل</div></div>
-                    <div class="flex flex-col items-center justify-between h-full"><div class="mb-2 h-full">${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<span class="text-gray-300">-</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیر کارخانه</div></div>
-                    <div class="flex flex-col items-center justify-between h-full"><div class="mb-2 h-full">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<span class="text-gray-300">-</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">سرپرست انبار</div></div>
-                    <div class="flex flex-col items-center justify-between h-full"><div class="mb-2 h-full">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div class="mt-2 border-t border-dashed border-gray-400 pt-1 text-[10px]">ساعت خروج:</div><div class="text-2xl font-black font-mono">${record.exitTime}</div>` : ''}</div>` : '<div class="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>'}</div><div class="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید خروج</div></div>
+                <div class="mt-auto pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end">
+                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full"><div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div></div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">درخواست کننده</div></div>
+                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرعامل</div></div>
+                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیر کارخانه</div></div>
+                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">سرپرست انبار</div></div>
+                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div class="mt-2 border-t border-dashed border-gray-400 pt-1 text-[9px] font-bold text-center">ساعت خروج:</div><div class="text-2xl font-black font-mono">${record.exitTime}</div>` : ''}</div>` : '<div class="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>'}</div><div class="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید خروج</div></div>
                 </div>
+                <div class="mt-2 border-t border-gray-300 text-[9px] text-gray-500 text-center">نسخه چاپی سیستم</div>
             </div></body></html>`;
 
             // Make viewport wide enough
-            await page.setViewport({ width: 900, height: 1200, deviceScaleFactor: 2 });
+            await page.setViewport({ width: 900, height: 1300, deviceScaleFactor: 2 });
             await page.setContent(html, { waitUntil: 'networkidle0' });
             
             const card = await page.$('#capture-wrapper');

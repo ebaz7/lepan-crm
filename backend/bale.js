@@ -107,10 +107,11 @@ const poll = async () => {
                         // Ignore group messages unless it's a command or part of an active session
                         if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) continue;
                         
-                        await BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn);
+                        // Run handling in background to not block the poll loop
+                        BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn).catch(e => console.error("Bale Core Handle Err", e));
                     } else if (u.callback_query) {
                         const userId = u.callback_query.from ? u.callback_query.from.id : u.callback_query.message.chat.id;
-                        await BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn);
+                        BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn).catch(e => console.error("Bale Callback Err", e));
                     }
                 } catch (err) {
                     console.error("Bale Message Handler Error:", err);
