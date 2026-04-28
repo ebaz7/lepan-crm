@@ -417,7 +417,20 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
+        
+        let caption = `🚛 *مجوز خروج کالا*\n\n`;
+        caption += `🏢 *شرکت:* ${p.company}\n`;
+        caption += `🔢 *شماره مجوز:* ${p.permitNumber}\n`;
+        caption += `📅 *تاریخ:* ${toShamsiFull(p.date)}\n`;
+        caption += `👤 *تحویل‌گیرنده:* ${p.recipientName}\n`;
+        caption += `📦 *نام کالا:* ${p.goodsName}\n`;
+        caption += `🔢 *تعداد کل:* ${p.cartonCount} کارتن\n`;
+        caption += `👤 *درخواست‌کننده:* ${p.requester}\n`;
+        if (p.driverName) caption += `🚛 *راننده:* ${p.driverName}\n`;
+        if (p.plateNumber) caption += `🆔 *پلاک:* ${p.plateNumber}\n`;
+        if (p.exitTime) caption += `🕒 *زمان خروج:* ${p.exitTime}\n`;
+        caption += `\n✅ *مرحله:* ${stepName}\n`;
+        caption += `🔄 *آخرین وضعیت:* ${p.status}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -459,8 +472,8 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
 
             if (gNum === 1) {
                 const g1Config = settings.exitPermitFirstGroupConfig || {};
-                tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || '';
-                baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || '';
+                tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || settings.telegramChatId || '';
+                baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || settings.baleGroupChatId || '';
                 waGroupId = g1Config.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
             } else {
                 tgGroupId = g2Config.telegramId;
