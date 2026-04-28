@@ -280,17 +280,21 @@ export const generateRecordImage = async (record, type) => {
                             <tr class="header-row">
                                 <th>#</th>
                                 <th>شرح کالا</th>
-                                <th>تعداد (کارتن)</th>
-                                <th>وزن (KG)</th>
+                                <th>تعداد درخواستی</th>
+                                <th>تعداد خروجی</th>
+                                <th>وزن درخواستی</th>
+                                <th>وزن خروجی</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, weight: record.weight}]).map((i, idx) => `
+                            ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, deliveredCartonCount: record.deliveredCartonCount, weight: record.weight, deliveredWeight: record.deliveredWeight}]).map((i, idx) => `
                                 <tr>
                                     <td>${idx+1}</td>
                                     <td style="font-weight: bold;">${i.goodsName}</td>
-                                    <td>${i.cartonCount}</td>
-                                    <td>${i.weight}</td>
+                                    <td>${i.cartonCount || 0}</td>
+                                    <td>${i.deliveredCartonCount ?? i.cartonCount ?? 0}</td>
+                                    <td>${i.weight || 0}</td>
+                                    <td>${i.deliveredWeight ?? i.weight ?? 0}</td>
                                 </tr>
                             `).join('')}
                         </tbody>

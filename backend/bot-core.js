@@ -183,14 +183,29 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     }
 
     if (text.startsWith('/daily_report') || text.startsWith('/report')) {
-        const today = new Date().toISOString().split('T')[0];
-        const finalExits = (db.exitPermits || []).filter(p => p.date === today && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
-        
-        if (finalExits.length === 0) {
-            return sendFn(chatId, "📭 امروز هنوز خروج نهایی ثبت نشده است.");
+        const args = text.split(' ');
+        let targetDate = new Date();
+        let dateStr = new Date().toISOString().split('T')[0];
+
+        if (args.length > 1) {
+            // Very simple date handling, assuming YYYY-MM-DD input for simplicity
+            dateStr = args[1];
         }
         
-        let reportMsg = `🚛 *گزارش خروج‌های نهایی امروز* (${toShamsiFull(new Date())})\n\n`;
+        // Helper to check if a permit date matches today, regardless of store format
+        const matchesDate = (dateVal) => {
+            if (!dateVal) return false;
+            // Try to match YYYY-MM-DD
+            return dateVal.includes(dateStr) || (new Date(dateVal).toISOString().split('T')[0] === dateStr);
+        };
+
+        const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+        
+        if (finalExits.length === 0) {
+            return sendFn(chatId, `📭 در تاریخ ${toShamsiFull(dateStr)} خروج نهایی ثبت نشده است.`);
+        }
+        
+        let reportMsg = `🚛 *گزارش خروج‌های نهایی ${toShamsiFull(dateStr)}*\n\n`;
         finalExits.forEach((p, idx) => {
             reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName} (${p.cartonCount} کارتن)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
         });
@@ -445,6 +460,12 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
         if (g2Config.activeStatuses && g2Config.activeStatuses.includes(p.status)) {
             targetGroups.push(2);
+        }
+
+        // FORCE BOTH GROUPS IF AFTER WAREHOUSE TICKET
+        if (p.status === 'در انتظار خروج') {
+            if (!targetGroups.includes(1)) targetGroups.push(1);
+            if (!targetGroups.includes(2)) targetGroups.push(2);
         }
 
         // Distinctly and separately fire off to all targets, without await to prevent blocking
