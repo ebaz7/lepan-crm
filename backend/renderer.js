@@ -304,7 +304,7 @@ export const generateRecordImage = async (record, type) => {
                     <div style="text-align: center;">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">سرپرست انبار</div></div>
                     <div style="text-align: center;">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 10px; font-weight: bold; margin-top: 2px;">ساعت: ${record.exitTime}</div>` : ''}</div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">تایید خروج</div></div>
                 </div>
-            </div></body></html>`;`;
+            </div></body></html>`;
 
             // Make viewport wide enough
             await page.setViewport({ width: 900, height: 1300, deviceScaleFactor: 2 });
