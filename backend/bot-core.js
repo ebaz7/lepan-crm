@@ -195,8 +195,8 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         // Helper to check if a permit date matches today, regardless of store format
         const matchesDate = (dateVal) => {
             if (!dateVal) return false;
-            // Try to match YYYY-MM-DD
-            return dateVal.includes(dateStr) || (new Date(dateVal).toISOString().split('T')[0] === dateStr);
+            // TRY Shamsi first, then ISO fallback
+            return dateVal.includes(dateStr) || dateVal === toShamsiFull(dateStr).split(' ')[0] || (new Date(dateVal).toISOString().split('T')[0] === dateStr);
         };
 
         const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
@@ -462,8 +462,8 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             targetGroups.push(2);
         }
 
-        // FORCE BOTH GROUPS IF AFTER WAREHOUSE TICKET
-        if (p.status === 'در انتظار خروج') {
+        // FORCE BOTH GROUPS IF AFTER WAREHOUSE TICKET or if final exit
+        if (p.status === 'در انتظار خروج' || p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)') {
             if (!targetGroups.includes(1)) targetGroups.push(1);
             if (!targetGroups.includes(2)) targetGroups.push(2);
         }

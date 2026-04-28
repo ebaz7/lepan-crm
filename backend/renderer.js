@@ -211,8 +211,8 @@ export const generateRecordImage = async (record, type) => {
             const showDelivery = record.items && record.items.some(i => i.deliveredCartonCount !== undefined);
             const totalCartons = (record.items||[]).reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0);
             const totalWeight = (record.items||[]).reduce((acc, i) => acc + (Number(i.weight) || 0), 0);
-            const totalDelCartons = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
-            const totalDelWeight = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0);
+            const totalDelCartons = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? 0) || 0), 0);
+            const totalDelWeight = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredWeight ?? 0) || 0), 0);
 
             const itemsHtml = (record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, weight: record.weight}]).map((i, idx) => `
                 <tr class="text-base">
@@ -292,9 +292,9 @@ export const generateRecordImage = async (record, type) => {
                                     <td>${idx+1}</td>
                                     <td style="font-weight: bold;">${i.goodsName}</td>
                                     <td>${i.cartonCount || 0}</td>
-                                    <td>${i.deliveredCartonCount ?? i.cartonCount ?? 0}</td>
+                                    <td>${i.deliveredCartonCount ?? 0}</td>
                                     <td>${i.weight || 0}</td>
-                                    <td>${i.deliveredWeight ?? i.weight ?? 0}</td>
+                                    <td>${i.deliveredWeight ?? 0}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
