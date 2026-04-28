@@ -447,12 +447,16 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
                 targetGroups.push(1);
             }
         } else {
-            // Legacy default fallback
-            if (p.status === 'در انتظار بررسی' ||
-                p.status === 'در انتظار تایید مدیرعامل' || 
-                p.status === 'در انتظار مدیر کارخانه' || 
-                p.status === 'خارج شد' || 
-                p.status.includes('رد')) {
+            // Legacy default fallback - more inclusive
+            const legacyStatuses = [
+                'در انتظار بررسی', 
+                'در انتظار تایید مدیرعامل', 
+                'در انتظار مدیر کارخانه', 
+                'در انتظار تحویل انبار',
+                'در انتظار خروج',
+                'خارج شد'
+            ];
+            if (legacyStatuses.includes(p.status) || p.status.includes('رد')) {
                 targetGroups.push(1);
             }
         }
@@ -461,7 +465,14 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
         if (g2Config.activeStatuses && g2Config.activeStatuses.includes(p.status)) {
             targetGroups.push(2);
+        } else if (!g2Config.activeStatuses || g2Config.activeStatuses.length === 0) {
+            // Default for Group 2: Final steps
+            if (p.status === 'خارج شد' || p.status.includes('بایگانی')) {
+                targetGroups.push(2);
+            }
         }
+
+        console.log(`>>> Exiting Notify: Status=${p.status}, Permit=${p.permitNumber}, Targets=${targetGroups.join(',')}`);
 
         // Distinctly and separately fire off to all targets, without await to prevent blocking
         for (const gNum of targetGroups) {
@@ -471,15 +482,18 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             let companyConfig = settings.companyNotifications?.[p.company] || {};
 
             if (gNum === 1) {
-                const g1Config = settings.exitPermitFirstGroupConfig || {};
-                tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || settings.telegramChatId || '';
-                baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || settings.baleGroupChatId || '';
-                waGroupId = g1Config.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
-            } else {
-                tgGroupId = g2Config.telegramId;
-                baleGroupId = g2Config.baleId;
-                waGroupId = g2Config.groupId;
+                const conf = settings.exitPermitFirstGroupConfig || {};
+                tgGroupId = conf.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || settings.telegramChatId || '';
+                baleGroupId = conf.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || settings.baleGroupChatId || '';
+                waGroupId = conf.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
+            } else if (gNum === 2) {
+                const conf = settings.exitPermitSecondGroupConfig || {};
+                tgGroupId = conf.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationSecondTelegramId || '';
+                baleGroupId = conf.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationSecondBaleId || '';
+                waGroupId = conf.groupId || companyConfig.factoryGroup || '';
             }
+
+            console.log(`>>> G${gNum} IDs: TG=${tgGroupId}, Bale=${baleGroupId}, WA=${waGroupId}`);
 
             // Fire Telegram
             if (tgGroupId && settings.telegramBotToken) {

@@ -6,6 +6,11 @@ let bot = null;
 
 let currentToken = null;
 
+export const sendBotPhoto = (chatId, buf, caption) => {
+    if (!bot) return Promise.reject("TG Bot not initialized");
+    return bot.sendPhoto(chatId, buf, { caption });
+};
+
 export const initTelegram = async (token) => {
     if (!token) {
         if(bot) {
@@ -42,6 +47,9 @@ export const initTelegram = async (token) => {
         const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts).catch(e => console.error("TG Send Err:", e.message));
         const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts }).catch(e => console.error("TG Photo Err:", e.message));
         
+        // Helper for core to send photos to groups without knowing the bot instance
+        bot.sendBotPhoto = (chatId, buf, caption) => bot.sendPhoto(chatId, buf, { caption }).catch(e => console.error("TG Group Photo Err:", e.message));
+
         // FIXED: Ensure options { filename } is passed as fileOptions
         const sendDocFn = (id, buf, name, cap) => {
             return bot.sendDocument(id, buf, { caption: cap }, { filename: name })
