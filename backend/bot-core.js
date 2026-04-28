@@ -414,7 +414,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
+        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || '-'}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {

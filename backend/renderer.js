@@ -244,92 +244,67 @@ export const generateRecordImage = async (record, type) => {
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
                 ${fontFaceRule}
-                body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; }
-                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; shadow: 0 1px 2px rgba(0,0,0,0.05); }
-                .stamp.black { border-color: black; color: black; }
-                .stamp-title { font-size: 10px; font-weight: bold; border-bottom: 1px solid currentColor; margin-bottom: 4px; padding-bottom: 4px; }
-                .stamp-name { font-size: 14px; font-weight: 900; }
+                body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; margin: 0; }
                 #capture-wrapper { 
                     padding: 10mm; 
                     margin: 0 auto; 
                     width: 210mm; 
-                    height: 296mm;
                     background: white; 
                     direction: rtl; 
                     display: flex;
                     flex-direction: column;
                     box-sizing: border-box;
+                    color: black;
                 }
+                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .stamp.black { border-color: black; color: black; }
+                .stamp-title { font-size: 10px; font-weight: bold; border-bottom: 1px solid #1e40af; margin-bottom: 4px; padding-bottom: 2px; }
+                .stamp-name { font-size: 14px; font-weight: 900; }
+                table { width: 100%; border-collapse: collapse; border: 2px solid black; margin-top: 10px; text-align: center; }
+                th, td { border: 2px solid black; padding: 8px; }
+                th { background-color: #f3f4f6; }
+                .header-row { font-weight: bold; }
+                .meta-section { border-bottom: 2px solid black; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
             </style>
             </head><body>
             <div id="capture-wrapper">
-                <div class="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
-                    <div><h1 class="text-3xl font-black mb-1">مجوز خروج کالا از کارخانه</h1><p class="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                    <div class="text-left space-y-2"><div class="text-xl font-black bg-gray-100 px-4 py-2 border-2 border-black rounded-lg">شماره: ${record.permitNumber}</div><div class="text-sm font-bold">تاریخ: ${new Date(record.date).toLocaleDateString('fa-IR')}</div></div>
+                <div class="meta-section">
+                    <div><h1 style="font-size: 24px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه</h1><p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
+                    <div style="text-align: left;"><div style="font-size: 18px; font-weight: 900; background: #e5e7eb; padding: 8px 16px; border: 2px solid black; border-radius: 8px;">شماره: ${record.permitNumber}</div><div style="font-size: 14px; font-weight: bold; margin-top: 5px;">تاریخ: ${new Date(record.date).toLocaleDateString('fa-IR')}</div></div>
                 </div>
 
-                <div class="space-y-6 flex-1">
-                    <div>
-                        <h3 class="font-black text-lg mb-1">لیست اقلام و کالاها</h3>
-                        <table class="w-full text-sm border-collapse border-2 border-black text-center">
-                            <thead>
-                                <tr class="bg-gray-100 text-base">
-                                    <th class="border-2 border-black p-2 w-10" rowspan="2">#</th>
-                                    <th class="border-2 border-black p-2" rowspan="2">شرح کالا</th>
-                                    <th class="border-2 border-black p-1" colspan="${showDelivery ? 2 : 1}">تعداد (کارتن)</th>
-                                    <th class="border-2 border-black p-1" colspan="${showDelivery ? 2 : 1}">وزن (KG)</th>
+                <div style="flex: 1;">
+                    <h3 style="margin-bottom: 5px;">لیست اقلام و کالاها</h3>
+                    <table>
+                        <thead>
+                            <tr class="header-row">
+                                <th>#</th>
+                                <th>شرح کالا</th>
+                                <th>تعداد (کارتن)</th>
+                                <th>وزن (KG)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, weight: record.weight}]).map((i, idx) => `
+                                <tr>
+                                    <td>${idx+1}</td>
+                                    <td style="font-weight: bold;">${i.goodsName}</td>
+                                    <td>${i.cartonCount}</td>
+                                    <td>${i.weight}</td>
                                 </tr>
-                                ${showDelivery ? `
-                                <tr class="bg-gray-50 text-xs">
-                                    <th class="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th><th class="border-2 border-black p-1 bg-green-50 text-green-800 w-20">خروجی</th>
-                                    <th class="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th><th class="border-2 border-black p-1 bg-green-50 text-green-800 w-20">خروجی</th>
-                                </tr>
-                                ` : ''}
-                            </thead>
-                            <tbody>
-                                ${itemsHtml}
-                                <tr class="bg-gray-100 text-base font-black">
-                                    <td colspan="2" class="border-2 border-black p-2 text-left pl-6">جمع کل:</td>
-                                    ${showDelivery ? `
-                                        <td class="border-2 border-black p-2 font-mono text-gray-500">${totalCartons}</td>
-                                        <td class="border-2 border-black p-2 font-mono text-black">${totalDelCartons}</td>
-                                        <td class="border-2 border-black p-2 font-mono text-gray-500">${totalWeight}</td>
-                                        <td class="border-2 border-black p-2 font-mono text-black">${totalDelWeight}</td>
-                                    ` : `
-                                        <td class="border-2 border-black p-2 font-mono">${totalCartons}</td>
-                                        <td class="border-2 border-black p-2 font-mono">${totalWeight}</td>
-                                    `}
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div>
-                        <h3 class="font-black text-lg mb-1">مشخصات گیرنده</h3>
-                        <div class="border-2 border-black rounded-xl p-3 bg-gray-50">${destsHtml}</div>
-                    </div>
-
-                    ${(record.driverName || record.plateNumber) ? `
-                    <div>
-                        <h3 class="font-black text-lg mb-1">مشخصات حمل</h3>
-                        <div class="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm flex gap-8">
-                            <div><span class="font-bold text-gray-500 ml-2">نام راننده:</span> <span class="font-bold text-lg">${record.driverName || '-'}</span></div>
-                            <div><span class="font-bold text-gray-500 ml-2">شماره پلاک:</span> <span class="font-mono font-bold text-lg" dir="ltr">${record.plateNumber || '-'}</span></div>
-                        </div>
-                    </div>` : ''}
-
-                    ${record.description ? `<div><h3 class="font-black text-lg mb-1">توضیحات</h3><div class="border-2 border-black rounded-xl p-3 bg-white text-sm">${record.description}</div></div>` : ''}
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
 
-                <div class="mt-auto pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end">
-                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full"><div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div></div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">درخواست کننده</div></div>
-                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرعامل</div></div>
-                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیر کارخانه</div></div>
-                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<span class="text-gray-300 text-xs">---</span>'}</div><div class="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">سرپرست انبار</div></div>
-                    <div class="flex flex-col items-center justify-between min-h-[80px]"><div class="mb-2 flex items-center justify-center h-full">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div class="mt-2 border-t border-dashed border-gray-400 pt-1 text-[9px] font-bold text-center">ساعت خروج:</div><div class="text-2xl font-black font-mono">${record.exitTime}</div>` : ''}</div>` : '<div class="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>'}</div><div class="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید خروج</div></div>
+                <div style="margin-top: 30px; border-top: 4px solid black; padding-top: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div style="text-align: center;"><div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div><div style="font-size: 12px; font-weight: bold; margin-top: 5px;">درخواست کننده</div></div>
+                    <div style="text-align: center;">${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">مدیرعامل</div></div>
+                    <div style="text-align: center;">${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">مدیر کارخانه</div></div>
+                    <div style="text-align: center;">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">سرپرست انبار</div></div>
+                    <div style="text-align: center;">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 10px; font-weight: bold; margin-top: 2px;">ساعت: ${record.exitTime}</div>` : ''}</div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">تایید خروج</div></div>
                 </div>
-                <div class="mt-2 border-t border-gray-300 text-[9px] text-gray-500 text-center">نسخه چاپی سیستم</div>
-            </div></body></html>`;
+            </div></body></html>`;`;
 
             // Make viewport wide enough
             await page.setViewport({ width: 900, height: 1300, deviceScaleFactor: 2 });
