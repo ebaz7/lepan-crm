@@ -183,21 +183,18 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     }
 
     if (text.startsWith('/daily_report') || text.startsWith('/report')) {
-        const now = new Date();
-        const tehranDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran' }).format(now); // yyyy-mm-dd
-        
-        const finalExits = (db.exitPermits || []).filter(p => p.date === tehranDate && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+        const today = new Date().toISOString().split('T')[0];
+        const finalExits = (db.exitPermits || []).filter(p => p.date === today && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
         
         if (finalExits.length === 0) {
-            return sendFn(chatId, `📭 برای تاریخ ${toShamsiFull(tehranDate)} هنوز خروج نهایی ثبت نشده است.`);
+            return sendFn(chatId, "📭 امروز هنوز خروج نهایی ثبت نشده است.");
         }
         
-        let reportMsg = `🚛 *گزارش خروج‌های نهایی امروز*\n📅 تاریخ: ${toShamsiFull(tehranDate)}\n📊 تعداد: ${finalExits.length} مورد\n\n`;
+        let reportMsg = `🚛 *گزارش خروج‌های نهایی امروز* (${toShamsiFull(new Date())})\n\n`;
         finalExits.forEach((p, idx) => {
-            reportMsg += `📍 *${idx + 1}. مجوز ${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName} (${p.cartonCount} کارتن)\n👤 درخواست: ${p.requester}\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName} (${p.cartonCount} کارتن)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
         });
         
-        reportMsg += `\n🏁 پایان گزارش`;
         return sendFn(chatId, reportMsg);
     }
 
@@ -417,20 +414,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        
-        let caption = `🚛 *مجوز خروج کالا*\n\n`;
-        caption += `🏢 *شرکت:* ${p.company}\n`;
-        caption += `🔢 *شماره مجوز:* ${p.permitNumber}\n`;
-        caption += `📅 *تاریخ:* ${toShamsiFull(p.date)}\n`;
-        caption += `👤 *تحویل‌گیرنده:* ${p.recipientName}\n`;
-        caption += `📦 *نام کالا:* ${p.goodsName}\n`;
-        caption += `🔢 *تعداد کل:* ${p.cartonCount} کارتن\n`;
-        caption += `👤 *درخواست‌کننده:* ${p.requester}\n`;
-        if (p.driverName) caption += `🚛 *راننده:* ${p.driverName}\n`;
-        if (p.plateNumber) caption += `🆔 *پلاک:* ${p.plateNumber}\n`;
-        if (p.exitTime) caption += `🕒 *زمان خروج:* ${p.exitTime}\n`;
-        caption += `\n✅ *مرحله:* ${stepName}\n`;
-        caption += `🔄 *آخرین وضعیت:* ${p.status}`;
+        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester}${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -447,16 +431,12 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
                 targetGroups.push(1);
             }
         } else {
-            // Legacy default fallback - more inclusive
-            const legacyStatuses = [
-                'در انتظار بررسی', 
-                'در انتظار تایید مدیرعامل', 
-                'در انتظار مدیر کارخانه', 
-                'در انتظار تحویل انبار',
-                'در انتظار خروج',
-                'خارج شد'
-            ];
-            if (legacyStatuses.includes(p.status) || p.status.includes('رد')) {
+            // Legacy default fallback
+            if (p.status === 'در انتظار بررسی' ||
+                p.status === 'در انتظار تایید مدیرعامل' || 
+                p.status === 'در انتظار مدیر کارخانه' || 
+                p.status === 'خارج شد' || 
+                p.status.includes('رد')) {
                 targetGroups.push(1);
             }
         }
@@ -465,14 +445,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
         if (g2Config.activeStatuses && g2Config.activeStatuses.includes(p.status)) {
             targetGroups.push(2);
-        } else if (!g2Config.activeStatuses || g2Config.activeStatuses.length === 0) {
-            // Default for Group 2: Final steps
-            if (p.status === 'خارج شد' || p.status.includes('بایگانی')) {
-                targetGroups.push(2);
-            }
         }
-
-        console.log(`>>> Exiting Notify: Status=${p.status}, Permit=${p.permitNumber}, Targets=${targetGroups.join(',')}`);
 
         // Distinctly and separately fire off to all targets, without await to prevent blocking
         for (const gNum of targetGroups) {
@@ -482,18 +455,15 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             let companyConfig = settings.companyNotifications?.[p.company] || {};
 
             if (gNum === 1) {
-                const conf = settings.exitPermitFirstGroupConfig || {};
-                tgGroupId = conf.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || settings.telegramChatId || '';
-                baleGroupId = conf.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || settings.baleGroupChatId || '';
-                waGroupId = conf.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
-            } else if (gNum === 2) {
-                const conf = settings.exitPermitSecondGroupConfig || {};
-                tgGroupId = conf.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationSecondTelegramId || '';
-                baleGroupId = conf.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationSecondBaleId || '';
-                waGroupId = conf.groupId || companyConfig.factoryGroup || '';
+                const g1Config = settings.exitPermitFirstGroupConfig || {};
+                tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || '';
+                baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || '';
+                waGroupId = g1Config.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
+            } else {
+                tgGroupId = g2Config.telegramId;
+                baleGroupId = g2Config.baleId;
+                waGroupId = g2Config.groupId;
             }
-
-            console.log(`>>> G${gNum} IDs: TG=${tgGroupId}, Bale=${baleGroupId}, WA=${waGroupId}`);
 
             // Fire Telegram
             if (tgGroupId && settings.telegramBotToken) {

@@ -38,15 +38,6 @@ const callApi = (method, data, isMultipart = false) => {
     });
 };
 
-export const sendBotPhoto = (chatId, buf, caption) => {
-    if (!botToken) return Promise.reject("Bale Token not set");
-    const form = new FormData();
-    form.append('chat_id', String(chatId));
-    form.append('photo', buf, { filename: 'image.jpg' });
-    if (caption) form.append('caption', caption);
-    return callApi('sendPhoto', form, true);
-};
-
 export const initBaleBot = (token) => {
     if (!token) {
         pollingActive = false;
