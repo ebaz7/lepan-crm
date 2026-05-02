@@ -293,7 +293,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
               companies: currentCompanies,
               companyNames: currentCompanies.map(c => c.name),
               // Ensure legacy mapping for notification group
-              exitPermitNotificationGroup: settings.defaultWarehouseGroup
+              exitPermitNotificationGroup: settings.defaultWarehouseGroup,
+              botAccountingGroupIdTele: settings.botAccountingGroupIdTele,
+              botAccountingGroupIdBale: settings.botAccountingGroupIdBale,
+              botAccountingGroupIdWhatsApp: settings.botAccountingGroupIdWhatsApp
           };
 
           await saveSettings(syncedSettings); 

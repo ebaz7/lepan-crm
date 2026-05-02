@@ -41,6 +41,11 @@ export default function SalesCRMModule() {
         }
     };
 
+    const handleSaveTemplate = () => {
+        // API call to save template
+        alert('متن تبریک ذخیره شد.');
+    };
+
     return (
         <div className="p-6 space-y-6">
             <h2 className="text-2xl font-black text-gray-800">مدیریت مخاطبین فروش</h2>
