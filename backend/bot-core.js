@@ -41,7 +41,16 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '💰 مدیریت پرداخت', callback_data: 'MENU_PAY' }, { text: '🚛 مدیریت خروج', callback_data: 'MENU_EXIT' }],
             [{ text: '📦 انبار و موجودی', callback_data: 'MENU_WH' }, { text: '🌍 بازرگانی', callback_data: 'MENU_TRADE' }],
+            [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }],
             [{ text: '📊 گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }, { text: '👤 پروفایل', callback_data: 'MENU_PROFILE' }]
+        ]
+    },
+    SALES: {
+        inline_keyboard: [
+            [{ text: '📦 لیست قیمت کالاها', callback_data: 'SALES_LIST_ALL' }],
+            [{ text: '🔖 دسته‌بندی محصولات', callback_data: 'SALES_GROUPS' }],
+            [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
     PAYMENT: {
@@ -232,7 +241,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
-                    if (ch.id) {
+                    if (ch.id && (!ch.platform || ch.platform === platform)) {
                         const isMember = await checkMembershipFn(chatId, ch.id);
                         if (!isMember) missingChannels.push(ch);
                     }
@@ -316,6 +325,24 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
+
+    if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
+        session.state = 'IDLE';
+        // Broadcast
+        let count = 0;
+        const baleModule = await import('./bale.js');
+        const tgModule = await import('./telegram.js');
+
+        for (const u of db.users) {
+            if (u.telegramChatId) {
+                try { await tgModule.sendBotMessage(u.telegramChatId, text); count++; } catch (e) {}
+            }
+            if (u.baleChatId) {
+                try { await baleModule.sendBotMessage(u.baleChatId, text); count++; } catch (e) {}
+            }
+        }
+        return sendFn(chatId, `✅ پیام به ${count} کاربر ارسال شد.`);
+    }
 
 
     // --- SEARCH BY ID HANDLER ---
@@ -620,7 +647,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
-                    if (ch.id) {
+                    if (ch.id && (!ch.platform || ch.platform === platform)) {
                         const isMember = await checkMembershipFn(chatId, ch.id);
                         if (!isMember) missingChannels.push(ch);
                     }
@@ -716,8 +743,47 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
     if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
     if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
+    if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
+    // Sales logic
+    if (data === 'SALES_BROADCAST') {
+        if (!['admin', 'sales_manager'].includes(user.role)) return sendFn(chatId, "⛔ دسترسی ندارید.");
+        session.state = 'SALES_WAIT_BROADCAST_MSG';
+        return sendFn(chatId, "📢 پیام خود را برای ارسال به همه کاربران وارد کنید:");
+    }
+
+    if (data === 'SALES_LIST_ALL') {
+        const products = db.products || [];
+        if (products.length === 0) return sendFn(chatId, "لیست قیمت خالی است.");
+        let res = "📢 *لیست کامل قیمت*\n\n";
+        const groups = [...new Set(products.map(p => p.group))];
+        groups.forEach(g => {
+            res += `📁 *${g}*\n`;
+            products.filter(p => p.group === g).forEach(p => {
+                res += `🔹 ${p.name}: ${p.price.toLocaleString()} ${p.unit || 'عدد'}\n`;
+            });
+            res += "\n";
+        });
+        return sendFn(chatId, res);
+    }
+    if (data === 'SALES_GROUPS') {
+        const products = db.products || [];
+        const groups = [...new Set(products.map(p => p.group))];
+        const buttons = groups.map(g => [{ text: `📁 ${g}`, callback_data: `SALES_GROUP_${g}` }]);
+        buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]);
+        return sendFn(chatId, "🔖 انتخاب گروه کالا:", { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('SALES_GROUP_')) {
+        const group = data.replace('SALES_GROUP_', '');
+        const products = (db.products || []).filter(p => p.group === group);
+        let res = `📁 *گروه: ${group}*\n\n`;
+        products.forEach(p => {
+            res += `🔹 ${p.name}: ${p.price.toLocaleString()} ${p.unit || 'عدد'}\n`;
+        });
+        return sendFn(chatId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_GROUPS' }]] } });
+    }
     // --- NEW: SEARCH BY ID INIT ---
     if (['ACT_SEARCH_ID_PAY', 'ACT_SEARCH_ID_EXIT', 'ACT_SEARCH_ID_WH'].includes(data)) {
         let type = 'PAYMENT';

@@ -206,7 +206,7 @@ export interface SystemSettings {
   botAccountingGroupId?: string;
   botBijakGroupId?: string;
   botPaymentNotificationMode?: 'bulk' | 'step';
-  botForceJoinChannels?: { name: string; link: string; id: string }[];
+  botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' }[];
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
 }
