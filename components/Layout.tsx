@@ -502,25 +502,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         </header>
         
         <div className={`flex-1 overflow-y-auto bg-gray-50 pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
-            {/* Desktop Year Selector */}
-            <div className="hidden md:flex justify-end p-4 bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm no-print items-center">
+                    <div className="hidden md:flex justify-end p-4 bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm no-print items-center">
                 <span className="font-bold text-gray-600 mr-3 text-sm">سال مالی:</span>
-                {financialYear && setFinancialYear && (
+                {settings?.fiscalYears && (
                     <select 
-                        value={financialYear} 
-                        onChange={(e) => setFinancialYear(e.target.value)}
+                        value={settings.activeFiscalYearId || ''} 
+                        onChange={async (e) => {
+                            const newYearId = e.target.value;
+                            const newSettings = { ...settings, activeFiscalYearId: newYearId };
+                            await saveSettings(newSettings);
+                            // Force reload to apply new context globally
+                            window.location.reload(); 
+                        }}
                         className="bg-blue-50 text-blue-800 font-black border-2 border-blue-200 outline-none rounded-xl px-4 py-2 hover:bg-blue-100 transition-colors cursor-pointer"
                         dir="ltr"
                     >
-                        {settings?.fiscalYears?.map(fy => (
-                            <option key={fy.id} value={fy.label}>{fy.label} سال مالی</option>
-                        )) || <>
-                            <option value="1402">1402 سال مالی</option>
-                            <option value="1403">1403 سال مالی</option>
-                            <option value="1404">1404 سال مالی</option>
-                            <option value="1405">1405 سال مالی</option>
-                        </>
-                        }
+                        {settings.fiscalYears.map(fy => (
+                            <option key={fy.id} value={fy.id}>{fy.label} سال مالی</option>
+                        ))}
                     </select>
                 )}
             </div>

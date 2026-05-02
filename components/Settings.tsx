@@ -73,7 +73,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
       insuranceCompanies: [],
       exitPermitNotificationGroup: '',
       printTemplates: [],
-      fiscalYears: []
+      fiscalYears: [],
+      botAccountingGroupIdTele: '',
+      botAccountingGroupIdBale: '',
+      botAccountingGroupIdWhatsApp: ''
   });
 
   const [loading, setLoading] = useState(false);

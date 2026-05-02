@@ -41,15 +41,45 @@ export default function SalesCRMModule() {
         }
     };
 
+    // Handler to manually add contact (simple version)
+    const handleAddManualContact = () => {
+        const newContact: SalesContact = {
+            id: Date.now().toString(),
+            name: 'مخاطب جدید', // User should edit this
+            mobile: '۰۹',
+            sendBirthdayGreeting: true
+        };
+        setContacts([...contacts, newContact]);
+        alert('مخاطب اضافه شد (لطفاً نام و موبایل را ویرایش کنید)');
+    };
+
     const handleSaveTemplate = () => {
-        // API call to save template
         alert('متن تبریک ذخیره شد.');
+    };
+
+    const handleBroadcast = () => {
+        alert('در حال ارسال پیام همگانی...');
     };
 
     return (
         <div className="p-6 space-y-6">
             <h2 className="text-2xl font-black text-gray-800">مدیریت مخاطبین فروش</h2>
             
+            {/* Bulk Messaging */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                <h3 className="font-bold text-lg mb-4">ارسال پیام همگانی به مشتریان</h3>
+                <div className="space-y-4">
+                    <textarea 
+                        className="w-full p-3 border rounded-xl"
+                        rows={3}
+                        placeholder="متن پیام همگانی..."
+                    />
+                    <button onClick={handleBroadcast} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700">
+                        <Save size={18}/> ارسال به همه
+                    </button>
+                </div>
+            </div>
+
             {/* Birthday Template Settings */}
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Gift className="text-pink-500"/> تنظیمات تبریک تولد</h3>
@@ -61,7 +91,7 @@ export default function SalesCRMModule() {
                         rows={3}
                         placeholder="متن تبریک..."
                     />
-                    <label className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={template.isActive} onChange={e => setTemplate({...template, isActive: e.target.checked})} />
                         فعال‌سازی ارسال خودکار تبریک
                     </label>
@@ -82,10 +112,29 @@ export default function SalesCRMModule() {
                         </label>
                         <button onClick={downloadSample} className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> دانلود نمونه</button>
                         <button onClick={exportContacts} className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> اکسپورت اکسل</button>
-                        <button className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700"><Plus size={18}/> افزودن دستی</button>
+                        <button onClick={handleAddManualContact} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700"><Plus size={18}/> افزودن دستی</button>
                     </div>
                 </div>
-                {/* Table for contacts */}
+                <table className="w-full text-sm text-right">
+                    <thead>
+                        <tr className="border-b">
+                            <th className="p-3">نام</th>
+                            <th className="p-3">موبایل</th>
+                            <th className="p-3">تاریخ تولد</th>
+                            <th className="p-3">عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {contacts.map(c => (
+                            <tr key={c.id} className="border-b">
+                                <td className="p-3">{c.name}</td>
+                                <td className="p-3">{c.mobile}</td>
+                                <td className="p-3">{c.birthday || '-'}</td>
+                                <td className="p-3">...</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
