@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X } from 'lucide-react';
+import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X, ChevronRight, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { formatCurrency, parsePersianDate } from '../constants';
 
@@ -8,9 +8,12 @@ interface Product {
     code: string;
     name: string;
     group: string;
+    subgroup?: string;
     price: number;
     stock: number;
     unit: string;
+    hidePrice?: boolean;
+    hideStock?: boolean;
 }
 
 interface CustomerOrder {
@@ -29,8 +32,12 @@ const ProductsModule: React.FC = () => {
 
     const [showProductModal, setShowProductModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const [formData, setFormData] = useState({ code: '', name: '', group: '', price: '', stock: '', unit: '' });
+    const [formData, setFormData] = useState({ 
+        code: '', name: '', group: '', subgroup: '', price: '', stock: '', unit: '',
+        hidePrice: false, hideStock: false
+    });
     const [searchQuery, setSearchQuery] = useState('');
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
     const fetchData = async () => {
         setLoading(true);
@@ -50,15 +57,22 @@ const ProductsModule: React.FC = () => {
 
     useEffect(() => { fetchData(); }, []);
 
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         const payload = {
             code: formData.code,
             name: formData.name,
-            group: formData.group,
+            group: formData.group || 'بدون گروه',
+            subgroup: formData.subgroup || 'سایر',
             price: Number(formData.price) || 0,
             stock: Number(formData.stock) || 0,
-            unit: formData.unit || 'عدد'
+            unit: formData.unit || 'عدد',
+            hidePrice: formData.hidePrice,
+            hideStock: formData.hideStock
         };
 
         try {
@@ -104,6 +118,26 @@ const ProductsModule: React.FC = () => {
         }
     };
 
+    // Tree grouping logic
+    const filteredProducts = products.filter(p => 
+        p.name.includes(searchQuery) || 
+        p.code.includes(searchQuery) || 
+        (p.group && p.group.includes(searchQuery)) || 
+        (p.subgroup && p.subgroup.includes(searchQuery))
+    );
+
+    const groupedProducts: Record<string, Record<string, Product[]>> = {};
+
+    filteredProducts.forEach(p => {
+        const g = p.group || 'بدون گروه';
+        const sg = p.subgroup || 'سایر';
+        if (!groupedProducts[g]) groupedProducts[g] = {};
+        if (!groupedProducts[g][sg]) groupedProducts[g][sg] = [];
+        groupedProducts[g][sg].push(p);
+    });
+
+    const isSearching = searchQuery.length > 0;
+
     return (
         <div className="space-y-6 animate-fade-in" dir="rtl">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -112,14 +146,18 @@ const ProductsModule: React.FC = () => {
                         <Package className="text-blue-600 w-8 h-8" />
                         مدیریت بازرگانی و فروش
                     </h2>
-                    <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت محصولات، قیمت‌ها و سفارشات مشتریان (ربات)</p>
+                    <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت هرمی محصولات، قیمت‌ها و سفارشات مشتریان</p>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                     {view === 'products' && (
-                        <button onClick={() => { setEditingProduct(null); setFormData({ code: '', name: '', group: '', price: '', stock: '', unit: 'عدد' }); setShowProductModal(true); }} 
+                        <button onClick={() => { 
+                            setEditingProduct(null); 
+                            setFormData({ code: '', name: '', group: '', subgroup: '', price: '', stock: '', unit: 'عدد', hidePrice: false, hideStock: false }); 
+                            setShowProductModal(true); 
+                        }} 
                                 className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-200">
                             <Plus className="w-5 h-5" />
                             تعریف محصول جدید
@@ -146,7 +184,7 @@ const ProductsModule: React.FC = () => {
                             <Search className="w-5 h-5 absolute right-3 top-2.5 text-gray-400" />
                             <input 
                                 type="text" 
-                                placeholder="جستجو در محصولات..." 
+                                placeholder="جستجو در محصولات و دسته‌ها..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                                 className="w-full pl-4 pr-10 py-2 border-2 border-gray-200 focus:border-blue-500 rounded-xl outline-none transition-all" 
@@ -157,8 +195,20 @@ const ProductsModule: React.FC = () => {
                                 if (!confirm("آیا مایلید لیست قیمت برای کاربران ربات پیام‌رسان‌ها ارسال شود؟")) return;
                                 try {
                                     let content = "📢 *لیست قیمت محصولات*\n\n";
-                                    products.filter(p => Number(p.price) > 0).forEach(p => {
-                                        content += `🔹 ${p.name}\n💰 قیمت: ${Number(p.price).toLocaleString()} ریال\n`;
+                                    // Tree logic for broadcast
+                                    const allGroups = Object.keys(groupedProducts).sort();
+                                    allGroups.forEach(g => {
+                                        content += `📁 *${g}*\n`;
+                                        const subGroups = Object.keys(groupedProducts[g]).sort();
+                                        subGroups.forEach(sg => {
+                                            content += `  🔹 *${sg}*\n`;
+                                            groupedProducts[g][sg].forEach(p => {
+                                                const priceTxt = p.hidePrice ? "تماس با فروش" : `${Number(p.price).toLocaleString()} ریال`;
+                                                const stockTxt = p.hideStock ? "تماس با فروش" : `${p.stock} ${p.unit}`;
+                                                content += `      ◽️ ${p.name}: ${priceTxt} (${stockTxt})\n`;
+                                            });
+                                        });
+                                        content += "\n";
                                     });
                                     const res: any = await apiCall('/bot/broadcast', 'POST', { message: content });
                                     alert(`ارسال با موفقیت به ${res.count} کاربر انجام شد.`);
@@ -166,74 +216,84 @@ const ProductsModule: React.FC = () => {
                                     alert("خطا در ارسال پیام");
                                 }
                             }}
-                            className="bg-green-100 text-green-700 font-bold px-4 py-2 border border-green-200 rounded-xl hover:bg-green-200 flex items-center gap-2"
+                            className="bg-green-100 text-green-700 font-bold px-4 py-2 border border-green-200 rounded-xl hover:bg-green-200 flex items-center gap-2 text-xs"
                         >
-                            ارسال لیست قیمت به کاربران بات (تلگرام/بله)
+                            ارسال لیست هرمی قیمت به بات
                         </button>
                     </div>
-                    <div className="hidden md:block overflow-x-auto">
-                        <table className="w-full text-sm text-right">
-                            <thead className="bg-gray-50 border-b-2 border-gray-200 text-gray-600">
-                                <tr>
-                                    <th className="p-4 font-bold text-center">کد کالا</th>
-                                    <th className="p-4 font-bold">نام کالا</th>
-                                    <th className="p-4 font-bold text-center">گروه / دسته</th>
-                                    <th className="p-4 font-bold text-center">قیمت فروش (ریال)</th>
-                                    <th className="p-4 font-bold text-center">موجودی (واحد)</th>
-                                    <th className="p-4 font-bold text-center">عملیات</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {products.filter(p => p.name.includes(searchQuery) || p.code.includes(searchQuery) || (p.group && p.group.includes(searchQuery))).map(p => (
-                                    <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                                        <td className="p-4 text-center font-mono text-gray-500">{p.code || '-'}</td>
-                                        <td className="p-4 font-bold text-gray-800">{p.name}</td>
-                                        <td className="p-4 text-center"><span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">{p.group || 'بدون گروه'}</span></td>
-                                        <td className="p-4 text-center font-mono font-bold text-green-700 bg-green-50/30">{p.price > 0 ? p.price.toLocaleString() : '-'}</td>
-                                        <td className="p-4 text-center">
-                                            <span className={`font-mono font-bold px-3 py-1 rounded-lg ${p.stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{p.stock} {p.unit || 'عدد'}</span>
-                                        </td>
-                                        <td className="p-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group || '', price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
-                                                <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
 
-                    {/* Mobile View */}
-                    <div className="md:hidden divide-y divide-gray-100">
-                         {products.filter(p => p.name.includes(searchQuery) || p.code.includes(searchQuery) || (p.group && p.group.includes(searchQuery))).map(p => (
-                             <div key={p.id} className="p-4 space-y-3">
-                                 <div className="flex justify-between items-start">
-                                     <div>
-                                         <div className="font-bold text-gray-800">{p.name}</div>
-                                         <div className="text-[10px] text-gray-400 font-mono mt-0.5">{p.code || 'بدون کد'}</div>
-                                     </div>
-                                     <div className="flex gap-1">
-                                         <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group || '', price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 bg-blue-50 rounded-lg"><Edit2 size={16}/></button>
-                                         <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 bg-red-50 rounded-lg"><Trash2 size={16}/></button>
-                                     </div>
-                                 </div>
-                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl text-xs">
-                                     <div className="flex flex-col">
-                                         <span className="text-[9px] text-gray-400">قیمت فروش</span>
-                                         <span className="font-bold text-green-700">{p.price > 0 ? p.price.toLocaleString() : '-'} ریال</span>
-                                     </div>
-                                     <div className="flex flex-col text-left">
-                                         <span className="text-[9px] text-gray-400">موجودی</span>
-                                         <span className={`font-bold ${p.stock > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{p.stock} {p.unit || 'واحد'}</span>
-                                     </div>
-                                 </div>
-                                 <div className="flex gap-2">
-                                     <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-[10px] font-bold">{p.group || 'بدون گروه'}</span>
-                                 </div>
-                             </div>
-                         ))}
+                    <div className="p-4 bg-gray-50/30">
+                        {Object.keys(groupedProducts).sort().map(group => (
+                            <div key={group} className="mb-4 last:mb-0">
+                                <button 
+                                    onClick={() => toggleGroup(group)}
+                                    className="w-full flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-black text-gray-800 shadow-sm"
+                                >
+                                    {expandedGroups[group] || isSearching ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                                    <Tag className="w-4 h-4 text-blue-500" />
+                                    {group}
+                                    <span className="mr-auto text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                        {Object.values(groupedProducts[group]).flat().length} کالا
+                                    </span>
+                                </button>
+
+                                {(expandedGroups[group] || isSearching) && (
+                                    <div className="mr-6 mt-2 space-y-2 border-r-2 border-blue-100 pr-4">
+                                        {Object.keys(groupedProducts[group]).sort().map(subgroup => (
+                                            <div key={subgroup}>
+                                                <div className="flex items-center gap-2 p-2 text-sm font-bold text-gray-600 border-b border-gray-100">
+                                                    <Filter className="w-3 h-3 text-gray-400" />
+                                                    {subgroup}
+                                                </div>
+                                                <div className="space-y-2 mt-2">
+                                                    {groupedProducts[group][subgroup].map(p => (
+                                                        <div key={p.id} className="bg-white border border-gray-100 p-3 rounded-xl flex flex-wrap items-center justify-between gap-4 hover:shadow-md transition-shadow">
+                                                            <div className="flex-1 min-w-[200px]">
+                                                                <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                                    {p.name}
+                                                                    {(p.hidePrice || p.hideStock) && (
+                                                                        <span title="مخفی در بات">
+                                                                            <EyeOff className="w-3 h-3 text-orange-400" />
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-[10px] text-gray-400 font-mono">{p.code || 'بدون کد'}</div>
+                                                            </div>
+                                                            <div className="flex items-center gap-6">
+                                                                <div className="text-left">
+                                                                    <div className="text-[9px] text-gray-400">قیمت (ریال)</div>
+                                                                    <div className={`font-mono font-black ${p.hidePrice ? 'text-orange-500' : 'text-green-700'}`}>
+                                                                        {p.hidePrice ? 'تماس با فروش' : (p.price > 0 ? p.price.toLocaleString() : '-')}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-left">
+                                                                    <div className="text-[9px] text-gray-400">موجودی</div>
+                                                                    <div className={`font-bold ${p.hideStock ? 'text-orange-500' : (p.stock > 0 ? 'text-emerald-700' : 'text-red-700')}`}>
+                                                                        {p.hideStock ? 'تماس با فروش' : `${p.stock} ${p.unit}`}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex gap-1 border-r pr-4">
+                                                                    <button onClick={() => { 
+                                                                        setEditingProduct(p); 
+                                                                        setFormData({ 
+                                                                            code: p.code, name: p.name, group: p.group || '', subgroup: p.subgroup || '', 
+                                                                            price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد',
+                                                                            hidePrice: !!p.hidePrice, hideStock: !!p.hideStock
+                                                                        }); 
+                                                                        setShowProductModal(true); 
+                                                                    }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -283,8 +343,24 @@ const ProductsModule: React.FC = () => {
                         </div>
                         <form onSubmit={handleSave} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">نام کالا *</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">نام کالا * / پلاک</label>
                                 <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">گروه اصلی</label>
+                                    <input type="text" value={formData.group} list="groups-list" onChange={e => setFormData({...formData, group: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <datalist id="groups-list">
+                                        {[...new Set(products.map(p => p.group))].map(g => <option key={String(g)} value={String(g)} />)}
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">زیرگروه</label>
+                                    <input type="text" value={formData.subgroup} list="subgroups-list" onChange={e => setFormData({...formData, subgroup: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <datalist id="subgroups-list">
+                                        {[...new Set(products.map(p => p.subgroup))].filter(Boolean).map(sg => <option key={String(sg)} value={String(sg)} />)}
+                                    </datalist>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -292,11 +368,11 @@ const ProductsModule: React.FC = () => {
                                     <input type="text" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all text-left font-mono" dir="ltr" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">گروه / دسته</label>
-                                    <input type="text" value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">واحد</label>
+                                    <input type="text" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">قیمت (ریال)</label>
                                     <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
@@ -305,15 +381,22 @@ const ProductsModule: React.FC = () => {
                                     <label className="block text-sm font-bold text-gray-700 mb-2">موجودی</label>
                                     <input type="number" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">واحد</label>
-                                    <input type="text" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
-                                </div>
+                            </div>
+
+                            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-2">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input type="checkbox" checked={formData.hidePrice} onChange={e => setFormData({...formData, hidePrice: e.target.checked})} className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500" />
+                                    <span className="text-xs font-bold text-orange-800">مخفی کردن قیمت در بات (نمایش "تماس با فروش")</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input type="checkbox" checked={formData.hideStock} onChange={e => setFormData({...formData, hideStock: e.target.checked})} className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500" />
+                                    <span className="text-xs font-bold text-orange-800">مخفی کردن موجودی در بات (نمایش "تماس با فروش")</span>
+                                </label>
                             </div>
                             
                             <div className="pt-4 flex gap-3">
                                 <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-black text-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-                                    ذخیره
+                                    ذخیره محصول
                                 </button>
                                 <button type="button" onClick={() => setShowProductModal(false)} className="px-6 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-all">
                                     انصراف

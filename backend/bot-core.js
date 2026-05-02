@@ -47,8 +47,9 @@ const KEYBOARDS = {
     },
     SALES: {
         inline_keyboard: [
-            [{ text: '📦 لیست قیمت کالاها', callback_data: 'SALES_LIST_ALL' }],
-            [{ text: '🔖 دسته‌بندی محصولات', callback_data: 'SALES_GROUPS' }],
+            [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
+            [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
+            [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
             [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
@@ -184,6 +185,15 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
     }
     
     await sendFn(chatId, "✅ پایان لیست.", { reply_markup: KEYBOARDS.MAIN });
+};
+
+// --- PRODUCT HELPERS ---
+const formatProduct = (p) => {
+    const priceTxt = p.hidePrice ? "📞 تماس با فروش" : `${p.price?.toLocaleString() || 0} ریال`;
+    const stockTxt = p.hideStock ? "📞 تماس با فروش" : `${p.stock || 0} ${p.unit || 'عدد'}`;
+    const groupPath = `${p.group || 'بدون گروه'} > ${p.subgroup || 'سایر'}`;
+    
+    return `📦 *${p.name}*\n📂 ${groupPath}\n🔢 کد: ${p.code || '-'}\n💰 قیمت: ${priceTxt}\n📊 موجودی: ${stockTxt}\n`;
 };
 
 // --- MAIN HANDLERS ---
@@ -342,6 +352,32 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             }
         }
         return sendFn(chatId, `✅ پیام به ${count} کاربر ارسال شد.`);
+    }
+
+    if (session.state === 'SALES_WAIT_SEARCH_QUERY') {
+        const query = text.trim().toLowerCase();
+        if (query.length < 2) return sendFn(chatId, "⚠️ لطفاً حداقل ۲ کاراکتر وارد کنید:");
+        
+        const products = (db.products || []).filter(p => 
+            p.name.toLowerCase().includes(query) || 
+            (p.code && p.code.toLowerCase().includes(query))
+        );
+
+        if (products.length === 0) {
+            return sendFn(chatId, `❌ کالایی با عبارت "${text}" یافت نشد.`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔍 جستجوی مجدد', callback_data: 'SALES_SEARCH' }], [{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] }
+            });
+        }
+
+        let res = `🔎 *نتایج جستجو برای:* "${text}"\n\n`;
+        products.slice(0, 15).forEach(p => {
+            res += formatProduct(p) + "------------------\n";
+        });
+
+        if (products.length > 15) res += `⚠️ ${products.length - 15} مورد دیگر یافت شد. لطفا جستجو را دقیق‌تر کنید.`;
+        
+        session.state = 'IDLE';
+        return sendFn(chatId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
     }
 
 
@@ -696,15 +732,13 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
                 });
             }
-            let msg = `📦 *لیست محصولات*\n\n`;
-            products.forEach((p, idx) => {
-                msg += `${idx + 1}. *${p.name}* (${p.group || 'بدون دسته‌بندی'})\n`;
-                msg += `💰 قیمت: ${p.price > 0 ? p.price.toLocaleString() + ' ریال' : 'تماس بگیرید'}\n`;
-                msg += `📦 موجودی: ${p.stock > 0 ? p.stock + ' عدد' : 'ناموجود'}\n\n`;
-            });
-            return sendFn(userId, msg, {
-                reply_markup: { inline_keyboard: [[{ text: '🛒 ثبت سفارش', callback_data: 'GUEST_ORDER' }], [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
-            });
+            
+            // Show groups first for guests too
+            const groups = [...new Set(products.map(p => p.group || 'بدون گروه'))].sort();
+            const buttons = groups.map(g => [{ text: `📁 ${g}`, callback_data: `SALES_GROUP_${g}` }]);
+            buttons.push([{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]);
+            
+            return sendFn(userId, "🔖 انتخاب گروه کالا:", { reply_markup: { inline_keyboard: buttons } });
         }
 
         if (data === 'GUEST_ORDER') {
@@ -756,20 +790,39 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_LIST_ALL') {
         const products = db.products || [];
         if (products.length === 0) return sendFn(chatId, "لیست قیمت خالی است.");
-        let res = "📢 *لیست کامل قیمت*\n\n";
-        const groups = [...new Set(products.map(p => p.group))];
-        groups.forEach(g => {
+        let res = "📢 *لیست کامل قیمت (هرمی)*\n\n";
+        
+        const grouped = {};
+        products.forEach(p => {
+            const g = p.group || 'بدون گروه';
+            const sg = p.subgroup || 'سایر';
+            if (!grouped[g]) grouped[g] = {};
+            if (!grouped[g][sg]) grouped[g][sg] = [];
+            grouped[g][sg].push(p);
+        });
+
+        Object.keys(grouped).sort().forEach(g => {
             res += `📁 *${g}*\n`;
-            products.filter(p => p.group === g).forEach(p => {
-                res += `🔹 ${p.name}: ${p.price.toLocaleString()} ${p.unit || 'عدد'}\n`;
+            Object.keys(grouped[g]).sort().forEach(sg => {
+                res += `   🔹 *${sg}*\n`;
+                grouped[g][sg].forEach(p => {
+                    const price = p.hidePrice ? "تماس" : p.price.toLocaleString();
+                    res += `      ▫️ ${p.name}: ${price}\n`;
+                });
             });
             res += "\n";
         });
-        return sendFn(chatId, res);
+        return sendFn(chatId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
     }
+
+    if (data === 'SALES_SEARCH') {
+        session.state = 'SALES_WAIT_SEARCH_QUERY';
+        return sendFn(chatId, "🔎 نام کالا یا کد کالا را وارد کنید:", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
+    }
+
     if (data === 'SALES_GROUPS') {
         const products = db.products || [];
-        const groups = [...new Set(products.map(p => p.group))];
+        const groups = [...new Set(products.map(p => p.group || 'بدون گروه'))].sort();
         const buttons = groups.map(g => [{ text: `📁 ${g}`, callback_data: `SALES_GROUP_${g}` }]);
         buttons.push([{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]);
         return sendFn(chatId, "🔖 انتخاب گروه کالا:", { reply_markup: { inline_keyboard: buttons } });
@@ -777,12 +830,27 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data.startsWith('SALES_GROUP_')) {
         const group = data.replace('SALES_GROUP_', '');
-        const products = (db.products || []).filter(p => p.group === group);
-        let res = `📁 *گروه: ${group}*\n\n`;
+        const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group);
+        const subgroups = [...new Set(products.map(p => p.subgroup || 'سایر'))].sort();
+        
+        const buttons = subgroups.map(sg => [{ text: `🔹 ${sg}`, callback_data: `SALES_SUB_${group}_${sg}` }]);
+        buttons.push([{ text: '🔙 انتخاب گروه دیگر', callback_data: 'SALES_GROUPS' }]);
+        
+        return sendFn(chatId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('SALES_SUB_')) {
+        const parts = data.split('_');
+        const group = parts[2];
+        const subgroup = parts[3];
+        const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group && (p.subgroup || 'سایر') === subgroup);
+        
+        let res = `📁 ${group} > 🔹 ${subgroup}\n\n`;
         products.forEach(p => {
-            res += `🔹 ${p.name}: ${p.price.toLocaleString()} ${p.unit || 'عدد'}\n`;
+            res += formatProduct(p) + "------------------\n";
         });
-        return sendFn(chatId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_GROUPS' }]] } });
+        
+        return sendFn(chatId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 انتخاب زیرگروه دیگر', callback_data: `SALES_GROUP_${group}` }], [{ text: '🔙 منوی اصلی فروش', callback_data: 'MENU_SALES' }]] } });
     }
     // --- NEW: SEARCH BY ID INIT ---
     if (['ACT_SEARCH_ID_PAY', 'ACT_SEARCH_ID_EXIT', 'ACT_SEARCH_ID_WH'].includes(data)) {
