@@ -348,6 +348,7 @@ function App() {
             onRemoveNotification={removeNotification}
             financialYear={financialYear}
             setFinancialYear={setFinancialYear}
+            settings={settings}
             >
             
             <NotificationController currentUser={currentUser} />
@@ -387,7 +388,7 @@ function App() {
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
                     {activeTab === 'products' && <ProductsModule />}
                     {activeTab === 'users' && <ManageUsers />}
-                    {activeTab === 'settings' && <Settings />}
+                    {activeTab === 'settings' && <Settings financialYear={financialYear} />}
                     {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                     {activeTab === 'chat' && (
                         <ChatRoom 

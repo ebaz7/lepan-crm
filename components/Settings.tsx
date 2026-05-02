@@ -39,7 +39,11 @@ const QRCode = ({ value, size }: { value: string, size: number }) => {
     ); 
 };
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+    financialYear?: string;
+}
+
+const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
   const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
       currentTrackingNumber: 1000, 
@@ -400,7 +404,7 @@ const Settings: React.FC = () => {
 
         <div className="flex-1 p-6 md:p-8 overflow-y-auto max-h-[calc(100vh-100px)]">
             {activeCategory === 'fiscal' ? (
-                <FiscalYearManager />
+                <FiscalYearManager settings={settings} />
             ) : (
                 <form onSubmit={handleSave} className="space-y-8 max-w-4xl mx-auto">
                     

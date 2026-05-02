@@ -10,6 +10,7 @@ interface Product {
     group: string;
     price: number;
     stock: number;
+    unit: string;
 }
 
 interface CustomerOrder {
@@ -28,7 +29,7 @@ const ProductsModule: React.FC = () => {
 
     const [showProductModal, setShowProductModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const [formData, setFormData] = useState({ code: '', name: '', group: '', price: '', stock: '' });
+    const [formData, setFormData] = useState({ code: '', name: '', group: '', price: '', stock: '', unit: '' });
     const [searchQuery, setSearchQuery] = useState('');
 
     const fetchData = async () => {
@@ -56,7 +57,8 @@ const ProductsModule: React.FC = () => {
             name: formData.name,
             group: formData.group,
             price: Number(formData.price) || 0,
-            stock: Number(formData.stock) || 0
+            stock: Number(formData.stock) || 0,
+            unit: formData.unit || 'عدد'
         };
 
         try {
@@ -177,7 +179,7 @@ const ProductsModule: React.FC = () => {
                                     <th className="p-4 font-bold">نام کالا</th>
                                     <th className="p-4 font-bold text-center">گروه / دسته</th>
                                     <th className="p-4 font-bold text-center">قیمت فروش (ریال)</th>
-                                    <th className="p-4 font-bold text-center">موجودی</th>
+                                    <th className="p-4 font-bold text-center">موجودی (واحد)</th>
                                     <th className="p-4 font-bold text-center">عملیات</th>
                                 </tr>
                             </thead>
@@ -189,11 +191,11 @@ const ProductsModule: React.FC = () => {
                                         <td className="p-4 text-center"><span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">{p.group || 'بدون گروه'}</span></td>
                                         <td className="p-4 text-center font-mono font-bold text-green-700 bg-green-50/30">{p.price > 0 ? p.price.toLocaleString() : '-'}</td>
                                         <td className="p-4 text-center">
-                                            <span className={`font-mono font-bold px-3 py-1 rounded-lg ${p.stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{p.stock}</span>
+                                            <span className={`font-mono font-bold px-3 py-1 rounded-lg ${p.stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{p.stock} {p.unit || 'عدد'}</span>
                                         </td>
                                         <td className="p-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
-                                                <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group, price: p.price.toString(), stock: p.stock.toString() }); setShowProductModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group, price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
                                                 <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                             </div>
                                         </td>
@@ -263,7 +265,7 @@ const ProductsModule: React.FC = () => {
                                     <input type="text" value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">قیمت (ریال)</label>
                                     <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
@@ -271,6 +273,10 @@ const ProductsModule: React.FC = () => {
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">موجودی</label>
                                     <input type="number" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">واحد</label>
+                                    <input type="text" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                 </div>
                             </div>
                             

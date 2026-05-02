@@ -20,12 +20,19 @@ interface LayoutProps {
   onRemoveNotification: (id: string) => void;
   financialYear?: string;
   setFinancialYear?: (y: string) => void;
+  settings?: SystemSettings | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
+
+  useEffect(() => {
+    if (propSettings) {
+        setSettings(propSettings);
+    }
+  }, [propSettings]);
   const isSecure = window.isSecureContext;
   const notifRef = useRef<HTMLDivElement>(null);
   const mobileNotifRef = useRef<HTMLDivElement>(null);
@@ -470,10 +477,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         className="bg-gray-100 text-gray-700 font-bold border-none outline-none rounded-lg text-sm px-2 py-1 mr-2"
                         dir="ltr"
                     >
-                        <option value="1402">1402</option>
-                        <option value="1403">1403</option>
-                        <option value="1404">1404</option>
-                        <option value="1405">1405</option>
+                        {settings?.fiscalYears?.map(fy => (
+                            <option key={fy.id} value={fy.label}>{fy.label}</option>
+                        )) || <>
+                            <option value="1402">1402</option>
+                            <option value="1403">1403</option>
+                            <option value="1404">1404</option>
+                            <option value="1405">1405</option>
+                        </>
+                        }
                     </select>
                 )}
                 <div className="relative notification-trigger" ref={mobileNotifRef}>
@@ -497,10 +509,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         className="bg-blue-50 text-blue-800 font-black border-2 border-blue-200 outline-none rounded-xl px-4 py-2 hover:bg-blue-100 transition-colors cursor-pointer"
                         dir="ltr"
                     >
-                        <option value="1402">1402 سال مالی</option>
-                        <option value="1403">1403 سال مالی</option>
-                        <option value="1404">1404 سال مالی</option>
-                        <option value="1405">1405 سال مالی</option>
+                        {settings?.fiscalYears?.map(fy => (
+                            <option key={fy.id} value={fy.label}>{fy.label} سال مالی</option>
+                        )) || <>
+                            <option value="1402">1402 سال مالی</option>
+                            <option value="1403">1403 سال مالی</option>
+                            <option value="1404">1404 سال مالی</option>
+                            <option value="1405">1405 سال مالی</option>
+                        </>
+                        }
                     </select>
                 )}
             </div>

@@ -65,8 +65,8 @@ export const FiscalYearSwitcher: React.FC = () => {
 };
 
 // --- MANAGER COMPONENT (FOR SETTINGS) ---
-export const FiscalYearManager: React.FC = () => {
-    const [settings, setSettings] = useState<SystemSettings | null>(null);
+export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> = ({ settings: propSettings }) => {
+    const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
     const [newYearLabel, setNewYearLabel] = useState('1405'); 
     
     // Config editing state
@@ -76,14 +76,22 @@ export const FiscalYearManager: React.FC = () => {
     const [companyConfig, setCompanyConfig] = useState<Record<string, { pay: string, exit: string, bijak: string }>>({});
 
     useEffect(() => {
-        getSettings().then(s => {
-            setSettings(s);
-            // Automatically load configuration for the active year if one exists
-            if (s.activeFiscalYearId) {
-                loadCompanyConfig(s.activeFiscalYearId, s);
-            }
-        });
-    }, []);
+        if (propSettings) {
+             setSettings(propSettings);
+             // Automatically load configuration for the active year if one exists
+             if (propSettings.activeFiscalYearId) {
+                 loadCompanyConfig(propSettings.activeFiscalYearId, propSettings);
+             }
+        } else {
+             getSettings().then(s => {
+                setSettings(s);
+                // Automatically load configuration for the active year if one exists
+                if (s.activeFiscalYearId) {
+                    loadCompanyConfig(s.activeFiscalYearId, s);
+                }
+            });
+        }
+    }, [propSettings]);
 
     const loadCompanyConfig = (yearId: string, currentSettings: SystemSettings) => {
         const year = currentSettings.fiscalYears?.find(y => y.id === yearId);
