@@ -119,7 +119,7 @@ const ProductsModule: React.FC = () => {
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                     {view === 'products' && (
-                        <button onClick={() => { setEditingProduct(null); setFormData({ code: '', name: '', group: '', price: '', stock: '' }); setShowProductModal(true); }} 
+                        <button onClick={() => { setEditingProduct(null); setFormData({ code: '', name: '', group: '', price: '', stock: '', unit: 'عدد' }); setShowProductModal(true); }} 
                                 className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-200">
                             <Plus className="w-5 h-5" />
                             تعریف محصول جدید
@@ -160,7 +160,7 @@ const ProductsModule: React.FC = () => {
                                     products.filter(p => Number(p.price) > 0).forEach(p => {
                                         content += `🔹 ${p.name}\n💰 قیمت: ${Number(p.price).toLocaleString()} ریال\n`;
                                     });
-                                    const res = await apiCall('/bot/broadcast', 'POST', { message: content });
+                                    const res: any = await apiCall('/bot/broadcast', 'POST', { message: content });
                                     alert(`ارسال با موفقیت به ${res.count} کاربر انجام شد.`);
                                 } catch (e) {
                                     alert("خطا در ارسال پیام");
@@ -171,7 +171,7 @@ const ProductsModule: React.FC = () => {
                             ارسال لیست قیمت به کاربران بات (تلگرام/بله)
                         </button>
                     </div>
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm text-right">
                             <thead className="bg-gray-50 border-b-2 border-gray-200 text-gray-600">
                                 <tr>
@@ -184,7 +184,7 @@ const ProductsModule: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {products.filter(p => p.name.includes(searchQuery) || p.code.includes(searchQuery) || p.group.includes(searchQuery)).map(p => (
+                                {products.filter(p => p.name.includes(searchQuery) || p.code.includes(searchQuery) || (p.group && p.group.includes(searchQuery))).map(p => (
                                     <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                                         <td className="p-4 text-center font-mono text-gray-500">{p.code || '-'}</td>
                                         <td className="p-4 font-bold text-gray-800">{p.name}</td>
@@ -195,7 +195,7 @@ const ProductsModule: React.FC = () => {
                                         </td>
                                         <td className="p-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
-                                                <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group, price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group || '', price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
                                                 <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                             </div>
                                         </td>
@@ -203,6 +203,37 @@ const ProductsModule: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                         {products.filter(p => p.name.includes(searchQuery) || p.code.includes(searchQuery) || (p.group && p.group.includes(searchQuery))).map(p => (
+                             <div key={p.id} className="p-4 space-y-3">
+                                 <div className="flex justify-between items-start">
+                                     <div>
+                                         <div className="font-bold text-gray-800">{p.name}</div>
+                                         <div className="text-[10px] text-gray-400 font-mono mt-0.5">{p.code || 'بدون کد'}</div>
+                                     </div>
+                                     <div className="flex gap-1">
+                                         <button onClick={() => { setEditingProduct(p); setFormData({ code: p.code, name: p.name, group: p.group || '', price: p.price.toString(), stock: p.stock.toString(), unit: p.unit || 'عدد' }); setShowProductModal(true); }} className="p-2 text-blue-600 bg-blue-50 rounded-lg"><Edit2 size={16}/></button>
+                                         <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 bg-red-50 rounded-lg"><Trash2 size={16}/></button>
+                                     </div>
+                                 </div>
+                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl text-xs">
+                                     <div className="flex flex-col">
+                                         <span className="text-[9px] text-gray-400">قیمت فروش</span>
+                                         <span className="font-bold text-green-700">{p.price > 0 ? p.price.toLocaleString() : '-'} ریال</span>
+                                     </div>
+                                     <div className="flex flex-col text-left">
+                                         <span className="text-[9px] text-gray-400">موجودی</span>
+                                         <span className={`font-bold ${p.stock > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{p.stock} {p.unit || 'واحد'}</span>
+                                     </div>
+                                 </div>
+                                 <div className="flex gap-2">
+                                     <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-[10px] font-bold">{p.group || 'بدون گروه'}</span>
+                                 </div>
+                             </div>
+                         ))}
                     </div>
                 </div>
             )}
@@ -214,7 +245,7 @@ const ProductsModule: React.FC = () => {
                             <div>
                                 <div className="flex justify-between items-start mb-4">
                                     <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-lg shadow-sm">
-                                        {parsePersianDate(order.date)}
+                                        {order.date}
                                     </span>
                                     <span className={`text-xs font-bold px-2 py-1 rounded-lg
                                         ${order.status === 'pending' ? 'bg-orange-100 text-orange-700' : 

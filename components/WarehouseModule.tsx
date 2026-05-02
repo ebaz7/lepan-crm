@@ -97,7 +97,7 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
     );
 };
 
-const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 'dashboard' }) => {
+const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 'dashboard', financialYear }) => {
     const isMobile = useIsMobile();
     const [loadingData, setLoadingData] = useState(true);
     const [activeTab, setActiveTab] = useState(initialTab);

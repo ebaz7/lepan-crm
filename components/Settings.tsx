@@ -41,9 +41,11 @@ const QRCode = ({ value, size }: { value: string, size: number }) => {
 
 interface SettingsProps {
     financialYear?: string;
+    settings?: SystemSettings;
+    onUpdateSettings?: (s: SystemSettings) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
+const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
   const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
       currentTrackingNumber: 1000, 
@@ -147,11 +149,15 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
   const [appUsers, setAppUsers] = useState<(Contact | User)[]>([]);
 
   useEffect(() => { 
-      loadSettings(); 
+      if (propSettings) {
+          setSettings(propSettings);
+      } else {
+          loadSettings();
+      }
       setNotificationsEnabled(isNotificationEnabledInApp()); 
       checkWhatsappStatus();
       loadAppUsers();
-  }, []);
+  }, [propSettings]);
 
   const loadSettings = async () => { 
       try { 
@@ -304,6 +310,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
 
           await saveSettings(syncedSettings); 
           setSettings(syncedSettings);
+          if (onUpdateSettings) onUpdateSettings(syncedSettings);
           setMessage('ذخیره شد ✅'); setTimeout(() => setMessage(''), 3000); 
       } catch (e) { setMessage('خطا ❌'); } finally { setLoading(false); } 
   };
@@ -832,20 +839,22 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
                                 <h4 className="font-bold text-sm text-gray-700">تنظیمات اطلاع‌رسانی مالی و خروج</h4>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-700 block mb-1">گروه تلگرام حسابداری (برای دستورپرداخت)</label>
-                                        <input type="text" value={settings.botAccountingGroupId || ''} onChange={e => setSettings({...settings, botAccountingGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
+                                    <div className="md:col-span-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                        <label className="text-sm font-bold text-blue-800 block mb-2">شناسه گروه‌های حسابداری (ارسال دستورپرداخت)</label>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div><label className="text-[10px] font-bold text-gray-500 block mb-1">تلگرام (Chat ID)</label><input className="w-full border rounded p-2 text-xs dir-ltr" value={settings.botAccountingGroupIdTele || settings.botAccountingGroupId || ''} onChange={e => setSettings({...settings, botAccountingGroupIdTele: e.target.value, botAccountingGroupId: e.target.value})} placeholder="-100..." /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-500 block mb-1">بله (شناسه)</label><input className="w-full border rounded p-2 text-xs dir-ltr" value={settings.botAccountingGroupIdBale || ''} onChange={e => setSettings({...settings, botAccountingGroupIdBale: e.target.value})} placeholder="ID..." /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-500 block mb-1">واتساپ (ID)</label><input className="w-full border rounded p-2 text-xs dir-ltr" value={settings.botAccountingGroupIdWhatsApp || ''} onChange={e => setSettings({...settings, botAccountingGroupIdWhatsApp: e.target.value})} placeholder="...@g.us" /></div>
+                                        </div>
                                     </div>
-                                    <div>
+                                    <div className="mt-2">
                                         <label className="text-sm font-bold text-gray-700 block mb-1">حالت ارسال دستورپرداخت (بات تلگرام)</label>
                                         <select value={settings.botPaymentNotificationMode || 'bulk'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'bulk'|'step'})} className="w-full border rounded-lg p-2 text-sm bg-white">
                                             <option value="bulk">ارسال یکجای جزئیات و مدارک پس از تایید نهایی</option>
                                             <option value="step">ارسال مرحله به مرحله تاییدیه</option>
                                         </select>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4 mt-4">
-                                    <div>
+                                    <div className="mt-2">
                                         <label className="text-sm font-bold text-gray-700 block mb-1">گروه دستی بیجک‌ها (Telegram Chat ID)</label>
                                         <input type="text" value={settings.botBijakGroupId || ''} onChange={e => setSettings({...settings, botBijakGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
                                     </div>

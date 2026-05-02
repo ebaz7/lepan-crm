@@ -4,7 +4,7 @@ import { LayoutDashboard, PlusCircle, ListChecks, FileText, Users, LogOut, User 
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
-import { getSettings, uploadFile } from '../services/storageService';
+import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 

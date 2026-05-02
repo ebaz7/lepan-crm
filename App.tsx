@@ -17,7 +17,7 @@ import PrintVoucher from './components/PrintVoucher';
 import NotificationController from './components/NotificationController'; 
 import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
-import { getOrders, getSettings, getMessages } from './services/storageService'; 
+import { getOrders, getSettings, getMessages, saveSettings } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
@@ -30,11 +30,11 @@ import { sendNotification } from './services/notificationService';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
-  const [financialYear, setFinancialYear] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
+  const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
-  const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [manageOrdersInitialTab, setManageOrdersInitialTab] = useState<'current' | 'archive'>('current');
@@ -169,6 +169,18 @@ function App() {
   const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
   const closeToast = () => { setToast(null); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
 
+  const setFinancialYear = async (yearLabel: string) => {
+      setFinancialYearState(yearLabel);
+      if (settings && settings.fiscalYears) {
+          const year = settings.fiscalYears.find(y => y.label === yearLabel);
+          if (year && year.id !== settings.activeFiscalYearId) {
+              const updated = { ...settings, activeFiscalYearId: year.id };
+              await saveSettings(updated);
+              setSettings(updated);
+          }
+      }
+  };
+
   const loadData = async (silent = false) => {
     if (!currentUser) return;
     
@@ -178,7 +190,13 @@ function App() {
         const cachedMessages = getLocalData<ChatMessage[]>(LS_KEYS.CHAT, []); 
         
         if (cachedOrders.length > 0) setOrders(cachedOrders);
-        if (cachedSettings) setSettings(cachedSettings);
+        if (cachedSettings) {
+            setSettings(cachedSettings);
+            if (cachedSettings.activeFiscalYearId && cachedSettings.fiscalYears) {
+                const activeYear = cachedSettings.fiscalYears.find(y => y.id === cachedSettings.activeFiscalYearId);
+                if (activeYear) setFinancialYearState(activeYear.label);
+            }
+        }
         if (cachedMessages.length > 0) {
             setChatMessages(cachedMessages);
             if (cachedMessages.length > 0) lastChatMsgIdRef.current = cachedMessages[cachedMessages.length - 1].id;
@@ -198,6 +216,12 @@ function App() {
                 if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
                 if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
                 setSettings(settingsData);
+                
+                // Sync financial year state from server settings
+                if (settingsData.activeFiscalYearId && settingsData.fiscalYears) {
+                    const activeYear = settingsData.fiscalYears.find(y => y.id === settingsData.activeFiscalYearId);
+                    if (activeYear) setFinancialYearState(activeYear.label);
+                }
             }
         }).catch(err => console.error("Settings load error", err));
 
@@ -390,7 +414,7 @@ function App() {
                     {activeTab === 'sales' && <SalesCRMModule />}
                     {activeTab === 'products' && <ProductsModule />}
                     {activeTab === 'users' && <ManageUsers />}
-                    {activeTab === 'settings' && <Settings financialYear={financialYear} />}
+                    {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
                     {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                     {activeTab === 'chat' && (
                         <ChatRoom 

@@ -101,7 +101,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             if (financialYear && financialYear !== 'all') {
                 safeL = safeL.filter(x => isInFinancialYear(x.date, financialYear));
                 safeD = safeD.filter(x => isInFinancialYear(x.date, financialYear));
-                safeI = safeI.filter(x => isInFinancialYear(x.date || x.createdAt, financialYear));
+                safeI = safeI.filter(x => isInFinancialYear(x.date || new Date(x.createdAt).toISOString().split('T')[0], financialYear));
             }
             
             setLogs(safeL);

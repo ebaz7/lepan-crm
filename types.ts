@@ -23,6 +23,7 @@ export interface User {
   telegramChatId?: string;
   baleChatId?: string;
   canManageTrade?: boolean;
+  canManageSales?: boolean;
   receiveNotifications?: boolean;
   lastSeen?: number; // New: For online status
 }
@@ -203,6 +204,7 @@ export interface SystemSettings {
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
   dailySecurityMeta?: Record<string, DailySecurityMeta>;
+  botAccountingGroupId?: string;
   botAccountingGroupIdTele?: string;
   botAccountingGroupIdBale?: string;
   botAccountingGroupIdWhatsApp?: string;
@@ -292,6 +294,7 @@ export interface PaymentOrder {
   approverCeo?: string;
   rejectionReason?: string;
   rejectedBy?: string;
+  payDate?: string;
   fiscalYearId?: string;
 }
 
