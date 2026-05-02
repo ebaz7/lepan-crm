@@ -11,10 +11,13 @@ import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import useIsMobile from '../hooks/useIsMobile';
 
+import { isInFinancialYear } from '../utils/dateUtils';
+
 interface Props { 
     currentUser: User; 
     settings?: SystemSettings; 
     initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals';
+    financialYear?: string;
 }
 
 // Internal Edit Modal Component
@@ -112,7 +115,13 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
     // Transaction State
     const currentShamsi = getCurrentShamsiDate();
-    const [txDate, setTxDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+    const [txDate, setTxDate] = useState({ year: financialYear ? parseInt(financialYear) : currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+
+    useEffect(() => {
+        if (financialYear) {
+            setTxDate(prev => ({ ...prev, year: parseInt(financialYear) }));
+        }
+    }, [financialYear]);
     const [selectedCompany, setSelectedCompany] = useState('');
     const [txItems, setTxItems] = useState<Partial<WarehouseTransactionItem>[]>([{ itemId: '', quantity: 0, weight: 0, unitPrice: 0 }]);
     const [proformaNumber, setProformaNumber] = useState('');
@@ -140,7 +149,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [editedBijakForAutoSend, setEditedBijakForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [deletedTxForAutoSend, setDeletedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(); }, [financialYear]);
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
     
     // Trigger update on company change
@@ -155,7 +164,11 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         try { 
             const [i, t] = await Promise.all([getWarehouseItems(), getWarehouseTransactions()]); 
             setItems(Array.isArray(i) ? i : []); 
-            setTransactions(Array.isArray(t) ? t : []); 
+            let safeTxs = Array.isArray(t) ? t : [];
+            if (financialYear && financialYear !== 'all') {
+                safeTxs = safeTxs.filter(tx => isInFinancialYear(tx.date, financialYear));
+            }
+            setTransactions(safeTxs); 
         } catch (e) { 
             console.error(e); 
             setItems([]);

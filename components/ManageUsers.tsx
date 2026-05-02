@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, SystemSettings } from '../types';
 import { getUsers, saveUser, updateUser, deleteUser } from '../services/authService';
 import { getSettings, uploadFile } from '../services/storageService'; 
-import { UserPlus, Trash2, Shield, User as UserIcon, Download, Pencil, X, Save, Container, Camera, Send, Phone, BellRing, Info } from 'lucide-react';
+import { UserPlus, Trash2, Shield, User as UserIcon, Download, Pencil, X, Save, Container, Camera, Send, Phone, BellRing, Info, Package } from 'lucide-react';
 import { generateUUID } from '../constants';
 import { apiCall } from '../services/apiService';
 
@@ -11,7 +11,7 @@ const ManageUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null); 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ username: '', password: '', fullName: '', role: UserRole.USER as string, canManageTrade: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' });
+  const [formData, setFormData] = useState({ username: '', password: '', fullName: '', role: UserRole.USER as string, canManageTrade: false, canManageSales: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,16 +34,16 @@ const ManageUsers: React.FC = () => {
           await saveUser(user); 
       } 
       await loadData(); 
-      setFormData({ username: '', password: '', fullName: '', role: UserRole.USER, canManageTrade: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' }); 
+      setFormData({ username: '', password: '', fullName: '', role: UserRole.USER, canManageTrade: false, canManageSales: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' }); 
   };
   
   const handleEditClick = (user: User) => { 
       setEditingId(user.id); 
-      setFormData({ username: user.username, password: user.password, fullName: user.fullName, role: user.role, canManageTrade: user.canManageTrade || false, receiveNotifications: user.receiveNotifications !== false, avatar: user.avatar || '', telegramChatId: user.telegramChatId || '', baleChatId: user.baleChatId || '', phoneNumber: user.phoneNumber || '' }); 
+      setFormData({ username: user.username, password: user.password, fullName: user.fullName, role: user.role, canManageTrade: user.canManageTrade || false, canManageSales: user.canManageSales || false, receiveNotifications: user.receiveNotifications !== false, avatar: user.avatar || '', telegramChatId: user.telegramChatId || '', baleChatId: user.baleChatId || '', phoneNumber: user.phoneNumber || '' }); 
       window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
   
-  const handleCancelEdit = () => { setEditingId(null); setFormData({ username: '', password: '', fullName: '', role: UserRole.USER, canManageTrade: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' }); };
+  const handleCancelEdit = () => { setEditingId(null); setFormData({ username: '', password: '', fullName: '', role: UserRole.USER, canManageTrade: false, canManageSales: false, receiveNotifications: true, avatar: '', telegramChatId: '', baleChatId: '', phoneNumber: '' }); };
   const handleDeleteUser = async (id: string) => { if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟')) { await deleteUser(id); await loadData(); } };
   const handleBackup = async () => { try { const backupData = await apiCall<any>('/backup'); const jsonString = JSON.stringify(backupData, null, 2); const blob = new Blob([jsonString], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `backup_payment_system_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) { alert('خطا در دریافت فایل پشتیبان'); } };
 
@@ -141,6 +141,10 @@ const ManageUsers: React.FC = () => {
                   <input type="checkbox" checked={formData.canManageTrade} onChange={e => setFormData({...formData, canManageTrade: e.target.checked})} className="w-4 h-4 text-blue-600" />
                   <span>دسترسی اختصاصی بازرگانی</span>
               </label>
+              <label className="flex items-center gap-2 text-xs text-gray-700 bg-sky-50 px-2 py-1.5 rounded cursor-pointer border border-sky-200">
+                  <input type="checkbox" checked={formData.canManageSales} onChange={e => setFormData({...formData, canManageSales: e.target.checked})} className="w-4 h-4 text-sky-600" />
+                  <span>دسترسی مدیر فروش (پنل بات)</span>
+              </label>
               <label className="flex items-center gap-2 text-xs text-gray-700 bg-green-50 px-2 py-1.5 rounded cursor-pointer border border-green-200">
                   <input type="checkbox" checked={formData.receiveNotifications} onChange={e => setFormData({...formData, receiveNotifications: e.target.checked})} className="w-4 h-4 text-green-600" />
                   <span>دریافت پیام‌های اطلاع‌رسانی</span>
@@ -156,7 +160,7 @@ const ManageUsers: React.FC = () => {
         <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">لیست کاربران سیستم</h2></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-right"><thead className="bg-gray-5 text-gray-600"><tr><th className="px-6 py-3">تصویر</th><th className="px-6 py-3">نام و نام خانوادگی</th><th className="px-6 py-3">نام کاربری</th><th className="px-6 py-3">شماره تماس</th><th className="px-6 py-3">نقش</th><th className="px-6 py-3">دسترسی‌ها</th><th className="px-6 py-3 text-center">عملیات</th></tr></thead>
-            <tbody className="divide-y divide-gray-100">{users.map((user) => (<tr key={user.id} className={`hover:bg-gray-50 transition-colors ${editingId === user.id ? 'bg-amber-50' : ''}`}><td className="px-6 py-4"><div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-gray-400"><UserIcon size={20}/></div>}</div></td><td className="px-6 py-4 flex items-center gap-2">{user.fullName}</td><td className="px-6 py-4 font-mono text-gray-500">{user.username}</td><td className="px-6 py-4 font-mono text-gray-500" dir="ltr">{user.phoneNumber || '-'}</td><td className="px-6 py-4"><span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${user.role === UserRole.ADMIN ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{user.role === UserRole.ADMIN && <Shield size={10} />}{getRoleLabel(user.role)}</span></td><td className="px-6 py-4 flex gap-1 flex-wrap">{user.canManageTrade && (<span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded w-fit"><Container size={10} /> بازرگانی</span>)}{user.receiveNotifications !== false && (<span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded w-fit"><BellRing size={10} /> اعلان‌ها</span>)}</td><td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => handleEditClick(user)} className="text-amber-500 hover:text-amber-700 p-1 hover:bg-amber-50 rounded transition-colors" title="ویرایش / تغییر رمز"><Pencil size={16} /></button>{user.username !== 'admin' && (<button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors" title="حذف کاربر"><Trash2 size={16} /></button>)}</div></td></tr>))}</tbody>
+            <tbody className="divide-y divide-gray-100">{users.map((user) => (<tr key={user.id} className={`hover:bg-gray-50 transition-colors ${editingId === user.id ? 'bg-amber-50' : ''}`}><td className="px-6 py-4"><div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-gray-400"><UserIcon size={20}/></div>}</div></td><td className="px-6 py-4 flex items-center gap-2">{user.fullName}</td><td className="px-6 py-4 font-mono text-gray-500">{user.username}</td><td className="px-6 py-4 font-mono text-gray-500" dir="ltr">{user.phoneNumber || '-'}</td><td className="px-6 py-4"><span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${user.role === UserRole.ADMIN ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{user.role === UserRole.ADMIN && <Shield size={10} />}{getRoleLabel(user.role)}</span></td><td className="px-6 py-4 flex gap-1 flex-wrap">{user.canManageTrade && (<span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded w-fit"><Container size={10} /> بازرگانی</span>)}{user.canManageSales && (<span className="flex items-center gap-1 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded w-fit"><Package size={10} /> فروش</span>)}{user.receiveNotifications !== false && (<span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded w-fit"><BellRing size={10} /> اعلان‌ها</span>)}</td><td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => handleEditClick(user)} className="text-amber-500 hover:text-amber-700 p-1 hover:bg-amber-50 rounded transition-colors" title="ویرایش / تغییر رمز"><Pencil size={16} /></button>{user.username !== 'admin' && (<button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors" title="حذف کاربر"><Trash2 size={16} /></button>)}</div></td></tr>))}</tbody>
           </table>
         </div>
       </div>

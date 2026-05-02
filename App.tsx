@@ -15,6 +15,7 @@ import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
+import ProductsModule from './components/ProductsModule';
 import { getOrders, getSettings, getMessages } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
@@ -29,6 +30,7 @@ import { sendNotification } from './services/notificationService';
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTabState] = useState('dashboard');
+  const [financialYear, setFinancialYear] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
@@ -326,7 +328,7 @@ function App() {
       setActiveTab('manage');
   };
 
-  const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
+    const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
   const [warehouseInitialTab, setWarehouseInitialTab] = useState<'dashboard' | 'approvals'>('dashboard');
   const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); setActiveTab('warehouse'); };
 
@@ -344,6 +346,8 @@ function App() {
             clearNotifications={() => setNotifications([])}
             onAddNotification={addAppNotification}
             onRemoveNotification={removeNotification}
+            financialYear={financialYear}
+            setFinancialYear={setFinancialYear}
             >
             
             <NotificationController currentUser={currentUser} />
@@ -374,16 +378,17 @@ function App() {
                 </div> 
             ) : (
                 <>
-                    {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} />}
+                    {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} financialYear={financialYear} />}
                     {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
-                    {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} />}
+                    {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
                     {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} />}
-                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} />}
+                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} />}
+                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
+                    {activeTab === 'products' && <ProductsModule />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings />}
-                    {activeTab === 'security' && <SecurityModule currentUser={currentUser} />}
+                    {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                     {activeTab === 'chat' && (
                         <ChatRoom 
                             currentUser={currentUser} 

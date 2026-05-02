@@ -15,7 +15,9 @@ import EditExitPermitModal from './EditExitPermitModal';
 import useIsMobile from '../hooks/useIsMobile';
 import html2canvas from 'html2canvas';
 
-const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any }> = ({ currentUser, settings, statusFilter }) => {
+import { isInFinancialYear } from '../utils/dateUtils';
+
+const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any, financialYear?: string }> = ({ currentUser, settings, statusFilter, financialYear }) => {
     const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [autoSendPermit, setAutoSendPermit] = useState<ExitPermit | null>(null);
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(); }, [financialYear]);
     
     useEffect(() => {
         if (statusFilter) {
@@ -39,7 +41,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         setLoading(true);
         try {
             const data = await getExitPermits();
-            const safeData = Array.isArray(data) ? data : [];
+            let safeData = Array.isArray(data) ? data : [];
+            if (financialYear && financialYear !== 'all') {
+                safeData = safeData.filter(p => isInFinancialYear(p.date, financialYear));
+            }
             setPermits(safeData.sort((a, b) => b.createdAt - a.createdAt));
         } catch (e) {
             console.error("Failed to load permits", e);

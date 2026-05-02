@@ -7,9 +7,11 @@ import { Shield, Plus, CheckCircle, XCircle, Clock, Truck, AlertTriangle, UserCh
 import { PrintSecurityDailyLog, PrintPersonnelDelay, PrintIncidentReport } from './security/SecurityPrints';
 import { getRolePermissions } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator';
+import { isInFinancialYear } from '../utils/dateUtils';
 
 interface Props {
     currentUser: User;
+    financialYear?: string;
 }
 
 // --- HELPER FOR SCALING ---
@@ -52,12 +54,18 @@ const ScaledContainer: React.FC<{ children: React.ReactNode, isLandscape?: boole
     );
 };
 
-const SecurityModule: React.FC<Props> = ({ currentUser }) => {
+const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const [activeTab, setActiveTab] = useState<'logs' | 'delays' | 'incidents' | 'cartable' | 'archive' | 'in_progress'>('logs');
     const [subTab, setSubTab] = useState<'current' | 'archived'>('current');
     const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
     const currentShamsi = getCurrentShamsiDate();
-    const [selectedDate, setSelectedDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+    const [selectedDate, setSelectedDate] = useState({ year: financialYear ? parseInt(financialYear) : currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+
+    useEffect(() => {
+        if (financialYear) {
+            setSelectedDate(prev => ({ ...prev, year: parseInt(financialYear) }));
+        }
+    }, [financialYear]);
     const [logs, setLogs] = useState<SecurityLog[]>([]);
     const [delays, setDelays] = useState<PersonnelDelay[]>([]);
     const [incidents, setIncidents] = useState<SecurityIncident[]>([]);
@@ -75,7 +83,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser }) => {
     const [metaForm, setMetaForm] = useState<DailySecurityMeta>({});
     const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : null;
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(); }, [financialYear]);
     
     // Reset subTab when changing main tabs or date
     useEffect(() => {
@@ -85,7 +93,21 @@ const SecurityModule: React.FC<Props> = ({ currentUser }) => {
     const loadData = async () => {
         try {
             const [l, d, i, s] = await Promise.all([getSecurityLogs(), getPersonnelDelays(), getSecurityIncidents(), getSettings()]);
-            setLogs(l || []); setDelays(d || []); setIncidents(i || []); setSettings(s);
+            
+            let safeL = Array.isArray(l) ? l : [];
+            let safeD = Array.isArray(d) ? d : [];
+            let safeI = Array.isArray(i) ? i : [];
+            
+            if (financialYear && financialYear !== 'all') {
+                safeL = safeL.filter(x => isInFinancialYear(x.date, financialYear));
+                safeD = safeD.filter(x => isInFinancialYear(x.date, financialYear));
+                safeI = safeI.filter(x => isInFinancialYear(x.date || x.createdAt, financialYear));
+            }
+            
+            setLogs(safeL);
+            setDelays(safeD);
+            setIncidents(safeI);
+            setSettings(s);
         } catch(e) { console.error(e); }
     };
 

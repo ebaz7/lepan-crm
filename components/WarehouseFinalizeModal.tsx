@@ -47,8 +47,8 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
     if (items.some(i => !i.goodsName)) return alert("نام کالا نمی‌تواند خالی باشد.");
     const finalizedItems = items.map(i => ({
         ...i,
-        cartonCount: Number(i.deliveredCartonCount), 
-        weight: Number(i.deliveredWeight),
+        cartonCount: Number(i.cartonCount), 
+        weight: Number(i.weight),
         deliveredCartonCount: Number(i.deliveredCartonCount),
         deliveredWeight: Number(i.deliveredWeight)
     }));

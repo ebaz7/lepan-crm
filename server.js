@@ -200,6 +200,68 @@ app.get('/api/vapid-key', (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
 });
 
+// --- PRODUCT MANAGEMENT API ---
+app.get('/api/products', (req, res) => {
+    const db = getDb();
+    res.json(db.products || []);
+});
+
+app.post('/api/products', (req, res) => {
+    const db = getDb();
+    if (!db.products) db.products = [];
+    const newProduct = { ...req.body, id: utils.generateUUID() };
+    db.products.push(newProduct);
+    saveDb(db);
+    res.json({ success: true, product: newProduct });
+});
+
+app.put('/api/products/:id', (req, res) => {
+    const db = getDb();
+    if (!db.products) db.products = [];
+    const idx = db.products.findIndex(p => p.id === req.params.id);
+    if (idx > -1) {
+        db.products[idx] = { ...db.products[idx], ...req.body };
+        saveDb(db);
+        res.json({ success: true, product: db.products[idx] });
+    } else {
+        res.status(404).json({ error: 'Not found' });
+    }
+});
+
+app.delete('/api/products/:id', (req, res) => {
+    const db = getDb();
+    if (!db.products) db.products = [];
+    db.products = db.products.filter(p => p.id !== req.params.id);
+    saveDb(db);
+    res.json({ success: true });
+});
+
+app.get('/api/customer-orders', (req, res) => {
+    const db = getDb();
+    res.json(db.customerOrders || []);
+});
+
+app.put('/api/customer-orders/:id', (req, res) => {
+    const db = getDb();
+    if (!db.customerOrders) db.customerOrders = [];
+    const idx = db.customerOrders.findIndex(o => o.id === req.params.id);
+    if (idx > -1) {
+        db.customerOrders[idx] = { ...db.customerOrders[idx], ...req.body };
+        saveDb(db);
+        res.json({ success: true, order: db.customerOrders[idx] });
+    } else {
+        res.status(404).json({ error: 'Not found' });
+    }
+});
+
+app.delete('/api/customer-orders/:id', (req, res) => {
+    const db = getDb();
+    if (!db.customerOrders) db.customerOrders = [];
+    db.customerOrders = db.customerOrders.filter(o => o.id !== req.params.id);
+    saveDb(db);
+    res.json({ success: true });
+});
+
 app.post('/api/subscribe', (req, res) => {
     const db = getDb();
     if (!db.subscriptions) db.subscriptions = [];
@@ -727,15 +789,47 @@ app.post('/api/heartbeat', (req, res) => {
     const user = db.users.find(u => u.username === username);
     if (user) {
         user.lastSeen = new Date().toISOString();
-        // We don't save to disk on every heartbeat to avoid IO thrashing, 
-        // just update memory. Disk save happens on other actions or periodic backup.
-        // However, if we want persistence across restarts, we should save periodically.
-        // For now, let's save to memory only, and maybe trigger a debounced save?
-        // Or just save. It's low frequency per user (1 min).
-        // Let's save for accuracy.
         saveDb(db);
     }
     res.json({ success: true });
+});
+
+// BROADCAST TO BOT USERS
+app.post('/api/bot/broadcast', async (req, res) => {
+    try {
+        const { message, platform = 'all' } = req.body;
+        const db = getDb();
+        const users = db.users || [];
+        const botUsers = users.filter(u => u.telegramChatId || u.baleChatId || u.whatsappChatId);
+        
+        let telegramCount = 0;
+        let baleCount = 0;
+        
+        if (platform === 'all' || platform === 'telegram') {
+            const telUsers = botUsers.filter(u => u.telegramChatId);
+            if (telUsers.length > 0) {
+                const tgModule = await import('./backend/telegram.js');
+                for (const u of telUsers) {
+                    try { await tgModule.sendTelegramMessage(u.telegramChatId, message); telegramCount++; } catch (e) { }
+                }
+            }
+        }
+        
+        if (platform === 'all' || platform === 'bale') {
+            const baleUsers = botUsers.filter(u => u.baleChatId);
+            if (baleUsers.length > 0) {
+                const baleModule = await import('./backend/bale.js');
+                for (const u of baleUsers) {
+                    try { await baleModule.sendBaleMessage(u.baleChatId, message); baleCount++; } catch (e) { }
+                }
+            }
+        }
+        
+        res.json({ success: true, count: telegramCount + baleCount });
+    } catch (e) {
+        console.error("Broadcast failed:", e);
+        res.status(500).json({ error: 'Broadcast failed' });
+    }
 });
 
 // 8. CHAT & COMMUNICATION

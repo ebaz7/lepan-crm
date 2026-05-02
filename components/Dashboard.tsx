@@ -7,6 +7,8 @@ import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar a
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions } from '../services/storageService';
 
+import { isInFinancialYear } from '../utils/dateUtils';
+
 interface DashboardProps {
   orders: PaymentOrder[];
   settings?: SystemSettings;
@@ -16,12 +18,18 @@ interface DashboardProps {
   onGoToPaymentApprovals: () => void;
   onGoToExitApprovals: () => void;
   onGoToBijakApprovals: () => void;
+  financialYear?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, financialYear }) => {
+  const orders = useMemo(() => {
+        if (!financialYear) return rawOrders;
+        return rawOrders.filter(o => o.createdAt?.includes(financialYear) || o.payDate?.includes(financialYear));
+  }, [rawOrders, financialYear]);
+
   const [showBankReport, setShowBankReport] = useState(false);
   const [bankReportTab, setBankReportTab] = useState<'summary' | 'timeline'>('summary');
   
@@ -40,7 +48,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, on
           try {
               // Only fetch if has access to avoid unnecessary calls (though data might be preloaded in App.tsx)
               if (hasExitAccess || hasWarehouseAccess) {
-                  const [exits, txs] = await Promise.all([getExitPermits(), getWarehouseTransactions()]);
+                  let [exits, txs] = await Promise.all([getExitPermits(), getWarehouseTransactions()]);
+                  if (financialYear && financialYear !== 'all') {
+                      exits = exits.filter(e => isInFinancialYear(e.date, financialYear));
+                      txs = txs.filter(t => isInFinancialYear(t.date, financialYear));
+                  }
                   setExitPermits(exits || []);
                   setWarehouseTxs(txs || []);
               }
@@ -51,7 +63,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, settings, currentUser, on
           }
       };
       fetchData();
-  }, [hasExitAccess, hasWarehouseAccess]);
+  }, [hasExitAccess, hasWarehouseAccess, financialYear]);
 
 
   // --- CALC PENDING COUNTS FOR ACTION CARDS ---

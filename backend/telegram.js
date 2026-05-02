@@ -51,6 +51,16 @@ export const initTelegram = async (token) => {
                 });
         };
 
+        const checkMembershipFn = async (userId, channelId) => {
+            try {
+                const res = await bot.getChatMember(channelId, userId);
+                return ['creator', 'administrator', 'member'].includes(res.status);
+            } catch(e) {
+                console.error("Membership check error", e.message);
+                return false;
+            }
+        };
+
         bot.on('message', async (msg) => {
             try {
                 if (!msg.text) return;
@@ -66,7 +76,7 @@ export const initTelegram = async (token) => {
                 const hasActiveSession = BotCore.sessions[msg.chat.id] && BotCore.sessions[msg.chat.id].state !== 'IDLE';
 
                 if (isPrivate || isCommand || hasActiveSession) {
-                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn);
+                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
                 }
             } catch (e) {
                 console.error("TG Msg Handle Error:", e);
@@ -76,7 +86,7 @@ export const initTelegram = async (token) => {
 
         bot.on('callback_query', async (query) => {
             try {
-                await BotCore.handleCallback('telegram', query.message.chat.id, query.from.id, query.data, sendFn, sendPhotoFn, sendDocFn);
+                await BotCore.handleCallback('telegram', query.message.chat.id, query.from.id, query.data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
                 await bot.answerCallbackQuery(query.id);
             } catch (e) {
                 console.error("TG Callback Handle Error:", e);

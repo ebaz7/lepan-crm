@@ -147,7 +147,11 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
                 caption = `📄 *سند پرداخت #${item.trackingNumber}*\n🏢 شرکت: ${item.payingCompany || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_ORDER_${item.id}`;
             } else if (type === 'EXIT') {
-                caption = `🚛 *مجوز خروج کالا #${item.permitNumber}*\n🏢 شرکت: ${item.company || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName}\n🔢 تعداد: ${item.cartonCount} کارتن\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
+                const totalReqCount = (item.items||[]).reduce((sum, i) => sum + (Number(i.cartonCount) || 0), item.cartonCount || 0);
+                const showDeliv = item.items && item.items.some(i => i.deliveredCartonCount !== undefined);
+                const totalDelivCount = showDeliv ? (item.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
+                
+                caption = `🚛 *مجوز خروج کالا #${item.permitNumber}*\n🏢 شرکت: ${item.company || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n📦 کالا: ${item.goodsName || 'چند مورد'}\n🔢 تعداد درخواستی: ${totalReqCount} ${showDeliv ? `\n✅ تعداد خروجی (انبار): ${totalDelivCount}` : ''}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_EXIT_${item.id}`;
             } else if (type === 'WH_OUT' || type === 'WH_BIJAK') {
                 caption = `📦 *حواله انبار (بیجک) #${item.number}*\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 گیرنده: ${item.recipientName}\n🚛 راننده: ${item.driverName||'-'}`;
@@ -175,8 +179,11 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
 
 // --- MAIN HANDLERS ---
 
-export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn) => {
+export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn) => {
     const db = getDb();
+    
+    // Default Settings
+    const settings = db.settings || {};
 
     if (text === '/id' || text === 'آیدی') {
         return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n(این کد را کپی کرده و در بخش تنظیمات در مقابل نام خود وارد کنید)`);
@@ -184,30 +191,30 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
     if (text.startsWith('/daily_report') || text.startsWith('/report')) {
         const args = text.split(' ');
-        let targetDate = new Date();
-        let dateStr = new Date().toISOString().split('T')[0];
+        let dateStr = toShamsiFull(new Date().toISOString()).split(' ')[0]; // Default to today in Shamsi
 
         if (args.length > 1) {
-            // Very simple date handling, assuming YYYY-MM-DD input for simplicity
+            // Check if user provided a Shamsi date like 1403/02/05
             dateStr = args[1];
         }
         
-        // Helper to check if a permit date matches today, regardless of store format
+        // Helper to check if a permit date matches the given Shamsi date
         const matchesDate = (dateVal) => {
             if (!dateVal) return false;
-            // TRY Shamsi first, then ISO fallback
-            return dateVal.includes(dateStr) || dateVal === toShamsiFull(dateStr).split(' ')[0] || (new Date(dateVal).toISOString().split('T')[0] === dateStr);
+            const shamsiOfRecord = toShamsiFull(dateVal).split(' ')[0];
+            return shamsiOfRecord === dateStr;
         };
 
         const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
         
         if (finalExits.length === 0) {
-            return sendFn(chatId, `📭 در تاریخ ${toShamsiFull(dateStr)} خروج نهایی ثبت نشده است.`);
+            return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
         }
         
-        let reportMsg = `🚛 *گزارش خروج‌های نهایی ${toShamsiFull(dateStr)}*\n\n`;
+        let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
         finalExits.forEach((p, idx) => {
-            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName} (${p.cartonCount} کارتن)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+            const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
         });
         
         return sendFn(chatId, reportMsg);
@@ -220,14 +227,92 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         session.data = {};
         
         const user = resolveUser(db, platform, chatId);
+        
+        if (!user && platform === 'telegram' && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
+            if (checkMembershipFn) {
+                const missingChannels = [];
+                for (const ch of settings.botForceJoinChannels) {
+                    if (ch.id) {
+                        const isMember = await checkMembershipFn(chatId, ch.id);
+                        if (!isMember) missingChannels.push(ch);
+                    }
+                }
+                if (missingChannels.length > 0) {
+                    const btns = missingChannels.map(ch => [{ text: `عضویت در ${ch.name || 'کانال'}`, url: ch.link || `https://t.me/${ch.id.replace('@','')}` }]);
+                    btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
+                    return sendFn(chatId, `⚠️ برای استفاده از ربات، ابتدا باید در کانال‌های زیر عضو شوید:\nپس از عضویت دکمه تایید را بزنید.`, {
+                        reply_markup: { inline_keyboard: btns }
+                    });
+                }
+            }
+        }
+
         if (!user) {
-            return sendFn(chatId, `👋 خوش آمدید.\nشناسه چت شما: \`${chatId}\`\n\n⛔ این شناسه هنوز در سیستم ثبت نشده است. لطفاً آن را به مدیر سیستم اعلام کنید تا دسترسی شما فعال شود.\n(پس از ثبت، مجدداً /start را بزنید)`);
+            const guestMenu = [
+                [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
+                [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
+                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }],
+                [{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]
+            ];
+            
+            if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
+                settings.botStoreLinks.forEach(link => {
+                    guestMenu.push([{ text: `🌐 ${link.title}`, url: link.url }]);
+                });
+            }
+
+            return sendFn(chatId, `👋 خوش آمدید کاربر گرامی.\n\nشما به عنوان کاربر مهمان/مشتری وارد شده‌اید. لطفاً یکی از گزینه‌های زیر را انتخاب کنید:`, {
+                reply_markup: {
+                    inline_keyboard: guestMenu
+                }
+            });
         }
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
 
     const user = resolveUser(db, platform, chatId);
-    if (!user) return sendFn(chatId, `⛔ دسترسی غیرمجاز. شناسه شما (\`${chatId}\`) در سیستم ثبت نشده است.`);
+    if (!user) {
+        // Handle guest states
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        const session = sessions[chatId];
+        
+        if (session.state === 'GUEST_WAIT_CONTACT_MSG') {
+            const msgObj = {
+                id: generateUUID(),
+                chatId: chatId,
+                senderName: 'مشتری (مهمان)',
+                text: text,
+                timestamp: new Date().toISOString()
+            };
+            db.messages = db.messages || [];
+            db.messages.push(msgObj);
+            saveDb(db);
+            session.state = 'IDLE';
+            return sendFn(chatId, "✅ پیام شما برای مدیریت فروش ارسال شد. در اسرع وقت با شما تماس خواهیم گرفت.", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
+        if (session.state === 'GUEST_WAIT_ORDER_INFO') {
+            const lines = text.split('\n');
+            const orderDoc = {
+                id: generateUUID(),
+                customerChatId: chatId,
+                text: text,
+                status: 'pending',
+                date: new Date().toISOString()
+            };
+            db.customerOrders = db.customerOrders || [];
+            db.customerOrders.push(orderDoc);
+            saveDb(db);
+            session.state = 'IDLE';
+            return sendFn(chatId, "✅ سفارش شما ثبت شد و در اسرع وقت بررسی می‌گردد. کد پیگیری: " + orderDoc.id.split('-')[0], {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+        
+        return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
+    }
 
     if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
     const session = sessions[chatId];
@@ -429,7 +514,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
     try {
         const img = await Renderer.generateRecordImage(p, 'EXIT');
-        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || '-'}\n🔢 تعداد: ${p.cartonCount} کارتن\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
+        
+        const totalReqCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.cartonCount) || 0), p.cartonCount || 0);
+        const showDeliv = p.items && p.items.some(i => i.deliveredCartonCount !== undefined);
+        const totalDelivCount = showDeliv ? (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
+
+        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} ${showDeliv ? `\n✅ تعداد خروجی (انبار): ${totalDelivCount}` : ''}`;
+        
+        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -517,9 +609,100 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
     } catch (e) { console.error("Notification Helper Error:", e); }
 };
 
-export const handleCallback = async (platform, chatId, userId, data, sendFn, sendPhotoFn, sendDocFn) => {
+export const handleCallback = async (platform, chatId, userId, data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn) => {
     const db = getDb();
+    const settings = db.settings || {};
     const user = resolveUser(db, platform, userId);
+    
+    // GUEST HANDLERS / PRE-AUTH HANDLERS
+    if (data === 'CHECK_JOIN') {
+        if (platform === 'telegram' && settings.botForceJoinEnabled && settings.botForceJoinChannels) {
+            if (checkMembershipFn) {
+                const missingChannels = [];
+                for (const ch of settings.botForceJoinChannels) {
+                    if (ch.id) {
+                        const isMember = await checkMembershipFn(chatId, ch.id);
+                        if (!isMember) missingChannels.push(ch);
+                    }
+                }
+                if (missingChannels.length > 0) {
+                    return sendFn(chatId, `❌ هنوز در همه کانال‌ها عضو نشده‌اید. لطفا مجدد بررسی کنید.`);
+                } else {
+                    // Re-trigger start logic
+                    return handleMessage(platform, chatId, '/start', sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
+                }
+            }
+        }
+        return;
+    }
+
+    if (!user && data.startsWith('GUEST_')) {
+        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+        const session = sessions[userId];
+
+        if (data === 'GUEST_MAIN') {
+            session.state = 'IDLE';
+            const guestMenu = [
+                [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
+                [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
+                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }],
+                [{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]
+            ];
+            
+            if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
+                settings.botStoreLinks.forEach(link => {
+                    guestMenu.push([{ text: `🌐 ${link.title}`, url: link.url }]);
+                });
+            }
+
+            return sendFn(userId, `لطفاً یکی از گزینه‌های زیر را انتخاب کنید:`, {
+                reply_markup: {
+                    inline_keyboard: guestMenu
+                }
+            });
+        }
+
+        if (data === 'GUEST_PRODUCTS') {
+            const products = db.products || [];
+            if (products.length === 0) {
+                return sendFn(userId, "لیست محصولات در حال حاضر خالی است.", {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+                });
+            }
+            let msg = `📦 *لیست محصولات*\n\n`;
+            products.forEach((p, idx) => {
+                msg += `${idx + 1}. *${p.name}* (${p.group || 'بدون دسته‌بندی'})\n`;
+                msg += `💰 قیمت: ${p.price > 0 ? p.price.toLocaleString() + ' ریال' : 'تماس بگیرید'}\n`;
+                msg += `📦 موجودی: ${p.stock > 0 ? p.stock + ' عدد' : 'ناموجود'}\n\n`;
+            });
+            return sendFn(userId, msg, {
+                reply_markup: { inline_keyboard: [[{ text: '🛒 ثبت سفارش', callback_data: 'GUEST_ORDER' }], [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
+        if (data === 'GUEST_ORDER') {
+            session.state = 'GUEST_WAIT_ORDER_INFO';
+            return sendFn(userId, "لطفا نام و نام خانوادگی، شماره تماس و لیست اقلام درخواستی خود را در یک پیام برای ما ارسال کنید:", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
+        if (data === 'GUEST_CONTACT') {
+            session.state = 'GUEST_WAIT_CONTACT_MSG';
+            return sendFn(userId, "لطفاً پیام خود را برای مدیر فروش بنویسید (در صورت نیاز به تماس، شماره خود را نیز درج کنید):", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+        
+        if (data === 'GUEST_SHOW_ID') {
+             return sendFn(userId, `🆔 شناسه چت شما: \`${userId}\``, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
+        return;
+    }
+
     if (!user) {
         return sendFn(userId, `⛔ امکان انجام این عملیات وجود ندارد. شناسه شما (\`${userId}\`) ثبت نشده است.`);
     }

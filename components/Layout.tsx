@@ -18,9 +18,11 @@ interface LayoutProps {
   clearNotifications: () => void;
   onAddNotification: (title: string, message: string) => void;
   onRemoveNotification: (id: string) => void;
+  financialYear?: string;
+  setFinancialYear?: (y: string) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -239,6 +241,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canViewExit = perms.canViewExitPermits === true;
   const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true || perms.canApproveBijak === true;
   const canSeeTrade = perms.canManageTrade === true;
+  const canSeeProducts = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SALES_MANAGER || perms.canManageSales === true; // Sales manager & admins
   const canSeeSettings = currentUser.role === UserRole.ADMIN || perms.canManageSettings === true;
   const canSeeSecurity = currentUser.role === UserRole.ADMIN || perms.canViewSecurity === true;
 
@@ -253,6 +256,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });
+  if (canSeeProducts) navItems.push({ id: 'products', label: 'فروش', icon: Package });
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
@@ -459,6 +463,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 </div>
             </div>
             <div className="flex items-center gap-2">
+                {financialYear && setFinancialYear && (
+                    <select 
+                        value={financialYear} 
+                        onChange={(e) => setFinancialYear(e.target.value)}
+                        className="bg-gray-100 text-gray-700 font-bold border-none outline-none rounded-lg text-sm px-2 py-1 mr-2"
+                        dir="ltr"
+                    >
+                        <option value="1402">1402</option>
+                        <option value="1403">1403</option>
+                        <option value="1404">1404</option>
+                        <option value="1405">1405</option>
+                    </select>
+                )}
                 <div className="relative notification-trigger" ref={mobileNotifRef}>
                     <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                         <Bell size={20} className="text-gray-600" />
@@ -470,6 +487,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         </header>
         
         <div className={`flex-1 overflow-y-auto bg-gray-50 pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
+            {/* Desktop Year Selector */}
+            <div className="hidden md:flex justify-end p-4 bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm no-print items-center">
+                <span className="font-bold text-gray-600 mr-3 text-sm">سال مالی:</span>
+                {financialYear && setFinancialYear && (
+                    <select 
+                        value={financialYear} 
+                        onChange={(e) => setFinancialYear(e.target.value)}
+                        className="bg-blue-50 text-blue-800 font-black border-2 border-blue-200 outline-none rounded-xl px-4 py-2 hover:bg-blue-100 transition-colors cursor-pointer"
+                        dir="ltr"
+                    >
+                        <option value="1402">1402 سال مالی</option>
+                        <option value="1403">1403 سال مالی</option>
+                        <option value="1404">1404 سال مالی</option>
+                        <option value="1405">1405 سال مالی</option>
+                    </select>
+                )}
+            </div>
             <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-full min-w-0">
                 {children}
             </div>

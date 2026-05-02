@@ -10,6 +10,8 @@ import EditOrderModal from './EditOrderModal';
 import { apiCall } from '../services/apiService';
 import MobileOrderCard from './mobile/MobileOrderCard';
 
+import { isInFinancialYear } from '../utils/dateUtils';
+
 interface ManageOrdersProps {
   orders: PaymentOrder[];
   refreshData: () => void;
@@ -17,11 +19,14 @@ interface ManageOrdersProps {
   initialTab?: 'current' | 'archive';
   settings?: SystemSettings;
   statusFilter?: any; 
+  financialYear?: string;
 }
 
-const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, currentUser, initialTab = 'current', settings, statusFilter }) => {
-  // CRITICAL FIX: Ensure orders is always an array to prevent "filter is not a function"
-  const safeOrders = Array.isArray(orders) ? orders : [];
+const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, currentUser, initialTab = 'current', settings, statusFilter, financialYear }) => {
+  let safeOrders = Array.isArray(orders) ? orders : [];
+  if (financialYear && financialYear !== 'all') {
+      safeOrders = safeOrders.filter(o => isInFinancialYear(o.date, financialYear));
+  }
 
   const [activeTab, setActiveTab] = useState<'current' | 'archive'>(initialTab);
   const [viewOrder, setViewOrder] = useState<PaymentOrder | null>(null); 

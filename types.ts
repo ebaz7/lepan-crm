@@ -112,6 +112,7 @@ export interface RolePermissions {
   canEditAll?: boolean;
   canDeleteAll?: boolean;
   canManageTrade?: boolean;
+  canManageSales?: boolean;
   canManageSettings?: boolean;
   canCreateExitPermit?: boolean;
   canViewExitPermits?: boolean;
@@ -202,6 +203,12 @@ export interface SystemSettings {
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
   dailySecurityMeta?: Record<string, DailySecurityMeta>;
+  botAccountingGroupId?: string;
+  botBijakGroupId?: string;
+  botPaymentNotificationMode?: 'bulk' | 'step';
+  botForceJoinChannels?: { name: string; link: string; id: string }[];
+  botForceJoinEnabled?: boolean;
+  botStoreLinks?: { title: string; url: string }[];
 }
 
 export enum PaymentMethod {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -40,7 +40,7 @@ const QRCode = ({ value, size }: { value: string, size: number }) => {
 };
 
 const Settings: React.FC = () => {
-  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates'>('system');
+  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
       currentTrackingNumber: 1000, 
       currentExitPermitNumber: 1000, 
@@ -393,6 +393,7 @@ const Settings: React.FC = () => {
                 <button onClick={() => setActiveCategory('warehouse')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'warehouse' ? 'bg-white shadow text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Warehouse size={18}/> انبار</button>
                 <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'bg-white shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
                 <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'bg-white shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
+                <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'bg-white shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
                 <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'bg-white shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
             </nav>
         </div>
@@ -815,6 +816,72 @@ const Settings: React.FC = () => {
                         </div>
                     )}
                     
+                    {activeCategory === 'bot' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Power size={20}/> تنظیمات ربات و فروشگاه</h3>
+                            
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+                                <h4 className="font-bold text-sm text-gray-700">عضویت اجباری کانال‌ها</h4>
+                                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" checked={settings.botForceJoinEnabled || false} onChange={e => setSettings({...settings, botForceJoinEnabled: e.target.checked})} className="w-4 h-4 text-blue-600" />
+                                    فعال‌سازی عضویت اجباری (کاربر باید عضو این کانال‌ها شود تا از ربات استفاده کند)
+                                </label>
+                                
+                                <div className="space-y-2">
+                                    {(settings.botForceJoinChannels || []).map((channel, cIdx) => (
+                                        <div key={cIdx} className="flex gap-2">
+                                            <input type="text" placeholder="نام کانال (اختیاری)" value={channel.name} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].name = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
+                                            <input type="text" placeholder="لینک کانال (https://t.me/...)" value={channel.link} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].link = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
+                                            <input type="text" placeholder="آیدی یا ChatId کانال (@channel_id)" value={channel.id} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].id = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
+                                            <button type="button" onClick={() => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr.splice(cIdx, 1); setSettings({...settings, botForceJoinChannels: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><X size={16} /></button>
+                                        </div>
+                                    ))}
+                                    <button type="button" onClick={() => setSettings({...settings, botForceJoinChannels: [...(settings.botForceJoinChannels||[]), {name:'', link:'', id:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1">+ افزودن کانال</button>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+                                <h4 className="font-bold text-sm text-gray-700">لینک‌های مرتبط فروشگاه (ربات)</h4>
+                                <div className="space-y-2">
+                                    {(settings.botStoreLinks || []).map((linkItem, lIdx) => (
+                                        <div key={lIdx} className="flex gap-2">
+                                            <input type="text" placeholder="عنوان لینک" value={linkItem.title} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].title = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
+                                            <input type="url" placeholder="https://..." value={linkItem.url} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].url = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-2 border rounded p-2 text-sm dir-ltr" style={{flex: 2}} />
+                                            <button type="button" onClick={() => { const newArr = [...(settings.botStoreLinks||[])]; newArr.splice(lIdx, 1); setSettings({...settings, botStoreLinks: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><X size={16} /></button>
+                                        </div>
+                                    ))}
+                                    <button type="button" onClick={() => setSettings({...settings, botStoreLinks: [...(settings.botStoreLinks||[]), {title:'', url:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1">+ افزودن شناسه/سایت</button>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+                                <h4 className="font-bold text-sm text-gray-700">تنظیمات اطلاع‌رسانی مالی و خروج</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-bold text-gray-700 block mb-1">گروه تلگرام حسابداری (برای دستورپرداخت)</label>
+                                        <input type="text" value={settings.botAccountingGroupId || ''} onChange={e => setSettings({...settings, botAccountingGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-bold text-gray-700 block mb-1">حالت ارسال دستورپرداخت (بات تلگرام)</label>
+                                        <select value={settings.botPaymentNotificationMode || 'bulk'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'bulk'|'step'})} className="w-full border rounded-lg p-2 text-sm bg-white">
+                                            <option value="bulk">ارسال یکجای جزئیات و مدارک پس از تایید نهایی</option>
+                                            <option value="step">ارسال مرحله به مرحله تاییدیه</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4 mt-4">
+                                    <div>
+                                        <label className="text-sm font-bold text-gray-700 block mb-1">گروه دستی بیجک‌ها (Telegram Chat ID)</label>
+                                        <input type="text" value={settings.botBijakGroupId || ''} onChange={e => setSettings({...settings, botBijakGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <BotManager />
+                        </div>
+                    )}
+
                     {activeCategory === 'permissions' && (
                         <div className="space-y-6 animate-fade-in">
                             <RolePermissionsEditor settings={settings} onUpdateSettings={handleUpdateSettings} />
