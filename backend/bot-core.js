@@ -228,7 +228,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         
         const user = resolveUser(db, platform, chatId);
         
-        if (!user && platform === 'telegram' && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
+        if (!user && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
@@ -616,7 +616,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     
     // GUEST HANDLERS / PRE-AUTH HANDLERS
     if (data === 'CHECK_JOIN') {
-        if (platform === 'telegram' && settings.botForceJoinEnabled && settings.botForceJoinChannels) {
+        if ((platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels) {
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {

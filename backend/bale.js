@@ -91,6 +91,19 @@ const poll = async () => {
                     return callApi('sendDocument', form, true).catch(e => console.error("Bale Doc Err", e.message));
                 }
 
+                const checkMembershipFn = async (userId, channelId) => {
+                    try {
+                        const res = await callApi('getChatMember', { chat_id: channelId, user_id: userId });
+                        if (res && res.result && res.result.status) {
+                            return ['creator', 'administrator', 'member'].includes(res.result.status);
+                        }
+                        return false;
+                    } catch(e) {
+                        console.error("Bale Membership check error", e.message);
+                        return false;
+                    }
+                };
+
                 try {
                     if (u.message && u.message.text) {
                         const text = u.message.text;
@@ -108,10 +121,10 @@ const poll = async () => {
                         if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession) continue;
                         
                         // Run handling in background to not block the poll loop
-                        BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn).catch(e => console.error("Bale Core Handle Err", e));
+                        BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn).catch(e => console.error("Bale Core Handle Err", e));
                     } else if (u.callback_query) {
                         const userId = u.callback_query.from ? u.callback_query.from.id : u.callback_query.message.chat.id;
-                        BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn).catch(e => console.error("Bale Callback Err", e));
+                        BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn).catch(e => console.error("Bale Callback Err", e));
                     }
                 } catch (err) {
                     console.error("Bale Message Handler Error:", err);

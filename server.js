@@ -810,7 +810,7 @@ app.post('/api/bot/broadcast', async (req, res) => {
             if (telUsers.length > 0) {
                 const tgModule = await import('./backend/telegram.js');
                 for (const u of telUsers) {
-                    try { await tgModule.sendTelegramMessage(u.telegramChatId, message); telegramCount++; } catch (e) { }
+                    try { await tgModule.sendBotMessage(u.telegramChatId, message); telegramCount++; } catch (e) { }
                 }
             }
         }
@@ -820,7 +820,7 @@ app.post('/api/bot/broadcast', async (req, res) => {
             if (baleUsers.length > 0) {
                 const baleModule = await import('./backend/bale.js');
                 for (const u of baleUsers) {
-                    try { await baleModule.sendBaleMessage(u.baleChatId, message); baleCount++; } catch (e) { }
+                    try { await baleModule.sendBotMessage(u.baleChatId, message); baleCount++; } catch (e) { }
                 }
             }
         }

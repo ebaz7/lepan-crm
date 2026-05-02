@@ -26,8 +26,8 @@ const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', '
 
 const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, financialYear }) => {
   const orders = useMemo(() => {
-        if (!financialYear) return rawOrders;
-        return rawOrders.filter(o => o.createdAt?.includes(financialYear) || o.payDate?.includes(financialYear));
+        if (!financialYear || financialYear === 'all') return rawOrders;
+        return rawOrders.filter(o => isInFinancialYear(o.date, financialYear) || isInFinancialYear(o.payDate, financialYear));
   }, [rawOrders, financialYear]);
 
   const [showBankReport, setShowBankReport] = useState(false);
