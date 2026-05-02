@@ -203,13 +203,35 @@ export interface SystemSettings {
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
   dailySecurityMeta?: Record<string, DailySecurityMeta>;
-  botAccountingGroupId?: string;
+  botAccountingGroupIdTele?: string;
+  botAccountingGroupIdBale?: string;
+  botAccountingGroupIdWhatsApp?: string;
   botBijakGroupId?: string;
   botPaymentNotificationMode?: 'bulk' | 'step';
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' }[];
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
+  
+  // CRM / SALES
+  salesContacts?: SalesContact[];
+  birthdayGreetingTemplate?: BirthdayGreetingTemplate;
 }
+
+export interface BirthdayGreetingTemplate {
+    text: string;
+    isActive: boolean;
+}
+
+export interface SalesContact {
+    id: string;
+    name: string;
+    mobile: string;
+    telegramId?: string;
+    baleId?: string;
+    birthday?: string; // Gregorian YYYY-MM-DD
+    sendBirthdayGreeting: boolean;
+}
+
 
 export enum PaymentMethod {
   TRANSFER = 'حواله بانکی',

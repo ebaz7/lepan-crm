@@ -549,53 +549,17 @@ const Settings: React.FC<SettingsProps> = ({ financialYear }) => {
                             
                             {/* UPDATED: Default Group Settings with 3 Columns */}
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">گروه اطلاع‌رسانی پیش‌فرض (عمومی)</h4>
-                                <p className="text-xs text-gray-500 mb-3">اگر برای شرکتی گروه اختصاصی تنظیم نشود، پیام‌ها به این مقصدها ارسال خواهند شد.</p>
-                                
+                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">شناسه گروه‌های حسابداری (اتصال به ربات‌ها)</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {/* WhatsApp */}
-                                    <div className="bg-green-50 p-2 rounded border border-green-200">
-                                        <div className="flex items-center gap-1 mb-1 text-green-700 font-bold text-[10px]">
-                                            <MessageCircle size={12}/> واتساپ (گروه)
-                                        </div>
-                                        <select 
-                                            className="w-full border rounded-lg p-2 text-sm bg-white" 
-                                            value={settings.defaultWarehouseGroup || ''} 
-                                            onChange={e => setSettings({...settings, defaultWarehouseGroup: e.target.value})}
-                                        >
-                                            <option value="">-- انتخاب گروه --</option>
-                                            {settings.savedContacts?.filter(c => c.isGroup).map(c => (
-                                                <option key={c.id} value={c.number}>{c.name} {c.baleId ? '(+Bale)' : ''}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Bale */}
-                                    <div className="bg-cyan-50 p-2 rounded border border-cyan-200">
-                                        <div className="flex items-center gap-1 mb-1 text-cyan-700 font-bold text-[10px]">
-                                            <Send size={12}/> بله (شناسه گروه/کانال)
-                                        </div>
-                                        <input 
-                                            className="w-full border rounded p-2 text-sm dir-ltr bg-white" 
-                                            placeholder="ID..." 
-                                            value={settings.exitPermitNotificationBaleId || ''}
-                                            onChange={e => setSettings({...settings, exitPermitNotificationBaleId: e.target.value})}
-                                        />
-                                    </div>
-
-                                    {/* Telegram */}
-                                    <div className="bg-blue-50 p-2 rounded border border-blue-200">
-                                        <div className="flex items-center gap-1 mb-1 text-blue-700 font-bold text-[10px]">
-                                            <Send size={12}/> تلگرام (Chat ID)
-                                        </div>
-                                        <input 
-                                            className="w-full border rounded p-2 text-sm dir-ltr bg-white" 
-                                            placeholder="-100..." 
-                                            value={settings.exitPermitNotificationTelegramId || ''}
-                                            onChange={e => setSettings({...settings, exitPermitNotificationTelegramId: e.target.value})}
-                                        />
-                                    </div>
+                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">تلگرام (Chat ID)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdTele || ''} onChange={e => setSettings({...settings, botAccountingGroupIdTele: e.target.value})} placeholder="-100..." /></div>
+                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">بله (شناسه گروه/کانال)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdBale || ''} onChange={e => setSettings({...settings, botAccountingGroupIdBale: e.target.value})} placeholder="ID..." /></div>
+                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">واتساپ (ID گروه)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdWhatsApp || ''} onChange={e => setSettings({...settings, botAccountingGroupIdWhatsApp: e.target.value})} placeholder="...@g.us" /></div>
                                 </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">مدیریت سال مالی (سال فعال: {financialYear || settings.fiscalYears?.find(fy => fy.id === settings.activeFiscalYearId)?.label || 'نامشخص'})</h4>
+                                <FiscalYearManager settings={settings} />
                             </div>
                             
                             <div className="space-y-4">

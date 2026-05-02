@@ -15,6 +15,7 @@ import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
 import PrintVoucher from './components/PrintVoucher'; 
 import NotificationController from './components/NotificationController'; 
+import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
 import { getOrders, getSettings, getMessages } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
@@ -386,6 +387,7 @@ function App() {
                     {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} />}
                     {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
+                    {activeTab === 'sales' && <SalesCRMModule />}
                     {activeTab === 'products' && <ProductsModule />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings financialYear={financialYear} />}

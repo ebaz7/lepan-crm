@@ -263,7 +263,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });
-  if (canSeeProducts) navItems.push({ id: 'products', label: 'فروش', icon: Package });
+  if (canSeeProducts) {
+      navItems.push({ id: 'products', label: 'کالاها', icon: Package });
+      navItems.push({ id: 'sales', label: 'مشتریان', icon: Users });
+  }
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
