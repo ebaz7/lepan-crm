@@ -389,7 +389,7 @@ app.put('/api/orders/:id', (req, res) => {
         if (currentOrder.status !== updatedOrder.status) {
             
             // Send bot group notifications
-            const isFinal = updatedOrder.status === 'تایید نهایی';
+            const isFinal = updatedOrder.status === 'تایید نهایی' || updatedOrder.status === 'پرداخت شده';
             notifyPaymentOrderStep(updatedOrder, db, updatedOrder.status, isFinal).catch(e => console.error("Bot Order Notify Error:", e));
 
             // Notify Requestor

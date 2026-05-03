@@ -17,10 +17,14 @@ const generateUUID = utils.generateUUID;
 const normalizeChannelId = (id) => {
     if (!id) return id;
     id = id.toString().trim();
+    // Support links
     if (id.startsWith('http')) {
         const parts = id.split('/');
         id = parts[parts.length - 1] || id;
     }
+    // Remove if @ is at the end (user typo like lepanbaft@)
+    if (id.endsWith('@')) id = id.slice(0, -1);
+    
     if (id.startsWith('-100') || id.startsWith('-')) return id;
     if (!id.startsWith('@') && isNaN(Number(id))) return `@${id}`;
     return id;

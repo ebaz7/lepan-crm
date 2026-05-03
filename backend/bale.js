@@ -93,21 +93,28 @@ const poll = async () => {
 
                 const checkMembershipFn = async (userId, channelId) => {
                     try {
+                        let cleanId = channelId;
+                        if (typeof cleanId === 'string' && cleanId.startsWith('@')) {
+                            cleanId = cleanId.substring(1);
+                        }
+                        
+                        // First try with original
                         let res = await callApi('getChatMember', { chat_id: channelId, user_id: userId });
                         
-                        // If failed with @, try without @ for Bale
-                        if ((!res || !res.ok) && channelId.startsWith('@')) {
-                            const altId = channelId.substring(1);
-                            res = await callApi('getChatMember', { chat_id: altId, user_id: userId });
+                        // If not successful, try without @ prefix which is common in Bale
+                        if ((!res || !res.ok) && channelId.toString().startsWith('@')) {
+                            res = await callApi('getChatMember', { chat_id: cleanId, user_id: userId });
                         }
+
+                        console.log(`[Bale Membership] User: ${userId}, Channel: ${channelId}, Res Status: ${res && res.result ? res.result.status : 'ERR'}, Full:`, JSON.stringify(res));
 
                         if (res && res.result && res.result.status) {
                             const status = res.result.status;
-                            return ['creator', 'administrator', 'member'].includes(status);
+                            return ['creator', 'administrator', 'member', 'restricted'].includes(status);
                         }
                         return false;
                     } catch(e) {
-                        console.error("Bale Membership check error", e.message);
+                        console.error("[Bale Membership Error]", e.message);
                         return false;
                     }
                 };
