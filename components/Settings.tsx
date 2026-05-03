@@ -821,16 +821,29 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     فعال‌سازی عضویت اجباری (کاربر باید عضو این کانال‌ها شود تا از ربات استفاده کند)
                                 </label>
                                 
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     {(settings.botForceJoinChannels || []).map((channel, cIdx) => (
-                                        <div key={cIdx} className="flex gap-2">
-                                            <input type="text" placeholder="نام کانال (اختیاری)" value={channel.name} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].name = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
-                                            <input type="text" placeholder="لینک کانال (https://t.me/...)" value={channel.link} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].link = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
-                                            <input type="text" placeholder="آیدی یا ChatId کانال (@channel_id)" value={channel.id} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].id = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
-                                            <button type="button" onClick={() => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr.splice(cIdx, 1); setSettings({...settings, botForceJoinChannels: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><X size={16} /></button>
+                                        <div key={cIdx} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                                            <div className="flex gap-2">
+                                                <input type="text" placeholder="نام کانال (مثلا: کانال رسمی)" value={channel.name} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].name = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
+                                                <select 
+                                                    value={channel.platform || 'all'} 
+                                                    onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].platform = e.target.value as any; setSettings({...settings, botForceJoinChannels: newArr}); }}
+                                                    className="border rounded p-2 text-sm bg-gray-50"
+                                                >
+                                                    <option value="all">همه پلتفرم‌ها</option>
+                                                    <option value="telegram">فقط تلگرام</option>
+                                                    <option value="bale">فقط بله</option>
+                                                </select>
+                                                <button type="button" onClick={() => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr.splice(cIdx, 1); setSettings({...settings, botForceJoinChannels: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><X size={16} /></button>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input type="text" placeholder="لینک عضویت (https://t.me/... یا https://ble.ir/...)" value={channel.link} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].link = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
+                                                <input type="text" placeholder="آیدی کانال (@channel_id)" value={channel.id} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].id = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm dir-ltr" />
+                                            </div>
                                         </div>
                                     ))}
-                                    <button type="button" onClick={() => setSettings({...settings, botForceJoinChannels: [...(settings.botForceJoinChannels||[]), {name:'', link:'', id:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1">+ افزودن کانال</button>
+                                    <button type="button" onClick={() => setSettings({...settings, botForceJoinChannels: [...(settings.botForceJoinChannels||[]), {name:'', link:'', id:'', platform: 'all'}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors">+ افزودن کانال جدید</button>
                                 </div>
                             </div>
 

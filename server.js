@@ -355,7 +355,7 @@ app.post('/api/orders', (req, res) => {
     db.orders.unshift(order); 
     
     saveDb(db); 
-    res.status(201).json(order); 
+    res.json(db.orders || []); 
     
     // Send bot group notifications
     notifyPaymentOrderStep(order, db, 'ثبت اولیه', false).catch(e => console.error("Bot Order Notify Error:", e));

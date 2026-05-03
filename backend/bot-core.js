@@ -261,15 +261,22 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
-                    if (ch.id && (!ch.platform || ch.platform === platform)) {
+                    if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
                         const isMember = await checkMembershipFn(chatId, ch.id);
                         if (!isMember) missingChannels.push(ch);
                     }
                 }
                 if (missingChannels.length > 0) {
-                    const btns = missingChannels.map(ch => [{ text: `عضویت در ${ch.name || 'کانال'}`, url: ch.link || `https://t.me/${ch.id.replace('@','')}` }]);
+                    const btns = missingChannels.map(ch => {
+                        let link = ch.link;
+                        if (!link) {
+                            if (platform === 'bale') link = `https://ble.ir/${ch.id.replace('@','')}`;
+                            else link = `https://t.me/${ch.id.replace('@','')}`;
+                        }
+                        return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
+                    });
                     btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
-                    return sendFn(chatId, `⚠️ برای استفاده از ربات، ابتدا باید در کانال‌های زیر عضو شوید:\nپس از عضویت دکمه تایید را بزنید.`, {
+                    return sendFn(chatId, `⚠️ برای استفاده از ربات در ${platform === 'bale' ? 'بله' : 'تلگرام'}، ابتدا باید در کانال زیر عضو شوید:\nپس از عضویت دکمه تایید را بزنید.`, {
                         reply_markup: { inline_keyboard: btns }
                     });
                 }
@@ -742,13 +749,24 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
-                    if (ch.id && (!ch.platform || ch.platform === platform)) {
-                        const isMember = await checkMembershipFn(chatId, ch.id);
+                    if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
+                        const isMember = await checkMembershipFn(userId, ch.id);
                         if (!isMember) missingChannels.push(ch);
                     }
                 }
                 if (missingChannels.length > 0) {
-                    return sendFn(chatId, `❌ هنوز در همه کانال‌ها عضو نشده‌اید. لطفا مجدد بررسی کنید.`);
+                    const btns = missingChannels.map(ch => {
+                        let link = ch.link;
+                        if (!link) {
+                            if (platform === 'bale') link = `https://ble.ir/${ch.id.replace('@','')}`;
+                            else link = `https://t.me/${ch.id.replace('@','')}`;
+                        }
+                        return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
+                    });
+                    btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
+                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nنکات مهم:\n۱. حتماً در کانال بالا عضو شوید.\n۲. ربات باید در کانال "مدیر (Administrator)" باشد تا بتواند عضویت شما را چک کند.\n۳. حدود ۱۰ ثانیه پس از عضویت، مجدداً دکمه تایید را بزنید.`, {
+                        reply_markup: { inline_keyboard: btns }
+                    });
                 } else {
                     // Re-trigger start logic
                     return handleMessage(platform, chatId, '/start', sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
