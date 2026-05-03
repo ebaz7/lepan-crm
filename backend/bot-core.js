@@ -362,6 +362,43 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
         const session = sessions[chatId];
         
+        // --- GUEST REGISTRATION STATES ---
+        if (session.state === 'GUEST_REG_NAME') {
+            const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+            if (sub) {
+                sub.fullName = text;
+                saveDb(db);
+            }
+            session.state = 'GUEST_REG_MOBILE';
+            return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
+                reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }]] }
+            });
+        }
+
+        if (session.state === 'GUEST_REG_MOBILE') {
+            const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+            if (sub) {
+                sub.mobile = text;
+                saveDb(db);
+            }
+            session.state = 'GUEST_REG_BIRTHDAY';
+            return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
+                reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
+            });
+        }
+
+        if (session.state === 'GUEST_REG_BIRTHDAY') {
+            const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+            if (sub) {
+                sub.birthday = text;
+                saveDb(db);
+            }
+            session.state = 'IDLE';
+            return sendFn(chatId, "✅ با تشکر! اطلاعات شما ثبت شد.", {
+                reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
         if (session.state === 'GUEST_WAIT_CONTACT_MSG') {
             const msgObj = {
                 id: generateUUID(),
@@ -393,10 +430,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             saveDb(db);
             session.state = 'IDLE';
             return sendFn(chatId, "✅ سفارش شما ثبت شد و در اسرع وقت بررسی می‌گردد. کد پیگیری: " + orderDoc.id.split('-')[0], {
-                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+                reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
             });
         }
         
+        if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
+
         return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
     }
 
@@ -639,42 +678,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     }
 
     // --- GUEST REGISTRATION STATES ---
-    if (session.state === 'GUEST_REG_NAME') {
-        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
-        if (sub) {
-            sub.fullName = text;
-            saveDb(db);
-        }
-        session.state = 'GUEST_REG_MOBILE';
-        return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
-            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }]] }
-        });
-    }
-
-    if (session.state === 'GUEST_REG_MOBILE') {
-        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
-        if (sub) {
-            sub.mobile = text;
-            saveDb(db);
-        }
-        session.state = 'GUEST_REG_BIRTHDAY';
-        return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
-            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
-        });
-    }
-
-    if (session.state === 'GUEST_REG_BIRTHDAY') {
-        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
-        if (sub) {
-            sub.birthday = text;
-            saveDb(db);
-        }
-        session.state = 'IDLE';
-        return sendFn(chatId, "✅ با تشکر! اطلاعات شما ثبت شد.", {
-            reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
-        });
-    }
-
     return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
 
@@ -895,14 +898,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         sessions[userId].state = 'GUEST_REG_MOBILE';
         return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
-            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }]] }
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }, { text: '⏹️ توقف ثبت‌نام', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
         });
     }
     if (data === 'SKIP_REG_MOBILE') {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         sessions[userId].state = 'GUEST_REG_BIRTHDAY';
         return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
-            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }, { text: '⏹️ توقف ثبت‌نام', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
         });
     }
     if (data === 'SKIP_REG_BIRTHDAY') {
