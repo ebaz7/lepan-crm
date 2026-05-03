@@ -290,25 +290,55 @@ export default function SalesCRMModule() {
                                     placeholder="۰۹۱۲..."
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">تاریخ تولد (شمسی)</label>
-                                    <input 
-                                        type="text"
-                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all text-sm dir-ltr text-right font-mono"
-                                        value={formData.birthday || ''}
-                                        onChange={e => setFormData({...formData, birthday: e.target.value})}
-                                        placeholder="مثال: 1370/05/12"
-                                    />
+                                    <div className="flex gap-2" dir="ltr">
+                                        <select 
+                                            className="flex-1 border-2 border-gray-100 rounded-xl p-2 text-sm outline-none focus:border-blue-500"
+                                            value={formData.birthday?.split('/')[2] || ''}
+                                            onChange={e => {
+                                                const parts = (formData.birthday || '1370/01/01').split('/');
+                                                parts[2] = e.target.value.padStart(2, '0');
+                                                setFormData({...formData, birthday: parts.join('/')});
+                                            }}
+                                        >
+                                            <option value="">روز</option>
+                                            {Array.from({length: 31}, (_, i) => (i + 1).toString().padStart(2, '0')).map(d => <option key={d} value={d}>{d}</option>)}
+                                        </select>
+                                        <select 
+                                            className="flex-1 border-2 border-gray-100 rounded-xl p-2 text-sm outline-none focus:border-blue-500"
+                                            value={formData.birthday?.split('/')[1] || ''}
+                                            onChange={e => {
+                                                const parts = (formData.birthday || '1370/01/01').split('/');
+                                                parts[1] = e.target.value.padStart(2, '0');
+                                                setFormData({...formData, birthday: parts.join('/')});
+                                            }}
+                                        >
+                                            <option value="">ماه</option>
+                                            {Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => <option key={m} value={m}>{m}</option>)}
+                                        </select>
+                                        <input 
+                                            type="number"
+                                            className="w-20 border-2 border-gray-100 rounded-xl p-2 text-sm outline-none focus:border-blue-500 text-center font-mono"
+                                            placeholder="سال"
+                                            value={formData.birthday?.split('/')[0] || ''}
+                                            onChange={e => {
+                                                const parts = (formData.birthday || '1370/01/01').split('/');
+                                                parts[0] = e.target.value;
+                                                setFormData({...formData, birthday: parts.join('/')});
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="flex flex-col justify-end">
-                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none mb-4">
+                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none mb-2">
                                         <input 
                                             type="checkbox" 
                                             checked={formData.sendBirthdayGreeting} 
                                             onChange={e => setFormData({...formData, sendBirthdayGreeting: e.target.checked})}
                                         />
-                                        ارسال پیام تولد
+                                        ارسال خودکار پیام تبریک به این مخاطب
                                     </label>
                                 </div>
                             </div>

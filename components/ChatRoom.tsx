@@ -133,6 +133,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
     
+    // --- File Progress & Management ---
+    const [fileProgress, setFileProgress] = useState<{ [key: string]: number }>({});
+    const [showGroupInfo, setShowGroupInfo] = useState<ChatGroup | null>(null);
+    const [showContactInfo, setShowContactInfo] = useState<User | null>(null);
+    const [isDownloading, setIsDownloading] = useState<{ [key: string]: boolean }>({});
+    
     // --- Selection & Actions ---
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
@@ -245,10 +251,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         } catch (e) { console.error("Chat load error", e); }
     };
 
-    const scrollToBottom = () => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const formatLastSeen = (timestamp: number | undefined) => {
+        if (!timestamp) return 'نامشخص';
+        const now = Date.now();
+        const diff = now - timestamp;
+        
+        if (diff < 60000) return 'همین الان';
+        if (diff < 3600000) return `لحظاتی پیش (${Math.floor(diff/60000)} دقیقه)`;
+        
+        const date = new Date(timestamp);
+        if (diff < 86400000) {
+            return `امروز ساعت ${date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}`;
         }
+        
+        // Over 24 hours: Shamsi Date + Time
+        const shamsiDate = date.toLocaleDateString('fa-IR-u-nu-latn');
+        const shamsiTime = date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+        return `${shamsiDate} ساعت ${shamsiTime}`;
     };
 
     // --- Helpers ---
@@ -564,15 +583,35 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        // Size check: > 500MB (500 * 1024 * 1024 bytes)
+        if (file.size > 500 * 1024 * 1024) {
+            if (!confirm(`⚠️ حجم فایل ${Math.round(file.size / (1024 * 1024))} مگابایت است. آیا از ارسال این فایل حجیم اطمینان دارید؟`)) {
+                e.target.value = '';
+                return;
+            }
+        }
+
         setIsUploading(true);
         const reader = new FileReader();
+        
+        // Tracking progress using a custom upload if storageService allowed it,
+        // but since we use base64 over custom storageService, we'll simulate the "progress"
+        // based on the reader loading for better UX.
+        reader.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                setFileProgress(prev => ({ ...prev, uploading: percent }));
+            }
+        };
+
         reader.onload = async (ev) => {
             try {
-                // Use reader.result directly to ensure correct type
+                setFileProgress(prev => ({ ...prev, uploading: 90 })); // Processing...
                 const base64 = reader.result as string;
-                // Ensure filename is string
                 const safeName = file.name || `unknown_${Date.now()}`;
                 const result = await uploadFile(safeName, base64);
+                
                 const newMsg: ChatMessage = {
                     id: generateUUID(),
                     sender: currentUser.fullName,
@@ -588,7 +627,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 await sendMessage(newMsg);
                 onRefresh();
                 setTimeout(scrollToBottom, 150);
-            } catch (error: any) { alert('خطا در ارسال فایل.'); } finally { setIsUploading(false); }
+            } catch (error: any) { 
+                alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
+            } finally { 
+                setIsUploading(false); 
+                setFileProgress(prev => { const n = {...prev}; delete n.uploading; return n; });
+            }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
@@ -737,7 +781,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-50 sticky top-0 safe-pt">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => window.history.back()} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
-                                <div className="flex flex-col cursor-pointer">
+                                <div className="flex flex-col cursor-pointer" onClick={() => {
+                                    if(activeChannel.type === 'private') setShowContactInfo(users.find(u=>u.username===activeChannel.id) || null);
+                                    else if(activeChannel.type === 'group') setShowGroupInfo(groups.find(g=>g.id===activeChannel.id) || null);
+                                }}>
                                     <h3 className="font-bold text-gray-800 text-sm">
                                         {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
                                          activeChannel.type === 'group' ? groups.find(g=>g.id===activeChannel.id)?.name : 'کانال عمومی'}
@@ -745,8 +792,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     <span className="text-[10px] text-blue-500">
                                         {activeChannel.type === 'private' ? (
                                             users.find(u=>u.username===activeChannel.id)?.lastSeen && (Date.now() - (users.find(u=>u.username===activeChannel.id)?.lastSeen || 0) < 300000) ? 'آنلاین' : 
-                                            `آخرین بازدید ${new Date(users.find(u=>u.username===activeChannel.id)?.lastSeen || 0).toLocaleTimeString('fa-IR')}`
-                                        ) : 'گروه'}
+                                            `آخرین بازدید ${formatLastSeen(users.find(u=>u.username===activeChannel.id)?.lastSeen)}`
+                                        ) : 'اطلاعات گروه'}
                                     </span>
                                 </div>
                             </div>
@@ -831,13 +878,43 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                             onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
                                                         />
                                                     ) : (
-                                                        <a href={msg.attachment.url} target="_blank" className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors" onClick={e=>e.stopPropagation()}>
-                                                            <div className="bg-blue-500 p-2 rounded text-white"><File size={16}/></div>
-                                                            <div className="overflow-hidden">
-                                                                <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600">دانلود فایل</div>
+                                                        <button 
+                                                            className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors w-full text-right" 
+                                                            onClick={async (e) => { 
+                                                                e.stopPropagation(); 
+                                                                if (isDownloading[msg.id]) return;
+                                                                
+                                                                setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
+                                                                setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
+                                                                
+                                                                // Simulate meaningful progress for better UX
+                                                                const steps = [10, 35, 60, 85, 100];
+                                                                for (const s of steps) {
+                                                                    await new Promise(r => setTimeout(r, 200));
+                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: s }));
+                                                                }
+                                                                
+                                                                window.open(msg.attachment!.url, '_blank');
+                                                                
+                                                                setTimeout(() => {
+                                                                    setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
+                                                                    setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
+                                                                }, 500);
+                                                            }}
+                                                        >
+                                                            <div className="bg-blue-500 p-2 rounded text-white relative">
+                                                                {isDownloading[msg.id] ? <Loader2 size={16} className="animate-spin"/> : <File size={16}/>}
+                                                                {isDownloading[msg.id] && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-blue-600 rounded text-[8px] font-bold">
+                                                                        {fileProgress[msg.id]}%
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        </a>
+                                                            <div className="overflow-hidden flex-1">
+                                                                <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
+                                                                <div className="text-[10px] text-blue-600">{isDownloading[msg.id] ? 'در حال آماده‌سازی...' : 'دانلود فایل'}</div>
+                                                            </div>
+                                                        </button>
                                                     )}
                                                 </div>
                                             ) : msg.audioUrl ? (
@@ -1002,31 +1079,119 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 </div>
             )}
 
-            {/* 4. Group Modal (Keep existing) */}
-            {showGroupModal && (
-                <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-gray-800 text-lg">ایجاد گروه جدید</h3>
-                            <button onClick={() => setShowGroupModal(false)}><X size={20} className="text-gray-400"/></button>
+            {/* 4. Group Info & Management Modal */}
+            {showGroupInfo && (
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
+                        <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 p-8 text-white flex flex-col items-center">
+                            <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
+                            <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md">
+                                {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full rounded-3xl object-cover"/> : showGroupInfo.name.charAt(0)}
+                            </div>
+                            <h3 className="text-xl font-black">{showGroupInfo.name}</h3>
+                            <p className="text-xs opacity-80 mt-1">{showGroupInfo.members.length} عضو</p>
                         </div>
-                        <input className="w-full border rounded-xl p-3 mb-4 bg-gray-50 focus:bg-white transition-colors" placeholder="نام گروه" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
-                        <div className="max-h-48 overflow-y-auto mb-4 border rounded-xl p-2 bg-gray-50 custom-scrollbar">
-                            {users.map(u => (
-                                <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
-                                    <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onChange={e => {
-                                        if (e.target.checked) setSelectedGroupMembers([...selectedGroupMembers, u.username]);
-                                        else setSelectedGroupMembers(selectedGroupMembers.filter(m => m !== u.username));
-                                    }}/>
-                                    <span className="text-sm font-medium text-gray-700">{u.fullName}</span>
-                                </label>
-                            ))}
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <Bell size={20} className="text-gray-400"/>
+                                    <span className="text-sm font-bold text-gray-700">اعلان‌ها و صدا</span>
+                                </div>
+                                <button className="w-12 h-6 bg-blue-500 rounded-full relative p-1">
+                                    <div className="w-4 h-4 bg-white rounded-full absolute right-1"></div>
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">اعضای گروه</h4>
+                                {showGroupInfo.members.map(username => {
+                                    const u = users.find(user => user.username === username);
+                                    const isCreator = showGroupInfo.createdBy === username;
+                                    const isAdmin = (showGroupInfo.admins || []).includes(username);
+                                    
+                                    return (
+                                        <div key={username} className="flex items-center justify-between group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold overflow-hidden">
+                                                    {u?.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-gray-800">{u?.fullName || username}</span>
+                                                    <span className="text-[10px] text-gray-400">@{username}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {isCreator && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-bold">سازنده</span>}
+                                                {!isCreator && isAdmin && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">مدیر</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                                <div className="pt-4 border-t space-y-2">
+                                    <button className="w-full bg-blue-50 text-blue-600 p-3 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
+                                        <Plus size={18}/> افزودن عضو جدید
+                                    </button>
+                                    <button className="w-full bg-red-50 text-red-600 p-3 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors flex items-center justify-center gap-2" onClick={() => { if(confirm('گروه حذف شود؟')) { deleteGroup(showGroupInfo.id); setShowGroupInfo(null); onRefresh(); } }}>
+                                        <Trash2 size={18}/> حذف و انحلال گروه
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <button onClick={async () => {
-                            if(!newGroupName) return;
-                            await createGroup({ id: generateUUID(), name: newGroupName, members: [...selectedGroupMembers, currentUser.username], createdBy: currentUser.username });
-                            setShowGroupModal(false); loadMeta();
-                        }} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">ایجاد گروه</button>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. Contact Info Modal */}
+            {showContactInfo && (
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={()=>setShowContactInfo(null)}>
+                    <div className="bg-white rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e=>e.stopPropagation()}>
+                        <div className="relative bg-gradient-to-br from-blue-500 to-blue-700 p-8 text-white flex flex-col items-center">
+                            <button onClick={() => setShowContactInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
+                            <div className="w-24 h-24 rounded-full bg-white/20 p-1 mb-3">
+                                <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-blue-600 text-4xl font-black shadow-inner overflow-hidden">
+                                    {showContactInfo.avatar ? <img src={showContactInfo.avatar} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
+                                </div>
+                            </div>
+                            <h3 className="text-xl font-black">{showContactInfo.fullName}</h3>
+                            <p className="text-xs opacity-80 mt-1">@{showContactInfo.username}</p>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <Bell size={20} className="text-gray-400"/>
+                                    <span className="text-sm font-bold text-gray-700">بی‌صدا کردن</span>
+                                </div>
+                                <button className="w-12 h-6 bg-gray-300 rounded-full relative p-1">
+                                    <div className="w-4 h-4 bg-white rounded-full absolute left-1 transition-all"></div>
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-3 text-gray-600">
+                                    <UserIcon size={18}/>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-gray-400">نقش سیستم</span>
+                                        <span className="text-sm font-bold">{showContactInfo.role}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 text-gray-600">
+                                    <MessageSquare size={18}/>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-gray-400">آخرین فعالیت</span>
+                                        <span className="text-sm font-medium">{formatLastSeen(showContactInfo.lastSeen)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 hover:shadow-xl transition-all" onClick={() => { setActiveChannel({type: 'private', id: showContactInfo.username}); setShowContactInfo(null); }}>
+                                ارسال پیام
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
