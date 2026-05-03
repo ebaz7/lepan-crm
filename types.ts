@@ -210,7 +210,7 @@ export interface SystemSettings {
   botAccountingGroupIdWhatsApp?: string;
   botBijakGroupId?: string;
   botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
-  botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' }[];
+  botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' | 'all' }[];
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
   

@@ -93,9 +93,17 @@ const poll = async () => {
 
                 const checkMembershipFn = async (userId, channelId) => {
                     try {
-                        const res = await callApi('getChatMember', { chat_id: channelId, user_id: userId });
+                        let res = await callApi('getChatMember', { chat_id: channelId, user_id: userId });
+                        
+                        // If failed with @, try without @ for Bale
+                        if ((!res || !res.ok) && channelId.startsWith('@')) {
+                            const altId = channelId.substring(1);
+                            res = await callApi('getChatMember', { chat_id: altId, user_id: userId });
+                        }
+
                         if (res && res.result && res.result.status) {
-                            return ['creator', 'administrator', 'member'].includes(res.result.status);
+                            const status = res.result.status;
+                            return ['creator', 'administrator', 'member'].includes(status);
                         }
                         return false;
                     } catch(e) {

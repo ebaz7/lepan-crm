@@ -17,6 +17,10 @@ const generateUUID = utils.generateUUID;
 const normalizeChannelId = (id) => {
     if (!id) return id;
     id = id.toString().trim();
+    if (id.startsWith('http')) {
+        const parts = id.split('/');
+        id = parts[parts.length - 1] || id;
+    }
     if (id.startsWith('-100') || id.startsWith('-')) return id;
     if (!id.startsWith('@') && isNaN(Number(id))) return `@${id}`;
     return id;
@@ -288,8 +292,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                     const btns = missingChannels.map(ch => {
                         let link = ch.link;
                         if (!link) {
-                            if (platform === 'bale') link = `https://ble.ir/${ch.id.replace('@','')}`;
-                            else link = `https://t.me/${ch.id.replace('@','')}`;
+                            let id = (ch.id || '').toString();
+                            if (id.startsWith('http')) {
+                                link = id;
+                            } else {
+                                const cleanId = id.replace('@', '');
+                                if (platform === 'bale') link = `https://ble.ir/${cleanId}`;
+                                else link = `https://t.me/${cleanId}`;
+                            }
                         }
                         return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
                     });
@@ -838,13 +848,25 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     const btns = missingChannels.map(ch => {
                         let link = ch.link;
                         if (!link) {
-                            if (platform === 'bale') link = `https://ble.ir/${ch.id.replace('@','')}`;
-                            else link = `https://t.me/${ch.id.replace('@','')}`;
+                            let id = (ch.id || '').toString();
+                            if (id.startsWith('http')) {
+                                link = id;
+                            } else {
+                                const cleanId = id.replace('@', '');
+                                if (platform === 'bale') link = `https://ble.ir/${cleanId}`;
+                                else link = `https://t.me/${cleanId}`;
+                            }
                         }
                         return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
                     });
                     btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
-                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nلطفاً ابتدا در کانال عضو شده و حدود ۱۰ ثانیه صبر کنید، سپس مجدداً دکمه تایید را بزنید.`, {
+                    
+                    let debugInfo = "";
+                    if (platform === 'bale') {
+                        debugInfo = `\n\n🔍 اطلاعات بررسی:\nآیدی شما: ${userId}\nآیدی کانال: ${missingChannels[0].id}`;
+                    }
+
+                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nلطفاً ابتدا در کانال عضو شده و حدود ۱۰ ثانیه صبر کنید، سپس مجدداً دکمه تایید را بزنید.${debugInfo}`, {
                         reply_markup: { inline_keyboard: btns }
                     });
                 } else {
