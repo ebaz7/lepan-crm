@@ -275,25 +275,30 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         
         const user = resolveUser(db, platform, chatId);
         
-        // --- CHANNEL JOIN CHECK ---
-        if (!user && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
-            if (checkMembershipFn) {
-                const missingChannels = [];
-                for (const ch of settings.botForceJoinChannels) {
-                    if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
-                        try {
-                            const normalizedId = normalizeChannelId(ch.id);
-                            const isMember = await checkMembershipFn(chatId, normalizedId);
-                            console.log(`[Join Check] User ${chatId} on ${platform} for channel ${normalizedId}: ${isMember}`);
-                            if (!isMember) missingChannels.push(ch);
-                        } catch (e) {
-                            console.error(`[Join Check Error] ${e.message}`);
-                            missingChannels.push(ch); 
-                        }
+    // --- CHANNEL JOIN CHECK ---
+    if (!user && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
+        if (checkMembershipFn) {
+            const missingChannels = [];
+            
+            // Parallelize checks for performance
+            const checkPromises = settings.botForceJoinChannels.map(async (ch) => {
+                if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
+                    try {
+                        const normalizedId = normalizeChannelId(ch.id);
+                        const isMember = await checkMembershipFn(chatId, normalizedId);
+                        return { ch, isMember };
+                    } catch (e) {
+                        return { ch, isMember: false };
                     }
                 }
-                if (missingChannels.length > 0) {
-                    const btns = missingChannels.map(ch => {
+                return { ch, isMember: true };
+            });
+
+            const results = await Promise.all(checkPromises);
+            results.forEach(res => { if (!res.isMember) missingChannels.push(res.ch); });
+
+            if (missingChannels.length > 0) {
+                const btns = missingChannels.map(ch => {
                         let link = ch.link;
                         if (!link) {
                             let id = (ch.id || '').toString();
@@ -888,29 +893,29 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // --- REGISTRATION BUTTONS ---
     if (data === 'GUEST_START_REG') {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        sessions[userId].state = 'GUEST_REG_NAME';
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        sessions[chatId].state = 'GUEST_REG_NAME';
         return sendFn(chatId, "👤 لطفاً نام و نام خانوادگی خود را وارد کنید (اختیاری):", {
             reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_NAME' }]] }
         });
     }
     if (data === 'SKIP_REG_NAME') {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        sessions[userId].state = 'GUEST_REG_MOBILE';
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        sessions[chatId].state = 'GUEST_REG_MOBILE';
         return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
             reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }, { text: '⏹️ توقف ثبت‌نام', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
         });
     }
     if (data === 'SKIP_REG_MOBILE') {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        sessions[userId].state = 'GUEST_REG_BIRTHDAY';
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        sessions[chatId].state = 'GUEST_REG_BIRTHDAY';
         return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
             reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }, { text: '⏹️ توقف ثبت‌نام', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
         });
     }
     if (data === 'SKIP_REG_BIRTHDAY') {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        sessions[userId].state = 'IDLE';
+        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+        sessions[chatId].state = 'IDLE';
         return sendFn(chatId, "✅ ثبت‌نام متوقف شد. خوش آمدید!", {
             reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
         });
@@ -1200,6 +1205,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             
             saveDb(db);
             sendFn(chatId, `✅ سند #${order.trackingNumber} تایید شد.`);
+
+            const isFinal = order.status === 'تایید نهایی' || order.status === 'پرداخت شده';
+            notifyPaymentOrderStep(order, db, order.status, isFinal).catch(e => console.error("Bot Callback Notify Error:", e));
         }
         return;
     }
@@ -1217,6 +1225,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             order.status = 'رد شده';
             saveDb(db);
             sendFn(chatId, `❌ سند #${order.trackingNumber} رد شد.`);
+            
+            notifyPaymentOrderStep(order, db, 'رد شده', false).catch(e => console.error("Bot Callback Reject Notify Error:", e));
         }
         return;
     }

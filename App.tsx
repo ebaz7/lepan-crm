@@ -47,6 +47,7 @@ function App() {
   const [backgroundJobs, setBackgroundJobs] = useState<{order: PaymentOrder, type: 'create' | 'approve'}[]>([]);
   const processingJobRef = useRef(false);
 
+  const isSyncingRef = useRef(false);
   const isFirstLoad = useRef(true);
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const IDLE_LIMIT = 60 * 60 * 1000; 
@@ -182,7 +183,8 @@ function App() {
   };
 
   const loadData = async (silent = false) => {
-    if (!currentUser) return;
+    if (!currentUser || isSyncingRef.current) return;
+    isSyncingRef.current = true;
     
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);
@@ -263,6 +265,8 @@ function App() {
         console.error("Failed to load data", error); 
     } finally { 
         if (!silent) setLoading(false); 
+        isSyncingRef.current = false;
+        isFirstLoad.current = false;
     }
   };
 

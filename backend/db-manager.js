@@ -8,6 +8,8 @@ const __dirname = path.dirname(__filename);
 const DB_FILE = path.join(__dirname, '..', 'database.json');
 
 let MEMORY_DB_CACHE = null;
+let saveTimeout = null;
+let isSaving = false;
 
 export const getDb = () => {
     if (MEMORY_DB_CACHE) return MEMORY_DB_CACHE;
@@ -39,12 +41,10 @@ export const getDb = () => {
                 MEMORY_DB_CACHE = { ...defaultDb, ...data };
                 
                 // Ensure arrays exist
-                if (!Array.isArray(MEMORY_DB_CACHE.users)) MEMORY_DB_CACHE.users = [];
-                if (!Array.isArray(MEMORY_DB_CACHE.botSubscribers)) MEMORY_DB_CACHE.botSubscribers = [];
-                if (!Array.isArray(MEMORY_DB_CACHE.orders)) MEMORY_DB_CACHE.orders = [];
-                if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
-                if (!Array.isArray(MEMORY_DB_CACHE.warehouseTransactions)) MEMORY_DB_CACHE.warehouseTransactions = [];
-                if (!Array.isArray(MEMORY_DB_CACHE.subscriptions)) MEMORY_DB_CACHE.subscriptions = [];
+                const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords'];
+                arrays.forEach(arr => {
+                    if (!Array.isArray(MEMORY_DB_CACHE[arr])) MEMORY_DB_CACHE[arr] = [];
+                });
                 
                 return MEMORY_DB_CACHE;
             }
@@ -58,12 +58,37 @@ export const getDb = () => {
 };
 
 export const saveDb = (data) => {
+    MEMORY_DB_CACHE = data;
+    
+    // Throttle disk writes to every 3 seconds to avoid event loop blockage
+    if (saveTimeout) return true;
+    
+    saveTimeout = setTimeout(() => {
+        try {
+            if (isSaving) return;
+            isSaving = true;
+            fs.writeFileSync(DB_FILE, JSON.stringify(MEMORY_DB_CACHE, null, 2));
+            saveTimeout = null;
+            isSaving = false;
+        } catch (e) {
+            console.error("DB Save Error:", e);
+            saveTimeout = null;
+            isSaving = false;
+        }
+    }, 3000);
+    
+    return true;
+};
+
+// Immediate save for critical operations (e.g. backup, restore)
+export const saveDbImmediate = (data) => {
     try {
         MEMORY_DB_CACHE = data;
+        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
         return true;
     } catch (e) {
-        console.error("DB Save Error:", e);
+        console.error("Immediate DB Save Error:", e);
         return false;
     }
 };

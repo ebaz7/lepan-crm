@@ -76,7 +76,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors()); 
 // Maximum compression for speed
-app.use(compression({ level: 9 })); 
+app.use(compression({ level: 5 })); 
 // INCREASED LIMIT TO 1GB TO SUPPORT FULL SYSTEM RESTORE (Files + DB)
 app.use(express.json({ limit: '1024mb' })); 
 app.use(express.urlencoded({ limit: '1024mb', extended: true }));
@@ -1063,7 +1063,8 @@ app.post('/api/emergency-restore', (req, res) => {
                 const dbContent = zip.readAsText(dbEntry);
                 fs.writeFileSync(DB_FILE, dbContent);
                 // UPDATE MEMORY
-                MEMORY_DB_CACHE = JSON.parse(dbContent);
+                const parsed = JSON.parse(dbContent);
+                dbManager.saveDbImmediate(parsed); 
                 console.log("✅ Database restored.");
             }
             
@@ -1081,9 +1082,7 @@ app.post('/api/emergency-restore', (req, res) => {
             const parsed = JSON.parse(jsonStr);
             if (!parsed.settings && !parsed.users) throw new Error("Invalid backup file");
             
-            fs.writeFileSync(DB_FILE, jsonStr);
-            // UPDATE MEMORY
-            MEMORY_DB_CACHE = parsed;
+            dbManager.saveDbImmediate(parsed);
             
             res.json({ success: true, mode: 'json' });
         }
