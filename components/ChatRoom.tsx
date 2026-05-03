@@ -8,7 +8,7 @@ import {
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
-    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft
+    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
 
@@ -159,6 +159,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const recordingTimerRef = useRef<any>(null);
     const recordedMimeTypeRef = useRef<string>('');
     const recordingStartTimeRef = useRef<number>(0);
+
+    const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
 
     // --- Refs ---
     const messagesEndRef = useRef<HTMLDivElement>(null);
