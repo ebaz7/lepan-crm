@@ -844,11 +844,12 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                         return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
                     });
                     btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
-                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nنکات مهم:\n۱. حتماً در کانال بالا عضو شوید.\n۲. ربات باید در کانال "مدیر (Administrator)" باشد تا بتواند عضویت شما را چک کند.\n۳. حدود ۱۰ ثانیه پس از عضویت، مجدداً دکمه تایید را بزنید.\n\n(آیدی بررسی شده: ${userId} در کانال ${missingChannels[0].id})`, {
+                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nلطفاً ابتدا در کانال عضو شده و حدود ۱۰ ثانیه صبر کنید، سپس مجدداً دکمه تایید را بزنید.`, {
                         reply_markup: { inline_keyboard: btns }
                     });
                 } else {
-                    // Re-trigger start logic
+                    // Success! 
+                    await sendFn(chatId, "✅ عضویت شما تایید شد. خوش آمدید!");
                     return handleMessage(platform, chatId, '/start', sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
                 }
             }
@@ -860,7 +861,16 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'GUEST_START_REG') {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         sessions[userId].state = 'GUEST_REG_NAME';
-        return sendFn(chatId, "👤 لطفاً نام و نام خانوادگی خود را وارد کنید:");
+        return sendFn(chatId, "👤 لطفاً نام و نام خانوادگی خود را وارد کنید (اختیاری):", {
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_NAME' }]] }
+        });
+    }
+    if (data === 'SKIP_REG_NAME') {
+        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+        sessions[userId].state = 'GUEST_REG_MOBILE';
+        return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }]] }
+        });
     }
     if (data === 'SKIP_REG_MOBILE') {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
