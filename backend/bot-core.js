@@ -14,6 +14,14 @@ const findNextGapNumber = utils.findNextGapNumber;
 const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
 
+const normalizeChannelId = (id) => {
+    if (!id) return id;
+    id = id.toString().trim();
+    if (id.startsWith('-100') || id.startsWith('-')) return id;
+    if (!id.startsWith('@') && isNaN(Number(id))) return `@${id}`;
+    return id;
+};
+
 // Session memory
 export const sessions = {}; 
 const lastSentIds = new Set(); // Simple de-duplication for notifications
@@ -253,17 +261,27 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             if (platform === 'bale') newSub.baleChatId = chatId;
             db.botSubscribers.push(newSub);
             saveDb(db);
+        } else {
+            // Already sub, check if we should continue onboarding
         }
         
         const user = resolveUser(db, platform, chatId);
         
+        // --- CHANNEL JOIN CHECK ---
         if (!user && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
                     if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
-                        const isMember = await checkMembershipFn(chatId, ch.id);
-                        if (!isMember) missingChannels.push(ch);
+                        try {
+                            const normalizedId = normalizeChannelId(ch.id);
+                            const isMember = await checkMembershipFn(chatId, normalizedId);
+                            console.log(`[Join Check] User ${chatId} on ${platform} for channel ${normalizedId}: ${isMember}`);
+                            if (!isMember) missingChannels.push(ch);
+                        } catch (e) {
+                            console.error(`[Join Check Error] ${e.message}`);
+                            missingChannels.push(ch); 
+                        }
                     }
                 }
                 if (missingChannels.length > 0) {
@@ -280,6 +298,24 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                         reply_markup: { inline_keyboard: btns }
                     });
                 }
+            }
+        }
+
+        // --- ONBOARDING FOR GUESTS ---
+        if (!user) {
+            const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+            
+            // If sub exists but lacks info, and we haven't asked yet or user just started
+            if (sub && !sub.fullName && !sub.mobile && !sub.birthday && session.state === 'IDLE') {
+                session.state = 'GUEST_REG_CONFIRM';
+                return sendFn(chatId, `🎉 خوش آمدید! آیا مایل هستید پروفایل خود را تکمیل کنید تا از خدمات بهتر ما بهره‌مند شوید؟ (اختیاری)`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '✅ بله، تکمیل مشخصات', callback_data: 'GUEST_START_REG' }],
+                            [{ text: 'خیر، بعداً', callback_data: 'GUEST_MAIN' }]
+                        ]
+                    }
+                });
             }
         }
 
@@ -588,6 +624,43 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, `✅ بیجک خروج #${nextSeq} ثبت شد.`);
     }
 
+    // --- GUEST REGISTRATION STATES ---
+    if (session.state === 'GUEST_REG_NAME') {
+        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+        if (sub) {
+            sub.fullName = text;
+            saveDb(db);
+        }
+        session.state = 'GUEST_REG_MOBILE';
+        return sendFn(chatId, "📱 لطفاً شماره موبایل خود را وارد کنید (اختیاری):", {
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_MOBILE' }]] }
+        });
+    }
+
+    if (session.state === 'GUEST_REG_MOBILE') {
+        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+        if (sub) {
+            sub.mobile = text;
+            saveDb(db);
+        }
+        session.state = 'GUEST_REG_BIRTHDAY';
+        return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
+        });
+    }
+
+    if (session.state === 'GUEST_REG_BIRTHDAY') {
+        const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+        if (sub) {
+            sub.birthday = text;
+            saveDb(db);
+        }
+        session.state = 'IDLE';
+        return sendFn(chatId, "✅ با تشکر! اطلاعات شما ثبت شد.", {
+            reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
+        });
+    }
+
     return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
 
@@ -750,8 +823,15 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {
                     if (ch.id && (!ch.platform || ch.platform === platform || ch.platform === 'all')) {
-                        const isMember = await checkMembershipFn(userId, ch.id);
-                        if (!isMember) missingChannels.push(ch);
+                        try {
+                            const normalizedId = normalizeChannelId(ch.id);
+                            const isMember = await checkMembershipFn(userId, normalizedId);
+                            console.log(`[Join Callback] User ${userId} on ${platform} for channel ${normalizedId}: ${isMember}`);
+                            if (!isMember) missingChannels.push(ch);
+                        } catch (e) {
+                            console.error(`[Join Callback Err] ${e.message}`);
+                            missingChannels.push(ch);
+                        }
                     }
                 }
                 if (missingChannels.length > 0) {
@@ -764,7 +844,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                         return [{ text: `عضویت در ${ch.name || 'کانال'}`, url: link }];
                     });
                     btns.push([{ text: '✅ عضو شدم', callback_data: 'CHECK_JOIN' }]);
-                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nنکات مهم:\n۱. حتماً در کانال بالا عضو شوید.\n۲. ربات باید در کانال "مدیر (Administrator)" باشد تا بتواند عضویت شما را چک کند.\n۳. حدود ۱۰ ثانیه پس از عضویت، مجدداً دکمه تایید را بزنید.`, {
+                    return sendFn(chatId, `⚠️ تایید عضویت شما در ${platform === 'bale' ? 'بله' : 'تلگرام'} ناموفق بود.\n\nنکات مهم:\n۱. حتماً در کانال بالا عضو شوید.\n۲. ربات باید در کانال "مدیر (Administrator)" باشد تا بتواند عضویت شما را چک کند.\n۳. حدود ۱۰ ثانیه پس از عضویت، مجدداً دکمه تایید را بزنید.\n\n(آیدی بررسی شده: ${userId} در کانال ${missingChannels[0].id})`, {
                         reply_markup: { inline_keyboard: btns }
                     });
                 } else {
@@ -774,6 +854,27 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             }
         }
         return;
+    }
+
+    // --- REGISTRATION BUTTONS ---
+    if (data === 'GUEST_START_REG') {
+        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+        sessions[userId].state = 'GUEST_REG_NAME';
+        return sendFn(chatId, "👤 لطفاً نام و نام خانوادگی خود را وارد کنید:");
+    }
+    if (data === 'SKIP_REG_MOBILE') {
+        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+        sessions[userId].state = 'GUEST_REG_BIRTHDAY';
+        return sendFn(chatId, "🎂 لطفاً تاریخ تولد خود را وارد کنید (مثال: 1370/05/12) (اختیاری):", {
+            reply_markup: { inline_keyboard: [[{ text: '⏩ رد کردن', callback_data: 'SKIP_REG_BIRTHDAY' }]] }
+        });
+    }
+    if (data === 'SKIP_REG_BIRTHDAY') {
+        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+        sessions[userId].state = 'IDLE';
+        return sendFn(chatId, "✅ ثبت‌نام متوقف شد. خوش آمدید!", {
+            reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
+        });
     }
 
     if (!user && data.startsWith('GUEST_')) {

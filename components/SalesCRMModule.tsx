@@ -6,19 +6,39 @@ import { getSettings, saveSettings } from '../services/storageService';
 
 export default function SalesCRMModule() {
     const [contacts, setContacts] = useState<SalesContact[]>([]);
+    const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<'contacts' | 'bot_leads'>('contacts');
     const [template, setTemplate] = useState<BirthdayGreetingTemplate>({ text: 'تولدت مبارک عزیز!', isActive: true });
     
-    useEffect(() => {
+    const fetchData = async () => {
         getSettings().then(s => {
             if (s.salesContacts) setContacts(s.salesContacts);
             if (s.birthdayGreetingTemplate) setTemplate(s.birthdayGreetingTemplate);
         });
+        try {
+            const subs = await apiCall<any[]>('/bot-subscribers');
+            setBotSubscribers(subs);
+        } catch (e) {}
+    };
+
+    useEffect(() => {
+        fetchData();
     }, []);
 
     const updateContacts = async (newContacts: SalesContact[]) => {
         setContacts(newContacts);
         const s = await getSettings();
         await saveSettings({ ...s, salesContacts: newContacts });
+    };
+
+    const handleDeleteBotSub = async (id: string) => {
+        if (!confirm('آیا از حذف این عضو اطمینان دارید؟')) return;
+        try {
+            await apiCall(`/bot-subscribers/${id}`, 'DELETE');
+            fetchData();
+        } catch (e) {
+            alert('خطا در حذف عضو');
+        }
     };
 
     const updateTemplate = async (newTemplate: BirthdayGreetingTemplate) => {
@@ -138,130 +158,192 @@ export default function SalesCRMModule() {
         <div className="p-6 space-y-6">
             <h2 className="text-2xl font-black text-gray-800">مدیریت مخاطبین فروش</h2>
             
-            {/* Bulk Messaging */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                <h3 className="font-bold text-lg mb-4">ارسال پیام همگانی به مشتریان</h3>
-                <div className="space-y-4">
-                    <div className="flex gap-4 mb-2">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
-                            <input type="radio" checked={broadcastTarget === 'all_subscribers'} onChange={() => setBroadcastTarget('all_subscribers')} />
-                            <span>همه اعضای ربات</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
-                            <input type="radio" checked={broadcastTarget === 'users'} onChange={() => setBroadcastTarget('users')} />
-                            <span>فقط کارکنان</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
-                            <input type="radio" checked={broadcastTarget === 'contacts'} onChange={() => setBroadcastTarget('contacts')} />
-                            <span>فقط لیست مشتریان</span>
-                        </label>
-                    </div>
-                    <textarea 
-                        className="w-full p-3 border rounded-xl"
-                        rows={3}
-                        placeholder="متن پیام همگانی..."
-                        value={broadcastMessage}
-                        onChange={e => setBroadcastMessage(e.target.value)}
-                        disabled={isBroadcasting}
-                    />
-                    <button disabled={isBroadcasting} onClick={handleBroadcast} className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl font-bold transition-colors ${isBroadcasting ? 'bg-purple-400' : 'bg-purple-600 hover:bg-purple-700'}`}>
-                        <Save size={18}/> {isBroadcasting ? 'در حال ارسال...' : 'ارسال به همه بر اساس فیلتر'}
-                    </button>
-                    <p className="text-[10px] text-gray-400">نکته: پیام همگانی به پلتفرم‌هایی که کاربر در آن عضو است (تلگرام/بله) ارسال می‌شود.</p>
-                </div>
+            {/* Tabs for Navigation */}
+            <div className="flex border-b border-gray-200">
+                <button 
+                    onClick={() => setActiveTab('contacts')}
+                    className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'contacts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}
+                >
+                    👥 لیست مخاطبین فروش
+                </button>
+                <button 
+                    onClick={() => setActiveTab('bot_leads')}
+                    className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'bot_leads' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}
+                >
+                    🤖 لیدهای جمع‌آوری شده از ربات
+                </button>
             </div>
 
-            {/* Birthday Template Settings */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Gift className="text-pink-500"/> تنظیمات تبریک تولد</h3>
-                <div className="space-y-4">
-                    <textarea 
-                        value={template.text}
-                        onChange={e => setTemplate({...template, text: e.target.value})}
-                        className="w-full p-3 border rounded-xl"
-                        rows={3}
-                        placeholder="متن تبریک..."
-                    />
-                    <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={template.isActive} onChange={e => setTemplate({...template, isActive: e.target.checked})} />
-                        فعال‌سازی ارسال خودکار تبریک
-                    </label>
-                    <button onClick={handleSaveTemplate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700">
-                        <Save size={18}/> ذخیره متن
-                    </button>
-                </div>
-            </div>
-
-            {/* Contacts Table / Cards */}
-            <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                    <h3 className="font-bold text-lg">لیست مخاطبین</h3>
-                    <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                        <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-gray-200">
-                             <Upload size={18}/> ایمپورت
-                             <input type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
-                        </label>
-                        <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> نمونه</button>
-                        <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> اکسپورت</button>
-                        <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100"><Plus size={18}/> افزودن دستی</button>
-                    </div>
-                </div>
-
-                {/* Desktop View */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-sm text-right">
-                        <thead>
-                            <tr className="border-b bg-gray-50 text-gray-500">
-                                <th className="p-4 font-bold text-right">نام مشتری</th>
-                                <th className="p-4 font-bold text-center">شماره موبایل</th>
-                                <th className="p-4 font-bold text-center">تاریخ تولد</th>
-                                <th className="p-4 font-bold text-center">تبریک تولد</th>
-                                <th className="p-4 font-bold text-center">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {contacts.map(c => (
-                                <tr key={c.id} className="border-b hover:bg-gray-50 transition-colors">
-                                    <td className="p-4 font-bold text-gray-800">{c.name}</td>
-                                    <td className="p-4 text-center font-mono">{c.mobile}</td>
-                                    <td className="p-4 text-center">{c.birthday || '-'}</td>
-                                    <td className="p-4 text-center">
-                                        {c.sendBirthdayGreeting ? 
-                                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">فعال</span> : 
-                                            <span className="bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-[10px] font-bold">غیرفعال</span>
-                                        }
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex justify-center gap-2">
-                                            <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16}/></button>
-                                            <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {contacts.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">هیچ مخاطبی ثبت نشده است.</td></tr>}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile View */}
-                <div className="md:hidden space-y-4">
-                    {contacts.map(c => (
-                        <div key={c.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center group">
-                            <div>
-                                <div className="font-bold text-gray-800">{c.name}</div>
-                                <div className="text-xs text-gray-500 font-mono mt-1">{c.mobile}</div>
-                                {c.birthday && <div className="text-[10px] text-gray-400 mt-1">تولد: {c.birthday}</div>}
+            {activeTab === 'contacts' ? (
+                <>
+                    {/* Bulk Messaging */}
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                        <h3 className="font-bold text-lg mb-4">ارسال پیام همگانی به مشتریان</h3>
+                        <div className="space-y-4">
+                            <div className="flex gap-4 mb-2">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                                    <input type="radio" checked={broadcastTarget === 'all_subscribers'} onChange={() => setBroadcastTarget('all_subscribers')} />
+                                    <span>همه اعضای ربات</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                                    <input type="radio" checked={broadcastTarget === 'users'} onChange={() => setBroadcastTarget('users')} />
+                                    <span>فقط کارکنان</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                                    <input type="radio" checked={broadcastTarget === 'contacts'} onChange={() => setBroadcastTarget('contacts')} />
+                                    <span>فقط لیست مشتریان</span>
+                                </label>
                             </div>
-                            <div className="flex gap-1">
-                                <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 bg-white rounded-xl shadow-sm"><Edit2 size={16}/></button>
-                                <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 bg-white rounded-xl shadow-sm"><Trash2 size={16}/></button>
+                            <textarea 
+                                className="w-full p-3 border rounded-xl"
+                                rows={3}
+                                placeholder="متن پیام همگانی..."
+                                value={broadcastMessage}
+                                onChange={e => setBroadcastMessage(e.target.value)}
+                                disabled={isBroadcasting}
+                            />
+                            <button disabled={isBroadcasting} onClick={handleBroadcast} className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl font-bold transition-colors ${isBroadcasting ? 'bg-purple-400' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                                <Save size={18}/> {isBroadcasting ? 'در حال ارسال...' : 'ارسال به همه بر اساس فیلتر'}
+                            </button>
+                            <p className="text-[10px] text-gray-400">نکته: پیام همگانی به پلتفرم‌هایی که کاربر در آن عضو است (تلگرام/بله) ارسال می‌شود.</p>
+                        </div>
+                    </div>
+
+                    {/* Birthday Template Settings */}
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Gift className="text-pink-500"/> تنظیمات تبریک تولد</h3>
+                        <div className="space-y-4">
+                            <textarea 
+                                value={template.text}
+                                onChange={e => setTemplate({...template, text: e.target.value})}
+                                className="w-full p-3 border rounded-xl"
+                                rows={3}
+                                placeholder="متن تبریک..."
+                            />
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" checked={template.isActive} onChange={e => setTemplate({...template, isActive: e.target.checked})} />
+                                فعال‌سازی ارسال خودکار تبریک
+                            </label>
+                            <button onClick={handleSaveTemplate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700">
+                                <Save size={18}/> ذخیره متن
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Contacts Table / Cards */}
+                    <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                            <h3 className="font-bold text-lg">لیست مخاطبین</h3>
+                            <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                                <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-gray-200">
+                                     <Upload size={18}/> ایمپورت
+                                     <input type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
+                                </label>
+                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> نمونه</button>
+                                <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> اکسپورت</button>
+                                <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100"><Plus size={18}/> افزودن دستی</button>
                             </div>
                         </div>
-                    ))}
-                    {contacts.length === 0 && <div className="p-8 text-center text-gray-400 italic text-sm">لیست خالی است.</div>}
+
+                        {/* Desktop View */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-sm text-right">
+                                <thead>
+                                    <tr className="border-b bg-gray-50 text-gray-500">
+                                        <th className="p-4 font-bold text-right">نام مشتری</th>
+                                        <th className="p-4 font-bold text-center">شماره موبایل</th>
+                                        <th className="p-4 font-bold text-center">تاریخ تولد</th>
+                                        <th className="p-4 font-bold text-center">تبریک تولد</th>
+                                        <th className="p-4 font-bold text-center">عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {contacts.map(c => (
+                                        <tr key={c.id} className="border-b hover:bg-gray-50 transition-colors">
+                                            <td className="p-4 font-bold text-gray-800">{c.name}</td>
+                                            <td className="p-4 text-center font-mono">{c.mobile}</td>
+                                            <td className="p-4 text-center">{c.birthday || '-'}</td>
+                                            <td className="p-4 text-center">
+                                                {c.sendBirthdayGreeting ? 
+                                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">فعال</span> : 
+                                                    <span className="bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-[10px] font-bold">غیرفعال</span>
+                                                }
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                                                    <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {contacts.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">هیچ مخاطبی ثبت نشده است.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile View */}
+                        <div className="md:hidden space-y-4">
+                            {contacts.map(c => (
+                                <div key={c.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center group">
+                                    <div>
+                                        <div className="font-bold text-gray-800">{c.name}</div>
+                                        <div className="text-xs text-gray-500 font-mono mt-1">{c.mobile}</div>
+                                        {c.birthday && <div className="text-[10px] text-gray-400 mt-1">تولد: {c.birthday}</div>}
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 bg-white rounded-xl shadow-sm"><Edit2 size={16}/></button>
+                                        <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 bg-white rounded-xl shadow-sm"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                            {contacts.length === 0 && <div className="p-8 text-center text-gray-400 italic text-sm">لیست خالی است.</div>}
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm animate-fade-in">
+                    <h3 className="font-bold text-lg mb-6">لیست لیدهای ربات (اعضای جدید)</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-right">
+                            <thead>
+                                <tr className="border-b bg-gray-50 text-gray-500">
+                                    <th className="p-4 font-bold text-right">نام ثبت شده</th>
+                                    <th className="p-4 font-bold text-center">شماره موبایل</th>
+                                    <th className="p-4 font-bold text-center">تاریخ تولد</th>
+                                    <th className="p-4 font-bold text-center">پلتفرم</th>
+                                    <th className="p-4 font-bold text-center">شناسه چت</th>
+                                    <th className="p-4 font-bold text-center">عملیات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {botSubscribers.map(sub => (
+                                    <tr key={sub.id} className="border-b hover:bg-gray-50">
+                                        <td className="p-4 font-bold text-gray-800">{sub.fullName || '(بدون نام)'}</td>
+                                        <td className="p-4 text-center font-mono">{sub.mobile || '-'}</td>
+                                        <td className="p-4 text-center">{sub.birthday || '-'}</td>
+                                        <td className="p-4 text-center">
+                                            {sub.platform === 'telegram' ? 
+                                                <span className="text-blue-500 font-bold">تلگرام</span> : 
+                                                <span className="text-emerald-500 font-bold">بله</span>
+                                            }
+                                        </td>
+                                        <td className="p-4 text-center font-mono text-[10px] text-gray-400">
+                                            {sub.telegramChatId || sub.baleChatId || sub.chatId}
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex justify-center gap-2">
+                                                <button onClick={() => handleDeleteBotSub(sub.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {botSubscribers.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">هیچ لیدی هنوز از ربات جمع‌آوری نشده است.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Edit Modal */}
             {isModalOpen && (

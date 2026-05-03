@@ -738,6 +738,19 @@ app.post('/api/settings', (req, res) => {
 app.get('/api/users', (req, res) => {
     res.json(getDb().users);
 });
+
+// --- BOT SUBSCRIBERS API ---
+app.get('/api/bot-subscribers', (req, res) => {
+    res.json(getDb().botSubscribers || []);
+});
+
+app.delete('/api/bot-subscribers/:id', (req, res) => {
+    const db = getDb();
+    db.botSubscribers = (db.botSubscribers || []).filter(s => s.id !== req.params.id);
+    saveDb(db);
+    res.json({ success: true });
+});
+
 app.post('/api/users', (req, res) => { 
     const db = getDb(); 
     db.users.push(req.body); 

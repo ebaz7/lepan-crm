@@ -27,6 +27,7 @@ export const getDb = () => {
             groups: [], 
             tasks: [],
             subscriptions: [],
+            botSubscribers: [],
             fiscalYears: {},
             sequences: {}
         };
@@ -39,6 +40,7 @@ export const getDb = () => {
                 
                 // Ensure arrays exist
                 if (!Array.isArray(MEMORY_DB_CACHE.users)) MEMORY_DB_CACHE.users = [];
+                if (!Array.isArray(MEMORY_DB_CACHE.botSubscribers)) MEMORY_DB_CACHE.botSubscribers = [];
                 if (!Array.isArray(MEMORY_DB_CACHE.orders)) MEMORY_DB_CACHE.orders = [];
                 if (!Array.isArray(MEMORY_DB_CACHE.exitPermits)) MEMORY_DB_CACHE.exitPermits = [];
                 if (!Array.isArray(MEMORY_DB_CACHE.warehouseTransactions)) MEMORY_DB_CACHE.warehouseTransactions = [];
