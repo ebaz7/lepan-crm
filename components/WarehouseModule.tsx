@@ -103,6 +103,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [activeTab, setActiveTab] = useState(initialTab);
     const [items, setItems] = useState<WarehouseItem[]>([]);
     const [transactions, setTransactions] = useState<WarehouseTransaction[]>([]);
+    const [allTransactions, setAllTransactions] = useState<WarehouseTransaction[]>([]);
     
     // New Item State
     const [newItemName, setNewItemName] = useState('');
@@ -164,7 +165,9 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         try { 
             const [i, t] = await Promise.all([getWarehouseItems(), getWarehouseTransactions()]); 
             setItems(Array.isArray(i) ? i : []); 
-            let safeTxs = Array.isArray(t) ? t : [];
+            let rawTxs = Array.isArray(t) ? t : [];
+            setAllTransactions(rawTxs);
+            let safeTxs = rawTxs;
             if (financialYear && financialYear !== 'all') {
                 safeTxs = safeTxs.filter(tx => isInFinancialYear(tx.date, financialYear));
             }
@@ -173,6 +176,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             console.error(e); 
             setItems([]);
             setTransactions([]);
+            setAllTransactions([]);
         } finally { 
             setLoadingData(false); 
         } 
@@ -450,14 +454,29 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             const companyItems = items.map(catalogItem => {
                 let quantity = 0; let weight = 0;
                 
-                safeTransactions.filter(tx => tx.company === company && tx.status !== 'REJECTED').forEach(tx => {
-                    tx.items.forEach(txItem => {
-                        if (txItem.itemId === catalogItem.id) {
-                            if (tx.type === 'IN') { quantity += txItem.quantity; weight += txItem.weight; } 
-                            else { quantity -= txItem.quantity; weight -= txItem.weight; }
-                        }
+                // Cumulative logic: We want all transactions from all time UP TO the end of the selected financial year
+                // If financialYear is not set, we use all transactions.
+                allTransactions
+                    .filter(tx => tx.company === company && tx.status !== 'REJECTED')
+                    .filter(tx => {
+                        if (!financialYear || financialYear === 'all') return true;
+                        // Check if transaction year is <= current selected year
+                        try {
+                            const d = new Date(tx.date);
+                            const shamsi = d.toLocaleDateString('fa-IR-u-nu-latn');
+                            const year = parseInt(shamsi.split('/')[0]);
+                            const targetYear = parseInt(financialYear);
+                            return year <= targetYear;
+                        } catch (e) { return true; }
+                    })
+                    .forEach(tx => {
+                        tx.items.forEach(txItem => {
+                            if (txItem.itemId === catalogItem.id) {
+                                if (tx.type === 'IN') { quantity += txItem.quantity; weight += txItem.weight; } 
+                                else { quantity -= txItem.quantity; weight -= txItem.weight; }
+                            }
+                        });
                     });
-                });
                 const containerCapacity = catalogItem.containerCapacity || 0;
                 const containerCount = (containerCapacity > 0 && quantity > 0) ? (quantity / containerCapacity) : 0;
                 return { id: catalogItem.id, name: catalogItem.name, quantity, weight, containerCount };
@@ -465,7 +484,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             return { company, items: companyItems };
         });
         return result;
-    }, [safeTransactions, items, settings]);
+    }, [allTransactions, items, settings, financialYear]);
 
     const recentBijaks = useMemo(() => safeTransactions.filter(t => t.type === 'OUT').slice(0, 5), [safeTransactions]);
     

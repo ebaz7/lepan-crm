@@ -378,8 +378,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
               {navItems.map((item) => { const Icon = item.icon; return (<React.Fragment key={item.id}><button onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-700'}`}><Icon size={20} /><span className="font-medium">{item.label}</span></button></React.Fragment>); })}
               
               <div className="pt-4 mt-2 border-t border-slate-700 relative" ref={notifRef}>
-                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors text-sm relative ${unreadCount > 0 ? 'text-white bg-slate-700' : 'text-slate-400 hover:bg-slate-700'}`}><div className="relative"><Bell size={18} />{unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">{unreadCount}</span>)}</div><span>مرکز اعلان‌ها</span></button>
+                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-white bg-slate-700 shadow-inner' : 'text-slate-300 hover:bg-slate-700'}`}>
+                      <div className="relative">
+                          <Bell size={20} />
+                          {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-800 animate-bounce">{unreadCount}</span>)}
+                      </div>
+                      <span className="font-bold">مرکز اعلان‌ها</span>
+                  </button>
                   {showNotifDropdown && <NotificationDropdown />}
+                  
+                  {!notifEnabled && (
+                      <button onClick={handleToggleNotif} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30 animate-pulse font-black shadow-lg shadow-red-500/10 active:scale-95">
+                          <BellRing size={20} />
+                          <span>فعال‌سازی نوتـیفـیکیشـن (الزامی)</span>
+                      </button>
+                  )}
               </div>
           </nav>
           
@@ -410,6 +423,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                       </div>
                   </div>
                   
+                  {/* Notification Toggle (if not enabled) */}
+                  {!notifEnabled && (
+                      <div className="mx-5 mt-5 bg-red-50 border border-red-100 p-3 rounded-2xl flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-red-600 text-xs font-bold">
+                              <Bell size={16} />
+                              <span>اعلان‌ها غیرفعال است</span>
+                          </div>
+                          <button onClick={handleToggleNotif} className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:bg-red-700 animate-pulse">
+                              فعال‌سازی
+                          </button>
+                      </div>
+                  )}
+
                   {/* Grid Menu */}
                   <div className="p-5 grid grid-cols-3 gap-3">
                       {navItems.map((item) => {

@@ -1,15 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Upload, Download, Gift, Save, X } from 'lucide-react';
 import { SalesContact, BirthdayGreetingTemplate } from '../types';
+import { apiCall } from '../services/apiService';
+import { getSettings, saveSettings } from '../services/storageService';
 
 export default function SalesCRMModule() {
     const [contacts, setContacts] = useState<SalesContact[]>([]);
     const [template, setTemplate] = useState<BirthdayGreetingTemplate>({ text: 'تولدت مبارک عزیز!', isActive: true });
     
-    // In a real app, these would be fetched from backend
     useEffect(() => {
-        // Fetch contacts and template
+        getSettings().then(s => {
+            if (s.salesContacts) setContacts(s.salesContacts);
+            if (s.birthdayGreetingTemplate) setTemplate(s.birthdayGreetingTemplate);
+        });
     }, []);
+
+    const updateContacts = async (newContacts: SalesContact[]) => {
+        setContacts(newContacts);
+        const s = await getSettings();
+        await saveSettings({ ...s, salesContacts: newContacts });
+    };
+
+    const updateTemplate = async (newTemplate: BirthdayGreetingTemplate) => {
+        setTemplate(newTemplate);
+        const s = await getSettings();
+        await saveSettings({ ...s, birthdayGreetingTemplate: newTemplate });
+    };
 
     const exportContacts = () => {
         const headers = ["نام", "موبایل", "تلگرام", "بله", "تاریخ تولد(YYYY-MM-DD)"];
@@ -56,20 +72,20 @@ export default function SalesCRMModule() {
         }
 
         if (editingContact) {
-            setContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData } as SalesContact : c));
+            updateContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData } as SalesContact : c));
         } else {
             const newContact: SalesContact = {
                 id: Date.now().toString(),
                 ...formData as SalesContact
             };
-            setContacts([...contacts, newContact]);
+            updateContacts([...contacts, newContact]);
         }
         setIsModalOpen(false);
     };
 
     const handleDeleteContact = (id: string) => {
         if (confirm('آیا از حذف این مخاطب اطمینان دارید؟')) {
-            setContacts(contacts.filter(c => c.id !== id));
+            updateContacts(contacts.filter(c => c.id !== id));
         }
     };
 
@@ -90,11 +106,32 @@ export default function SalesCRMModule() {
     };
 
     const handleSaveTemplate = () => {
+        updateTemplate(template);
         alert('متن تبریک ذخیره شد.');
     };
 
-    const handleBroadcast = () => {
-        alert('در حال ارسال پیام همگانی...');
+    const [broadcastMessage, setBroadcastMessage] = useState('');
+    const [broadcastTarget, setBroadcastTarget] = useState<'users' | 'contacts' | 'all_subscribers'>('all_subscribers');
+    const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+    const handleBroadcast = async () => {
+        if (!broadcastMessage.trim()) {
+            alert('لطفا متن پیام را وارد کنید.');
+            return;
+        }
+        setIsBroadcasting(true);
+        try {
+            const res = await apiCall<{count: number}>('/bot/broadcast', 'POST', { 
+                message: broadcastMessage,
+                target: broadcastTarget
+            });
+            alert(`پیام همگانی با موفقیت به ${res.count} چت/کاربر ارسال شد.`);
+            setBroadcastMessage('');
+        } catch (e) {
+            alert('خطا در ارسال پیام همگانی');
+        } finally {
+            setIsBroadcasting(false);
+        }
     };
 
     return (
@@ -105,14 +142,32 @@ export default function SalesCRMModule() {
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                 <h3 className="font-bold text-lg mb-4">ارسال پیام همگانی به مشتریان</h3>
                 <div className="space-y-4">
+                    <div className="flex gap-4 mb-2">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                            <input type="radio" checked={broadcastTarget === 'all_subscribers'} onChange={() => setBroadcastTarget('all_subscribers')} />
+                            <span>همه اعضای ربات</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                            <input type="radio" checked={broadcastTarget === 'users'} onChange={() => setBroadcastTarget('users')} />
+                            <span>فقط کارکنان</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                            <input type="radio" checked={broadcastTarget === 'contacts'} onChange={() => setBroadcastTarget('contacts')} />
+                            <span>فقط لیست مشتریان</span>
+                        </label>
+                    </div>
                     <textarea 
                         className="w-full p-3 border rounded-xl"
                         rows={3}
                         placeholder="متن پیام همگانی..."
+                        value={broadcastMessage}
+                        onChange={e => setBroadcastMessage(e.target.value)}
+                        disabled={isBroadcasting}
                     />
-                    <button onClick={handleBroadcast} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700">
-                        <Save size={18}/> ارسال به همه
+                    <button disabled={isBroadcasting} onClick={handleBroadcast} className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl font-bold transition-colors ${isBroadcasting ? 'bg-purple-400' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                        <Save size={18}/> {isBroadcasting ? 'در حال ارسال...' : 'ارسال به همه بر اساس فیلتر'}
                     </button>
+                    <p className="text-[10px] text-gray-400">نکته: پیام همگانی به پلتفرم‌هایی که کاربر در آن عضو است (تلگرام/بله) ارسال می‌شود.</p>
                 </div>
             </div>
 
@@ -237,12 +292,13 @@ export default function SalesCRMModule() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">تاریخ تولد</label>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">تاریخ تولد (شمسی)</label>
                                     <input 
-                                        type="date"
-                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all text-sm"
-                                        value={formData.birthday}
+                                        type="text"
+                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all text-sm dir-ltr text-right font-mono"
+                                        value={formData.birthday || ''}
                                         onChange={e => setFormData({...formData, birthday: e.target.value})}
+                                        placeholder="مثال: 1370/05/12"
                                     />
                                 </div>
                                 <div className="flex flex-col justify-end">

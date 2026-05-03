@@ -218,6 +218,17 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
                             </div>
                         </div>
                         <div className="flex gap-2 w-full md:w-auto justify-end">
+                            {y.id !== settings.activeFiscalYearId && (
+                                <button onClick={async () => {
+                                    if(confirm('آیا مطمئن هستید که می‌خواهید سال مالی فعال را تغییر دهید؟')) {
+                                        const newSettings = { ...settings, activeFiscalYearId: y.id };
+                                        await saveSettings(newSettings);
+                                        window.location.reload();
+                                    }
+                                }} className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg border border-green-200 hover:bg-green-100 transition-colors">
+                                    تنظیم به عنوان سال فعال
+                                </button>
+                            )}
                             <button onClick={() => loadCompanyConfig(y.id, settings)} className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editingYearId === y.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
                                 تنظیم شماره شرکت‌ها
                             </button>

@@ -189,11 +189,10 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
 
 // --- PRODUCT HELPERS ---
 const formatProduct = (p) => {
-    const priceTxt = p.hidePrice ? "📞 تماس با فروش" : `${p.price?.toLocaleString() || 0} ریال`;
+    const priceTxt = p.hidePrice ? "📞 تماس با فروش" : `${Number(p.price || 0).toLocaleString()} ریال`;
     const stockTxt = p.hideStock ? "📞 تماس با فروش" : `${p.stock || 0} ${p.unit || 'عدد'}`;
-    const groupPath = `${p.group || 'بدون گروه'} > ${p.subgroup || 'سایر'}`;
     
-    return `📦 *${p.name}*\n📂 ${groupPath}\n🔢 کد: ${p.code || '-'}\n💰 قیمت: ${priceTxt}\n📊 موجودی: ${stockTxt}\n`;
+    return `📁 گروه: ${p.group || 'بدون گروه'}\n🔹 زیرگروه: ${p.subgroup || 'سایر'}\n📦 کالا: ${p.name}\n💰 قیمت: ${priceTxt}\n📊 موجودی: ${stockTxt}\n`;
 };
 
 // --- MAIN HANDLERS ---
@@ -244,6 +243,17 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         const session = sessions[chatId];
         session.state = 'IDLE';
         session.data = {};
+
+        // TRACK SUBSCRIBER
+        if (!db.botSubscribers) db.botSubscribers = [];
+        const existingSub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
+        if (!existingSub) {
+            const newSub = { id: generateUUID(), platform, joinedAt: new Date().toISOString() };
+            if (platform === 'telegram') newSub.telegramChatId = chatId;
+            if (platform === 'bale') newSub.baleChatId = chatId;
+            db.botSubscribers.push(newSub);
+            saveDb(db);
+        }
         
         const user = resolveUser(db, platform, chatId);
         
@@ -670,6 +680,55 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             }
         }
     } catch (e) { console.error("Notification Helper Error:", e); }
+};
+
+export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false) => {
+    try {
+        const settings = db.settings || {};
+        const mode = settings.botPaymentNotificationMode || 'step_by_step';
+        
+        // Mode filtering
+        if (mode === 'after_submit' && stepName !== 'ثبت اولیه') return;
+        if (mode === 'after_final' && !isFinal) return;
+
+        const tgGroupId = settings.botAccountingGroupIdTele || settings.botAccountingGroupId || '';
+        const baleGroupId = settings.botAccountingGroupIdBale || '';
+        const waGroupId = settings.botAccountingGroupIdWhatsApp || '';
+
+        if (!tgGroupId && !baleGroupId && !waGroupId) return; // No targets
+
+        // We can just format a text message, or generate an image using Renderer. For now, text message.
+        // Wait, Renderer can generate order images? No, payment orders don't have a specific `Renderer.generateRecordImage(o, 'ORDER')`. Wait, let's just use text!
+        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره پیگیری: ${o.trackingNumber}\n📅 تاریخ: ${o.date}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
+        
+        const attachFiles = o.attachments && o.attachments.length > 0;
+        if (attachFiles) caption += `\n📎 همراه با ${o.attachments.length} فایل/سند الحاقی`;
+
+        // Fire Telegram
+        if (tgGroupId && settings.telegramBotToken) {
+            const cleanId = sanitizeGroupId(tgGroupId);
+            import('./telegram.js').then(mod => {
+                if (mod?.sendBotMessage) mod.sendBotMessage(cleanId, caption).catch(e => console.error("TG Payment Notify Error:", e));
+            }).catch(e => console.error("TG Import Error", e));
+        }
+
+        // Fire Bale
+        if (baleGroupId && settings.baleBotToken) {
+            const cleanId = sanitizeGroupId(baleGroupId);
+            import('./bale.js').then(mod => {
+                if (mod?.sendBotMessage) mod.sendBotMessage(cleanId, caption).catch(e => console.error("Bale Payment Notify Error:", e));
+            }).catch(e => console.error("Bale Import Error", e));
+        }
+
+        // Fire WhatsApp
+        if (waGroupId && settings.whatsappEnabled) {
+            import('./whatsapp.js').then(mod => {
+                if (mod?.sendMessage) {
+                    mod.sendMessage(waGroupId, caption).catch(e => console.error("WA Payment Notify Error:", e));
+                }
+            }).catch(e => console.error("WA Import Error", e));
+        }
+    } catch (e) { console.error("Payment Notification Helper Error:", e); }
 };
 
 export const handleCallback = async (platform, chatId, userId, data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn) => {

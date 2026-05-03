@@ -12,7 +12,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep } from './backend/bot-core.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -356,11 +356,14 @@ app.post('/api/orders', (req, res) => {
     
     saveDb(db); 
     res.json(db.orders); 
+    
+    // Send bot group notifications
+    notifyPaymentOrderStep(order, db, 'ثبت اولیه', false).catch(e => console.error("Bot Order Notify Error:", e));
 
     // Notify relevant roles
     broadcastNotification(
         'درخواست پرداخت جدید',
-        `${order.description || 'بدون شرح'} - مبلغ: ${order.amount.toLocaleString()} ریال`,
+        `${order.description || 'بدون شرح'} - مبلغ: ${Number(order.totalAmount || 0).toLocaleString()} ریال`,
         '/payment-approvals',
         ['FINANCIAL', 'ADMIN'],
         null,
@@ -384,6 +387,11 @@ app.put('/api/orders/:id', (req, res) => {
         
         // Notification Logic for Status Change
         if (currentOrder.status !== updatedOrder.status) {
+            
+            // Send bot group notifications
+            const isFinal = updatedOrder.status === 'تایید نهایی';
+            notifyPaymentOrderStep(updatedOrder, db, updatedOrder.status, isFinal).catch(e => console.error("Bot Order Notify Error:", e));
+
             // Notify Requestor
             if (updatedOrder.requester) {
                 broadcastNotification(
@@ -797,10 +805,26 @@ app.post('/api/heartbeat', (req, res) => {
 // BROADCAST TO BOT USERS
 app.post('/api/bot/broadcast', async (req, res) => {
     try {
-        const { message, platform = 'all' } = req.body;
+        const { message, platform = 'all', target = 'all' } = req.body;
         const db = getDb();
-        const users = db.users || [];
-        const botUsers = users.filter(u => u.telegramChatId || u.baleChatId || u.whatsappChatId);
+        
+        let targetTargets = [];
+        
+        if (target === 'users') {
+            targetTargets = db.users || [];
+        } else if (target === 'contacts') {
+            targetTargets = db.settings.savedContacts || [];
+        } else if (target === 'all_subscribers') {
+            const users = db.users || [];
+            const contacts = db.settings.savedContacts || [];
+            const subscribers = db.botSubscribers || []; // We'll add this
+            targetTargets = [...users, ...contacts, ...subscribers];
+        } else {
+            // Default: All registered users who have linked their chat IDs
+            targetTargets = db.users || [];
+        }
+
+        const botUsers = targetTargets.filter(u => u.telegramChatId || u.baleChatId || u.whatsappChatId);
         
         let telegramCount = 0;
         let baleCount = 0;
@@ -809,8 +833,9 @@ app.post('/api/bot/broadcast', async (req, res) => {
             const telUsers = botUsers.filter(u => u.telegramChatId);
             if (telUsers.length > 0) {
                 const tgModule = await import('./backend/telegram.js');
-                for (const u of telUsers) {
-                    try { await tgModule.sendBotMessage(u.telegramChatId, message); telegramCount++; } catch (e) { }
+                const uniqueIds = [...new Set(telUsers.map(u => u.telegramChatId))];
+                for (const chatId of uniqueIds) {
+                    try { await tgModule.sendBotMessage(chatId, message); telegramCount++; } catch (e) { }
                 }
             }
         }
@@ -819,8 +844,9 @@ app.post('/api/bot/broadcast', async (req, res) => {
             const baleUsers = botUsers.filter(u => u.baleChatId);
             if (baleUsers.length > 0) {
                 const baleModule = await import('./backend/bale.js');
-                for (const u of baleUsers) {
-                    try { await baleModule.sendBotMessage(u.baleChatId, message); baleCount++; } catch (e) { }
+                const uniqueIds = [...new Set(baleUsers.map(u => u.baleChatId))];
+                for (const chatId of uniqueIds) {
+                    try { await baleModule.sendBotMessage(chatId, message); baleCount++; } catch (e) { }
                 }
             }
         }

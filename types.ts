@@ -209,7 +209,7 @@ export interface SystemSettings {
   botAccountingGroupIdBale?: string;
   botAccountingGroupIdWhatsApp?: string;
   botBijakGroupId?: string;
-  botPaymentNotificationMode?: 'bulk' | 'step';
+  botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' }[];
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];

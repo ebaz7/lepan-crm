@@ -563,10 +563,23 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             {/* UPDATED: Default Group Settings with 3 Columns */}
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">شناسه گروه‌های حسابداری (اتصال به ربات‌ها)</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                     <div><label className="text-xs font-bold text-gray-500 block mb-1">تلگرام (Chat ID)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdTele || ''} onChange={e => setSettings({...settings, botAccountingGroupIdTele: e.target.value})} placeholder="-100..." /></div>
                                     <div><label className="text-xs font-bold text-gray-500 block mb-1">بله (شناسه گروه/کانال)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdBale || ''} onChange={e => setSettings({...settings, botAccountingGroupIdBale: e.target.value})} placeholder="ID..." /></div>
                                     <div><label className="text-xs font-bold text-gray-500 block mb-1">واتساپ (ID گروه)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdWhatsApp || ''} onChange={e => setSettings({...settings, botAccountingGroupIdWhatsApp: e.target.value})} placeholder="...@g.us" /></div>
+                                </div>
+                                <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                                    <label className="text-xs font-bold text-blue-700 block mb-2">زمان‌بندی اطلاع‌رسانی دستور پرداخت به گروه‌ها</label>
+                                    <select 
+                                        className="w-full border rounded-lg p-2 text-sm bg-white"
+                                        value={settings.botPaymentNotificationMode || 'step_by_step'}
+                                        onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as any})}
+                                    >
+                                        <option value="after_submit">بلافاصله پس از ثبت درخواست (توسط درخواست‌کننده)</option>
+                                        <option value="after_final">فقط پس از تایید نهایی مدیرعامل</option>
+                                        <option value="step_by_step">مرحله به مرحله (پس از هر تایید)</option>
+                                    </select>
+                                    <p className="text-[10px] text-blue-600 mt-2 font-medium">نکته: پیام‌ها به تمام گروه‌های تعریف شده بالا (تلگرام و بله) به صورت همزمان ارسال خواهند شد.</p>
                                 </div>
                             </div>
                             
@@ -849,9 +862,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                     <div className="mt-2">
                                         <label className="text-sm font-bold text-gray-700 block mb-1">حالت ارسال دستورپرداخت (بات تلگرام)</label>
-                                        <select value={settings.botPaymentNotificationMode || 'bulk'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'bulk'|'step'})} className="w-full border rounded-lg p-2 text-sm bg-white">
-                                            <option value="bulk">ارسال یکجای جزئیات و مدارک پس از تایید نهایی</option>
-                                            <option value="step">ارسال مرحله به مرحله تاییدیه</option>
+                                        <select value={settings.botPaymentNotificationMode || 'step_by_step'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'after_submit'|'after_final'|'step_by_step'})} className="w-full border rounded-lg p-2 text-sm bg-white">
+                                            <option value="after_submit">بعد از ثبت درخواست</option>
+                                            <option value="after_final">بعد از تایید نهایی</option>
+                                            <option value="step_by_step">مرحله به مرحله (بعد از هر وضعیت)</option>
                                         </select>
                                     </div>
                                     <div className="mt-2">
