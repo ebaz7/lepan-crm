@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustomerTicket } from '../types';
 import { Check, X, Send, Search, UserIcon } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
 
 export const Tickets: React.FC = () => {
   const [tickets, setTickets] = useState<CustomerTicket[]>([]);
@@ -95,7 +94,7 @@ export const Tickets: React.FC = () => {
                         <div key={m.id} className={`flex ${m.sender === 'admin' ? 'justify-start' : 'justify-end'}`}>
                             <div className={`max-w-[70%] p-3 rounded-xl border ${m.sender === 'admin' ? 'bg-blue-600 outline-blue-600 border-transparent rounded-tr-none text-white' : 'bg-gray-100 border-gray-200 rounded-tl-none text-gray-800'}`}>
                                 <div className={`text-[10px] font-bold mb-1 ${m.sender === 'admin' ? 'text-blue-100' : 'text-gray-500'}`}>{m.sender === 'admin' ? 'شما' : 'مشتری'}</div>
-                                <div className="text-sm whitespace-pre-wrap leading-relaxed space-y-1"><ReactMarkdown>{m.text}</ReactMarkdown></div>
+                                <div className="text-sm whitespace-pre-wrap leading-relaxed space-y-1">{m.text}</div>
                             </div>
                         </div>
                     ))}
