@@ -278,11 +278,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             // Already sub, check if we should continue onboarding
         }
         
-        const user = resolveUser(db, platform, senderId || chatId);
-        const isGroup = chatId.toString().startsWith('-') || 
-                      (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
-                      (senderId && senderId.toString() !== chatId.toString());
-
         // --- SALES REPLY HANDLER ---
         if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
             const isSalesUser = user && (settings.salesNotificationUsers || []).includes(user.username);
@@ -410,8 +405,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
-
-    const user = resolveUser(db, platform, chatId);
     if (!user) {
         // Handle guest states
         if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
@@ -1199,19 +1192,19 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         const group = data.replace('SALES_GROUP_', '');
         const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group);
         const subgroups = [...new Set(products.map(p => p.subgroup || 'سایر'))].sort();
-        
-            const buttons = subgroups.map(sg => [
-                { text: `🔹 ${sg}`, callback_data: `SALES_SUB|${group}|${sg}` }
-            ]);
-            buttons.push([{ text: '🔙 انتخاب گروه دیگر', callback_data: 'SALES_GROUPS' }]);
-            
-            return sendFn(chatId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
-        }
-    
-        if (data.startsWith('SALES_SUB|')) {
-            const parts = data.split('|');
-            const group = parts[1];
-            const subgroup = parts[2];
+
+        const buttons = subgroups.map(sg => [
+            { text: `🔹 ${sg}`, callback_data: `SALES_SUB|${group}|${sg}` }
+        ]);
+        buttons.push([{ text: '🔙 انتخاب گروه دیگر', callback_data: 'SALES_GROUPS' }]);
+
+        return sendFn(chatId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+    }
+
+    if (data.startsWith('SALES_SUB|')) {
+        const parts = data.split('|');
+        const group = parts[1];
+        const subgroup = parts[2];
         const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group && (p.subgroup || 'سایر') === subgroup);
         
         let res = `📁 ${group} > 🔹 ${subgroup}\n\n`;
