@@ -283,7 +283,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         
         // --- SALES REPLY HANDLER ---
         if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
-            const isSalesUser = user && (settings.salesNotificationUsers || []).includes(user.username);
+            const isSalesUser = user && (settings.salesNotificationUsers || []).some(item => (typeof item === 'string' ? item === user.username : item.username === user.username));
             const isAdminUser = user && user.role === 'admin';
             
             if (isSalesUser || isAdminUser) {
@@ -470,11 +470,18 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                  const baleModule = await import('./bale.js');
                  const tgModule = await import('./telegram.js');
                  
-                 for (const username of settings.salesNotificationUsers) {
+                 for (const item of settings.salesNotificationUsers) {
+                     const username = typeof item === 'string' ? item : item.username;
+                     const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
+                     
                      const targetUser = db.users.find(u => u.username === username);
                      if (targetUser) {
-                         if (targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
-                         if (targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         if (platforms.includes('telegram') && targetUser.telegramChatId) {
+                             tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                         }
+                         if (platforms.includes('bale') && targetUser.baleChatId) {
+                             baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         }
                      }
                  }
             }

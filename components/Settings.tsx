@@ -151,7 +151,17 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
 
   useEffect(() => { 
       if (propSettings) {
-          setSettings(propSettings);
+          // Normalize salesNotificationUsers if it's the old format (string[])
+          const normalizedSettings = { ...propSettings };
+          if (Array.isArray(normalizedSettings.salesNotificationUsers)) {
+              normalizedSettings.salesNotificationUsers = normalizedSettings.salesNotificationUsers.map((u: any) => {
+                  if (typeof u === 'string') {
+                      return { username: u, platforms: ['telegram', 'bale'] };
+                  }
+                  return u;
+              });
+          }
+          setSettings(normalizedSettings);
       } else {
           loadSettings();
       }
@@ -903,27 +913,70 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             </div>
                                             <div>
                                                 <label className="text-xs font-bold text-gray-500 block mb-1">دریافت‌کنندگان پیام‌های فروش (اعلان در ربات)</label>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2 bg-white">
-                                                    {(settings.salesNotificationUsers || []).map(username => {
+                                                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto border rounded p-2 bg-white">
+                                                    {(settings.salesNotificationUsers || []).map(item => {
+                                                        const username = typeof item === 'string' ? item : item.username;
+                                                        const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
                                                         const u = systemUsers.find(user => user.username === username);
+                                                        
+                                                        const togglePlatform = (p: string) => {
+                                                            const current = (settings.salesNotificationUsers || []).map(prevItem => {
+                                                                const prevUsername = typeof prevItem === 'string' ? prevItem : prevItem.username;
+                                                                if (prevUsername !== username) return prevItem;
+                                                                
+                                                                const prevPlatforms = typeof prevItem === 'string' ? ['telegram', 'bale'] : prevItem.platforms;
+                                                                const nextPlatforms = prevPlatforms.includes(p) 
+                                                                    ? prevPlatforms.filter(pl => pl !== p)
+                                                                    : [...prevPlatforms, p];
+                                                                
+                                                                return { username: prevUsername, platforms: nextPlatforms };
+                                                            });
+                                                            setSettings({...settings, salesNotificationUsers: current});
+                                                        };
+
                                                         return (
-                                                            <label key={username} className="flex items-center justify-between gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer group">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                                                                    <span>{u ? u.fullName : username} {u ? `(@${u.username})` : '(آیدی دستی)'}</span>
+                                                            <div key={username} className="flex flex-col border-b last:border-0 pb-2 mb-2 last:mb-0">
+                                                                <div className="flex items-center justify-between gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer group">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                                                        <span className="font-bold">{u ? u.fullName : username} {u ? `(@${u.username})` : '(آیدی دستی)'}</span>
+                                                                    </div>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            const updated = (settings.salesNotificationUsers || []).filter(prevItem => {
+                                                                                const prevUsername = typeof prevItem === 'string' ? prevItem : prevItem.username;
+                                                                                return prevUsername !== username;
+                                                                            });
+                                                                            setSettings({...settings, salesNotificationUsers: updated});
+                                                                        }}
+                                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        <X size={14} />
+                                                                    </button>
                                                                 </div>
-                                                                <button 
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.preventDefault();
-                                                                        const updated = (settings.salesNotificationUsers || []).filter(un => un !== username);
-                                                                        setSettings({...settings, salesNotificationUsers: updated});
-                                                                    }}
-                                                                    className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                >
-                                                                    <X size={14} />
-                                                                </button>
-                                                            </label>
+                                                                <div className="flex gap-4 mt-1 px-4">
+                                                                    <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={platforms.includes('telegram')} 
+                                                                            onChange={() => togglePlatform('telegram')}
+                                                                            className="w-3 h-3"
+                                                                        />
+                                                                        <span>تلگرام</span>
+                                                                    </label>
+                                                                    <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={platforms.includes('bale')} 
+                                                                            onChange={() => togglePlatform('bale')}
+                                                                            className="w-3 h-3"
+                                                                        />
+                                                                        <span>بله</span>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
                                                         );
                                                     })}
                                                     {(settings.salesNotificationUsers || []).length === 0 && <div className="text-[10px] text-gray-400 col-span-2 text-center py-2">موردی انتخاب نشده است.</div>}
@@ -931,11 +984,11 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <div className="mt-4 border-t pt-2">
                                                     <label className="text-[10px] font-bold text-gray-400 block mb-1">انتخاب از کاربران سیستم:</label>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {systemUsers.filter(u => !(settings.salesNotificationUsers || []).includes(u.username)).map(u => (
+                                                        {systemUsers.filter(u => !(settings.salesNotificationUsers || []).some(item => (typeof item === 'string' ? item === u.username : item.username === u.username))).map(u => (
                                                             <button 
                                                                 key={u.id} 
                                                                 type="button" 
-                                                                onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), u.username]})}
+                                                                onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), {username: u.username, platforms: ['telegram', 'bale']}]})}
                                                                 className="text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-2 py-1 rounded transition-colors"
                                                             >
                                                                 + {u.fullName}
@@ -954,8 +1007,8 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                 const val = e.currentTarget.value.trim();
                                                                 if (val) {
                                                                     const current = settings.salesNotificationUsers || [];
-                                                                    if (!current.includes(val)) {
-                                                                        setSettings({...settings, salesNotificationUsers: [...current, val]});
+                                                                    if (!current.some(item => (typeof item === 'string' ? item === val : item.username === val))) {
+                                                                        setSettings({...settings, salesNotificationUsers: [...current, {username: val, platforms: ['telegram', 'bale']}]});
                                                                     }
                                                                     e.currentTarget.value = '';
                                                                 }
