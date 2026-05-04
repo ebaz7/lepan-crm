@@ -12,10 +12,38 @@ const BackupManager: React.FC = () => {
     // Auto Backup List
     const [autoBackups, setAutoBackups] = useState<any[]>([]);
     const [loadingBackups, setLoadingBackups] = useState(false);
+    
+    // Backup Configuration
+    const [backupInterval, setBackupInterval] = useState(3);
+    const [backupMode, setBackupMode] = useState<'full' | 'db-only'>('full');
+    const [savingSettings, setSavingSettings] = useState(false);
 
     useEffect(() => {
         fetchAutoBackups();
+        loadBackupSettings();
     }, []);
+
+    const loadBackupSettings = async () => {
+        try {
+            const settings = await apiCall<any>('/settings');
+            if (settings) {
+                setBackupInterval(settings.backupIntervalHours || 3);
+                setBackupMode(settings.backupMode || 'full');
+            }
+        } catch (e) { console.error("Load settings failed", e); }
+    };
+
+    const saveBackupSettings = async () => {
+        setSavingSettings(true);
+        try {
+            await apiCall('/settings', 'POST', { 
+                backupIntervalHours: backupInterval,
+                backupMode: backupMode
+            });
+            alert('تنظیمات بکاپ با موفقیت ذخیره شد.');
+        } catch (e) { alert('خطا در ذخیره تنظیمات'); }
+        finally { setSavingSettings(false); }
+    };
 
     const fetchAutoBackups = async () => {
         setLoadingBackups(true);
@@ -194,10 +222,30 @@ const BackupManager: React.FC = () => {
                     <div className="bg-green-100 p-2 rounded-full">
                         <Clock size={20} className="text-green-600 animate-pulse"/>
                     </div>
-                    <div>
-                        <span className="text-sm font-bold text-green-800 block mb-1">سیستم پشتیبان‌گیری خودکار (شامل فایل‌ها)</span>
-                        <p className="text-xs text-green-700 leading-relaxed">
-                            سرور هر ۳ ساعت به طور خودکار از تمام دیتابیس و فایل‌های آپلود شده (چت، اسناد و ...) نسخه پشتیبان (ZIP) تهیه می‌کند.
+                    <div className="flex-1">
+                        <div className="flex justify-between items-center mb-2">
+                             <span className="text-sm font-bold text-green-800 block">پشتیبان‌گیری خودکار</span>
+                             <button onClick={saveBackupSettings} disabled={savingSettings} className="bg-green-600 text-white text-[10px] px-3 py-1 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1">
+                                 {savingSettings ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} ذخیره تنظیمات
+                             </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div className="bg-white p-2 rounded-lg border border-green-200">
+                                <label className="text-[10px] text-gray-500 block mb-1">بازه زمانی (ساعت)</label>
+                                <select value={backupInterval} onChange={e => setBackupInterval(Number(e.target.value))} className="w-full text-xs font-bold text-green-800 bg-transparent">
+                                    {[1, 2, 3, 6, 12, 24, 48].map(h => <option key={h} value={h}>{h} ساعت</option>)}
+                                </select>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-green-200">
+                                <label className="text-[10px] text-gray-500 block mb-1">نوع بکاپ</label>
+                                <select value={backupMode} onChange={e => setBackupMode(e.target.value as any)} className="w-full text-xs font-bold text-green-800 bg-transparent">
+                                    <option value="full">کامل (دیتابیس + فایل‌ها)</option>
+                                    <option value="db-only">فقط دیتابیس (سریع‌تر)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-green-700 leading-relaxed">
+                            سیستم طبق بازه زمانی انتخابی شما، پشتیبان تهیه می‌کند. نسخه پشتیبان شامل {backupMode === 'full' ? 'تمام دیتابیس و فایل‌های آپلود شده' : 'فقط اطلاعات متنی دیتابیس'} می‌باشد.
                         </p>
                     </div>
                 </div>

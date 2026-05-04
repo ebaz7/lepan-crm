@@ -711,6 +711,87 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
+    const handleCreateGroup = async () => {
+        if (!newGroupName.trim()) return;
+        try {
+            const newGroup: ChatGroup = {
+                id: generateUUID(),
+                name: newGroupName.trim(),
+                members: [...selectedGroupMembers, currentUser.username],
+                admins: [currentUser.username],
+                createdBy: currentUser.username,
+                createdAt: Date.now(),
+                avatar: null
+            };
+            await createGroup(newGroup);
+            setGroups(prev => [...prev, newGroup]);
+            setShowGroupModal(false);
+            setNewGroupName('');
+            setSelectedGroupMembers([]);
+            setActiveChannel({ type: 'group', id: newGroup.id });
+        } catch (e) {
+            alert('خطا در ساخت گروه');
+        }
+    };
+
+    const handleUpdateGroup = async (groupId: string, updates: Partial<ChatGroup>) => {
+        try {
+            await updateGroup(groupId, updates);
+            setGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...updates } : g));
+            if (showGroupInfo && showGroupInfo.id === groupId) {
+                setShowGroupInfo(prev => prev ? { ...prev, ...updates } : null);
+            }
+        } catch (e) {
+            alert('خطا در بروزرسانی گروه');
+        }
+    };
+
+    const handleAddMemberToGroup = async (groupId: string) => {
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const availableUsers = users.filter(u => !group.members.includes(u.username));
+        // Simple UI for member selection - in a real app this should be a modal
+        const username = prompt('نام کاربری کاربر جدید را وارد کنید:');
+        if (username && users.find(u => u.username === username)) {
+            const newMembers = [...group.members, username];
+            await handleUpdateGroup(groupId, { members: newMembers });
+        } else if (username) {
+            alert('کاربر یافت نشد');
+        }
+    };
+
+    const handleRemoveMemberFromGroup = async (groupId: string, memberUsername: string) => {
+        const group = groups.find(g => g.id === groupId);
+        if (!group || group.createdBy === memberUsername) {
+            alert('نمی‌توان سازنده گروه را حذف کرد');
+            return;
+        }
+        
+        if (confirm(`آیا از حذف ${memberUsername} اطمینان دارید؟`)) {
+            const newMembers = group.members.filter(m => m !== memberUsername);
+            const newAdmins = (group.admins || []).filter(a => a !== memberUsername);
+            await handleUpdateGroup(groupId, { members: newMembers, admins: newAdmins });
+        }
+    };
+
+    const handleToggleAdminStatus = async (groupId: string, memberUsername: string) => {
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const admins = group.admins || [];
+        const isCurrentlyAdmin = admins.includes(memberUsername);
+        
+        let newAdmins;
+        if (isCurrentlyAdmin) {
+            newAdmins = admins.filter(a => a !== memberUsername);
+        } else {
+            newAdmins = [...admins, memberUsername];
+        }
+        
+        await handleUpdateGroup(groupId, { admins: newAdmins });
+    };
+
     // --- Render Logic ---
     if (!currentUser) return null;
 
@@ -752,7 +833,65 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {activeTab === 'TASKS' ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">بخش تسک‌ها</div>
+                        <div className="flex flex-col h-full bg-gray-50">
+                            <div className="p-4 border-b bg-white">
+                                <button 
+                                    onClick={() => {
+                                        const title = prompt('عنوان تسک؟');
+                                        if (title) {
+                                            const newTask: GroupTask = {
+                                                id: generateUUID(),
+                                                groupId: activeChannel?.type === 'group' ? activeChannel.id! : 'personal',
+                                                title,
+                                                status: 'pending',
+                                                assignedTo: [],
+                                                createdBy: currentUser.username,
+                                                createdAt: Date.now()
+                                            };
+                                            createTask(newTask).then(() => {
+                                                setTasks(prev => [newTask, ...prev]);
+                                            });
+                                        }
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white p-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100"
+                                >
+                                    <Plus size={18}/> تسک جدید
+                                </button>
+                            </div>
+                            <div className="p-2 space-y-2 overflow-y-auto">
+                                {tasks.length === 0 ? (
+                                    <div className="text-center text-gray-400 py-20">
+                                        <ListTodo size={48} className="mx-auto mb-2 opacity-20"/>
+                                        <p className="text-sm">تسک یا پروژه‌ای یافت نشد</p>
+                                    </div>
+                                ) : tasks.map(task => (
+                                    <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm group">
+                                        <div className="flex items-start gap-3">
+                                            <button 
+                                                onClick={() => {
+                                                    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+                                                    updateTask(task.id, { status: newStatus }).then(() => {
+                                                        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+                                                    });
+                                                }}
+                                                className={`mt-0.5 rounded-md border-2 transition-colors ${task.status === 'completed' ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
+                                            >
+                                                {task.status === 'completed' ? <Check size={14} className="text-white"/> : <div className="w-3.5 h-3.5"/>}
+                                            </button>
+                                            <div className="flex-1 min-w-0">
+                                                <h5 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{task.title}</h5>
+                                                <div className="flex items-center justify-between mt-2">
+                                                    <span className="text-[10px] text-gray-400">{formatDate(task.createdAt)}</span>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)))} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 size={14}/></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     ) : getSortedChannels().map((item: ChannelItem) => (
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 relative group">
                             <div className="relative">
@@ -852,7 +991,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             </div>
                                         )}
                                         
-                                        <div className={`relative max-w-[85%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+                                        <div className={`relative max-w-[75%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
                                             
                                             {/* Forward Header */}
                                             {msg.isForwarded && msg.forwardFrom && (
@@ -928,7 +1067,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                     <AudioPlayer url={msg.audioUrl} isMe={isMe} duration={msg.audioDuration} />
                                                 </div>
                                             ) : (
-                                                <div className="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
+                                                <div className="whitespace-pre-wrap leading-relaxed message-content">{msg.message}</div>
                                             )}
 
                                             {/* Footer */}
@@ -1085,6 +1224,58 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 </div>
             )}
 
+            {/* 3.1 Group Creation Modal */}
+            {showGroupModal && (
+                <div className="fixed inset-0 bg-black/50 z-[202] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden animate-scale-in">
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold flex items-center gap-2"><Users size={20} className="text-orange-500"/> ساخت گروه جدید</h3>
+                            <button onClick={() => setShowGroupModal(false)} className="p-2 hover:bg-gray-200 rounded-full"><X size={20}/></button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">نام گروه</label>
+                                <input 
+                                    type="text" 
+                                    value={newGroupName} 
+                                    onChange={e => setNewGroupName(e.target.value)}
+                                    placeholder="مثلاً: واحد حسابداری"
+                                    className="w-full p-3 bg-gray-100 rounded-xl border-none outline-none focus:ring-2 focus:ring-orange-200 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">انتخاب اعضا</label>
+                                <div className="max-h-48 overflow-y-auto space-y-1 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                                    {users.filter(u => u.username !== currentUser.username).map(user => (
+                                        <label key={user.username} className="flex justify-between items-center p-2 hover:bg-white rounded-lg cursor-pointer group transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs uppercase">
+                                                    {user.fullName.charAt(0)}
+                                                </div>
+                                                <span className="text-sm">{user.fullName}</span>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedGroupMembers.includes(user.username)}
+                                                onChange={e => {
+                                                    if (e.target.checked) setSelectedGroupMembers([...selectedGroupMembers, user.username]);
+                                                    else setSelectedGroupMembers(selectedGroupMembers.filter(id => id !== user.username));
+                                                }}
+                                                className="w-4 h-4 rounded text-orange-500"
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-gray-50 border-t flex gap-3">
+                            <button onClick={handleCreateGroup} className="flex-1 bg-orange-500 text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition-colors shadow-lg shadow-orange-100">ایجاد گروه</button>
+                            <button onClick={() => setShowGroupModal(false)} className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300 transition-colors">انصراف</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 4. Group Info & Management Modal */}
             {showGroupInfo && (
                 <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -1094,18 +1285,36 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md">
                                 {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full rounded-3xl object-cover"/> : showGroupInfo.name.charAt(0)}
                             </div>
-                            <h3 className="text-xl font-black">{showGroupInfo.name}</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-xl font-black">{showGroupInfo.name}</h3>
+                                {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
+                                    <button 
+                                        onClick={() => {
+                                            const newName = prompt('نام جدید گروه را وارد کنید:', showGroupInfo.name);
+                                            if (newName && newName !== showGroupInfo.name) {
+                                                handleUpdateGroup(showGroupInfo.id, { name: newName });
+                                            }
+                                        }}
+                                        className="p-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                                    >
+                                        <Edit2 size={14}/>
+                                    </button>
+                                )}
+                            </div>
                             <p className="text-xs opacity-80 mt-1">{showGroupInfo.members.length} عضو</p>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                                 <div className="flex items-center gap-3">
-                                    <Bell size={20} className="text-gray-400"/>
+                                    <Bell size={20} className={activeChannel?.id === showGroupInfo.id && isMuted ? "text-gray-300" : "text-blue-500"}/>
                                     <span className="text-sm font-bold text-gray-700">اعلان‌ها و صدا</span>
                                 </div>
-                                <button className="w-12 h-6 bg-blue-500 rounded-full relative p-1">
-                                    <div className="w-4 h-4 bg-white rounded-full absolute right-1"></div>
+                                <button 
+                                    onClick={() => setIsMuted(!isMuted)}
+                                    className={`w-12 h-6 rounded-full relative p-1 transition-colors ${isMuted ? 'bg-gray-300' : 'bg-green-500'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${isMuted ? 'left-1' : 'right-1'}`}></div>
                                 </button>
                             </div>
 
@@ -1115,33 +1324,57 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     const u = users.find(user => user.username === username);
                                     const isCreator = showGroupInfo.createdBy === username;
                                     const isAdmin = (showGroupInfo.admins || []).includes(username);
+                                    const isMe = currentUser.username === username;
+                                    const canManage = (showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN;
                                     
                                     return (
-                                        <div key={username} className="flex items-center justify-between group">
+                                        <div key={username} className="flex items-center justify-between group/member p-2 hover:bg-gray-50 rounded-xl transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold overflow-hidden">
                                                     {u?.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
                                                 </div>
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm font-bold text-gray-800">{u?.fullName || username}</span>
+                                                    <span className="text-sm font-bold text-gray-800">{u?.fullName || username} {isMe && '(شما)'}</span>
                                                     <span className="text-[10px] text-gray-400">@{username}</span>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                {isCreator && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-bold">سازنده</span>}
-                                                {!isCreator && isAdmin && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">مدیر</span>}
+                                            <div className="flex items-center gap-1">
+                                                {isCreator && <span className="text-[9px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-bold">سازنده</span>}
+                                                {!isCreator && isAdmin && <span className="text-[9px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">مدیر</span>}
+                                                
+                                                {canManage && !isCreator && !isMe && (
+                                                    <div className="flex gap-1 ml-2">
+                                                        <button 
+                                                            onClick={() => handleToggleAdminStatus(showGroupInfo.id, username)}
+                                                            className={`p-1.5 rounded-lg hover:bg-white shadow-sm transition-all ${isAdmin ? 'text-blue-500' : 'text-gray-400'}`}
+                                                            title={isAdmin ? 'سلب مدیریت' : 'ارتقا به مدیر'}
+                                                        >
+                                                            <Shield size={14}/>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleRemoveMemberFromGroup(showGroupInfo.id, username)}
+                                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-white shadow-sm rounded-lg transition-all"
+                                                            title="حذف از گروه"
+                                                        >
+                                                            <UserMinus size={14}/>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
 
-                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                            {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
                                 <div className="pt-4 border-t space-y-2">
-                                    <button className="w-full bg-blue-50 text-blue-600 p-3 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                                        <Plus size={18}/> افزودن عضو جدید
+                                    <button 
+                                        onClick={() => handleAddMemberToGroup(showGroupInfo.id)}
+                                        className="w-full bg-blue-50 text-blue-600 p-3 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <UserPlus size={18}/> افزودن عضو جدید
                                     </button>
-                                    <button className="w-full bg-red-50 text-red-600 p-3 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors flex items-center justify-center gap-2" onClick={() => { if(confirm('گروه حذف شود؟')) { deleteGroup(showGroupInfo.id); setShowGroupInfo(null); onRefresh(); } }}>
+                                    <button onClick={() => { if(confirm('گروه حذف شود؟')) { deleteGroup(showGroupInfo.id); setShowGroupInfo(null); setActiveChannel(null); onRefresh(); } }} className="w-full bg-red-50 text-red-600 p-3 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
                                         <Trash2 size={18}/> حذف و انحلال گروه
                                     </button>
                                 </div>

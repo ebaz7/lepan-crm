@@ -274,11 +274,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
         
         const user = resolveUser(db, platform, chatId);
+        const isGroup = chatId.toString().startsWith('-') || (platform === 'bale' && chatId.toString().length > 10);
         
-    // --- CHANNEL JOIN CHECK ---
-    if (!user && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
-        if (checkMembershipFn) {
-            const missingChannels = [];
+        // --- CHANNEL JOIN CHECK ---
+        if (!user && !isGroup && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
+            if (checkMembershipFn) {
+                const missingChannels = [];
             
             // Parallelize checks for performance
             const checkPromises = settings.botForceJoinChannels.map(async (ch) => {
@@ -837,10 +838,11 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     const db = getDb();
     const settings = db.settings || {};
     const user = resolveUser(db, platform, userId);
+    const isGroup = chatId.toString().startsWith('-') || (platform === 'bale' && chatId.toString().length > 10);
     
     // GUEST HANDLERS / PRE-AUTH HANDLERS
     if (data === 'CHECK_JOIN') {
-        if ((platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels) {
+        if (!user && !isGroup && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels) {
             if (checkMembershipFn) {
                 const missingChannels = [];
                 for (const ch of settings.botForceJoinChannels) {

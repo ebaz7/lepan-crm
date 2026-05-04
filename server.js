@@ -101,12 +101,18 @@ app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache upl
 
 // Shared data logic moved to db-manager.js and utils.js
 
-// --- AUTOMATIC FULL BACKUP LOGIC (ZIP) ---
+// --- AUTOMATIC BACKUP LOGIC ---
+let activeBackupJob = null;
+
 const performAutoBackup = () => {
-    console.log(">>> Starting Automatic Full Backup (ZIP)...");
+    const db = getDb();
+    const settings = db.settings || {};
+    const mode = settings.backupMode || 'full'; // 'full' or 'db-only'
+    
+    console.log(`>>> Starting Automatic Backup (Mode: ${mode})...`);
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16); 
-        const filename = `AutoBackup_Full_${timestamp}.zip`;
+        const filename = `AutoBackup_${mode === 'full' ? 'Full' : 'DB'}_${timestamp}.zip`;
         const filePath = path.join(BACKUPS_DIR, filename);
         
         const output = fs.createWriteStream(filePath);
@@ -116,22 +122,20 @@ const performAutoBackup = () => {
             console.log(`✅ Auto Backup Created: ${filename} (${(archive.pointer() / 1024 / 1024).toFixed(2)} MB)`);
         });
 
-        archive.on('error', (err) => {
-            throw err;
-        });
-
+        archive.on('error', (err) => { throw err; });
         archive.pipe(output);
 
         if (fs.existsSync(DB_FILE)) {
             archive.file(DB_FILE, { name: 'database.json' });
         }
 
-        if (fs.existsSync(UPLOADS_DIR)) {
+        if (mode === 'full' && fs.existsSync(UPLOADS_DIR)) {
             archive.directory(UPLOADS_DIR, 'uploads');
         }
 
         archive.finalize();
         
+        // Cleanup old backups (keep last 20)
         setTimeout(() => {
             try {
                 const files = fs.readdirSync(BACKUPS_DIR).filter(f => f.startsWith('AutoBackup_')).sort();
@@ -148,8 +152,22 @@ const performAutoBackup = () => {
     }
 };
 
-cron.schedule('0 */3 * * *', performAutoBackup);
-setTimeout(performAutoBackup, 10000); 
+const setupAutoBackup = () => {
+    if (activeBackupJob) {
+        activeBackupJob.stop();
+        activeBackupJob = null;
+    }
+    
+    const db = getDb();
+    const intervalHours = Number(db.settings.backupIntervalHours) || 3;
+    console.log(`>>> Scheduling Auto Backup every ${intervalHours} hours.`);
+    
+    // Convert hours to cron expression: 0 */X * * *
+    activeBackupJob = cron.schedule(`0 */${intervalHours} * * *`, performAutoBackup);
+};
+
+setupAutoBackup();
+setTimeout(performAutoBackup, 15000); 
 
 // Shared helpers moved to utils.js
 
@@ -733,6 +751,12 @@ app.post('/api/settings', (req, res) => {
 
     db.settings = { ...db.settings, ...newSettings }; 
     saveDb(db); 
+    
+    // Reschedule backup if interval changed
+    if (newSettings.backupIntervalHours !== undefined) {
+        setupAutoBackup();
+    }
+    
     res.json(db.settings); 
 });
 app.get('/api/users', (req, res) => {
