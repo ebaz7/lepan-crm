@@ -275,6 +275,43 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         
         const user = resolveUser(db, platform, chatId);
         const isGroup = chatId.toString().startsWith('-') || (platform === 'bale' && chatId.toString().length > 10);
+
+        // --- SALES REPLY HANDLER ---
+        if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
+            const isSalesUser = user && (settings.salesNotificationUsers || []).includes(user.username);
+            const isAdminUser = user && user.role === 'admin';
+            
+            if (isSalesUser || isAdminUser) {
+                const parts = text.split(' ');
+                if (parts.length >= 3) {
+                    const targetChatId = parts[1];
+                    const replyText = parts.slice(2).join(' ');
+                    
+                    try {
+                        const baleModule = await import('./bale.js');
+                        const tgModule = await import('./telegram.js');
+                        
+                        let sent = false;
+                        try {
+                            await tgModule.sendBotMessage(targetChatId, `📩 *پاسخ از طرف پشتیبانی:*\n\n${replyText}`);
+                            sent = true;
+                        } catch (e) {}
+                        
+                        try {
+                            await baleModule.sendBotMessage(targetChatId, `📩 *پاسخ از طرف پشتیبانی:*\n\n${replyText}`);
+                            sent = true;
+                        } catch (e) {}
+
+                        if (sent) return sendFn(chatId, "✅ پاسخ شما با موفقیت برای مشتری ارسال شد.");
+                        else return sendFn(chatId, "❌ خطا در ارسال پاسخ (شناسه یافت نشد یا ربات بلاک شده است).");
+                    } catch (e) {
+                        return sendFn(chatId, "❌ خطای سیستمی در ارسال پاسخ.");
+                    }
+                } else {
+                    return sendFn(chatId, "💡 روش استفاده: `/reply [ID] [Message]`");
+                }
+            }
+        }
         
         // --- CHANNEL JOIN CHECK ---
         if (!user && !isGroup && (platform === 'telegram' || platform === 'bale') && settings.botForceJoinEnabled && settings.botForceJoinChannels && settings.botForceJoinChannels.length > 0) {
@@ -417,17 +454,35 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             db.messages.push(msgObj);
             saveDb(db);
             session.state = 'IDLE';
+            
+            // Forward to sales notification users
+            if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
+                 const forwardText = `📞 *پیام جدید از مشتری*\n👤 شناسه: \`${chatId}\`\n💬 متن: ${text}`;
+                 const baleModule = await import('./bale.js');
+                 const tgModule = await import('./telegram.js');
+                 
+                 for (const username of settings.salesNotificationUsers) {
+                     const targetUser = db.users.find(u => u.username === username);
+                     if (targetUser) {
+                         if (targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                         if (targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                     }
+                 }
+            }
+            
             return sendFn(chatId, "✅ پیام شما برای مدیریت فروش ارسال شد. در اسرع وقت با شما تماس خواهیم گرفت.", {
                 reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
             });
         }
 
-        if (session.state === 'GUEST_WAIT_ORDER_INFO') {
-            const lines = text.split('\n');
+        if (session.state === 'GUEST_WAIT_ORDER_DESC') {
+            const selectedProduct = session.data.selectedProduct;
             const orderDoc = {
                 id: generateUUID(),
                 customerChatId: chatId,
-                text: text,
+                productId: selectedProduct?.id,
+                productName: selectedProduct?.name,
+                description: text,
                 status: 'pending',
                 date: new Date().toISOString()
             };
@@ -435,7 +490,23 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             db.customerOrders.push(orderDoc);
             saveDb(db);
             session.state = 'IDLE';
-            return sendFn(chatId, "✅ سفارش شما ثبت شد و در اسرع وقت بررسی می‌گردد. کد پیگیری: " + orderDoc.id.split('-')[0], {
+            
+             // Forward to sales notification users
+            if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
+                 const forwardText = `🛒 *درخواست خرید جدید*\n👤 مشتری: \`${chatId}\`\n📦 کالا: ${selectedProduct?.name || 'نامشخص'}\n📝 توضیحات: ${text}`;
+                 const baleModule = await import('./bale.js');
+                 const tgModule = await import('./telegram.js');
+                 
+                 for (const username of settings.salesNotificationUsers) {
+                     const targetUser = db.users.find(u => u.username === username);
+                     if (targetUser) {
+                         if (targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                         if (targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                     }
+                 }
+            }
+
+            return sendFn(chatId, `✅ سفارش شما برای محصول *${selectedProduct?.name}* ثبت شد و در اسرع وقت بررسی می‌گردد.\nکد پیگیری: \`${orderDoc.id.split('-')[0]}\``, {
                 reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
             });
         }
@@ -923,7 +994,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         });
     }
 
-    if (!user && data.startsWith('GUEST_')) {
+    if (!user && (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB'))) {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         const session = sessions[userId];
 
@@ -957,7 +1028,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 });
             }
             
-            // Show groups first for guests too
             const groups = [...new Set(products.map(p => p.group || 'بدون گروه'))].sort();
             const buttons = groups.map(g => [{ text: `📁 ${g}`, callback_data: `SALES_GROUP_${g}` }]);
             buttons.push([{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]);
@@ -965,16 +1035,69 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             return sendFn(userId, "🔖 انتخاب گروه کالا:", { reply_markup: { inline_keyboard: buttons } });
         }
 
+        if (data.startsWith('SALES_GROUP_')) {
+            const group = data.replace('SALES_GROUP_', '');
+            const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group);
+            const subgroups = [...new Set(products.map(p => p.subgroup || 'سایر'))].sort();
+            
+            const buttons = subgroups.map(sg => [
+                { text: `🔹 ${sg}`, callback_data: `SALES_SUB|${group}|${sg}` }
+            ]);
+            const backBtn = (session.state || '').startsWith('GUEST_ORDER') ? 'GUEST_ORDER' : 'GUEST_PRODUCTS';
+            buttons.push([{ text: '🔙 بازگشت', callback_data: backBtn }]);
+            
+            return sendFn(userId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+        }
+
+        if (data.startsWith('SALES_SUB|')) {
+            const parts = data.split('|');
+            const group = parts[1];
+            const subgroup = parts[2];
+            const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group && (p.subgroup || 'سایر') === subgroup);
+            
+            if (session.state === 'GUEST_ORDER_SELECT_PRODUCT') {
+                 const buttons = products.map(p => [{ text: `🛒 انتخاب ${p.name}`, callback_data: `GUEST_ORDER_PICK_${p.id}` }]);
+                 buttons.push([{ text: '🔙 بازگشت', callback_data: `SALES_GROUP_${group}` }]);
+                 return sendFn(userId, `🛍️ انتخاب کالا از ${subgroup}:`, { reply_markup: { inline_keyboard: buttons } });
+            }
+
+            let res = `📁 ${group} > 🔹 ${subgroup}\n\n`;
+            products.forEach(p => {
+                res += formatProduct(p) + "------------------\n";
+            });
+            
+            return sendFn(userId, res, { reply_markup: { inline_keyboard: [[{ text: '🔙 انتخاب زیرگروه دیگر', callback_data: `SALES_GROUP_${group}` }], [{ text: '🔙 منوی اصلی', callback_data: 'GUEST_MAIN' }]] } });
+        }
+
         if (data === 'GUEST_ORDER') {
-            session.state = 'GUEST_WAIT_ORDER_INFO';
-            return sendFn(userId, "لطفا نام و نام خانوادگی، شماره تماس و لیست اقلام درخواستی خود را در یک پیام برای ما ارسال کنید:", {
-                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
+            const products = db.products || [];
+            if (products.length === 0) return sendFn(userId, "لیست محصولات خالی است.");
+            
+            session.state = 'GUEST_ORDER_SELECT_PRODUCT';
+            const groups = [...new Set(products.map(p => p.group || 'بدون گروه'))].sort();
+            const buttons = groups.map(g => [{ text: `📁 ${g}`, callback_data: `SALES_GROUP_${g}` }]);
+            buttons.push([{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]);
+            
+            return sendFn(userId, "🛒 مرحله ۱: انتخاب محصول\nلطفاً گروه محصول مورد نظر خود را انتخاب کنید:", { reply_markup: { inline_keyboard: buttons } });
+        }
+
+        if (data.startsWith('GUEST_ORDER_PICK_')) {
+            const pid = data.replace('GUEST_ORDER_PICK_', '');
+            const product = (db.products || []).find(p => p.id === pid);
+            if (!product) return sendFn(userId, "❌ کالا یافت نشد.");
+            
+            session.data.selectedProduct = product;
+            session.state = 'GUEST_WAIT_ORDER_DESC';
+            return sendFn(userId, `🛍️ محصول انتخاب شده: *${product.name}*\n\n📝 مرحله ۲: توضیحات\nلطفاً نام، شماره تماس و هرگونه توضیحات تکمیلی (تعداد، رنگ، و ...) را ارسال کنید:`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 تغییر محصول', callback_data: 'GUEST_ORDER' }]] }
             });
         }
 
         if (data === 'GUEST_CONTACT') {
             session.state = 'GUEST_WAIT_CONTACT_MSG';
-            return sendFn(userId, "لطفاً پیام خود را برای مدیر فروش بنویسید (در صورت نیاز به تماس، شماره خود را نیز درج کنید):", {
+            const defaultMsg = "لطفاً پیام خود را برای مدیر فروش بنویسید (در صورت نیاز به تماس، شماره خود را نیز درج کنید):";
+            const customMsg = settings.salesContactMessage || defaultMsg;
+            return sendFn(userId, customMsg, {
                 reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
             });
         }

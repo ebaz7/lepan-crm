@@ -214,6 +214,9 @@ export interface SystemSettings {
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
   
+  salesNotificationUsers?: string[]; // Usernames or IDs
+  salesContactMessage?: string;
+  
   // CRM / SALES
   salesContacts?: SalesContact[];
   birthdayGreetingTemplate?: BirthdayGreetingTemplate;

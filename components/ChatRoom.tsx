@@ -1344,7 +1344,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                                 <div className="flex items-center gap-3">
-                                    <Bell size={20} className={mutedChannels.has(showGroupInfo.id) ? "text-gray-300" : "text-blue-500"}/>
+                                    <Bell size={20} className={showGroupInfo && mutedChannels.has(showGroupInfo.id) ? "text-gray-300" : "text-blue-500"}/>
                                     <span className="text-sm font-bold text-gray-700">اعلان‌ها و صدا</span>
                                 </div>
                                 <button 

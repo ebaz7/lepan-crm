@@ -885,6 +885,43 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                         <label className="text-sm font-bold text-gray-700 block mb-1">گروه دستی بیجک‌ها (Telegram Chat ID)</label>
                                         <input type="text" value={settings.botBijakGroupId || ''} onChange={e => setSettings({...settings, botBijakGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
                                     </div>
+                                    
+                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+                                        <h4 className="font-bold text-sm text-gray-700">ارتباط با مشتری و مدیریت پیام‌های فروش</h4>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 block mb-1">پیام خوش‌آمدگویی بخش "ارتباط با فروش" در ربات</label>
+                                                <textarea 
+                                                    className="w-full border rounded p-2 text-sm h-20" 
+                                                    value={settings.salesContactMessage || ''} 
+                                                    onChange={e => setSettings({...settings, salesContactMessage: e.target.value})} 
+                                                    placeholder="مثلاً: لطفاً پیام خود را بنویسید..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 block mb-1">دریافت‌کنندگان پیام‌های فروش (اعلان در ربات)</label>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2 bg-white">
+                                                    {(appUsers.filter(u => 'fullName' in u) as User[]).map(u => (
+                                                        <label key={u.id} className="flex items-center gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={(settings.salesNotificationUsers || []).includes(u.username)} 
+                                                                onChange={e => {
+                                                                    const current = settings.salesNotificationUsers || [];
+                                                                    const updated = e.target.checked 
+                                                                        ? [...current, u.username]
+                                                                        : current.filter(un => un !== u.username);
+                                                                    setSettings({...settings, salesNotificationUsers: updated});
+                                                                }}
+                                                            />
+                                                            <span>{u.fullName} (@{u.username})</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 mt-1">پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد. (باید در ربات استارت کرده باشند)</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
