@@ -169,6 +169,26 @@ export interface DailySecurityMeta {
     isCeoDailyApproved?: boolean;
 }
 
+export interface TicketMessage {
+  id: string;
+  sender: 'customer' | 'admin';
+  senderName?: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface CustomerTicket {
+  id: string; // e.g. "81423"
+  chatId: string | number;
+  platform: string;
+  customerName?: string;
+  subject?: string;
+  messages: TicketMessage[];
+  status: 'OPEN' | 'CLOSED';
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface SystemSettings {
   currentTrackingNumber: number;
   currentExitPermitNumber: number;
@@ -182,6 +202,10 @@ export interface SystemSettings {
   customRoles?: CustomRole[];
   savedContacts?: Contact[];
   pwaIcon?: string;
+  botCompanyInfo?: string; // fallback / general
+  companyAddress?: string;
+  companyPhone?: string;
+  companyBank?: string;
   telegramBotToken?: string;
   telegramAdminId?: string;
   baleBotToken?: string;
@@ -304,6 +328,7 @@ export interface PaymentOrder {
   rejectedBy?: string;
   payDate?: string;
   fiscalYearId?: string;
+  isEdit?: boolean;
 }
 
 export enum ExitPermitStatus {
@@ -357,6 +382,7 @@ export interface ExitPermit {
   exitTime?: string;
   rejectionReason?: string;
   rejectedBy?: string;
+  isEdit?: boolean;
 }
 
 export interface WarehouseItem {
@@ -395,6 +421,7 @@ export interface WarehouseTransaction {
   rejectionReason?: string;
   rejectedBy?: string;
   updatedAt?: number;
+  isEdit?: boolean;
 }
 
 export enum SecurityStatus {

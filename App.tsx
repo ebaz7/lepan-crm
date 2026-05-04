@@ -17,6 +17,7 @@ import PrintVoucher from './components/PrintVoucher';
 import NotificationController from './components/NotificationController'; 
 import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
+import { Tickets } from './components/Tickets';
 import { getOrders, getSettings, getMessages, saveSettings } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
@@ -417,6 +418,7 @@ function App() {
                     {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
                     {activeTab === 'sales' && <SalesCRMModule />}
                     {activeTab === 'products' && <ProductsModule />}
+                    {activeTab === 'tickets' && <Tickets />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
                     {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}

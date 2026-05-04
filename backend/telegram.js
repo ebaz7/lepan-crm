@@ -76,8 +76,8 @@ export const initTelegram = async (token) => {
                 const isDaily = msg.text.toLowerCase().includes('daily') || msg.text.includes('گزارش روزانه');
                 const hasActiveSession = BotCore.sessions[msg.chat.id] && BotCore.sessions[msg.chat.id].state !== 'IDLE';
 
-                if (isPrivate || isCommand || isDaily || hasActiveSession) {
-                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, msg.from.id);
+                if (isPrivate || isCommand || isDaily || hasActiveSession || msg.reply_to_message) {
+                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, msg.from.id, msg);
                 }
             } catch (e) {
                 console.error("TG Msg Handle Error:", e);

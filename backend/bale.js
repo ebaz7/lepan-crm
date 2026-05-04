@@ -133,13 +133,14 @@ const poll = async () => {
                         const isDaily = text.toLowerCase().includes('daily') || text.includes('گزارش روزانه');
                         const hasActiveSession = BotCore.sessions[chatId] && BotCore.sessions[chatId].state !== 'IDLE';
 
-                        // Ignore group messages unless it's a command or part of an active session or a report request
-                        if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession && !isDaily) continue;
-                        
                         const senderId = u.message.from ? u.message.from.id : chatId;
+                        const isReply = !!u.message.reply_to_message;
+
+                        // Ignore group messages unless it's a command, part of active session, report request, or a reply
+                        if (u.message.chat.type && u.message.chat.type !== 'private' && !text.startsWith('/') && !hasActiveSession && !isDaily && !isReply) continue;
 
                         // Run handling in background to not block the poll loop
-                        BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId).catch(e => console.error("Bale Core Handle Err", e));
+                        BotCore.handleMessage('bale', chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId, u.message).catch(e => console.error("Bale Core Handle Err", e));
                     } else if (u.callback_query) {
                         const userId = u.callback_query.from ? u.callback_query.from.id : u.callback_query.message.chat.id;
                         BotCore.handleCallback('bale', u.callback_query.message.chat.id, userId, u.callback_query.data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn).catch(e => console.error("Bale Callback Err", e));

@@ -828,6 +828,28 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Power size={20}/> تنظیمات ربات و فروشگاه</h3>
                             
                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+                                <h4 className="font-bold text-sm text-gray-700">اطلاعات ارتباطی شرکت (برای مشتریان)</h4>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">آدرس شرکت</label>
+                                        <textarea rows={2} value={settings.companyAddress || ''} onChange={e => setSettings({...settings, companyAddress: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: تهران، خیابان..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">شماره‌های تماس</label>
+                                        <input type="text" value={settings.companyPhone || ''} onChange={e => setSettings({...settings, companyPhone: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: 021-12345678" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">اطلاعات حساب بانکی (شبا / کارتی)</label>
+                                        <textarea rows={2} value={settings.companyBank || ''} onChange={e => setSettings({...settings, companyBank: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: بانک ملت - شماره شبا IR... به نام..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">سایر اطلاعات (نمایش در پیام معرفی)</label>
+                                        <textarea rows={3} value={settings.botCompanyInfo || ''} onChange={e => setSettings({...settings, botCompanyInfo: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="توضیحات کلی شرکت برای مشتری..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
                                 <h4 className="font-bold text-sm text-gray-700">عضویت اجباری کانال‌ها</h4>
                                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                     <input type="checkbox" checked={settings.botForceJoinEnabled || false} onChange={e => setSettings({...settings, botForceJoinEnabled: e.target.checked})} className="w-4 h-4 text-blue-600" />

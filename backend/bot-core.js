@@ -67,6 +67,8 @@ const KEYBOARDS = {
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
             [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
+            [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
+            [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -215,7 +217,7 @@ const formatProduct = (p) => {
 
 // --- MAIN HANDLERS ---
 
-export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId) => {
+export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId, rawMsg = null) => {
     const db = getDb();
     
     // Default Settings
@@ -284,38 +286,75 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
         
         // --- SALES REPLY HANDLER ---
-        if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
-            const isSalesUser = user && (settings.salesNotificationUsers || []).some(item => (typeof item === 'string' ? item === user.username : item.username === user.username));
-            const isAdminUser = user && user.role === 'admin';
-            
+        const isSalesUser = (settings.salesNotificationUsers || []).some(item => {
+            const u = typeof item === 'string' ? item : item.username;
+            return (user && user.username === u) || String(chatId) === u || String(senderId) === u;
+        });
+        const isAdminUser = user && user.role === 'admin';
+        
+        if (text.startsWith('/reply ') || text.startsWith('پاسخ ') || (rawMsg && rawMsg.reply_to_message && (isSalesUser || isAdminUser))) {
             if (isSalesUser || isAdminUser) {
-                const parts = text.split(' ');
-                if (parts.length >= 3) {
-                    const targetChatId = parts[1];
-                    const replyText = parts.slice(2).join(' ');
-                    
+                let targetChatId = null;
+                let replyText = text;
+                
+                if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
+                    const parts = text.split(' ');
+                    if (parts.length >= 3) {
+                        targetChatId = parts[1];
+                        replyText = parts.slice(2).join(' ');
+                    }
+                } else if (rawMsg && rawMsg.reply_to_message && rawMsg.reply_to_message.text) {
+                    const match = rawMsg.reply_to_message.text.match(/شناسه:\s*`?(\d+)`?/);
+                    if (match) {
+                        targetChatId = match[1];
+                    }
+                }
+                
+                if (targetChatId) {
                     try {
                         const baleModule = await import('./bale.js');
                         const tgModule = await import('./telegram.js');
                         
+                        db.tickets = db.tickets || [];
+                        const ticket = db.tickets.find(t => t.id === targetChatId);
+
+                        let actualChatId = targetChatId;
+                        let prefixMsg = `📩 *پاسخ از طرف پشتیبانی:*\n\n${replyText}`;
+                        
+                        if (ticket) {
+                            actualChatId = ticket.chatId;
+                            ticket.messages.push({
+                                id: generateUUID(),
+                                sender: 'admin',
+                                text: replyText,
+                                timestamp: new Date().toISOString()
+                            });
+                            ticket.updatedAt = Date.now();
+                            ticket.status = 'OPEN';
+                            saveDb(db);
+                            prefixMsg = `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${replyText}`;
+                        }
+                        
                         let sent = false;
                         try {
-                            await tgModule.sendBotMessage(targetChatId, `📩 *پاسخ از طرف پشتیبانی:*\n\n${replyText}`);
+                            await tgModule.sendBotMessage(actualChatId, prefixMsg);
                             sent = true;
                         } catch (e) {}
                         
                         try {
-                            await baleModule.sendBotMessage(targetChatId, `📩 *پاسخ از طرف پشتیبانی:*\n\n${replyText}`);
+                            await baleModule.sendBotMessage(actualChatId, prefixMsg);
                             sent = true;
                         } catch (e) {}
 
-                        if (sent) return sendFn(chatId, "✅ پاسخ شما با موفقیت برای مشتری ارسال شد.");
+                        if (sent) return sendFn(chatId, `✅ پاسخ شما با موفقیت به شناسه/تیکت ${targetChatId} ارسال شد.`);
                         else return sendFn(chatId, "❌ خطا در ارسال پاسخ (شناسه یافت نشد یا ربات بلاک شده است).");
                     } catch (e) {
                         return sendFn(chatId, "❌ خطای سیستمی در ارسال پاسخ.");
                     }
-                } else {
-                    return sendFn(chatId, "💡 روش استفاده: `/reply [ID] [Message]`");
+                } else if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
+                    return sendFn(chatId, "💡 روش استفاده: `/reply [ID] [Message]` یا ریپلای کردن روی پیام دریافتی");
+                } else if (rawMsg && rawMsg.reply_to_message) {
+                    // Do nothing, let it fall through if it's not a reply to a customer message.
                 }
             }
         }
@@ -387,7 +426,9 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
-                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
+                [{ text: '📞 ارتباط با بخش فروش (تیکت)', callback_data: 'GUEST_CONTACT' }],
+                [{ text: '🔍 پیگیری درخواست', callback_data: 'GUEST_TRACK' }],
+                [{ text: '🏢 اطلاعات شرکت', callback_data: 'GUEST_COMPANY_INFO' }]
             ];
             
             guestMenu.push([{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]);
@@ -454,21 +495,32 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
 
         if (session.state === 'GUEST_WAIT_CONTACT_MSG') {
-            const msgObj = {
-                id: generateUUID(),
+            const ticketId = Math.floor(10000 + Math.random() * 90000).toString();
+            
+            const newTicket = {
+                id: ticketId,
                 chatId: chatId,
-                senderName: 'مشتری (مهمان)',
-                text: text,
-                timestamp: new Date().toISOString()
+                platform: platform,
+                customerName: rawMsg?.from?.first_name || 'مشتری',
+                messages: [{
+                    id: generateUUID(),
+                    sender: 'customer',
+                    text: text,
+                    timestamp: new Date().toISOString()
+                }],
+                status: 'OPEN',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
             };
-            db.messages = db.messages || [];
-            db.messages.push(msgObj);
+            
+            db.tickets = db.tickets || [];
+            db.tickets.push(newTicket);
             saveDb(db);
             session.state = 'IDLE';
             
             // Forward to sales notification users
             if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
-                 const forwardText = `📞 *پیام جدید از مشتری*\n👤 شناسه: \`${chatId}\`\n💬 متن: ${text}`;
+                 const forwardText = `📞 *تیکت جدید (کد پیگیری: ${ticketId})*\n👤 کاربر: ${newTicket.customerName}\n💬 متن:\n${text}`;
                  const baleModule = await import('./bale.js');
                  const tgModule = await import('./telegram.js');
                  
@@ -496,9 +548,74 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                  }
             }
             
-            return sendFn(chatId, "✅ پیام شما برای مدیریت فروش ارسال شد. در اسرع وقت با شما تماس خواهیم گرفت.", {
-                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            return sendFn(chatId, `✅ پیام شما ارسال شد.\n🔖 کد پیگیری شما: \`${ticketId}\`\n\nجهت پیگیری پاسخ از منوی اصلی اقدام نمایید.`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
             });
+        }
+
+        if (session.state === 'GUEST_WAIT_TRACK_CODE') {
+            const ticketId = text.trim();
+            db.tickets = db.tickets || [];
+            const ticket = db.tickets.find(t => t.id === ticketId && t.chatId === chatId);
+            
+            if (!ticket) {
+                return sendFn(chatId, "❌ کد پیگیری نامعتبر است یا متعلق به شما نمی‌باشد. لطفاً مجدداً تلاش کنید:", {
+                   reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
+                });
+            }
+            
+            let historyText = `📋 *تاریخچه درخواست #${ticket.id}*\nوضعیت: ${ticket.status === 'OPEN' ? 'باز' : 'بسته'}\n\n`;
+            ticket.messages.forEach(m => {
+                const isCustomer = m.sender === 'customer';
+                historyText += `${isCustomer ? '👤 شما:' : 'پشتیبانی:'}\n${m.text}\n---\n`;
+            });
+            
+            session.state = 'IDLE';
+            return sendFn(chatId, historyText, {
+                reply_markup: { inline_keyboard: [
+                    ticket.status === 'OPEN' ? [{ text: '➕ ارسال پاسخ جدید', callback_data: `GUEST_TICKET_REPLY_${ticket.id}` }] : [],
+                    [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]
+                ]}
+            });
+        }
+        
+        if (session.state === 'GUEST_WAIT_TICKET_REPLY') {
+            db.tickets = db.tickets || [];
+            const ticket = db.tickets.find(t => t.id === session.data.ticketId);
+            if (ticket) {
+                ticket.messages.push({
+                    id: generateUUID(),
+                    sender: 'customer',
+                    text: text,
+                    timestamp: new Date().toISOString()
+                });
+                ticket.updatedAt = Date.now();
+                saveDb(db);
+                
+                // Notify sales
+                if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
+                     const forwardText = `📞 *پاسخ جدید مشتری در تیکت #${ticket.id}*\n👤 کاربر: ${ticket.customerName}\n💬 متن:\n${text}`;
+                     const baleModule = await import('./bale.js');
+                     const tgModule = await import('./telegram.js');
+                     for (const item of settings.salesNotificationUsers) {
+                         const username = typeof item === 'string' ? item : item.username;
+                         const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
+                         const targetUser = db.users.find(u => u.username === username);
+                         if (targetUser) {
+                             if (platforms.includes('telegram') && targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                             if (platforms.includes('bale') && targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         } else if (!isNaN(Number(username))) {
+                             if (platforms.includes('telegram')) tgModule.sendBotMessage(username, forwardText).catch(e => {});
+                             if (platforms.includes('bale')) baleModule.sendBotMessage(username, forwardText).catch(e => {});
+                         }
+                     }
+                }
+                
+                session.state = 'IDLE';
+                return sendFn(chatId, `✅ پاسخ شما با موفقیت به تیکت #${ticket.id} اضافه شد.`, {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو', callback_data: 'GUEST_MAIN' }]] }
+                });
+            }
         }
 
         if (session.state === 'GUEST_WAIT_ORDER_DESC') {
@@ -1050,7 +1167,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
-                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
+                [{ text: '📞 ارتباط با بخش فروش (تیکت)', callback_data: 'GUEST_CONTACT' }],
+                [{ text: '🔍 پیگیری درخواست', callback_data: 'GUEST_TRACK' }],
+                [{ text: '🏢 اطلاعات شرکت', callback_data: 'GUEST_COMPANY_INFO' }]
             ];
             
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
@@ -1148,6 +1267,26 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             });
         }
         
+        if (data === 'GUEST_TRACK') {
+            session.state = 'GUEST_WAIT_TRACK_CODE';
+            return sendFn(userId, "🔍 لطفاً کد پیگیری درخواست خود را وارد کنید:", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
+        if (data === 'GUEST_COMPANY_INFO') {
+            const parts = [];
+            if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
+            if (settings.companyAddress) parts.push(`📍 *آدرس:*\n${settings.companyAddress}`);
+            if (settings.companyPhone) parts.push(`📞 *شماره تماس:*\n${settings.companyPhone}`);
+            if (settings.companyBank) parts.push(`💳 *اطلاعات حساب:*\n${settings.companyBank}`);
+            
+            const info = parts.length > 0 ? parts.join('\n\n') : "🏢 اطلاعات شرکت هنوز تنظیم نشده است.";
+            return sendFn(userId, info, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+        
         if (data === 'GUEST_SHOW_ID') {
              return sendFn(userId, `🆔 شناسه چت شما: \`${userId}\``, {
                 reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
@@ -1174,6 +1313,17 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
     // Sales logic
+    if (data === 'ACT_SEND_CO_INFO') {
+        const parts = [];
+        if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
+        if (settings.companyAddress) parts.push(`📍 *آدرس:*\n${settings.companyAddress}`);
+        if (settings.companyPhone) parts.push(`📞 *شماره تماس:*\n${settings.companyPhone}`);
+        if (settings.companyBank) parts.push(`💳 *اطلاعات حساب:*\n${settings.companyBank}`);
+        
+        const infoMsg = parts.length > 0 ? parts.join('\n\n') : "اطلاعاتی ثبت نشده است.";
+        return sendFn(chatId, `🏢 *اطلاعات شرکت:*\n\n${infoMsg}\n\nجهت ارسال به مشتری، روی این پیام ರಿپلی (Reply) کرده و کد پیگیری یا شناسه مشتری را وارد کنید، یا وضعیت فوروارد را برای پیام اصلی استفاده کنید.`);
+    }
+
     if (data === 'SALES_BROADCAST') {
         if (!['admin', 'sales_manager'].includes(user.role)) return sendFn(chatId, "⛔ دسترسی ندارید.");
         session.state = 'SALES_WAIT_BROADCAST_MSG';

@@ -919,6 +919,63 @@ app.post('/api/bot/broadcast', async (req, res) => {
 app.get('/api/chat', (req, res) => {
     res.json(getDb().messages || []);
 });
+
+app.get('/api/tickets', (req, res) => {
+    res.json(getDb().tickets || []);
+});
+
+app.post('/api/tickets/:id/reply', async (req, res) => {
+    const db = getDb();
+    const ticketId = req.params.id;
+    const { text, senderName } = req.body;
+    
+    db.tickets = db.tickets || [];
+    const ticket = db.tickets.find(t => t.id === ticketId);
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+    const newMsg = {
+        id: "msg_" + Math.random().toString(36).substr(2, 9),
+        sender: 'admin',
+        senderName: senderName || 'پشتیبانی',
+        text: text,
+        timestamp: new Date().toISOString()
+    };
+    ticket.messages.push(newMsg);
+    ticket.updatedAt = Date.now();
+    ticket.status = 'OPEN';
+    saveDb(db);
+
+    // Send to customer
+    try {
+        if (ticket.platform === 'telegram') {
+            const tg = await safeImport('./backend/telegram.js');
+            if (tg?.sendBotMessage) await tg.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`);
+        } else if (ticket.platform === 'bale') {
+            const bale = await safeImport('./backend/bale.js');
+            if (bale?.sendBotMessage) await bale.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`);
+        }
+    } catch (e) { console.error("Ticket reply err:", e); }
+
+    res.json(ticket);
+});
+
+app.put('/api/tickets/:id/status', (req, res) => {
+    const db = getDb();
+    const ticket = (db.tickets || []).find(t => t.id === req.params.id);
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    ticket.status = req.body.status;
+    ticket.updatedAt = Date.now();
+    saveDb(db);
+    res.json(ticket);
+});
+
+app.delete('/api/tickets/:id', (req, res) => {
+    const db = getDb();
+    db.tickets = (db.tickets || []).filter(t => t.id !== req.params.id);
+    saveDb(db);
+    res.json({ success: true });
+});
+
 app.post('/api/chat', async (req, res) => { 
     const db = getDb(); 
     const msg = req.body;
@@ -1000,7 +1057,7 @@ app.put('/api/chat/:id', (req, res) => {
         res.json(db.messages); 
     } else res.status(404).send('Not Found'); 
 });
-app.delete('/api/chat/:id', (req, res) => { 
+app.delete('/api/chat/:id', async (req, res) => { 
     const db = getDb(); 
     const id = req.params.id;
     const msgToDelete = (db.messages || []).find(m => m.id === id);
