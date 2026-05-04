@@ -187,8 +187,9 @@ const generateRecordCardHTML = (title, data, type) => {
 
 // --- EXPORTED FUNCTIONS ---
 
-export const generateRecordImage = async (record, type) => {
+export const generateRecordImage = async (record, type, options = {}) => {
     try {
+        const { isEdit, isDelete } = options;
         const browser = await getBrowser();
         const page = await browser.newPage();
         await page.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
@@ -198,6 +199,8 @@ export const generateRecordImage = async (record, type) => {
 
         if (type === 'PAYMENT') {
             title = 'دستور پرداخت وجه';
+            if (isEdit) title += ' (ویرایش شده)';
+            if (isDelete) title += ' (حذف شده)';
             htmlData = `
                 <div class="row"><span class="label">شماره:</span><span class="value">#${record.trackingNumber}</span></div>
                 <div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div>
@@ -209,12 +212,16 @@ export const generateRecordImage = async (record, type) => {
             `;
         } else if (type === 'EXIT') {
             const showDelivery = record.items && record.items.some(i => i.deliveredCartonCount !== undefined);
-            const totalCartons = (record.items||[]).reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0);
-            const totalWeight = (record.items||[]).reduce((acc, i) => acc + (Number(i.weight) || 0), 0);
-            const totalDelCartons = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? 0) || 0), 0);
-            const totalDelWeight = (record.items||[]).reduce((acc, i) => acc + (Number(i.deliveredWeight ?? 0) || 0), 0);
+            const itemsToRender = (record.items && record.items.length > 0) 
+                ? record.items 
+                : [{ goodsName: record.goodsName || 'نامشخص', cartonCount: record.cartonCount || 0, weight: record.weight || 0 }];
+            
+            const totalCartons = itemsToRender.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0);
+            const totalWeight = itemsToRender.reduce((acc, i) => acc + (Number(i.weight) || 0), 0);
+            const totalDelCartons = showDelivery ? itemsToRender.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? 0) || 0), 0) : totalCartons;
+            const totalDelWeight = showDelivery ? itemsToRender.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? 0) || 0), 0) : totalWeight;
 
-            const itemsHtml = (record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, weight: record.weight}]).map((i, idx) => `
+            const itemsHtml = itemsToRender.map((i, idx) => `
                 <tr class="text-base">
                     <td class="border-2 border-black p-2">${idx+1}</td>
                     <td class="border-2 border-black p-2 font-bold text-center">${i.goodsName}</td>
@@ -255,6 +262,22 @@ export const generateRecordImage = async (record, type) => {
                     flex-direction: column;
                     box-sizing: border-box;
                     color: black;
+                    position: relative;
+                }
+                .watermark {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%) rotate(-45deg);
+                    font-size: 120px;
+                    font-weight: 950;
+                    color: rgba(220, 38, 38, 0.15);
+                    white-space: nowrap;
+                    pointer-events: none;
+                    z-index: 100;
+                    border: 20px solid rgba(220, 38, 38, 0.15);
+                    padding: 40px;
+                    border-radius: 40px;
                 }
                 .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
                 .stamp.black { border-color: black; color: black; }
@@ -268,8 +291,10 @@ export const generateRecordImage = async (record, type) => {
             </style>
             </head><body>
             <div id="capture-wrapper">
+                ${isEdit ? '<div class="watermark">ویرایش شده</div>' : ''}
+                ${isDelete ? '<div class="watermark" style="color:rgba(0,0,0,0.1); border-color:rgba(0,0,0,0.1)">حذف شده</div>' : ''}
                 <div class="meta-section">
-                    <div><h1 style="font-size: 24px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه</h1><p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
+                    <div><h1 style="font-size: 24px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه ${isEdit ? '(ویرایش شده)' : ''}${isDelete ? '(حذف شده)' : ''}</h1><p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
                     <div style="text-align: left;"><div style="font-size: 18px; font-weight: 900; background: #e5e7eb; padding: 8px 16px; border: 2px solid black; border-radius: 8px;">شماره: ${record.permitNumber}</div><div style="font-size: 14px; font-weight: bold; margin-top: 5px;">تاریخ: ${new Date(record.date).toLocaleDateString('fa-IR')}</div></div>
                 </div>
 
@@ -321,6 +346,8 @@ export const generateRecordImage = async (record, type) => {
 
         } else if (type === 'BIJAK' || type === 'RECEIPT') {
             title = type === 'BIJAK' ? 'حواله خروج (بیجک)' : 'رسید ورود کالا';
+            if (isEdit) title += ' (ویرایش شده)';
+            if (isDelete) title += ' (حذف شده)';
             htmlData = `
                 <div class="row"><span class="label">شماره:</span><span class="value">#${record.number || record.proformaNumber}</span></div>
                 <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>

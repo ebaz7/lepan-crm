@@ -173,7 +173,9 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
                 caption = `📄 *شماره ${item.trackingNumber}*\n🏢 شرکت: ${item.payingCompany || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_ORDER_${item.id}`;
             } else if (type === 'EXIT') {
-                const totalReqCount = (item.items||[]).reduce((sum, i) => sum + (Number(i.cartonCount) || 0), item.cartonCount || 0);
+                const totalReqCount = (item.items && item.items.length > 0) 
+                    ? item.items.reduce((sum, i) => sum + (Number(i.cartonCount) || 0), 0)
+                    : (Number(item.cartonCount) || 0);
                 const showDeliv = item.items && item.items.some(i => i.deliveredCartonCount !== undefined);
                 const totalDelivCount = showDeliv ? (item.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
                 
@@ -474,13 +476,21 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                      const username = typeof item === 'string' ? item : item.username;
                      const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
                      
+                     // Try to find as system user
                      const targetUser = db.users.find(u => u.username === username);
+                     
                      if (targetUser) {
                          if (platforms.includes('telegram') && targetUser.telegramChatId) {
                              tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
                          }
                          if (platforms.includes('bale') && targetUser.baleChatId) {
                              baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         }
+                     } else {
+                         // If not a system user, check if username is a numeric Chat ID
+                         if (!isNaN(Number(username))) {
+                             if (platforms.includes('telegram')) tgModule.sendBotMessage(username, forwardText).catch(e => {});
+                             if (platforms.includes('bale')) baleModule.sendBotMessage(username, forwardText).catch(e => {});
                          }
                      }
                  }
@@ -513,11 +523,19 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                  const baleModule = await import('./bale.js');
                  const tgModule = await import('./telegram.js');
                  
-                 for (const username of settings.salesNotificationUsers) {
+                 for (const item of settings.salesNotificationUsers) {
+                     const username = typeof item === 'string' ? item : item.username;
+                     const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
+                     
                      const targetUser = db.users.find(u => u.username === username);
                      if (targetUser) {
-                         if (targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
-                         if (targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         if (platforms.includes('telegram') && targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                         if (platforms.includes('bale') && targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                     } else {
+                         if (!isNaN(Number(username))) {
+                             if (platforms.includes('telegram')) tgModule.sendBotMessage(username, forwardText).catch(e => {});
+                             if (platforms.includes('bale')) baleModule.sendBotMessage(username, forwardText).catch(e => {});
+                         }
                      }
                  }
             }
@@ -775,17 +793,26 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
 };
 
-export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName) => {
+export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName, eventType = 'STEP') => {
     try {
-        const img = await Renderer.generateRecordImage(p, 'EXIT');
+        const isEdit = eventType === 'EDIT';
+        const isDelete = eventType === 'DELETE';
         
-        const totalReqCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.cartonCount) || 0), p.cartonCount || 0);
-        const showDeliv = p.items && p.items.some(i => i.deliveredCartonCount !== undefined);
-        const totalDelivCount = showDeliv ? (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
+        const img = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete });
+        
+        const itemsToCalculate = (p.items && p.items.length > 0) ? p.items : [{ cartonCount: p.cartonCount || 0, weight: p.weight || 0, deliveredCartonCount: undefined, deliveredWeight: undefined }];
+        const totalReqCount = itemsToCalculate.reduce((sum, i) => sum + (Number(i.cartonCount) || 0), 0);
+        const totalReqWeight = itemsToCalculate.reduce((sum, i) => sum + (Number(i.weight) || 0), 0);
+        
+        const showDeliv = itemsToCalculate.some(i => i.deliveredCartonCount !== undefined);
+        const totalDelivCount = showDeliv ? itemsToCalculate.reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
+        const totalDelivWeight = showDeliv ? itemsToCalculate.reduce((sum, i) => sum + (Number(i.deliveredWeight) || 0), 0) : totalReqWeight;
 
-        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} ${showDeliv ? `\n✅ تعداد خروجی (انبار): ${totalDelivCount}` : ''}`;
+        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
         
-        const caption = `🚛 *مجوز خروج کالا*\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}`;
+        let header = isDelete ? `❌ *حذف شد: مجوز خروج کالا*` : (isEdit ? `✏️ *ویرایش شد: مجوز خروج کالا*` : `🚛 *مجوز خروج کالا*`);
+        
+        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -873,14 +900,16 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
     } catch (e) { console.error("Notification Helper Error:", e); }
 };
 
-export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false) => {
+export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, eventType = 'STEP') => {
     try {
+        const isEdit = eventType === 'EDIT';
+        const isDelete = eventType === 'DELETE';
         const settings = db.settings || {};
         const mode = settings.botPaymentNotificationMode || 'step_by_step';
         
         // Mode filtering
-        if (mode === 'after_submit' && stepName !== 'ثبت اولیه') return;
-        if (mode === 'after_final' && !isFinal) return;
+        if (mode === 'after_submit' && stepName !== 'ثبت اولیه' && eventType === 'STEP') return;
+        if (mode === 'after_final' && !isFinal && eventType === 'STEP') return;
 
         const tgGroupId = settings.botAccountingGroupIdTele || settings.botAccountingGroupId || '';
         const baleGroupId = settings.botAccountingGroupIdBale || '';
@@ -888,9 +917,8 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false) =
 
         if (!tgGroupId && !baleGroupId && !waGroupId) return; // No targets
 
-        // We can just format a text message, or generate an image using Renderer. For now, text message.
-        // Wait, Renderer can generate order images? No, payment orders don't have a specific `Renderer.generateRecordImage(o, 'ORDER')`. Wait, let's just use text!
-        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber}\n📅 تاریخ پرداخت: ${toShamsiFull(o.date)}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
+        let header = isDelete ? `❌ *حذف شد: دستور پرداخت*` : (isEdit ? `✏️ *ویرایش شد: دستور پرداخت*` : `💸 *دستور پرداخت*`);
+        let caption = `${header}\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber || o.id}\n📅 تاریخ پرداخت: ${o.date ? toShamsiFull(o.date) : '-'}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentDetails&&o.paymentDetails.length>0) ? o.paymentDetails[0].method : '-'}\n👤 ذینفع: ${o.payee || '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         
         const attachFiles = o.attachments && o.attachments.length > 0;
         if (attachFiles) caption += `\n📎 همراه با ${o.attachments.length} فایل/سند الحاقی`;

@@ -81,30 +81,10 @@ const SETTINGS_CACHE_KEY = 'app_settings_cache';
 const SETTINGS_CACHE_TTL = 300000; // 5 minutes (increased for better performance)
 
 export const getSettings = async (): Promise<SystemSettings> => { 
-    try {
-        const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
-        if (cached) {
-            const { data, timestamp } = JSON.parse(cached);
-            if (Date.now() - timestamp < SETTINGS_CACHE_TTL) {
-                return data;
-            }
-        }
-    } catch (e) { console.error("Cache read error", e); }
-
-    const s = await apiCall<SystemSettings>('/settings'); 
-    
-    try {
-        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ data: s, timestamp: Date.now() }));
-    } catch (e) { console.error("Cache write error", e); }
-    
-    return s;
+    return await apiCall<SystemSettings>('/settings'); 
 };
 export const saveSettings = async (settings: SystemSettings): Promise<SystemSettings> => { 
-    const s = await apiCall<SystemSettings>('/settings', 'POST', settings); 
-    try {
-        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ data: s, timestamp: Date.now() }));
-    } catch (e) { console.error("Cache write error", e); }
-    return s;
+    return await apiCall<SystemSettings>('/settings', 'POST', settings); 
 };
 
 // Updated: Accepts optional company parameter
@@ -124,7 +104,7 @@ export const getNextTrackingNumber = async (company?: string): Promise<number> =
 export const getMessages = async (): Promise<ChatMessage[]> => { const res = await apiCall<ChatMessage[]>('/chat'); return safeArray(res); };
 export const sendMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>('/chat', 'POST', message); };
 export const updateMessage = async (message: ChatMessage): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${message.id}`, 'PUT', message); };
-export const deleteMessage = async (id: string): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${id}`, 'DELETE'); };
+export const deleteMessage = async (id: string, forEveryone: boolean = false): Promise<ChatMessage[]> => { return await apiCall<ChatMessage[]>(`/chat/${id}?forEveryone=${forEveryone}`, 'DELETE'); };
 
 export const getGroups = async (): Promise<ChatGroup[]> => { const res = await apiCall<ChatGroup[]>('/groups'); return safeArray(res); };
 export const createGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>('/groups', 'POST', group); };

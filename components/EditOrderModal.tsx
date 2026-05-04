@@ -283,7 +283,8 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
             approverManager: undefined,
             approverCeo: undefined,
             rejectionReason: undefined,
-            rejectedBy: undefined
+            rejectedBy: undefined,
+            isEdit: true
         };
 
         await editOrder(updatedOrder);

@@ -165,3 +165,7 @@ export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     if (opts && opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
     return callApi('sendPhoto', form, true);
 };
+
+export const deleteBotMessage = (chatId, messageId) => {
+    return callApi('deleteMessage', { chat_id: chatId, message_id: messageId }).catch(e => console.error("Bale delete error:", e.message));
+};

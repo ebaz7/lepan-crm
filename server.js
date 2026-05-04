@@ -402,12 +402,15 @@ app.put('/api/orders/:id', (req, res) => {
         }
 
         const updatedOrder = { ...db.orders[idx], ...req.body };
+        const isExplicitEdit = req.body.isEdit === true;
+        const isFinal = updatedOrder.status === 'تایید نهایی' || updatedOrder.status === 'پرداخت شده';
         
         // Notification Logic for Status Change
-        if (currentOrder.status !== updatedOrder.status) {
+        if (isExplicitEdit) {
+            notifyPaymentOrderStep(updatedOrder, db, updatedOrder.status, isFinal, 'EDIT').catch(e => console.error("Bot Order Notify Error:", e));
+        } else if (currentOrder.status !== updatedOrder.status) {
             
             // Send bot group notifications
-            const isFinal = updatedOrder.status === 'تایید نهایی' || updatedOrder.status === 'پرداخت شده';
             notifyPaymentOrderStep(updatedOrder, db, updatedOrder.status, isFinal).catch(e => console.error("Bot Order Notify Error:", e));
 
             // Notify Requestor
@@ -440,6 +443,10 @@ app.put('/api/orders/:id', (req, res) => {
 });
 app.delete('/api/orders/:id', (req, res) => { 
     const db = getDb(); 
+    const order = db.orders.find(o => o.id === req.params.id);
+    if (order) {
+        notifyPaymentOrderStep(order, db, 'حذف شده', false, 'DELETE').catch(e => {});
+    }
     db.orders = db.orders.filter(o => o.id !== req.params.id); 
     saveDb(db); 
     res.json(db.orders); 
@@ -489,23 +496,32 @@ app.put('/api/exit-permits/:id', (req, res) => {
 
         const updatedPermit = { ...db.exitPermits[idx], ...req.body };
 
+        const isExplicitEdit = req.body.isEdit === true;
+
         // Notification Logic
-        if (currentPermit.status !== updatedPermit.status) {
+        if (isExplicitEdit) {
+            // It's definitely an edit from the Edit form
+            notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status, 'EDIT').catch(e => {});
+        } else if (currentPermit.status !== updatedPermit.status) {
             // 1. Bot Group Notifications
             notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status).catch(e => console.error("Bot Notify Error in server.js:", e));
+        } else {
+            // It's an edit without status change (legacy fallback)
+            notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status, 'EDIT').catch(e => {});
+        }
 
-            // 2. Web Browser Push Notifications
-            if (updatedPermit.requester) {
-                broadcastNotification(
-                    'تغییر وضعیت مجوز خروج',
-                    `مجوز خروج ${updatedPermit.permitNumber} به وضعیت "${updatedPermit.status}" تغییر یافت.`,
-                    '/exit-permits',
-                    null,
-                    [updatedPermit.requester]
-                );
-            }
+        // 2. Web Browser Push Notifications (for both status change and edits)
+        if (updatedPermit.requester) {
+            const title = currentPermit.status !== updatedPermit.status ? 'تغییر وضعیت مجوز خروج' : 'ویرایش مجوز خروج';
+            const body = currentPermit.status !== updatedPermit.status 
+                ? `مجوز خروج ${updatedPermit.permitNumber} به وضعیت "${updatedPermit.status}" تغییر یافت.`
+                : `مجوز خروج ${updatedPermit.permitNumber} ویرایش شد.`;
+            
+            broadcastNotification(title, body, '/exit-permits', null, [updatedPermit.requester]);
+        }
 
-            // Workflow Notifications
+        // Workflow Notifications (only on status change)
+        if (currentPermit.status !== updatedPermit.status) {
             if (updatedPermit.status === 'در انتظار مدیر کارخانه') {
                 broadcastNotification('تایید مدیرعامل خروج', `مجوز #${updatedPermit.permitNumber} تایید مدیرعامل شد و در انتظار مدیر کارخانه است.`, '/exit-approvals', ['FACTORY_MANAGER']);
             } else if (updatedPermit.status === 'در انتظار تایید انبار') {
@@ -526,6 +542,10 @@ app.put('/api/exit-permits/:id', (req, res) => {
 });
 app.delete('/api/exit-permits/:id', (req, res) => { 
     const db = getDb(); 
+    const permit = db.exitPermits.find(p => p.id === req.params.id);
+    if (permit) {
+        notifyExitPermitStep(permit, null, null, null, db, 'حذف شده', 'DELETE').catch(e => {});
+    }
     db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); 
     saveDb(db); 
     res.json(db.exitPermits); 
@@ -899,15 +919,45 @@ app.post('/api/bot/broadcast', async (req, res) => {
 app.get('/api/chat', (req, res) => {
     res.json(getDb().messages || []);
 });
-app.post('/api/chat', (req, res) => { 
+app.post('/api/chat', async (req, res) => { 
     const db = getDb(); 
+    const msg = req.body;
     if(!db.messages) db.messages=[]; 
-    db.messages.push(req.body); 
+
+    // Sync with Bot if recipient is a bot user
+    if (msg.recipient) {
+        const targetUser = db.users?.find(u => u.username === msg.recipient || u.fullName === msg.recipient);
+        if (targetUser) {
+            try {
+                let botRes = null;
+                if (targetUser.telegramChatId && db.settings?.telegramBotToken) {
+                    const tg = await safeImport('./backend/telegram.js');
+                    if (tg && tg.sendBotMessage) {
+                        botRes = await tg.sendBotMessage(targetUser.telegramChatId, msg.message || '📎 فایل');
+                        msg.botPlatform = 'telegram';
+                        msg.botChatId = targetUser.telegramChatId;
+                        msg.botMessageId = botRes?.message_id;
+                    }
+                } else if (targetUser.baleChatId && db.settings?.baleBotToken) {
+                    const bale = await safeImport('./backend/bale.js');
+                    if (bale && bale.sendBotMessage) {
+                        botRes = await bale.sendBotMessage(targetUser.baleChatId, msg.message || '📎 فایل');
+                        msg.botPlatform = 'bale';
+                        msg.botChatId = targetUser.baleChatId;
+                        msg.botMessageId = botRes?.result?.message_id;
+                    }
+                }
+            } catch (e) {
+                console.error("Bot Sync Error:", e);
+            }
+        }
+    }
+
+    db.messages.push(msg); 
     saveDb(db); 
     res.json(db.messages); 
 
     // Chat Notification
-    const msg = req.body;
     if (msg.recipient) {
         broadcastNotification(
             `پیام از ${msg.sender}`,
@@ -956,6 +1006,21 @@ app.delete('/api/chat/:id', (req, res) => {
     const msgToDelete = (db.messages || []).find(m => m.id === id);
 
     if (msgToDelete) {
+        const forEveryone = req.query.forEveryone === 'true';
+
+        // Two-way deletion from Bots
+        if (forEveryone && msgToDelete.botMessageId && msgToDelete.botChatId && msgToDelete.botPlatform) {
+            try {
+                if (msgToDelete.botPlatform === 'telegram') {
+                    const tg = await safeImport('./backend/telegram.js');
+                    if (tg && tg.deleteBotMessage) await tg.deleteBotMessage(msgToDelete.botChatId, msgToDelete.botMessageId);
+                } else if (msgToDelete.botPlatform === 'bale') {
+                    const bale = await safeImport('./backend/bale.js');
+                    if (bale && bale.deleteBotMessage) await bale.deleteBotMessage(msgToDelete.botChatId, msgToDelete.botMessageId);
+                }
+            } catch (e) { console.error("Bot Remove Error:", e); }
+        }
+
         // Collect file URLs to potentially delete
         const fileUrls = [];
         if (msgToDelete.attachment?.url) fileUrls.push(msgToDelete.attachment.url);

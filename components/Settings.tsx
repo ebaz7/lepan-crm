@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -861,16 +861,32 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             </div>
 
                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
-                                <h4 className="font-bold text-sm text-gray-700">لینک‌های مرتبط فروشگاه (ربات)</h4>
+                                <h4 className="font-bold text-sm text-gray-700 underline underline-offset-4 decoration-blue-500">لینک‌های مینی‌اپ و دکمه‌های اضافی در منوی استارت</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4 mb-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-500 block">لینک مینی‌اپ لیست قیمت خودرو</label>
+                                        <input type="url" placeholder="https://..." value={settings.miniAppCarPriceUrl || ''} onChange={e => setSettings({...settings, miniAppCarPriceUrl: e.target.value})} className="w-full border rounded p-2 text-sm dir-ltr" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-500 block">لینک مینی‌اپ تخمین قیمت خودرو</label>
+                                        <input type="url" placeholder="https://..." value={settings.miniAppCarEstimatorUrl || ''} onChange={e => setSettings({...settings, miniAppCarEstimatorUrl: e.target.value})} className="w-full border rounded p-2 text-sm dir-ltr" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-500 block">لینک مینی‌اپ قیمت موبایل</label>
+                                        <input type="url" placeholder="https://..." value={settings.miniAppMobilePriceUrl || ''} onChange={e => setSettings({...settings, miniAppMobilePriceUrl: e.target.value})} className="w-full border rounded p-2 text-sm dir-ltr" />
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
                                     {(settings.botStoreLinks || []).map((linkItem, lIdx) => (
-                                        <div key={lIdx} className="flex gap-2">
-                                            <input type="text" placeholder="عنوان لینک" value={linkItem.title} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].title = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
-                                            <input type="url" placeholder="https://..." value={linkItem.url} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].url = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-2 border rounded p-2 text-sm dir-ltr" style={{flex: 2}} />
-                                            <button type="button" onClick={() => { const newArr = [...(settings.botStoreLinks||[])]; newArr.splice(lIdx, 1); setSettings({...settings, botStoreLinks: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><X size={16} /></button>
+                                        <div key={lIdx} className="flex gap-2 animate-slide-left">
+                                            <input type="text" placeholder="عنوان دکمه (مثلا: لیست قیمت)" value={linkItem.title} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].title = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
+                                            <input type="url" placeholder="لینک (https://...) یا شناسه" value={linkItem.url} onChange={e => { const newArr = [...(settings.botStoreLinks||[])]; newArr[lIdx].url = e.target.value; setSettings({...settings, botStoreLinks: newArr}); }} className="flex-2 border rounded p-2 text-sm dir-ltr" style={{flex: 2}} />
+                                            <button type="button" onClick={() => { const newArr = [...(settings.botStoreLinks||[])]; newArr.splice(lIdx, 1); setSettings({...settings, botStoreLinks: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><Trash2 size={16} /></button>
                                         </div>
                                     ))}
-                                    <button type="button" onClick={() => setSettings({...settings, botStoreLinks: [...(settings.botStoreLinks||[]), {title:'', url:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1">+ افزودن شناسه/سایت</button>
+                                    <button type="button" onClick={() => setSettings({...settings, botStoreLinks: [...(settings.botStoreLinks||[]), {title:'', url:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1 bg-white border border-blue-200 px-3 py-1.5 rounded-lg hover:shadow-sm transition-all">+ افزودن دکمه جدید</button>
                                 </div>
                             </div>
 
@@ -911,112 +927,123 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                     placeholder="مثلاً: لطفاً پیام خود را بنویسید..."
                                                 />
                                             </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-gray-500 block mb-1">دریافت‌کنندگان پیام‌های فروش (اعلان در ربات)</label>
-                                                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto border rounded p-2 bg-white">
-                                                    {(settings.salesNotificationUsers || []).map(item => {
-                                                        const username = typeof item === 'string' ? item : item.username;
-                                                        const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
+                                            <div className="bg-white/50 p-4 rounded-xl border border-blue-200">
+                                                <h4 className="font-bold text-sm text-blue-800 mb-3 flex items-center gap-2"><Users size={16}/> مدیران پاسخگو و دریافت‌کنندگان پیام‌های مشتریان</h4>
+                                                <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto border rounded-xl p-3 bg-white shadow-inner">
+                                                    {(settings.salesNotificationUsers || []).map((item, idx) => {
+                                                        const username = item.username;
+                                                        const platforms = item.platforms;
+                                                        const name = item.name;
                                                         const u = systemUsers.find(user => user.username === username);
                                                         
                                                         const togglePlatform = (p: string) => {
-                                                            const current = (settings.salesNotificationUsers || []).map(prevItem => {
-                                                                const prevUsername = typeof prevItem === 'string' ? prevItem : prevItem.username;
-                                                                if (prevUsername !== username) return prevItem;
+                                                            const current = (settings.salesNotificationUsers || []).map((prevItem, pIdx) => {
+                                                                if (pIdx !== idx) return prevItem;
                                                                 
-                                                                const prevPlatforms = typeof prevItem === 'string' ? ['telegram', 'bale'] : prevItem.platforms;
-                                                                const nextPlatforms = prevPlatforms.includes(p) 
-                                                                    ? prevPlatforms.filter(pl => pl !== p)
-                                                                    : [...prevPlatforms, p];
+                                                                const nextPlatforms = prevItem.platforms.includes(p) 
+                                                                    ? prevItem.platforms.filter(pl => pl !== p)
+                                                                    : [...prevItem.platforms, p];
                                                                 
-                                                                return { username: prevUsername, platforms: nextPlatforms };
+                                                                return { ...prevItem, platforms: nextPlatforms };
                                                             });
                                                             setSettings({...settings, salesNotificationUsers: current});
                                                         };
 
                                                         return (
-                                                            <div key={username} className="flex flex-col border-b last:border-0 pb-2 mb-2 last:mb-0">
-                                                                <div className="flex items-center justify-between gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer group">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                                                                        <span className="font-bold">{u ? u.fullName : username} {u ? `(@${u.username})` : '(آیدی دستی)'}</span>
+                                                            <div key={idx} className="bg-gray-50/50 p-3 rounded-lg border border-gray-100 animate-fade-in group">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                                                            <UserIcon size={16} />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="text-sm font-bold text-gray-800">{name || (u ? u.fullName : 'کاربر دستی')}</div>
+                                                                            <div className="text-[10px] text-gray-500 font-mono">ID: {username}</div>
+                                                                        </div>
                                                                     </div>
                                                                     <button 
                                                                         type="button"
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            const updated = (settings.salesNotificationUsers || []).filter(prevItem => {
-                                                                                const prevUsername = typeof prevItem === 'string' ? prevItem : prevItem.username;
-                                                                                return prevUsername !== username;
-                                                                            });
+                                                                        onClick={() => {
+                                                                            const updated = (settings.salesNotificationUsers || []).filter((_, pIdx) => pIdx !== idx);
                                                                             setSettings({...settings, salesNotificationUsers: updated});
                                                                         }}
-                                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        className="p-1 px-2 text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
                                                                     >
-                                                                        <X size={14} />
+                                                                        <Trash2 size={16} />
                                                                     </button>
                                                                 </div>
-                                                                <div className="flex gap-4 mt-1 px-4">
-                                                                    <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                                                <div className="flex gap-6 mt-3 px-11 border-t pt-2 border-gray-100">
+                                                                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                                                                         <input 
                                                                             type="checkbox" 
                                                                             checked={platforms.includes('telegram')} 
                                                                             onChange={() => togglePlatform('telegram')}
-                                                                            className="w-3 h-3"
+                                                                            className="w-4 h-4 rounded text-blue-600"
                                                                         />
-                                                                        <span>تلگرام</span>
+                                                                        <span className="text-gray-600">تلگرام</span>
                                                                     </label>
-                                                                    <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                                                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                                                                         <input 
                                                                             type="checkbox" 
                                                                             checked={platforms.includes('bale')} 
                                                                             onChange={() => togglePlatform('bale')}
-                                                                            className="w-3 h-3"
+                                                                            className="w-4 h-4 rounded text-green-600"
                                                                         />
-                                                                        <span>بله</span>
+                                                                        <span className="text-gray-600">بله</span>
                                                                     </label>
                                                                 </div>
                                                             </div>
                                                         );
                                                     })}
-                                                    {(settings.salesNotificationUsers || []).length === 0 && <div className="text-[10px] text-gray-400 col-span-2 text-center py-2">موردی انتخاب نشده است.</div>}
+                                                    {(settings.salesNotificationUsers || []).length === 0 && <div className="text-sm text-gray-400 text-center py-6">هنوز هیچ مدیری اضافه نشده است.</div>}
                                                 </div>
-                                                <div className="mt-4 border-t pt-2">
-                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">انتخاب از کاربران سیستم:</label>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {systemUsers.filter(u => !(settings.salesNotificationUsers || []).some(item => (typeof item === 'string' ? item === u.username : item.username === u.username))).map(u => (
+                                                
+                                                <div className="mt-4 p-4 bg-blue-50/30 rounded-xl border border-dashed border-blue-200">
+                                                    <h5 className="text-xs font-bold text-blue-700 mb-3 flex items-center gap-1.5"><Plus size={14}/> افزودن مدیر جدید</h5>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                                                        {systemUsers.filter(u => !(settings.salesNotificationUsers || []).some(item => item.username === u.username)).map(u => (
                                                             <button 
                                                                 key={u.id} 
                                                                 type="button" 
-                                                                onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), {username: u.username, platforms: ['telegram', 'bale']}]})}
-                                                                className="text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-2 py-1 rounded transition-colors"
+                                                                onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), {username: u.username, name: u.fullName, platforms: ['telegram', 'bale']}]})}
+                                                                className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100 hover:border-blue-300 hover:shadow-sm transition-all text-right"
                                                             >
-                                                                + {u.fullName}
+                                                                <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px]"><Plus size={10}/></div>
+                                                                <span className="text-xs font-bold truncate flex-1">{u.fullName}</span>
                                                             </button>
                                                         ))}
                                                     </div>
-                                                </div>
-                                                <div className="mt-2 flex gap-2">
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="افزودن دستی (Username یا ID)..." 
-                                                        className="flex-1 border rounded p-1.5 text-xs dir-ltr"
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') {
-                                                                e.preventDefault();
-                                                                const val = e.currentTarget.value.trim();
-                                                                if (val) {
-                                                                    const current = settings.salesNotificationUsers || [];
-                                                                    if (!current.some(item => (typeof item === 'string' ? item === val : item.username === val))) {
-                                                                        setSettings({...settings, salesNotificationUsers: [...current, {username: val, platforms: ['telegram', 'bale']}]});
+                                                    
+                                                    <div className="flex flex-col gap-2 bg-white p-3 rounded-xl shadow-sm">
+                                                        <span className="text-[10px] font-bold text-gray-400">افزودن بصورت شناسه‌ی دستی:</span>
+                                                        <div className="flex gap-2">
+                                                            <input id="manual-manager-name" type="text" placeholder="نام مدیر..." className="flex-1 border rounded p-2 text-xs" />
+                                                            <input id="manual-manager-id" type="text" placeholder="Chat ID / Username..." className="flex-1 border rounded p-2 text-xs dir-ltr" />
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => {
+                                                                    const nameInput = document.getElementById('manual-manager-name') as HTMLInputElement;
+                                                                    const idInput = document.getElementById('manual-manager-id') as HTMLInputElement;
+                                                                    const name = nameInput.value.trim();
+                                                                    const id = idInput.value.trim();
+                                                                    if (name && id) {
+                                                                        setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), {username: id, name: name, platforms: ['telegram', 'bale']}]});
+                                                                        nameInput.value = '';
+                                                                        idInput.value = '';
+                                                                    } else {
+                                                                        alert("لطفاً هم نام و هم شناسه را وارد کنید.");
                                                                     }
-                                                                    e.currentTarget.value = '';
-                                                                }
-                                                            }
-                                                        }}
-                                                    />
+                                                                }}
+                                                                className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-blue-700"
+                                                            >افزودن</button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <p className="text-[10px] text-gray-400 mt-1">پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد. برای حذف موارد دستی، تیک مربوطه را در بالا بردارید (اگر نمایش داده می‌شود) یا در تنظیمات دیتابیس اقدام کنید. (باید در ربات استارت کرده باشند)</p>
+                                                <p className="text-[10px] text-gray-400 mt-3 bg-white p-2 rounded border border-gray-100 leading-relaxed">
+                                                    💡 پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد.
+                                                    <br/>
+                                                    ⚠️ مدیران باید حتماً ربات را در پلتفرم مربوطه (تلگرام یا بله) <b>استارت</b> کرده باشند.
+                                                </p>
                                             </div>
 
                                             <div>

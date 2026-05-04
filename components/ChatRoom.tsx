@@ -671,9 +671,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         
         for (const id of ids) {
             try {
-                if (forEveryone) {
-                    await deleteMessage(id);
-                }
+                await deleteMessage(id, forEveryone);
                 setMessages(prev => prev.filter(m => m.id !== id));
             } catch (e) {
                 console.error("Delete failed", e);

@@ -111,3 +111,8 @@ export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     if (!bot) return Promise.reject("Bot not initialized");
     return bot.sendPhoto(chatId, buffer, { caption, ...opts });
 };
+
+export const deleteBotMessage = (chatId, messageId) => {
+    if (!bot) return Promise.reject("Bot not initialized");
+    return bot.deleteMessage(chatId, messageId).catch(e => console.error("TG delete error:", e.message));
+};

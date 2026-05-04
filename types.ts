@@ -214,7 +214,7 @@ export interface SystemSettings {
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
   
-  salesNotificationUsers?: { username: string; platforms: string[] }[]; // Usernames and their active platforms (telegram, bale)
+  salesNotificationUsers?: { username: string; platforms: string[]; name?: string }[]; // Usernames and their active platforms (telegram, bale)
   salesContactMessage?: string;
   
   // CRM / SALES

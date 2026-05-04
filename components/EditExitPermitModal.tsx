@@ -90,7 +90,8 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
           
           rejectionReason: undefined,
           rejectedBy: undefined,
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          isEdit: true // Add isEdit flag to tell server it's an edit
       };
 
       try {
