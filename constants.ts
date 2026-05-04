@@ -59,10 +59,10 @@ export const formatCurrency = (amount: number): string => {
   }
 };
 
-export const formatDate = (dateString: string): string => {
-  if (!dateString) return '-';
+export const formatDate = (dateValue: string | number): string => {
+  if (!dateValue) return '-';
   try {
-    return new Date(dateString).toLocaleDateString('fa-IR-u-ca-persian', {
+    return new Date(dateValue).toLocaleDateString('fa-IR-u-ca-persian', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -70,9 +70,9 @@ export const formatDate = (dateString: string): string => {
   } catch (e) {
     // Fallback if Persian calendar not supported
     try {
-        return new Date(dateString).toLocaleDateString(); 
+        return new Date(dateValue).toLocaleDateString(); 
     } catch {
-        return dateString;
+        return dateValue.toString();
     }
   }
 };

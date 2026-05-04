@@ -484,8 +484,9 @@ export interface ChatGroup {
     members: string[];
     createdBy: string;
     admins?: string[];
-    avatar?: string;
+    avatar?: string | null;
     description?: string;
+    createdAt?: number;
 }
 
 export interface GroupTask {
@@ -494,8 +495,10 @@ export interface GroupTask {
     title: string;
     description?: string;
     assignee?: string;
+    assignedTo?: string[];
     dueDate?: string;
-    isCompleted: boolean;
+    isCompleted?: boolean;
+    status: 'pending' | 'completed';
     createdBy: string;
     createdAt: number;
     completedBy?: string;

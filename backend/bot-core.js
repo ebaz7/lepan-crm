@@ -220,7 +220,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     const settings = db.settings || {};
 
     if (text === '/id' || text === 'آیدی') {
-        return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n(این کد را کپی کرده و در بخش تنظیمات در مقابل نام خود وارد کنید)`);
+        return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
     }
 
     if (text.startsWith('/daily_report') || text.startsWith('/report')) {

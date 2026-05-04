@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
+import { sendMessage, deleteMessage, getGroups, createGroup, updateGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { generateUUID, formatDate } from '../constants';
 import { 
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
-    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell
+    Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
+    Shield, UserMinus, UserPlus, BellOff, Camera
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
 
@@ -174,6 +175,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Modals ---
     const [showGroupModal, setShowGroupModal] = useState(false);
+    const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
 
@@ -231,7 +233,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (messages.length > 0) {
             const lastMsg = messages[messages.length - 1];
-            if (lastMsg.senderUsername !== currentUser.username && document.hidden) {
+            const channelId = lastMsg.groupId || lastMsg.senderUsername;
+            
+            if (lastMsg.senderUsername !== currentUser.username && document.hidden && !mutedChannels.has(channelId)) {
                 let title = lastMsg.sender;
                 if (lastMsg.groupId) {
                     const grp = groups.find(g => g.id === lastMsg.groupId);
@@ -240,7 +244,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 sendNotification(title, lastMsg.message || 'پیام جدید');
             }
         }
-    }, [messages.length]);
+    }, [messages.length, mutedChannels]);
 
     const loadMeta = async () => {
         try {
@@ -736,10 +740,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleUpdateGroup = async (groupId: string, updates: Partial<ChatGroup>) => {
         try {
-            await updateGroup(groupId, updates);
-            setGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...updates } : g));
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+            const updatedGroup = { ...group, ...updates };
+            await updateGroup(updatedGroup);
+            setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
             if (showGroupInfo && showGroupInfo.id === groupId) {
-                setShowGroupInfo(prev => prev ? { ...prev, ...updates } : null);
+                setShowGroupInfo(updatedGroup);
             }
         } catch (e) {
             alert('خطا در بروزرسانی گروه');
@@ -870,8 +877,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <button 
                                                 onClick={() => {
                                                     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-                                                    updateTask(task.id, { status: newStatus }).then(() => {
-                                                        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+                                                    const updatedTask = { ...task, status: newStatus as any };
+                                                    updateTask(updatedTask).then(() => {
+                                                        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
                                                     });
                                                 }}
                                                 className={`mt-0.5 rounded-md border-2 transition-colors ${task.status === 'completed' ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
@@ -902,7 +910,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-gray-800 text-sm truncate">{item.name}</span>
+                                    <div className="flex items-center gap-1 overflow-hidden">
+                                        <span className="font-bold text-gray-800 text-sm truncate">{item.name}</span>
+                                        {mutedChannels.has(item.id) && <BellOff size={10} className="text-gray-400 opacity-60"/>}
+                                    </div>
                                     {item.lastMsg && <span className="text-[10px] text-gray-400">{new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>}
                                 </div>
                                 <div className="flex justify-between items-center">
@@ -1282,8 +1293,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     <div className="bg-white rounded-2xl w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
                         <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 p-8 text-white flex flex-col items-center">
                             <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
-                            <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md">
-                                {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full rounded-3xl object-cover"/> : showGroupInfo.name.charAt(0)}
+                            <div className="relative group/avatar">
+                                <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md overflow-hidden">
+                                    {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
+                                </div>
+                                {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
+                                    <button 
+                                        onClick={() => {
+                                            const input = document.createElement('input');
+                                            input.type = 'file';
+                                            input.accept = 'image/*';
+                                            input.onchange = async (e: any) => {
+                                                const file = e.target.files[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = async (re) => {
+                                                        const result = await uploadFile(file.name, re.target?.result as string);
+                                                        handleUpdateGroup(showGroupInfo.id, { avatar: result.url });
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            };
+                                            input.click();
+                                        }}
+                                        className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-3xl opacity-0 group-hover/avatar:opacity-100 transition-opacity backdrop-blur-[2px]"
+                                    >
+                                        <Camera size={24} className="text-white"/>
+                                    </button>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-xl font-black">{showGroupInfo.name}</h3>
@@ -1307,14 +1344,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                                 <div className="flex items-center gap-3">
-                                    <Bell size={20} className={activeChannel?.id === showGroupInfo.id && isMuted ? "text-gray-300" : "text-blue-500"}/>
+                                    <Bell size={20} className={mutedChannels.has(showGroupInfo.id) ? "text-gray-300" : "text-blue-500"}/>
                                     <span className="text-sm font-bold text-gray-700">اعلان‌ها و صدا</span>
                                 </div>
                                 <button 
-                                    onClick={() => setIsMuted(!isMuted)}
-                                    className={`w-12 h-6 rounded-full relative p-1 transition-colors ${isMuted ? 'bg-gray-300' : 'bg-green-500'}`}
+                                    onClick={() => {
+                                        const newMuted = new Set(mutedChannels);
+                                        if (newMuted.has(showGroupInfo.id)) newMuted.delete(showGroupInfo.id);
+                                        else newMuted.add(showGroupInfo.id);
+                                        setMutedChannels(newMuted);
+                                    }}
+                                    className={`w-12 h-6 rounded-full relative p-1 transition-colors ${mutedChannels.has(showGroupInfo.id) ? 'bg-gray-300' : 'bg-green-500'}`}
                                 >
-                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${isMuted ? 'left-1' : 'right-1'}`}></div>
+                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${mutedChannels.has(showGroupInfo.id) ? 'left-1' : 'right-1'}`}></div>
                                 </button>
                             </div>
 
