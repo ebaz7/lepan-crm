@@ -220,6 +220,11 @@ export interface SystemSettings {
   // CRM / SALES
   salesContacts?: SalesContact[];
   birthdayGreetingTemplate?: BirthdayGreetingTemplate;
+  
+  // MINI APPS
+  miniAppCarPriceUrl?: string;
+  miniAppCarEstimatorUrl?: string;
+  miniAppMobilePriceUrl?: string;
 }
 
 export interface BirthdayGreetingTemplate {

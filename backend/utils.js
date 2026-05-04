@@ -53,7 +53,12 @@ export const toShamsiYearMonth = (isoDate) => {
 };
 
 export const toShamsiFull = (isoDate) => {
-    try { return new Date(isoDate).toLocaleDateString('fa-IR'); } catch(e) { return isoDate; }
+    try { 
+        if (!isoDate) return '';
+        const d = new Date(isoDate);
+        if (isNaN(d.getTime())) return isoDate;
+        return new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    } catch(e) { return isoDate; }
 };
 
 export const sanitizeGroupId = (id) => {

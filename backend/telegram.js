@@ -73,10 +73,11 @@ export const initTelegram = async (token) => {
                 // Allow registration only in private chat
                 const isPrivate = msg.chat.type === 'private';
                 const isCommand = msg.text.startsWith('/');
+                const isDaily = msg.text.toLowerCase().includes('daily') || msg.text.includes('گزارش روزانه');
                 const hasActiveSession = BotCore.sessions[msg.chat.id] && BotCore.sessions[msg.chat.id].state !== 'IDLE';
 
-                if (isPrivate || isCommand || hasActiveSession) {
-                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn);
+                if (isPrivate || isCommand || isDaily || hasActiveSession) {
+                    await BotCore.handleMessage('telegram', msg.chat.id, msg.text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, msg.from.id);
                 }
             } catch (e) {
                 console.error("TG Msg Handle Error:", e);

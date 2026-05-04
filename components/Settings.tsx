@@ -920,6 +920,21 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 </div>
                                                 <p className="text-[10px] text-gray-400 mt-1">پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد. (باید در ربات استارت کرده باشند)</p>
                                             </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL لیست قیمت خودرو</label>
+                                                    <input type="text" value={settings.miniAppCarPriceUrl || ''} onChange={e => setSettings({...settings, miniAppCarPriceUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL تخمین قیمت خودرو</label>
+                                                    <input type="text" value={settings.miniAppCarEstimatorUrl || ''} onChange={e => setSettings({...settings, miniAppCarEstimatorUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL قیمت موبایل</label>
+                                                    <input type="text" value={settings.miniAppMobilePriceUrl || ''} onChange={e => setSettings({...settings, miniAppMobilePriceUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -213,17 +213,22 @@ const formatProduct = (p) => {
 
 // --- MAIN HANDLERS ---
 
-export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn) => {
+export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId) => {
     const db = getDb();
     
     // Default Settings
     const settings = db.settings || {};
 
+    const user = resolveUser(db, platform, senderId || chatId);
+    const isGroup = chatId.toString().startsWith('-') || 
+                  (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
+                  (senderId && senderId.toString() !== chatId.toString());
+
     if (text === '/id' || text === 'آیدی') {
         return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
     }
 
-    if (text.startsWith('/daily_report') || text.startsWith('/report')) {
+    if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
         const args = text.split(' ');
         let dateStr = toShamsiFull(new Date().toISOString()).split(' ')[0]; // Default to today in Shamsi
 
@@ -273,8 +278,10 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             // Already sub, check if we should continue onboarding
         }
         
-        const user = resolveUser(db, platform, chatId);
-        const isGroup = chatId.toString().startsWith('-') || (platform === 'bale' && chatId.toString().length > 10);
+        const user = resolveUser(db, platform, senderId || chatId);
+        const isGroup = chatId.toString().startsWith('-') || 
+                      (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
+                      (senderId && senderId.toString() !== chatId.toString());
 
         // --- SALES REPLY HANDLER ---
         if (text.startsWith('/reply ') || text.startsWith('پاسخ ')) {
@@ -380,9 +387,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
-                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }],
-                [{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]
+                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
             ];
+            
+            if (settings.miniAppCarPriceUrl) guestMenu.push([{ text: '🚗 لیست قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarPriceUrl } }]);
+            if (settings.miniAppCarEstimatorUrl) guestMenu.push([{ text: '⚖️ تخمین قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarEstimatorUrl } }]);
+            if (settings.miniAppMobilePriceUrl) guestMenu.push([{ text: '📱 قیمت موبایل (MiniApp)', web_app: { url: settings.miniAppMobilePriceUrl } }]);
+
+            guestMenu.push([{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]);
             
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
                 settings.botStoreLinks.forEach(link => {
@@ -513,6 +525,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         
         if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
 
+        if (isGroup) return;
         return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
     }
 
@@ -873,7 +886,7 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false) =
 
         // We can just format a text message, or generate an image using Renderer. For now, text message.
         // Wait, Renderer can generate order images? No, payment orders don't have a specific `Renderer.generateRecordImage(o, 'ORDER')`. Wait, let's just use text!
-        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره پیگیری: ${o.trackingNumber}\n📅 تاریخ: ${o.date}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
+        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber}\n📅 تاریخ: ${toShamsiFull(o.date)}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
         
         const attachFiles = o.attachments && o.attachments.length > 0;
         if (attachFiles) caption += `\n📎 همراه با ${o.attachments.length} فایل/سند الحاقی`;
@@ -909,7 +922,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     const db = getDb();
     const settings = db.settings || {};
     const user = resolveUser(db, platform, userId);
-    const isGroup = chatId.toString().startsWith('-') || (platform === 'bale' && chatId.toString().length > 10);
+    const isGroup = chatId.toString().startsWith('-') || 
+                  (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
+                  (userId && userId.toString() !== chatId.toString());
     
     // GUEST HANDLERS / PRE-AUTH HANDLERS
     if (data === 'CHECK_JOIN') {
@@ -1003,9 +1018,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
-                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }],
-                [{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]
+                [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
             ];
+            
+            if (settings.miniAppCarPriceUrl) guestMenu.push([{ text: '🚗 لیست قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarPriceUrl } }]);
+            if (settings.miniAppCarEstimatorUrl) guestMenu.push([{ text: '⚖️ تخمین قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarEstimatorUrl } }]);
+            if (settings.miniAppMobilePriceUrl) guestMenu.push([{ text: '📱 قیمت موبایل (MiniApp)', web_app: { url: settings.miniAppMobilePriceUrl } }]);
+
+            guestMenu.push([{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]);
             
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
                 settings.botStoreLinks.forEach(link => {
@@ -1180,16 +1200,18 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group);
         const subgroups = [...new Set(products.map(p => p.subgroup || 'سایر'))].sort();
         
-        const buttons = subgroups.map(sg => [{ text: `🔹 ${sg}`, callback_data: `SALES_SUB_${group}_${sg}` }]);
-        buttons.push([{ text: '🔙 انتخاب گروه دیگر', callback_data: 'SALES_GROUPS' }]);
-        
-        return sendFn(chatId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
-    }
-
-    if (data.startsWith('SALES_SUB_')) {
-        const parts = data.split('_');
-        const group = parts[2];
-        const subgroup = parts[3];
+            const buttons = subgroups.map(sg => [
+                { text: `🔹 ${sg}`, callback_data: `SALES_SUB|${group}|${sg}` }
+            ]);
+            buttons.push([{ text: '🔙 انتخاب گروه دیگر', callback_data: 'SALES_GROUPS' }]);
+            
+            return sendFn(chatId, `📁 *گروه: ${group}*\nلطفاً زیرگروه را انتخاب کنید:`, { reply_markup: { inline_keyboard: buttons } });
+        }
+    
+        if (data.startsWith('SALES_SUB|')) {
+            const parts = data.split('|');
+            const group = parts[1];
+            const subgroup = parts[2];
         const products = (db.products || []).filter(p => (p.group || 'بدون گروه') === group && (p.subgroup || 'سایر') === subgroup);
         
         let res = `📁 ${group} > 🔹 ${subgroup}\n\n`;
