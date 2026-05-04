@@ -901,39 +901,71 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             <div>
                                                 <label className="text-xs font-bold text-gray-500 block mb-1">دریافت‌کنندگان پیام‌های فروش (اعلان در ربات)</label>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2 bg-white">
-                                                    {(appUsers.filter(u => 'fullName' in u) as User[]).map(u => (
-                                                        <label key={u.id} className="flex items-center gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={(settings.salesNotificationUsers || []).includes(u.username)} 
-                                                                onChange={e => {
-                                                                    const current = settings.salesNotificationUsers || [];
-                                                                    const updated = e.target.checked 
-                                                                        ? [...current, u.username]
-                                                                        : current.filter(un => un !== u.username);
-                                                                    setSettings({...settings, salesNotificationUsers: updated});
-                                                                }}
-                                                            />
-                                                            <span>{u.fullName} (@{u.username})</span>
-                                                        </label>
-                                                    ))}
+                                                    {(settings.salesNotificationUsers || []).map(username => {
+                                                        const u = (appUsers.filter(user => 'fullName' in user) as User[]).find(user => user.username === username);
+                                                        return (
+                                                            <label key={username} className="flex items-center justify-between gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer group">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                                                    <span>{u ? u.fullName : username} {u ? `(@${u.username})` : '(آیدی دستی)'}</span>
+                                                                </div>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        const updated = (settings.salesNotificationUsers || []).filter(un => un !== username);
+                                                                        setSettings({...settings, salesNotificationUsers: updated});
+                                                                    }}
+                                                                    className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                >
+                                                                    <X size={14} />
+                                                                </button>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                    {(settings.salesNotificationUsers || []).length === 0 && <div className="text-[10px] text-gray-400 col-span-2 text-center py-2">موردی انتخاب نشده است.</div>}
                                                 </div>
-                                                <p className="text-[10px] text-gray-400 mt-1">پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد. (باید در ربات استارت کرده باشند)</p>
+                                                <div className="mt-4 border-t pt-2">
+                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">انتخاب از کاربران سیستم:</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(appUsers.filter(u => 'fullName' in u) as User[]).filter(u => !(settings.salesNotificationUsers || []).includes(u.username)).map(u => (
+                                                            <button 
+                                                                key={u.id} 
+                                                                type="button" 
+                                                                onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), u.username]})}
+                                                                className="text-[10px] bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-2 py-1 rounded transition-colors"
+                                                            >
+                                                                + {u.fullName}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 flex gap-2">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="افزودن دستی (Username یا ID)..." 
+                                                        className="flex-1 border rounded p-1.5 text-xs dir-ltr"
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                const val = e.currentTarget.value.trim();
+                                                                if (val) {
+                                                                    const current = settings.salesNotificationUsers || [];
+                                                                    if (!current.includes(val)) {
+                                                                        setSettings({...settings, salesNotificationUsers: [...current, val]});
+                                                                    }
+                                                                    e.currentTarget.value = '';
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 mt-1">پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد. برای حذف موارد دستی، تیک مربوطه را در بالا بردارید (اگر نمایش داده می‌شود) یا در تنظیمات دیتابیس اقدام کنید. (باید در ربات استارت کرده باشند)</p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL لیست قیمت خودرو</label>
-                                                    <input type="text" value={settings.miniAppCarPriceUrl || ''} onChange={e => setSettings({...settings, miniAppCarPriceUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL تخمین قیمت خودرو</label>
-                                                    <input type="text" value={settings.miniAppCarEstimatorUrl || ''} onChange={e => setSettings({...settings, miniAppCarEstimatorUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-400 block mb-1">URL قیمت موبایل</label>
-                                                    <input type="text" value={settings.miniAppMobilePriceUrl || ''} onChange={e => setSettings({...settings, miniAppMobilePriceUrl: e.target.value})} className="w-full border rounded p-1.5 text-xs dir-ltr" placeholder="https://..." />
-                                                </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-gray-400 block mb-1">حمایت و پشتیبانی</label>
+                                                <p className="text-[10px] text-gray-400">برای افزودن کادرها و دکمه‌های دلخواه در منوی شروع ربات، از بخش "لینک‌های مرتبط فروشگاه" در ابتدای همین صفحه استفاده کنید.</p>
                                             </div>
                                         </div>
                                     </div>

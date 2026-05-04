@@ -952,9 +952,45 @@ app.put('/api/chat/:id', (req, res) => {
 });
 app.delete('/api/chat/:id', (req, res) => { 
     const db = getDb(); 
-    db.messages = db.messages.filter(m => m.id !== req.params.id); 
-    saveDb(db); 
-    res.json(db.messages); 
+    const id = req.params.id;
+    const msgToDelete = (db.messages || []).find(m => m.id === id);
+
+    if (msgToDelete) {
+        // Collect file URLs to potentially delete
+        const fileUrls = [];
+        if (msgToDelete.attachment?.url) fileUrls.push(msgToDelete.attachment.url);
+        if (msgToDelete.audioUrl) fileUrls.push(msgToDelete.audioUrl);
+
+        // Delete from database
+        db.messages = db.messages.filter(m => m.id !== id); 
+        saveDb(db); 
+
+        // Physical file deletion logic
+        fileUrls.forEach(url => {
+            // Only try to delete local uploads
+            if (url.startsWith('/uploads/')) {
+                // Check if any other message still references this file
+                const stillInUse = db.messages.some(m => 
+                    m.attachment?.url === url || m.audioUrl === url
+                );
+
+                if (!stillInUse) {
+                    const fileName = url.replace('/uploads/', '');
+                    const filePath = path.join(UPLOADS_DIR, fileName);
+                    if (fs.existsSync(filePath)) {
+                        try {
+                            fs.unlinkSync(filePath);
+                            console.log(`Deleted file: ${fileName}`);
+                        } catch (err) {
+                            console.error(`Error deleting file ${fileName}:`, err);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    res.json(db.messages || []); 
 });
 
 app.get('/api/groups', (req, res) => res.json(getDb().groups || []));

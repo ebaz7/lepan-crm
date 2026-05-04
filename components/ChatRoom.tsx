@@ -649,20 +649,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const handleDelete = async (forEveryone: boolean) => {
-        if (!confirm(forEveryone ? "حذف دو طرفه؟" : "حذف برای من؟")) return;
         const ids = Array.from(selectedMessages);
+        if (ids.length === 0) return;
+
+        // Check if user is sender of all selected messages or an admin
+        const canDeleteForEveryone = ids.every(id => {
+            const msg = messages.find(m => m.id === id);
+            return msg && (msg.senderUsername === currentUser.username || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole));
+        });
+
+        const confirmMsg = canDeleteForEveryone && forEveryone 
+            ? `آیا از حذف ${ids.length > 1 ? 'پیام‌های انتخاب شده' : 'این پیام'} برای همه اطمینان دارید؟`
+            : `آیا از حذف ${ids.length > 1 ? 'پیام‌های انتخاب شده' : 'این پیام'} برای خودتان اطمینان دارید؟`;
+
+        if (!confirm(confirmMsg)) return;
         
         for (const id of ids) {
-            if (forEveryone) {
-                await deleteMessage(id);
+            try {
+                if (forEveryone && canDeleteForEveryone) {
+                    await deleteMessage(id);
+                }
                 setMessages(prev => prev.filter(m => m.id !== id));
-            } else {
-                // Logical delete (simulated locally)
-                setMessages(prev => prev.filter(m => m.id !== id));
+            } catch (e) {
+                console.error("Delete failed", e);
             }
         }
         setSelectionMode(false);
         setSelectedMessages(new Set());
+        onRefresh();
     };
 
     // Corrected Forward Logic
@@ -957,7 +971,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 {selectionMode ? (
                                     <div className="flex gap-2 animate-fade-in">
                                         <button onClick={() => setShowForwardModal(true)} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100" title="فوروارد"><Forward size={18}/></button>
-                                        <button onClick={() => handleDelete(false)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100" title="حذف"><Trash2 size={18}/></button>
+                                        <button onClick={() => handleDelete(true)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100" title="حذف دو طرفه"><Trash2 size={18}/></button>
                                         <button onClick={() => { setSelectionMode(false); setSelectedMessages(new Set()); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
                                     </div>
                                 ) : (
@@ -1186,8 +1200,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => { setEditingMessageId(contextMenuMsg.msg.id); setInputText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Edit2 size={16}/> ویرایش</button>
                         )}
                         <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setSelectionMode(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><CheckSquare size={16}/> انتخاب</button>
-                        {(contextMenuMsg.msg.senderUsername === currentUser.username || currentUser.role === UserRole.ADMIN) && (
-                            <button onClick={() => { deleteMessage(contextMenuMsg.msg.id); onRefresh(); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف</button>
+                        {(contextMenuMsg.msg.senderUsername === currentUser.username || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
+                            <button 
+                                onClick={async () => { 
+                                    if(confirm('آیا از حذف این پیام برای همه اطمینان دارید؟')) {
+                                        try {
+                                            await deleteMessage(contextMenuMsg.msg.id); 
+                                            setMessages(prev => prev.filter(m => m.id !== contextMenuMsg.msg.id));
+                                            onRefresh(); 
+                                        } catch (e) { alert("خطا در حذف پیام"); }
+                                    }
+                                    setContextMenuMsg(null); 
+                                }} 
+                                className="w-full text-right px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 text-sm"
+                            >
+                                <Trash2 size={16}/> حذف دو طرفه
+                            </button>
                         )}
                     </div>
                 </div>

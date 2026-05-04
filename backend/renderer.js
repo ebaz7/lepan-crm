@@ -199,7 +199,7 @@ export const generateRecordImage = async (record, type) => {
         if (type === 'PAYMENT') {
             title = 'دستور پرداخت وجه';
             htmlData = `
-                <div class="row"><span class="label">شماره سند:</span><span class="value">#${record.trackingNumber}</span></div>
+                <div class="row"><span class="label">شماره:</span><span class="value">#${record.trackingNumber}</span></div>
                 <div class="row"><span class="label">درخواست کننده:</span><span class="value">${record.requester}</span></div>
                 <div class="row"><span class="label">ذینفع:</span><span class="value">${record.payee}</span></div>
                 <div class="row"><span class="label">مبلغ:</span><span class="value amount" style="color:#1e40af">${parseInt(record.totalAmount).toLocaleString()}</span></div>
@@ -322,7 +322,7 @@ export const generateRecordImage = async (record, type) => {
         } else if (type === 'BIJAK' || type === 'RECEIPT') {
             title = type === 'BIJAK' ? 'حواله خروج (بیجک)' : 'رسید ورود کالا';
             htmlData = `
-                <div class="row"><span class="label">شماره سند:</span><span class="value">#${record.number || record.proformaNumber}</span></div>
+                <div class="row"><span class="label">شماره:</span><span class="value">#${record.number || record.proformaNumber}</span></div>
                 <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
                 <div class="row"><span class="label">${type === 'BIJAK' ? 'گیرنده' : 'فرستنده'}:</span><span class="value">${type === 'BIJAK' ? record.recipientName : record.proformaNumber}</span></div>
                 <div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length} قلم</span></div>

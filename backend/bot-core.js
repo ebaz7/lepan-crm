@@ -170,7 +170,7 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
             let pdfCallback = '';
 
             if (type === 'PAYMENT') {
-                caption = `📄 *سند پرداخت #${item.trackingNumber}*\n🏢 شرکت: ${item.payingCompany || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
+                caption = `📄 *شماره ${item.trackingNumber}*\n🏢 شرکت: ${item.payingCompany || '-'}\n📅 تاریخ: ${toShamsiFull(item.date)}\n👤 ذینفع: ${item.payee}\n💰 مبلغ: ${parseInt(item.totalAmount).toLocaleString()} ریال\n📝 بابت: ${item.description}\n🔄 وضعیت: ${item.status}\n👤 درخواست‌کننده: ${item.requester || '-'}`;
                 pdfCallback = `GEN_PDF_ORDER_${item.id}`;
             } else if (type === 'EXIT') {
                 const totalReqCount = (item.items||[]).reduce((sum, i) => sum + (Number(i.cartonCount) || 0), item.cartonCount || 0);
@@ -224,6 +224,9 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                   (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
                   (senderId && senderId.toString() !== chatId.toString());
 
+    // --- GROUP BEHAVIOR ---
+    // In groups, we don't enforce channel membership checks. Commands like DAILY should just work.
+    
     if (text === '/id' || text === 'آیدی') {
         return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
     }
@@ -361,7 +364,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
 
         // --- ONBOARDING FOR GUESTS ---
-        if (!user) {
+        if (!user && !isGroup) {
             const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
             
             // If sub exists but lacks info, and we haven't asked yet or user just started
@@ -378,17 +381,13 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             }
         }
 
-        if (!user) {
+        if (!user && !isGroup) {
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
                 [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
             ];
             
-            if (settings.miniAppCarPriceUrl) guestMenu.push([{ text: '🚗 لیست قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarPriceUrl } }]);
-            if (settings.miniAppCarEstimatorUrl) guestMenu.push([{ text: '⚖️ تخمین قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarEstimatorUrl } }]);
-            if (settings.miniAppMobilePriceUrl) guestMenu.push([{ text: '📱 قیمت موبایل (MiniApp)', web_app: { url: settings.miniAppMobilePriceUrl } }]);
-
             guestMenu.push([{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]);
             
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
@@ -403,9 +402,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 }
             });
         }
+        
+        if (isGroup && !user) {
+            return sendFn(chatId, "⚠️ برای دسترسی به پنل مدیریت در گروه، باید ابتدا بصورت کاربر در سیستم ثبت شده باشید.\nاما سایر دستورات عمومی (مانند DAILY) فعال هستند.");
+        }
+
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
-    if (!user) {
+    if (!user && !isGroup) {
         // Handle guest states
         if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
         const session = sessions[chatId];
@@ -879,7 +883,7 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false) =
 
         // We can just format a text message, or generate an image using Renderer. For now, text message.
         // Wait, Renderer can generate order images? No, payment orders don't have a specific `Renderer.generateRecordImage(o, 'ORDER')`. Wait, let's just use text!
-        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber}\n📅 تاریخ: ${toShamsiFull(o.date)}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
+        let caption = `💸 *دستور پرداخت*\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber}\n📅 تاریخ پرداخت: ${toShamsiFull(o.date)}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].type : '-'}\n👤 ذینفع: ${(o.paymentLines&&o.paymentLines.length>0) ? o.paymentLines[0].destination : '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}`;
         
         const attachFiles = o.attachments && o.attachments.length > 0;
         if (attachFiles) caption += `\n📎 همراه با ${o.attachments.length} فایل/سند الحاقی`;
@@ -1014,12 +1018,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 [{ text: '📞 ارتباط با مدیر فروش', callback_data: 'GUEST_CONTACT' }]
             ];
             
-            if (settings.miniAppCarPriceUrl) guestMenu.push([{ text: '🚗 لیست قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarPriceUrl } }]);
-            if (settings.miniAppCarEstimatorUrl) guestMenu.push([{ text: '⚖️ تخمین قیمت خودرو (MiniApp)', web_app: { url: settings.miniAppCarEstimatorUrl } }]);
-            if (settings.miniAppMobilePriceUrl) guestMenu.push([{ text: '📱 قیمت موبایل (MiniApp)', web_app: { url: settings.miniAppMobilePriceUrl } }]);
-
-            guestMenu.push([{ text: '🆔 نمایش شناسه چت من', callback_data: 'GUEST_SHOW_ID' }]);
-            
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
                 settings.botStoreLinks.forEach(link => {
                     guestMenu.push([{ text: `🌐 ${link.title}`, url: link.url }]);
@@ -1149,8 +1147,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_LIST_ALL') {
         const products = db.products || [];
-        if (products.length === 0) return sendFn(chatId, "لیست قیمت خالی است.");
-        let res = "📢 *لیست کامل قیمت (هرمی)*\n\n";
+        if (products.length === 0) return sendFn(chatId, "❌ لیست قیمت در حال حاضر خالی است.");
+        let res = "📢 *لیست کامل قیمت*\n\n";
         
         const grouped = {};
         products.forEach(p => {
