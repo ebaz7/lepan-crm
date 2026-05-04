@@ -145,8 +145,9 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const isSecure = window.isSecureContext;
   
-  // App Users to merge into contacts list
-  const [appUsers, setAppUsers] = useState<(Contact | User)[]>([]);
+  // App Users for various settings
+  const [systemUsers, setSystemUsers] = useState<User[]>([]);
+  const [appContacts, setAppContacts] = useState<Contact[]>([]);
 
   useEffect(() => { 
       if (propSettings) {
@@ -156,7 +157,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       }
       setNotificationsEnabled(isNotificationEnabledInApp()); 
       checkWhatsappStatus();
-      loadAppUsers();
+      loadSystemUsers();
   }, [propSettings]);
 
   const loadSettings = async () => { 
@@ -182,9 +183,11 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       } catch (e) { console.error("Failed to load settings"); } 
   };
 
-  const loadAppUsers = async () => {
+  const loadSystemUsers = async () => {
       try {
           const users = await getUsers();
+          setSystemUsers(users);
+          
           const contacts = users
               .filter(u => u.phoneNumber)
               .map(u => ({
@@ -194,7 +197,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                   isGroup: false,
                   baleId: u.baleChatId
               }));
-          setAppUsers(contacts);
+          setAppContacts(contacts);
       } catch (e) { console.error("Failed to load users"); }
   };
 
@@ -707,7 +710,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 iconColorClass="text-blue-700"
                                 settings={settings} 
                                 setSettings={setSettings} 
-                                contacts={[...(settings.savedContacts || []), ...appUsers as Contact[]]} 
+                                contacts={[...(settings.savedContacts || []), ...appContacts]} 
                             />
                             
                             <SecondExitGroupSettings 
@@ -715,7 +718,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 configKey="exitPermitSecondGroupConfig"
                                 settings={settings} 
                                 setSettings={setSettings} 
-                                contacts={[...(settings.savedContacts || []), ...appUsers as Contact[]]} 
+                                contacts={[...(settings.savedContacts || []), ...appContacts]} 
                             />
                         </div>
                     )}
@@ -902,7 +905,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <label className="text-xs font-bold text-gray-500 block mb-1">دریافت‌کنندگان پیام‌های فروش (اعلان در ربات)</label>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded p-2 bg-white">
                                                     {(settings.salesNotificationUsers || []).map(username => {
-                                                        const u = (appUsers.filter(user => 'fullName' in user) as User[]).find(user => user.username === username);
+                                                        const u = systemUsers.find(user => user.username === username);
                                                         return (
                                                             <label key={username} className="flex items-center justify-between gap-2 text-xs p-1 hover:bg-gray-50 rounded cursor-pointer group">
                                                                 <div className="flex items-center gap-2">
@@ -928,7 +931,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <div className="mt-4 border-t pt-2">
                                                     <label className="text-[10px] font-bold text-gray-400 block mb-1">انتخاب از کاربران سیستم:</label>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {(appUsers.filter(u => 'fullName' in u) as User[]).filter(u => !(settings.salesNotificationUsers || []).includes(u.username)).map(u => (
+                                                        {systemUsers.filter(u => !(settings.salesNotificationUsers || []).includes(u.username)).map(u => (
                                                             <button 
                                                                 key={u.id} 
                                                                 type="button" 
