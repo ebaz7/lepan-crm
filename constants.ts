@@ -167,7 +167,8 @@ export const getShamsiDateFromIso = (isoDate: string) => {
       const [yStr, mStr, dStr] = isoDate.split('-').map(Number);
       if(!yStr || !mStr || !dStr) return { year: 1403, month: 1, day: 1 }; // Parsing failed
 
-      const date = new Date(yStr, mStr - 1, dStr);
+      // Use noon to avoid timezone rollover issues shifting the day
+      const date = new Date(yStr, mStr - 1, dStr, 12, 0, 0); 
       const options: Intl.DateTimeFormatOptions = { calendar: 'persian', year: 'numeric', month: 'numeric', day: 'numeric' };
       const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', options).formatToParts(date);
       const y = parseInt(parts.find(p => p.type === 'year')?.value || '1403');

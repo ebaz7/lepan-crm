@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Upload, Download, Gift, Save, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, Download, Gift, Save, X, FileText } from 'lucide-react';
 import { SalesContact, BirthdayGreetingTemplate } from '../types';
 import { apiCall } from '../services/apiService';
 import { getSettings, saveSettings } from '../services/storageService';
+import * as XLSX from 'xlsx';
 
 export default function SalesCRMModule() {
     const [contacts, setContacts] = useState<SalesContact[]>([]);
@@ -61,10 +62,44 @@ export default function SalesCRMModule() {
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            alert('فایل انتخاب شد (در نسخه فعلی این بخش فقط نمایش داده می‌شود).');
-            // Logic to parse CSV would go here
-        }
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws);
+
+                if (!confirm(`آیا از وارد کردن ${data.length} مخاطب اطمینان دارید؟`)) return;
+
+                const newContacts = [...contacts];
+                data.forEach((row: any) => {
+                    const mobile = String(row['موبایل'] || row['Mobile'] || '').trim();
+                    const name = String(row['نام'] || row['Name'] || '').trim();
+                    if (mobile && name) {
+                        newContacts.push({
+                            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                            name,
+                            mobile,
+                            telegramId: String(row['تلگرام'] || row['Telegram'] || ''),
+                            baleId: String(row['بله'] || row['Bale'] || ''),
+                            birthday: String(row['تاریخ تولد'] || row['Birthday'] || ''),
+                            sendBirthdayGreeting: true
+                        });
+                    }
+                });
+                await updateContacts(newContacts);
+                alert(`${data.length} مخاطب با موفقیت وارد شد.`);
+            } catch (err) {
+                console.error(err);
+                alert('خطا در پردازش فایل');
+            }
+        };
+        reader.readAsBinaryString(file);
+        e.target.value = '';
     };
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,19 +145,14 @@ export default function SalesCRMModule() {
     };
 
     const downloadSample = () => {
-        const headers = "نام,موبایل,تلگرام,بله,تاریخ تولد(YYYY-MM-DD)";
-        const row1 = "نمونه ۱,۰۹۱۲۰۰۰۰۰۰۰,,";
-        const row2 = "نمونه ۲,۰۹۱۲۱۱۱۱۱۱۱,id1,id2,1990-01-01";
-        const csvContent = headers + "\n" + row1 + "\n" + row2;
-        
-        const blob = new Blob(["\uFEFF", csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", "sample_contacts.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const sampleData = [
+            { 'نام': 'علی محمدی', 'موبایل': '09121234567', 'تلگرام': '', 'بله': '', 'تاریخ تولد': '1370/05/20' },
+            { 'نام': 'رضا علوی', 'موبایل': '09191234567', 'تلگرام': 'reza_alavi', 'بله': 'reza_bale', 'تاریخ تولد': '1365/10/12' }
+        ];
+        const ws = XLSX.utils.json_to_sheet(sampleData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Contacts");
+        XLSX.writeFile(wb, "Sample_Contacts.xlsx");
     };
 
     const handleSaveTemplate = () => {
@@ -232,18 +262,15 @@ export default function SalesCRMModule() {
 
                     {/* Contacts Table / Cards */}
                     <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                            <h3 className="font-bold text-lg">لیست مخاطبین</h3>
                             <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                                <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-gray-200">
-                                     <Upload size={18}/> ایمپورت
-                                     <input type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
+                                <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-emerald-200 border border-emerald-200">
+                                     <Upload size={18}/> ایمپورت اکسل
+                                     <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
                                 </label>
-                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> نمونه</button>
-                                <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200"><Download size={18}/> اکسپورت</button>
-                                <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100"><Plus size={18}/> افزودن دستی</button>
+                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> نمونه اکسل</button>
+                                <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> اکسپورت</button>
+                                <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100"><Plus size={18}/> افزودن دستی</button>
                             </div>
-                        </div>
 
                         {/* Desktop View */}
                         <div className="hidden md:block overflow-x-auto">

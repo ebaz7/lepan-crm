@@ -554,29 +554,53 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
 
         if (session.state === 'GUEST_WAIT_TRACK_CODE') {
-            const ticketId = text.trim();
+            const trackId = text.trim();
             db.tickets = db.tickets || [];
-            const ticket = db.tickets.find(t => t.id === ticketId && t.chatId === chatId);
+            db.customerOrders = db.customerOrders || [];
             
-            if (!ticket) {
+            const ticket = db.tickets.find(t => t.id === trackId && t.chatId === chatId);
+            const order = db.customerOrders.find(o => o.id === trackId && o.chatId === chatId);
+            
+            if (!ticket && !order) {
                 return sendFn(chatId, "❌ کد پیگیری نامعتبر است یا متعلق به شما نمی‌باشد. لطفاً مجدداً تلاش کنید:", {
                    reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
                 });
             }
             
-            let historyText = `📋 *تاریخچه درخواست #${ticket.id}*\nوضعیت: ${ticket.status === 'OPEN' ? 'باز' : 'بسته'}\n\n`;
-            ticket.messages.forEach(m => {
-                const isCustomer = m.sender === 'customer';
-                historyText += `${isCustomer ? '👤 شما:' : 'پشتیبانی:'}\n${m.text}\n---\n`;
-            });
-            
-            session.state = 'IDLE';
-            return sendFn(chatId, historyText, {
-                reply_markup: { inline_keyboard: [
-                    ticket.status === 'OPEN' ? [{ text: '➕ ارسال پاسخ جدید', callback_data: `GUEST_TICKET_REPLY_${ticket.id}` }] : [],
-                    [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]
-                ]}
-            });
+            if (ticket) {
+                let historyText = `📋 *تاریخچه درخواست تیکت #${ticket.id}*\nوضعیت: ${ticket.status === 'OPEN' ? 'باز' : 'بسته'}\n\n`;
+                ticket.messages.forEach(m => {
+                    const isCustomer = m.sender === 'customer';
+                    historyText += `${isCustomer ? '👤 شما:' : 'پشتیبانی:'}\n${m.text}\n---\n`;
+                });
+                
+                session.state = 'IDLE';
+                return sendFn(chatId, historyText, {
+                    reply_markup: { inline_keyboard: [
+                        ticket.status === 'OPEN' ? [{ text: '➕ ارسال پاسخ جدید', callback_data: `GUEST_TICKET_REPLY_${ticket.id}` }] : [],
+                        [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]
+                    ]}
+                });
+            } else {
+                // It's an order
+                let statusColor = '⏳';
+                if (order.status === 'APPROVED') statusColor = '✅';
+                if (order.status === 'REJECTED') statusColor = '❌';
+                
+                let textRes = `📦 *جزئیات سفارش #${order.id}*\n`;
+                textRes += `وضعیت: ${statusColor} ${order.status}\n`;
+                textRes += `تاریخ: ${order.date}\n\n`;
+                textRes += `*محصولات:*\n`;
+                order.items.forEach(it => {
+                    textRes += `- ${it.name} (${it.quantity} ${it.unit || 'عدد'})\n`;
+                });
+                if (order.description) textRes += `\n💬 توضیحات: ${order.description}`;
+                
+                session.state = 'IDLE';
+                return sendFn(chatId, textRes, {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+                });
+            }
         }
         
         if (session.state === 'GUEST_WAIT_TICKET_REPLY') {
@@ -1158,7 +1182,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         });
     }
 
-    if (!user && (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB'))) {
+    // Allow Guest callbacks even for registered users (Admin access to customer menus)
+    if (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB')) {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         const session = sessions[userId];
 
@@ -1274,6 +1299,13 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             });
         }
 
+        if (data.startsWith('GUEST_TICKET_REPLY_')) {
+            const ticketId = data.replace('GUEST_TICKET_REPLY_', '');
+            session.state = 'GUEST_WAIT_TICKET_REPLY';
+            session.data.ticketId = ticketId;
+            return sendFn(userId, "📩 لطفاً پاسخ خود را بنویسید:");
+        }
+
         if (data === 'GUEST_COMPANY_INFO') {
             const parts = [];
             if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
@@ -1314,14 +1346,28 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // Sales logic
     if (data === 'ACT_SEND_CO_INFO') {
+        const keyboard = [
+            [{ text: '📢 ارسال همه موارد', callback_data: 'SEND_INFO_ALL' }],
+            [{ text: '📍 آدرس و تلفن', callback_data: 'SEND_INFO_ADDR' }],
+            [{ text: '💳 اطلاعات بانکی', callback_data: 'SEND_INFO_BANK' }],
+            [{ text: '🏢 درباره شرکت', callback_data: 'SEND_INFO_ABOUT' }],
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]
+        ];
+        return sendFn(chatId, "🏢 کدام اطلاعات را مایلید برای مشتری ارسال کنم؟\nپس از انتخاب، روی پیام ارسال شده ریپلای کنید و شناسه مشتری را وارد کنید.", { reply_markup: { inline_keyboard: keyboard } });
+    }
+
+    if (data.startsWith('SEND_INFO_')) {
+        const type = data.replace('SEND_INFO_', '');
         const parts = [];
-        if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
-        if (settings.companyAddress) parts.push(`📍 *آدرس:*\n${settings.companyAddress}`);
-        if (settings.companyPhone) parts.push(`📞 *شماره تماس:*\n${settings.companyPhone}`);
-        if (settings.companyBank) parts.push(`💳 *اطلاعات حساب:*\n${settings.companyBank}`);
+        if (type === 'ALL' || type === 'ABOUT') if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
+        if (type === 'ALL' || type === 'ADDR') {
+            if (settings.companyAddress) parts.push(`📍 *آدرس:*\n${settings.companyAddress}`);
+            if (settings.companyPhone) parts.push(`📞 *شماره تماس:*\n${settings.companyPhone}`);
+        }
+        if (type === 'ALL' || type === 'BANK') if (settings.companyBank) parts.push(`💳 *اطلاعات حساب:*\n${settings.companyBank}`);
         
         const infoMsg = parts.length > 0 ? parts.join('\n\n') : "اطلاعاتی ثبت نشده است.";
-        return sendFn(chatId, `🏢 *اطلاعات شرکت:*\n\n${infoMsg}\n\nجهت ارسال به مشتری، روی این پیام ರಿپلی (Reply) کرده و کد پیگیری یا شناسه مشتری را وارد کنید، یا وضعیت فوروارد را برای پیام اصلی استفاده کنید.`);
+        return sendFn(chatId, `🏢 *اطلاعات شرکت:*\n\n${infoMsg}\n\nجهت ارسال به مشتری، روی این پیام ریپلی (Reply) کرده و کد پیگیری یا شناسه مشتری را وارد کنید.`);
     }
 
     if (data === 'SALES_BROADCAST') {

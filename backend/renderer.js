@@ -326,28 +326,28 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     </table>
                 </div>
 
-                <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; align-items: start;">
-                    <div style="text-align: center;">
+                <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 10px;">
+                    <div style="text-align: center; flex: 1; min-width: 100px;">
                         <div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div>
-                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">درخواست کننده</div>
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">واحد فروش / درخواست</div>
                     </div>
-                    <div style="text-align: center;">                
+                    <div style="text-align: center; flex: 1; min-width: 100px;">                
                         ${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
-                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">مدیرعامل</div>
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">تایید مدیرعامل</div>
                     </div>
-                    <div style="text-align: center;">
+                    <div style="text-align: center; flex: 1; min-width: 100px;">
                         ${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
-                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">مدیر کارخانه</div>
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">تایید مدیر کارخانه</div>
                     </div>
-                    <div style="text-align: center;">
+                    <div style="text-align: center; flex: 1; min-width: 100px;">
                         ${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
                         <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">سرپرست انبار</div>
                     </div>
-                    <div style="text-align: center;">
+                    <div style="text-align: center; flex: 1; min-width: 100px;">
                         ${(record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)') ? `
                             <div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 8px; font-weight: bold;">ساعت: ${record.exitTime}</div>` : ''}</div>
                         ` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
-                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">تایید خروج</div>
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">تایید خروج / نگهبانی</div>
                     </div>
                 </div>
             </div></body></html>`;

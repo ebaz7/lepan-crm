@@ -881,16 +881,16 @@ app.post('/api/bot/broadcast', async (req, res) => {
             targetTargets = db.users || [];
         }
 
-        const botUsers = targetTargets.filter(u => u.telegramChatId || u.baleChatId || u.whatsappChatId);
+        const botUsers = targetTargets.filter(u => u.telegramChatId || u.baleChatId || u.whatsappChatId || u.telegramId || u.baleId);
         
         let telegramCount = 0;
         let baleCount = 0;
         
         if (platform === 'all' || platform === 'telegram') {
-            const telUsers = botUsers.filter(u => u.telegramChatId);
+            const telUsers = botUsers.filter(u => u.telegramChatId || u.telegramId);
             if (telUsers.length > 0) {
                 const tgModule = await import('./backend/telegram.js');
-                const uniqueIds = [...new Set(telUsers.map(u => u.telegramChatId))];
+                const uniqueIds = [...new Set(telUsers.map(u => u.telegramChatId || u.telegramId))];
                 for (const chatId of uniqueIds) {
                     try { await tgModule.sendBotMessage(chatId, message); telegramCount++; } catch (e) { }
                 }
@@ -898,10 +898,10 @@ app.post('/api/bot/broadcast', async (req, res) => {
         }
         
         if (platform === 'all' || platform === 'bale') {
-            const baleUsers = botUsers.filter(u => u.baleChatId);
+            const baleUsers = botUsers.filter(u => u.baleChatId || u.baleId);
             if (baleUsers.length > 0) {
                 const baleModule = await import('./backend/bale.js');
-                const uniqueIds = [...new Set(baleUsers.map(u => u.baleChatId))];
+                const uniqueIds = [...new Set(baleUsers.map(u => u.baleChatId || u.baleId))];
                 for (const chatId of uniqueIds) {
                     try { await baleModule.sendBotMessage(chatId, message); baleCount++; } catch (e) { }
                 }

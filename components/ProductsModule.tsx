@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X, ChevronRight, ChevronDown, EyeOff, Eye } from 'lucide-react';
+import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X, ChevronRight, ChevronDown, EyeOff, Eye, Upload, Download } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { formatCurrency, parsePersianDate } from '../constants';
+import * as XLSX from 'xlsx';
 
 interface Product {
     id: string;
@@ -53,6 +54,62 @@ const ProductsModule: React.FC = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws);
+
+                if (!confirm(`آیا از وارد کردن ${data.length} محصول اطمینان دارید؟`)) return;
+
+                setLoading(true);
+                let successCount = 0;
+                for (const row of (data as any[])) {
+                    const payload = {
+                        code: String(row['کد کالا'] || row['Code'] || ''),
+                        name: String(row['نام کالا'] || row['Name'] || ''),
+                        group: String(row['گوه'] || row['گروه'] || row['Group'] || 'سایر'),
+                        subgroup: String(row['زیرگروه'] || row['Subgroup'] || ''),
+                        price: Number(row['قیمت'] || row['Price'] || 0),
+                        stock: Number(row['موجودی'] || row['Stock'] || 0),
+                        unit: String(row['واحد'] || row['Unit'] || 'عدد')
+                    };
+                    if (payload.name) {
+                        await apiCall('/products', 'POST', payload);
+                        successCount++;
+                    }
+                }
+                alert(`${successCount} محصول با موفقیت وارد شد.`);
+                fetchData();
+            } catch (err) {
+                console.error(err);
+                alert('خطا در پردازش فایل اکسل');
+            } finally {
+                setLoading(false);
+            }
+        };
+        reader.readAsBinaryString(file);
+        e.target.value = '';
+    };
+
+    const downloadSampleExcel = () => {
+        const sampleData = [
+            { 'کد کالا': 'P1001', 'نام کالا': 'میلگرد ۱۰', 'گروه': 'آهن آلات', 'زیرگروه': 'میلگرد', 'قیمت': 250000, 'موجودی': 100, 'واحد': 'شاخه' },
+            { 'کد کالا': 'P1002', 'نام کالا': 'تیرآهن ۱۴', 'گروه': 'آهن آلات', 'زیرگروه': 'تیرآهن', 'قیمت': 4500000, 'موجودی': 50, 'واحد': 'شاخه' }
+        ];
+        const ws = XLSX.utils.json_to_sheet(sampleData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Products");
+        XLSX.writeFile(wb, "Sample_Products.xlsx");
     };
 
     useEffect(() => { fetchData(); }, []);
@@ -149,19 +206,30 @@ const ProductsModule: React.FC = () => {
                     <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت هرمی محصولات، قیمت‌ها و سفارشات مشتریان</p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                    <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all" title="بروزرسانی">
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                     {view === 'products' && (
-                        <button onClick={() => { 
-                            setEditingProduct(null); 
-                            setFormData({ code: '', name: '', group: '', subgroup: '', price: '', stock: '', unit: 'عدد', hidePrice: false, hideStock: false }); 
-                            setShowProductModal(true); 
-                        }} 
-                                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-200">
-                            <Plus className="w-5 h-5" />
-                            تعریف محصول جدید
-                        </button>
+                        <>
+                            <button onClick={downloadSampleExcel} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm" title="دانلود نمونه اکسل">
+                                <Download className="w-5 h-5" />
+                                <span className="hidden sm:inline">نمونه اکسل</span>
+                            </button>
+                            <label className="flex items-center gap-2 bg-emerald-600 text-white px-3 py-2 rounded-xl hover:bg-emerald-700 transition-all font-bold text-sm cursor-pointer shadow-lg shadow-emerald-100">
+                                <Upload className="w-5 h-5" />
+                                <span className="hidden sm:inline">واردات اکسل</span>
+                                <input type="file" accept=".xlsx, .xls" onChange={handleExcelImport} className="hidden" />
+                            </label>
+                            <button onClick={() => { 
+                                setEditingProduct(null); 
+                                setFormData({ code: '', name: '', group: '', subgroup: '', price: '', stock: '', unit: 'عدد', hidePrice: false, hideStock: false }); 
+                                setShowProductModal(true); 
+                            }} 
+                                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-200">
+                                <Plus className="w-5 h-5" />
+                                <span className="hidden sm:inline">تعریف محصول</span>
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
