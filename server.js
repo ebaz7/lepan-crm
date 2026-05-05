@@ -10,6 +10,7 @@ import cron from 'node-cron';
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import webpush from 'web-push';
+import * as XLSX from 'xlsx';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
 import { notifyExitPermitStep, notifyPaymentOrderStep } from './backend/bot-core.js';
@@ -222,6 +223,33 @@ app.get('/api/vapid-key', (req, res) => {
 app.get('/api/products', (req, res) => {
     const db = getDb();
     res.json(db.products || []);
+});
+
+app.post('/api/products/import-excel', async (req, res) => {
+    try {
+        const { fileData } = req.body;
+        const base64Data = fileData.replace(/^data:.*,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const workbook = XLSX.read(buffer, {type: 'buffer'});
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(sheet);
+
+        const db = getDb();
+        if (!db.products) db.products = [];
+
+        data.forEach(item => {
+            db.products.push({
+                ...item,
+                id: utils.generateUUID()
+            });
+        });
+        saveDb(db);
+        res.json({ success: true, count: data.length });
+    } catch (e) {
+        console.error("Excel Import Error:", e);
+        res.status(500).json({ error: 'Excel import failed' });
+    }
 });
 
 app.post('/api/products', (req, res) => {
@@ -870,6 +898,7 @@ app.post('/api/bot/broadcast', async (req, res) => {
         if (target === 'users') {
             targetTargets = db.users || [];
         } else if (target === 'contacts') {
+            console.log(">>>DEBUG: Sending to contacts. Target list length:", (db.settings.savedContacts || []).length);
             targetTargets = db.settings.savedContacts || [];
         } else if (target === 'all_subscribers') {
             const users = db.users || [];

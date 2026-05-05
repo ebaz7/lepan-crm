@@ -138,6 +138,28 @@ const ProductsModule: React.FC = () => {
 
     const isSearching = searchQuery.length > 0;
 
+    const handleExcelFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            const bstr = evt.target?.result;
+            if (!bstr) return;
+
+            try {
+                const res = await apiCall('/products/import-excel', 'POST', { 
+                    fileData: bstr 
+                });
+                alert(`تعداد ${res.count} محصول با موفقیت اضافه شد.`);
+                fetchData();
+            } catch (e) {
+                alert('خطا در ایمپورت فایل. لطفاً از فایل نمونه استفاده کنید.');
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
     return (
         <div className="space-y-6 animate-fade-in" dir="rtl">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -149,6 +171,13 @@ const ProductsModule: React.FC = () => {
                     <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت هرمی محصولات، قیمت‌ها و سفارشات مشتریان</p>
                 </div>
                 <div className="flex gap-2">
+                    <label className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 transition-all font-bold cursor-pointer">
+                         <Upload className="w-5 h-5" /> ایمپورت اکسل/CSV
+                         <input type="file" className="hidden" accept=".csv, .xlsx, .xls" onChange={handleExcelFileUpload} />
+                    </label>
+                    <a href="/sample_products.csv" download className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-all font-bold">
+                         <Download className="w-5 h-5" /> دانلود نمونه
+                    </a>
                     <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
