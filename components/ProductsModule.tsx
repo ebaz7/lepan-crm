@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
-import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X, ChevronRight, ChevronDown, EyeOff, Eye, FileSpreadsheet, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshCw, ShoppingCart, MessageSquare, Check, X, ChevronRight, ChevronDown, EyeOff, Eye } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { formatCurrency, parsePersianDate } from '../constants';
 
@@ -39,7 +38,6 @@ const ProductsModule: React.FC = () => {
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -120,44 +118,6 @@ const ProductsModule: React.FC = () => {
         }
     };
 
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            const data = evt.target?.result as ArrayBuffer;
-            const wb = XLSX.read(data, { type: 'array' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(ws);
-            
-            const newProducts = json.map((row: any) => ({
-                code: String(row['کد'] || ''),
-                name: String(row['نام'] || ''),
-                group: String(row['گروه'] || 'بدون گروه'),
-                subgroup: String(row['زیرگروه'] || 'سایر'),
-                price: Number(row['قیمت'] || 0),
-                stock: Number(row['موجودی'] || 0),
-                unit: String(row['واحد'] || 'عدد')
-            }));
-            
-            try {
-                await apiCall('/products/bulk', 'POST', { products: newProducts });
-                alert('محصولات با موفقیت ایمپورت شدند.');
-                fetchData();
-            } catch (e) {
-                alert('خطا در ایمپورت');
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    };
-
-    const downloadSample = () => {
-        const ws = XLSX.utils.aoa_to_sheet([["کد", "نام", "گروه", "زیرگروه", "قیمت", "موجودی", "واحد"], ["001", "محصول نمونه", "گروه ۱", "زیرگروه ۱", 100000, 10, "عدد"]]);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Products");
-        XLSX.writeFile(wb, "products_template.xlsx");
-    };
-
     // Tree grouping logic
     const filteredProducts = products.filter(p => 
         p.name.includes(searchQuery) || 
@@ -189,13 +149,6 @@ const ProductsModule: React.FC = () => {
                     <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت هرمی محصولات، قیمت‌ها و سفارشات مشتریان</p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl hover:bg-emerald-200 transition-all font-bold text-sm">
-                        <FileSpreadsheet className="w-4 h-4" /> ایمپورت اکسل
-                    </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
-                    <button onClick={downloadSample} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm">
-                        <Download className="w-4 h-4" /> نمونه
-                    </button>
                     <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
