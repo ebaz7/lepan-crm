@@ -252,9 +252,9 @@ export const generateRecordImage = async (record, type, options = {}) => {
             <style>
                 ${fontFaceRule}
                 body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; margin: 0; }
-                .stamp { position: absolute; top: 100px; left: 100px; font-size: 60px; font-weight: 900; opacity: 0.2; transform: rotate(-30deg); user-select: none; border: 6px solid; padding: 10px 40px; border-radius: 20px; z-index: 50; }
-                .stamp-edit { color: #d97706; border-color: #d97706; }
-                .stamp-delete { color: #dc2626; border-color: #dc2626; opacity: 0.4; }
+                .watermark-badge { position: absolute; top: 100px; left: 100px; font-size: 60px; font-weight: 900; opacity: 0.2; transform: rotate(-30deg); user-select: none; border: 6px solid; padding: 10px 40px; border-radius: 20px; z-index: 50; }
+                .badge-edit { color: #d97706; border-color: #d97706; }
+                .badge-delete { color: #dc2626; border-color: #dc2626; opacity: 0.4; }
                 #capture-wrapper { 
                     padding: 10mm; 
                     margin: 0 auto; 
@@ -294,8 +294,8 @@ export const generateRecordImage = async (record, type, options = {}) => {
             </style>
             </head><body>
             <div id="capture-wrapper">
-                ${isEdit ? '<div class="stamp stamp-edit">ویرایش شده</div>' : ''}
-                ${isDelete ? '<div class="stamp stamp-delete">حذف شده</div>' : ''}
+                ${isEdit ? '<div class="watermark-badge badge-edit">ویرایش شده</div>' : ''}
+                ${isDelete ? '<div class="watermark-badge badge-delete">حذف شده</div>' : ''}
                 <div class="meta-section">
                     <div><h1 style="font-size: 24px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه ${isEdit ? '(ویرایش شده)' : ''}${isDelete ? '(حذف شده)' : ''}</h1><p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
                     <div style="text-align: left;"><div style="font-size: 18px; font-weight: 900; background: #e5e7eb; padding: 8px 16px; border: 2px solid black; border-radius: 8px;">شماره: ${record.permitNumber}</div><div style="font-size: 14px; font-weight: bold; margin-top: 5px;">تاریخ: ${new Date(record.date).toLocaleDateString('fa-IR')}</div></div>
@@ -329,12 +329,27 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     </table>
                 </div>
 
-                <div style="margin-top: 30px; border-top: 4px solid black; padding-top: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
-                    <div style="text-align: center;"><div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div><div style="font-size: 12px; font-weight: bold; margin-top: 5px;">درخواست کننده</div></div>
-                    <div style="text-align: center;">${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">مدیرعامل</div></div>
-                    <div style="text-align: center;">${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">مدیر کارخانه</div></div>
-                    <div style="text-align: center;">${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">سرپرست انبار</div></div>
-                    <div style="text-align: center;">${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 10px; font-weight: bold; margin-top: 2px;">ساعت: ${record.exitTime}</div>` : ''}</div>` : ''}<div style="font-size: 12px; font-weight: bold; margin-top: 5px;">تایید خروج</div></div>
+                <div style="margin-top: 40px; border-top: 2px solid #000; padding-top: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-items: start;">
+                    <div style="text-align: center;">
+                        <div class="stamp" style="transform: none;"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div>
+                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">درخواست کننده</div>
+                    </div>
+                    <div style="text-align: center;">                
+                        ${record.approverCeo ? `<div class="stamp" style="transform: none;"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 48px;"></div>'}
+                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">مدیرعامل</div>
+                    </div>
+                    <div style="text-align: center;">
+                        ${record.approverFactory ? `<div class="stamp" style="transform: none;"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<div style="height: 48px;"></div>'}
+                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">مدیر کارخانه</div>
+                    </div>
+                    <div style="text-align: center;">
+                        ${record.approverWarehouse ? `<div class="stamp" style="transform: none;"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<div style="height: 48px;"></div>'}
+                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">سرپرست انبار</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    ${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black" style="display:inline-block; transform: none;"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 10px; font-weight: bold; margin-top: 2px;">ساعت: ${record.exitTime}</div>` : ''}</div>` : ''}
+                    <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">تایید خروج</div>
                 </div>
             </div></body></html>`;
 
