@@ -247,12 +247,24 @@ export const generateRecordImage = async (record, type, options = {}) => {
                 </div>
             `).join('');
 
+            const formatDateSafe = (dateVal) => {
+                if (!dateVal) return '-';
+                try {
+                    const iso = String(dateVal).split('T')[0];
+                    const parts = iso.split('-');
+                    if (parts.length === 3) {
+                        return new Date(parts[0], parts[1]-1, parts[2], 12).toLocaleDateString('fa-IR');
+                    }
+                    return new Date(dateVal).toLocaleDateString('fa-IR');
+                } catch(e) { return '-'; }
+            };
+
             const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
             <script src="https://cdn.tailwindcss.com"></script>
             <style>
                 ${fontFaceRule}
                 body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; margin: 0; }
-                .watermark-badge { position: absolute; top: 100px; left: 100px; font-size: 60px; font-weight: 900; opacity: 0.2; transform: rotate(-30deg); user-select: none; border: 6px solid; padding: 10px 40px; border-radius: 20px; z-index: 50; }
+                .watermark-badge { position: absolute; top: 40px; left: 40px; font-size: 40px; font-weight: 900; opacity: 0.2; transform: rotate(-15deg); user-select: none; border: 4px solid; padding: 5px 20px; border-radius: 12px; z-index: 50; }
                 .badge-edit { color: #d97706; border-color: #d97706; }
                 .badge-delete { color: #dc2626; border-color: #dc2626; opacity: 0.4; }
                 #capture-wrapper { 
@@ -267,45 +279,30 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     color: black;
                     position: relative;
                 }
-                .watermark {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%) rotate(-45deg);
-                    font-size: 120px;
-                    font-weight: 950;
-                    color: rgba(220, 38, 38, 0.15);
-                    white-space: nowrap;
-                    pointer-events: none;
-                    z-index: 100;
-                    border: 20px solid rgba(220, 38, 38, 0.15);
-                    padding: 40px;
-                    border-radius: 40px;
-                }
-                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 12px; padding: 8px; transform: rotate(-5deg); text-align: center; background: white; min-width: 90px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 10px; padding: 6px; transform: rotate(-3deg); text-align: center; background: white; min-width: 80px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: inline-block; }
                 .stamp.black { border-color: black; color: black; }
-                .stamp-title { font-size: 10px; font-weight: bold; border-bottom: 1px solid #1e40af; margin-bottom: 4px; padding-bottom: 2px; }
-                .stamp-name { font-size: 14px; font-weight: 900; }
+                .stamp-title { font-size: 9px; font-weight: bold; border-bottom: 1px solid #1e40af; margin-bottom: 3px; padding-bottom: 1px; }
+                .stamp.black .stamp-title { border-color: black; }
+                .stamp-name { font-size: 12px; font-weight: 900; }
                 table { width: 100%; border-collapse: collapse; border: 2px solid black; margin-top: 10px; text-align: center; }
-                th, td { border: 2px solid black; padding: 8px; }
+                th, td { border: 2px solid black; padding: 6px; }
                 th { background-color: #f3f4f6; }
-                .header-row { font-weight: bold; }
-                .meta-section { border-bottom: 2px solid black; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+                .meta-section { border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
             </style>
             </head><body>
             <div id="capture-wrapper">
                 ${isEdit ? '<div class="watermark-badge badge-edit">ویرایش شده</div>' : ''}
                 ${isDelete ? '<div class="watermark-badge badge-delete">حذف شده</div>' : ''}
                 <div class="meta-section">
-                    <div><h1 style="font-size: 24px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه ${isEdit ? '(ویرایش شده)' : ''}${isDelete ? '(حذف شده)' : ''}</h1><p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                    <div style="text-align: left;"><div style="font-size: 18px; font-weight: 900; background: #e5e7eb; padding: 8px 16px; border: 2px solid black; border-radius: 8px;">شماره: ${record.permitNumber}</div><div style="font-size: 14px; font-weight: bold; margin-top: 5px;">تاریخ: ${new Date(record.date).toLocaleDateString('fa-IR')}</div></div>
+                    <div><h1 style="font-size: 22px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه</h1><p style="font-size: 12px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
+                    <div style="text-align: left;"><div style="font-size: 16px; font-weight: 900; background: #e5e7eb; padding: 6px 12px; border: 2px solid black; border-radius: 6px;">شماره: ${record.permitNumber}</div><div style="font-size: 12px; font-weight: bold; margin-top: 3px;">تاریخ: ${formatDateSafe(record.date)}</div></div>
                 </div>
 
                 <div style="flex: 1;">
-                    <h3 style="margin-bottom: 5px;">لیست اقلام و کالاها</h3>
+                    <h3 style="margin-bottom: 5px; font-weight: bold;">لیست اقلام و کالاها</h3>
                     <table>
                         <thead>
-                            <tr class="header-row">
+                            <tr style="font-weight: bold; font-size: 11px;">
                                 <th>#</th>
                                 <th>شرح کالا</th>
                                 <th>تعداد درخواستی</th>
@@ -314,42 +311,44 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                 <th>وزن خروجی</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody style="font-size: 12px;">
                             ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, deliveredCartonCount: record.deliveredCartonCount, weight: record.weight, deliveredWeight: record.deliveredWeight}]).map((i, idx) => `
                                 <tr>
                                     <td>${idx+1}</td>
                                     <td style="font-weight: bold;">${i.goodsName}</td>
                                     <td>${i.cartonCount || 0}</td>
-                                    <td>${i.deliveredCartonCount ?? 0}</td>
+                                    <td style="font-weight: bold; color: #166534;">${i.deliveredCartonCount ?? 0}</td>
                                     <td>${i.weight || 0}</td>
-                                    <td>${i.deliveredWeight ?? 0}</td>
+                                    <td style="font-weight: bold; color: #166534;">${i.deliveredWeight ?? 0}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
                 </div>
 
-                <div style="margin-top: 40px; border-top: 2px solid #000; padding-top: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-items: start;">
+                <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; align-items: start;">
                     <div style="text-align: center;">
-                        <div class="stamp" style="transform: none;"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div>
-                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">درخواست کننده</div>
+                        <div class="stamp"><div class="stamp-title">درخواست کننده</div><div class="stamp-name">${record.requester || '-'}</div></div>
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">درخواست کننده</div>
                     </div>
                     <div style="text-align: center;">                
-                        ${record.approverCeo ? `<div class="stamp" style="transform: none;"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 48px;"></div>'}
-                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">مدیرعامل</div>
+                        ${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیریت</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">مدیرعامل</div>
                     </div>
                     <div style="text-align: center;">
-                        ${record.approverFactory ? `<div class="stamp" style="transform: none;"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<div style="height: 48px;"></div>'}
-                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">مدیر کارخانه</div>
+                        ${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">مدیر کارخانه</div>
                     </div>
                     <div style="text-align: center;">
-                        ${record.approverWarehouse ? `<div class="stamp" style="transform: none;"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<div style="height: 48px;"></div>'}
-                        <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">سرپرست انبار</div>
+                        ${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">سرپرست انبار</div>
                     </div>
-                </div>
-                <div style="margin-top: 15px; text-align: center;">
-                    ${record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)' ? `<div class="stamp black" style="display:inline-block; transform: none;"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 10px; font-weight: bold; margin-top: 2px;">ساعت: ${record.exitTime}</div>` : ''}</div>` : ''}
-                    <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">تایید خروج</div>
+                    <div style="text-align: center;">
+                        ${(record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)') ? `
+                            <div class="stamp black"><div class="stamp-title">انتظامات / خروج</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div>${record.exitTime ? `<div style="font-size: 8px; font-weight: bold;">ساعت: ${record.exitTime}</div>` : ''}</div>
+                        ` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
+                        <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">تایید خروج</div>
+                    </div>
                 </div>
             </div></body></html>`;
 

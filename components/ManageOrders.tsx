@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, User, UserRole, SystemSettings, PaymentMethod } from '../types';
 import { updateOrderStatus, deleteOrder } from '../services/storageService';
 import { getRolePermissions } from '../services/authService';
-import { formatCurrency, formatDate, getStatusLabel, jalaliToGregorian, formatNumberString, deformatNumberString } from '../constants';
+import { formatCurrency, formatDate, getStatusLabel, jalaliToGregorian, formatNumberString, deformatNumberString, parseSafeDate } from '../constants';
 import { Eye, Trash2, Search, Filter, FileSpreadsheet, Paperclip, ListChecks, Archive, X, Building2, Calculator, AlertTriangle, RefreshCcw, Loader2, ShieldAlert } from 'lucide-react';
 import PrintVoucher from './PrintVoucher';
 import EditOrderModal from './EditOrderModal';
@@ -225,7 +225,7 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       document.body.removeChild(link);
   };
 
-  const parseISODate = (iso: string) => new Date(iso);
+  const parseISODate = (iso: string) => parseSafeDate(iso);
   const getFilterDate = (d: {year: number, month: number, day: number}) => {
       return jalaliToGregorian(d.year, d.month, d.day);
   };
