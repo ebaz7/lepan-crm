@@ -233,6 +233,15 @@ app.post('/api/products', (req, res) => {
     res.json({ success: true, product: newProduct });
 });
 
+app.post('/api/products/bulk', (req, res) => {
+    const db = getDb();
+    if (!db.products) db.products = [];
+    const newProducts = req.body.products.map(p => ({ ...p, id: utils.generateUUID() }));
+    db.products.push(...newProducts);
+    saveDb(db);
+    res.json({ success: true, count: newProducts.length });
+});
+
 app.put('/api/products/:id', (req, res) => {
     const db = getDb();
     if (!db.products) db.products = [];
