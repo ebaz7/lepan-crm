@@ -45,8 +45,7 @@
     "react-dom": "^18.2.0",
     "recharts": "^2.12.2",
     "web-push": "^3.6.7",
-    "whatsapp-web.js": "^1.23.0",
-    "xlsx": "^0.18.5"
+    "whatsapp-web.js": "^1.23.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
