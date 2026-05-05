@@ -57,7 +57,7 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '💰 مدیریت پرداخت', callback_data: 'MENU_PAY' }, { text: '🚛 مدیریت خروج', callback_data: 'MENU_EXIT' }],
             [{ text: '📦 انبار و موجودی', callback_data: 'MENU_WH' }, { text: '🌍 بازرگانی', callback_data: 'MENU_TRADE' }],
-            [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }, { text: '🛒 بخش مشتریان', callback_data: 'GUEST_MAIN' }],
+            [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }],
             [{ text: '📊 گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }, { text: '👤 پروفایل', callback_data: 'MENU_PROFILE' }]
         ]
     },
@@ -673,25 +673,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
     if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
         session.state = 'IDLE';
-        const target = session.data.broadcastTarget || 'ALL';
-        delete session.data.broadcastTarget;
-
+        // Broadcast
         let count = 0;
         const baleModule = await import('./bale.js');
         const tgModule = await import('./telegram.js');
 
-        const targets = [];
-        if (target === 'ALL' || target === 'STAFF') targets.push(...db.users);
-        if (target === 'ALL' || target === 'CUSTOMERS') targets.push(...db.botSubscribers);
-        
-        // Deduplicate
-        const uniqueTargets = new Map();
-        targets.forEach(u => {
-            const chatId = u.telegramChatId || u.baleChatId;
-            if (chatId) uniqueTargets.set(chatId, u);
-        });
-
-        for (const u of uniqueTargets.values()) {
+        for (const u of db.users) {
             if (u.telegramChatId) {
                 try { await tgModule.sendBotMessage(u.telegramChatId, text); count++; } catch (e) {}
             }
@@ -699,7 +686,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 try { await baleModule.sendBotMessage(u.baleChatId, text); count++; } catch (e) {}
             }
         }
-        return sendFn(chatId, `✅ پیام برای ${target === 'STAFF' ? 'کارکنان' : target === 'CUSTOMERS' ? 'مشتریان' : 'همه'} (${count} کاربر) ارسال شد.`);
+        return sendFn(chatId, `✅ پیام به ${count} کاربر ارسال شد.`);
     }
 
     if (session.state === 'SALES_WAIT_SEARCH_QUERY') {
@@ -1171,20 +1158,10 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         });
     }
 
-    // GUEST HANDLERS / PRE-AUTH HANDLERS
-    if (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB')) {
+    if (!user && (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB'))) {
         if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
         const session = sessions[userId];
 
-        if (data.startsWith('GUEST_TICKET_REPLY_')) {
-            const ticketId = data.replace('GUEST_TICKET_REPLY_', '');
-            session.state = 'GUEST_WAIT_TICKET_REPLY';
-            session.data.ticketId = ticketId;
-            return sendFn(userId, "✍️ لطفاً پاسخ خود را به این تیکت وارد کنید:", {
-                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
-            });
-        }
-        
         if (data === 'GUEST_MAIN') {
             session.state = 'IDLE';
             const guestMenu = [
@@ -1335,13 +1312,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
 
-    // Broadcast Target Handler
-    if (data.startsWith('TARGET_')) {
-        session.state = 'SALES_WAIT_BROADCAST_MSG';
-        session.data.broadcastTarget = data.replace('TARGET_', '');
-        return sendFn(chatId, "📢 پیام خود را وارد کنید:");
-    }
-
+    // Sales logic
     if (data === 'ACT_SEND_CO_INFO') {
         const parts = [];
         if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
@@ -1355,16 +1326,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_BROADCAST') {
         if (!['admin', 'sales_manager'].includes(user.role)) return sendFn(chatId, "⛔ دسترسی ندارید.");
-        session.state = 'SALES_WAIT_TARGET';
-        return sendFn(chatId, "📢 گیرندگان پیام را انتخاب کنید:", {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '👥 همه (کارکنان + مشتریان)', callback_data: 'TARGET_ALL' }],
-                    [{ text: '👤 فقط کارکنان', callback_data: 'TARGET_STAFF' }],
-                    [{ text: '🛒 فقط مشتریان', callback_data: 'TARGET_CUSTOMERS' }]
-                ]
-            }
-        });
+        session.state = 'SALES_WAIT_BROADCAST_MSG';
+        return sendFn(chatId, "📢 پیام خود را برای ارسال به همه کاربران وارد کنید:");
     }
 
     if (data === 'SALES_LIST_ALL') {
