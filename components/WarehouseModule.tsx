@@ -318,13 +318,22 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: managerCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${updatedTx.number}_Price.png` } });
                         }
 
-                        if (groupNumber && warehouseElement) {
+                        if (warehouseElement) {
                             // @ts-ignore
                             const canvas = await window.html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
                             const warehouseCaption = `🏭 *شرکت: ${updatedTx.company}*\n📦 *حواله خروج (انبار)*\n${commonDetails}`;
+                            const mediaData = { data: base64, filename: `Bijak_${updatedTx.number}.png` };
 
-                            await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warehouseCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${updatedTx.number}.png` } });
+                            if (groupNumber) {
+                                await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warehouseCaption, mediaData: { ...mediaData, mimeType: 'image/png' } });
+                            }
+                            if (companyConfig?.telegramChannelId) {
+                                await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption: warehouseCaption, mediaData });
+                            }
+                            if (companyConfig?.baleChannelId) {
+                                await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption: warehouseCaption, mediaData });
+                            }
                         }
                     } catch(e) { console.error("Auto send error", e); }
                 }
