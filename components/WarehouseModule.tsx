@@ -322,7 +322,14 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             // @ts-ignore
                             const canvas = await window.html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
-                            const warehouseCaption = `🏭 *شرکت: ${updatedTx.company}*\n📦 *حواله خروج (انبار)*\n${commonDetails}`;
+                            const warehouseCaption = `📦 *بیجک انبار #${updatedTx.number}*\n` +
+                                `🏢 شرکت: ${updatedTx.company || '-'}\n` +
+                                `👤 گیرنده: ${updatedTx.recipientName || '-'}\n` +
+                                `📅 تاریخ: ${updatedTx.date}\n` +
+                                `📦 کالاها:\n` +
+                                updatedTx.items.map(it => `- ${it.name} (${it.quantity} ${it.unit || 'عدد'})`).join('\n') +
+                                (updatedTx.description ? `\n📝 توضیحات: ${updatedTx.description}` : '') +
+                                `\n🔄 وضعیت: ${updatedTx.status}`;
                             const mediaData = { data: base64, filename: `Bijak_${updatedTx.number}.png` };
 
                             if (groupNumber) {

@@ -1010,6 +1010,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                  <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
                                                  <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 bg-white rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
                                                  {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
@@ -1112,6 +1113,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                  <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
                                                  <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 bg-white rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
                                                  {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
