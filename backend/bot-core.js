@@ -1097,14 +1097,35 @@ export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP')
         const isDelete = eventType === 'DELETE';
         const settings = db.settings || {};
         
+        // Use full date helper if available
+        const dateStr = toShamsiFull ? toShamsiFull(tx.date) : new Date(tx.date).toLocaleDateString('fa-IR');
+        
         // Generate image using Renderer
         const Renderer = await import('./renderer.js');
         const img = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete });
         
         let header = isDelete ? `❌ *حذف شد: حواله خروج انبار (بیجک)*` : (isEdit ? `✏️ *ویرایش شد: حواله خروج انبار*` : `🚨 *حواله خروج انبار (بیجک)*`);
-        let footerText = stepName === 'ثبت اولیه' ? 'لطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.' : `تایید شده توسط: ${tx.approvedBy || '-'}`;
+        let footerText = stepName === 'ثبت اولیه' ? '⚠️ *لطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.*' : `✅ *تایید نهایی توسط:* ${tx.approvedBy || '-'}`;
         
-        const caption = `${header}\n🔢 شماره: ${tx.number}\n🏢 شرکت: ${tx.company || '-'}\n📅 تاریخ: ${toShamsiFull(tx.date)}\n👤 گیرنده: ${tx.recipientName || '-'}\n📦 کالاها:\n${tx.items.map(it => `- ${it.itemName} (${it.quantity} ${it.unit || 'واحد'})`).join('\n')}${tx.description ? `\n📝 توضیحات: ${tx.description}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${tx.status || 'PENDING'}\n${footerText}`;
+        let caption = `${header}\n`;
+        caption += `━━━━━━━━━━━━━━\n`;
+        caption += `🔢 *شماره:* ${tx.number}\n`;
+        caption += `🏢 *شرکت:* ${tx.company || '-'}\n`;
+        caption += `📅 *تاریخ:* ${dateStr}\n`;
+        caption += `👤 *گیرنده:* ${tx.recipientName || '-'}\n`;
+        caption += `📍 *مقصد:* ${tx.destination || '-'}\n`;
+        caption += `🚚 *راننده:* ${tx.driverName || '-'}\n`;
+        caption += `🆔 *پلاک:* \`${tx.plateNumber || '-'}\`\n`;
+        caption += `━━━━━━━━━━━━━━\n`;
+        caption += `📦 *اقلام حواله:* \n`;
+        tx.items.forEach((it, idx) => {
+            caption += `${idx + 1}. ${it.itemName} | ${it.quantity} ${it.unit || 'واحد'}\n`;
+        });
+        if (tx.description) caption += `📝 *توضیحات:* ${tx.description}\n`;
+        caption += `━━━━━━━━━━━━━━\n`;
+        caption += `🔄 *وضعیت:* ${tx.status || 'PENDING'}\n`;
+        caption += `📢 *مرحله:* ${stepName}\n`;
+        caption += `${footerText}`;
 
         const mediaData = { data: img.toString('base64'), filename: `Bijak_${tx.number}.png`, mimeType: 'image/png' };
 

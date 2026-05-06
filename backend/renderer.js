@@ -362,16 +362,125 @@ export const generateRecordImage = async (record, type, options = {}) => {
             return buffer;
 
         } else if (type === 'BIJAK' || type === 'RECEIPT') {
-            title = type === 'BIJAK' ? 'حواله خروج (بیجک)' : 'رسید ورود کالا';
-            if (isEdit) title += ' (ویرایش شده)';
-            if (isDelete) title += ' (حذف شده)';
-            htmlData = `
-                <div class="row"><span class="label">شماره:</span><span class="value">#${record.number || record.proformaNumber}</span></div>
-                <div class="row"><span class="label">شرکت:</span><span class="value">${record.company}</span></div>
-                <div class="row"><span class="label">${type === 'BIJAK' ? 'گیرنده' : 'فرستنده'}:</span><span class="value">${type === 'BIJAK' ? record.recipientName : record.proformaNumber}</span></div>
-                <div class="row"><span class="label">تعداد اقلام:</span><span class="value">${record.items.length} قلم</span></div>
-                <div class="row"><span class="label">راننده:</span><span class="value">${record.driverName || '-'}</span></div>
-            `;
+            const isBijak = type === 'BIJAK';
+            const showPrices = options.forceHidePrices !== true;
+            
+            const formatDateSafe = (dateVal) => {
+                if (!dateVal) return '-';
+                try { return new Date(dateVal).toLocaleDateString('fa-IR'); } catch(e) { return '-'; }
+            };
+
+            const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                ${fontFaceRule}
+                body { background: white; padding: 0 !important; font-family: 'Vazirmatn', sans-serif !important; margin: 0; }
+                .watermark-badge { position: absolute; top: 40px; left: 40px; font-size: 40px; font-weight: 900; opacity: 0.2; transform: rotate(-15deg); user-select: none; border: 4px solid; padding: 5px 20px; border-radius: 12px; z-index: 50; }
+                .badge-edit { color: #d97706; border-color: #d97706; }
+                .badge-delete { color: #dc2626; border-color: #dc2626; opacity: 0.4; }
+                #capture-wrapper { 
+                    padding: 8mm; 
+                    margin: 0 auto; 
+                    width: 148mm; 
+                    height: 209mm;
+                    background: white; 
+                    direction: rtl; 
+                    display: flex;
+                    flex-direction: column;
+                    box-sizing: border-box;
+                    color: black;
+                    position: relative;
+                    border: 1px solid #eee;
+                }
+                .stamp { border: 2px solid #1e40af; color: #1e40af; border-radius: 10px; padding: 4px; transform: rotate(-5deg); text-align: center; background: white; min-width: 80px; display: inline-block; }
+                .stamp.green { border-color: #166534; color: #166534; }
+                .stamp-title { font-size: 8px; font-weight: bold; border-bottom: 1px solid currentColor; margin-bottom: 2px; padding-bottom: 1px; }
+                .stamp-name { font-size: 11px; font-weight: 900; }
+                table { width: 100%; border-collapse: collapse; border: 1.5px solid black; margin-top: 5px; text-align: center; }
+                th, td { border: 1.5px solid black; padding: 4px; }
+                th { background-color: #f3f4f6; font-size: 10px; }
+                td { font-size: 11px; }
+                .meta-section { border-bottom: 2px solid black; padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: start; }
+            </style>
+            </head><body>
+            <div id="capture-wrapper">
+                ${isEdit ? '<div class="watermark-badge badge-edit">ویرایش شده</div>' : ''}
+                ${isDelete ? '<div class="watermark-badge badge-delete">حذف شده</div>' : ''}
+                
+                <div class="meta-section">
+                    <div>
+                        <h1 style="font-size: 18px; font-weight: 900; margin: 0;">${record.company}</h1>
+                        <p style="font-size: 11px; font-weight: bold; color: #4b5563; margin: 0;">${isBijak ? 'حواله خروج کالا (بیجک)' : 'رسید ورود کالا'}</p>
+                    </div>
+                    <div style="text-align: left;">
+                        <div style="font-size: 14px; font-weight: 900; border: 2px solid black; padding: 4px 10px; border-radius: 4px;">NO: ${record.number || record.proformaNumber}</div>
+                        <div style="font-size: 10px; font-weight: bold; margin-top: 2px;">تاریخ: ${formatDateSafe(record.date)}</div>
+                    </div>
+                </div>
+
+                <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; margin-bottom: 10px; font-size: 11px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div><span style="color: #6b7280;">${isBijak ? 'تحویل گیرنده' : 'فرستنده'}:</span> <b>${isBijak ? record.recipientName : (record.supplierName || record.proformaNumber)}</b></div>
+                        <div><span style="color: #6b7280;">مقصد/محل:</span> <b>${record.destination || record.location || '-'}</b></div>
+                        <div><span style="color: #6b7280;">راننده:</span> <b>${record.driverName || '-'}</b></div>
+                        <div><span style="color: #6b7280;">پلاک:</span> <b style="direction: ltr; display: inline-block;">${record.plateNumber || '-'}</b></div>
+                    </div>
+                </div>
+
+                <div style="flex: 1;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;">#</th>
+                                <th>شرح کالا</th>
+                                <th style="width: 60px;">تعداد</th>
+                                <th style="width: 70px;">وزن (KG)</th>
+                                ${showPrices ? '<th style="width: 90px;">فی (ریال)</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(record.items || []).map((item, idx) => `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td style="text-align: right; font-weight: bold; padding-right: 8px;">${item.itemName}</td>
+                                    <td>${item.quantity}</td>
+                                    <td>${item.weight || 0}</td>
+                                    ${showPrices ? `<td style="font-family: monospace;">${item.unitPrice ? parseInt(item.unitPrice).toLocaleString() : '-'}</td>` : ''}
+                                </tr>
+                            `).join('')}
+                            <tr style="background-color: #f3f4f6; font-weight: bold;">
+                                <td colspan="2" style="text-align: left; padding-left: 10px;">جمع کل:</td>
+                                <td>${(record.items || []).reduce((a, b) => a + (Number(b.quantity) || 0), 0)}</td>
+                                <td>${(record.items || []).reduce((a, b) => a + (Number(b.weight) || 0), 0)}</td>
+                                ${showPrices ? '<td></td>' : ''}
+                            </tr>
+                        </tbody>
+                    </table>
+                    ${record.description ? `<div style="margin-top: 10px; font-size: 10px; border: 1px solid #eee; padding: 5px; border-radius: 4px;"><b>توضیحات:</b> ${record.description}</div>` : ''}
+                </div>
+
+                <div style="margin-top: 20px; border-top: 1.5px solid black; padding-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center;">
+                    <div>
+                        <div class="stamp"><div class="stamp-title">انباردار (ثبت)</div><div class="stamp-name">${record.createdBy || 'کاربر انبار'}</div></div>
+                        <div style="font-size: 9px; font-weight: bold; color: #4b5563; margin-top: 4px;">امضا انباردار</div>
+                    </div>
+                    <div>
+                        ${record.approvedBy ? `<div class="stamp green"><div class="stamp-title">تایید مدیریت</div><div class="stamp-name">${record.approvedBy}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 10px;"></div>'}
+                        <div style="font-size: 9px; font-weight: bold; color: #4b5563; margin-top: 4px;">امضا مدیریت</div>
+                    </div>
+                    <div>
+                        <div style="height: 40px;"></div>
+                        <div style="font-size: 9px; font-weight: bold; color: #4b5563; margin-top: 4px;">امضا تحویل گیرنده</div>
+                    </div>
+                </div>
+            </div></body></html>`;
+
+            await page.setViewport({ width: 600, height: 850, deviceScaleFactor: 2 });
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const card = await page.$('#capture-wrapper');
+            const buffer = await card.screenshot({ type: 'png' });
+            await page.close();
+            return buffer;
         }
 
         await page.setContent(generateRecordCardHTML(title, htmlData, type), { waitUntil: 'networkidle0' });
