@@ -6,6 +6,7 @@ import { X, Printer, Loader2, Share2, Search, Users, Smartphone, FileDown, Check
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator'; 
+import html2canvas from 'html2canvas';
 
 interface PrintBijakProps {
   tx: WarehouseTransaction;
@@ -123,8 +124,7 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
               const element = document.getElementById(containerId);
               if (!element) throw new Error("Element not found");
 
-              // @ts-ignore
-              const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: 1000 });
+              const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: 1000 });
               const base64 = canvas.toDataURL('image/png').split(',')[1];
 
               let caption = `${captionPrefix}\nشماره: ${tx.number}\nگیرنده: ${tx.recipientName}\nتعداد: ${tx.items.length} قلم`;

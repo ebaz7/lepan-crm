@@ -9,6 +9,7 @@ import PrintStockReport from './print/PrintStockReport';
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
+import html2canvas from 'html2canvas';
 import useIsMobile from '../hooks/useIsMobile';
 
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -310,8 +311,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
                     try {
                         if (managerNumber && managerElement) {
-                            // @ts-ignore
-                            const canvas = await window.html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
+                            const canvas = await html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
                             const managerCaption = `🏭 *شرکت: ${updatedTx.company}*\n📑 *حواله خروج - تایید شده${titleSuffix}*\n${commonDetails}`;
                             
@@ -319,8 +319,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         }
 
                         if (warehouseElement) {
-                            // @ts-ignore
-                            const canvas = await window.html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
+                            const canvas = await html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
                             const warehouseCaption = `📦 *بیجک انبار #${updatedTx.number}*\n` +
                                 `🏢 شرکت: ${updatedTx.company || '-'}\n` +
@@ -390,14 +389,12 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
                 try {
                     if (managerNumber && managerElement) {
-                        // @ts-ignore
-                        const canvas = await window.html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
+                        const canvas = await html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: warningCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_DELETED_${txToDelete.number}.png` } });
                     }
                     if (warehouseElement) {
-                        // @ts-ignore
-                        const canvas = await window.html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
+                        const canvas = await html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         const mediaData = { data: base64, filename: `Bijak_DELETED_${txToDelete.number}.png` };
                         
@@ -443,8 +440,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                          const users = await getUsers();
                          const ceo = users.find(u => u.role === UserRole.CEO && u.phoneNumber);
                          if (ceo) {
-                             // @ts-ignore
-                            const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
+                             const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
                             
                             let caption = `📝 *اصلاحیه بیجک (جهت تایید مجدد)*\n`;

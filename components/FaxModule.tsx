@@ -4,7 +4,8 @@ import { User, SystemSettings } from '../types';
 import { Printer, Send, FileText, Loader2, Phone, User as UserIcon, Paperclip, CheckCircle } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { formatDate } from '../constants';
-import { generatePdf } from '../utils/pdfGenerator'; // Import Utility
+import { generatePdf } from '../utils/pdfGenerator'; 
+import html2canvas from 'html2canvas';
 
 interface Props {
     currentUser: User;
@@ -50,12 +51,11 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
             if (!element) throw new Error("Template not found");
 
             // Use same settings as our utility for consistency
-            // @ts-ignore
-            const canvas = await window.html2canvas(element, { 
+            const canvas = await html2canvas(element, { 
                 scale: 2, 
                 backgroundColor: '#ffffff',
                 useCORS: true,
-                windowWidth: 1200 // Consistent with our utility
+                windowWidth: 1200
             });
             
             // @ts-ignore

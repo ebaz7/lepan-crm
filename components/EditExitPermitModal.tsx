@@ -8,6 +8,7 @@ import PrintExitPermit from './PrintExitPermit';
 import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
 import { getSettings } from '../services/storageService'; 
+import html2canvas from 'html2canvas';
 
 interface EditExitPermitModalProps {
   permit: ExitPermit;
@@ -109,8 +110,7 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
               
               if (element) {
                   try {
-                      // @ts-ignore
-                      const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
                       const base64 = canvas.toDataURL('image/png').split(',')[1];
 
                       const users = await getUsers();

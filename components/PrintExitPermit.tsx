@@ -6,6 +6,7 @@ import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, Share2, Edit, L
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator'; 
+import html2canvas from 'html2canvas';
 
 interface Props {
   permit: ExitPermit;
@@ -95,8 +96,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
       
       try {
           setProcessing(true);
-          // @ts-ignore
-          const canvas = await window.html2canvas(element, { 
+          const canvas = await html2canvas(element, { 
               scale: 2, 
               backgroundColor: '#ffffff', 
               useCORS: true,

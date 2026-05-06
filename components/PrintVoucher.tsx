@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, getStatusLabel, numberToPersianWords, forma
 import { X, Printer, FileDown, Loader2, CheckCircle, XCircle, Pencil, Share2, Users, Search, RotateCcw, AlertTriangle, FileText, LayoutTemplate, EyeOff, Eye, Settings2, ChevronLeft, ChevronRight, Calendar, MapPin, Layers } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { generatePdf } from '../utils/pdfGenerator'; 
+import html2canvas from 'html2canvas';
 
 interface PrintVoucherProps {
   order: PaymentOrder;
@@ -234,8 +235,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       const element = document.getElementById(printAreaId);
       if (!element) { setProcessing(false); return; }
       try {
-          // @ts-ignore
-          const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+          const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
           const base64 = canvas.toDataURL('image/png').split(',')[1];
           const caption = `🧾 *رسید پرداخت وجه*\n🏢 شرکت: ${order.payingCompany}\n👤 ذینفع: ${order.payee}\n💰 مبلغ: ${formatCurrency(order.totalAmount)}`;
 

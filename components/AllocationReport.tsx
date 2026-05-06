@@ -4,7 +4,8 @@ import { TradeRecord, TradeStage } from '../types';
 import { formatCurrency, formatNumberString, deformatNumberString, parsePersianDate } from '../constants';
 import { FileSpreadsheet, Printer, FileDown, Share2, Loader2, Search, Filter, Settings, X, RefreshCw } from 'lucide-react';
 import { apiCall } from '../services/apiService';
-import PrintAllocationReport from './print/PrintAllocationReport'; // Import
+import PrintAllocationReport from './print/PrintAllocationReport';
+import html2canvas from 'html2canvas';
 
 interface AllocationReportProps {
     records: TradeRecord[];
@@ -206,8 +207,7 @@ const AllocationReport: React.FC<AllocationReportProps> = ({ records, onUpdateRe
         const element = document.getElementById('allocation-report-table-print-area');
         if (!element) { setIsGeneratingPdf(false); return; }
         try {
-            // @ts-ignore
-            const canvas = await window.html2canvas(element, {
+            const canvas = await html2canvas(element, {
                 scale: 2, backgroundColor: '#ffffff', useCORS: true,
                 onclone: (doc: any) => {
                     const el = doc.getElementById('allocation-report-table-print-area');
@@ -317,7 +317,7 @@ const AllocationReport: React.FC<AllocationReportProps> = ({ records, onUpdateRe
         if (!element) { setSendingReport(false); return; }
         try {
             // @ts-ignore
-            const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff', onclone: (doc: any) => { 
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff', onclone: (doc: any) => { 
                 const el = doc.getElementById('allocation-report-table-print-area'); 
                 if (el) { el.style.width = '1400px'; el.style.direction = 'rtl'; const selects = el.querySelectorAll('select'); selects.forEach((s: any) => { const val = s.options[s.selectedIndex].text; const span = doc.createElement('span'); span.innerText = val !== 'انتخاب' ? val : ''; s.parentNode.replaceChild(span, s); }); const checkboxes = el.querySelectorAll('input[type="checkbox"]'); checkboxes.forEach((c: any) => { const span = doc.createElement('span'); span.innerText = c.checked ? '✅' : '⬜'; c.parentNode.replaceChild(span, c); }); } 
             }});

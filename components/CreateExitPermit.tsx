@@ -7,6 +7,7 @@ import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
+import html2canvas from 'html2canvas';
 
 const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> = ({ onSuccess, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,8 +126,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 
                 if (element) {
                     try {
-                        // @ts-ignore
-                        const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                        const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         
                         const users = await getUsers();

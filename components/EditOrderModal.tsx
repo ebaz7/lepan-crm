@@ -8,6 +8,7 @@ import { Wand2, Save, Loader2, X, Calendar, Plus, Trash2, Paperclip, Hash, Alert
 import PrintVoucher from './PrintVoucher';
 import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
+import html2canvas from 'html2canvas';
 
 interface EditOrderModalProps {
   order: PaymentOrder;
@@ -299,8 +300,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
                     const users = await getUsers();
                     const finUser = users.find(u => u.role === UserRole.FINANCIAL && u.phoneNumber);
                     if (finUser) {
-                        // @ts-ignore
-                        const canvas = await window.html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                        const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         
                         let caption = `✏️ *دستور پرداخت ویرایش شد*\n`;
