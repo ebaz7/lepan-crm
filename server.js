@@ -12,7 +12,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak } from './backend/bot-core.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -597,6 +597,7 @@ app.post('/api/warehouse/transactions', (req, res) => {
     res.json(db.warehouseTransactions); 
 
     if (tx.type === 'OUT') {
+        notifyWarehouseBijak(tx, db, 'ثبت اولیه').catch(e => console.error("Bot Bijak Notify Error:", e));
         broadcastNotification(
             'بیجک خروج جدید',
             `بیجک شماره ${tx.number} ثبت شد و منتظر تایید است.`,
@@ -620,13 +621,28 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
             }
         }
 
-        db.warehouseTransactions[idx] = { ...db.warehouseTransactions[idx], ...req.body }; 
+        const updatedTx = { ...db.warehouseTransactions[idx], ...req.body };
+        const isExplicitEdit = req.body.isEdit === true;
+
+        if (updatedTx.type === 'OUT') {
+            if (isExplicitEdit) {
+                notifyWarehouseBijak(updatedTx, db, updatedTx.status || 'PENDING', 'EDIT').catch(e => console.error("Bot Bijak Notify Error:", e));
+            } else if (currentTx.status !== updatedTx.status) {
+                notifyWarehouseBijak(updatedTx, db, updatedTx.status === 'APPROVED' ? 'تایید نهایی' : updatedTx.status).catch(e => console.error("Bot Bijak Notify Error:", e));
+            }
+        }
+
+        db.warehouseTransactions[idx] = updatedTx; 
         saveDb(db); 
         res.json(db.warehouseTransactions); 
     } else res.status(404).send('Not Found'); 
 });
 app.delete('/api/warehouse/transactions/:id', (req, res) => { 
     const db = getDb(); 
+    const tx = db.warehouseTransactions.find(t => t.id === req.params.id);
+    if (tx && tx.type === 'OUT') {
+        notifyWarehouseBijak(tx, db, 'حذف شده', 'DELETE').catch(e => {});
+    }
     db.warehouseTransactions = db.warehouseTransactions.filter(t => t.id !== req.params.id); 
     saveDb(db); 
     res.json(db.warehouseTransactions); 

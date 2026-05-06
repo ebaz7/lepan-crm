@@ -267,47 +267,8 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         try {
             await saveWarehouseTransaction(tx);
             await loadData();
-            if(type === 'OUT') updateNextBijak();
-            
             if(type === 'OUT') {
-                setCreatedTxForAutoSend(tx);
-                setTimeout(async () => {
-                    try {
-                        const element = document.getElementById(`print-bijak-created-${tx.id}-price`);
-                        if (element) {
-                            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
-                            const base64 = canvas.toDataURL('image/png').split(',')[1];
-                            
-                            let caption = `🚨 *ثبت حواله خروج انبار (بیجک)*\n`;
-                            caption += `🔢 شماره: ${tx.number}\n`;
-                            caption += `🏢 شرکت: ${tx.company || '-'}\n`;
-                            caption += `👤 کاربر ایجاد کننده: ${currentUser.fullName}\n`;
-                            caption += `📅 تاریخ: ${formatDate(tx.date)}\n`;
-                            caption += `------------------\nلطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.`;
-                            
-                            const mediaData = { data: base64, filename: `Bijak_Created_${tx.number}.png`, mimeType: 'image/png' };
-                            
-                            const usersList = await getUsers();
-                            const managers = usersList.filter(u => u.role === UserRole.CEO || u.role === UserRole.MANAGER);
-                            
-                            for (const mgr of managers) {
-                                if (mgr.phoneNumber) {
-                                    await apiCall('/send-whatsapp', 'POST', { number: mgr.phoneNumber, message: caption, mediaData });
-                                }
-                                if (mgr.telegramId || mgr.telegramChatId) {
-                                    await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: mgr.telegramId || mgr.telegramChatId, caption, mediaData });
-                                }
-                                if (mgr.baleId || mgr.baleChatId) {
-                                    await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: mgr.baleId || mgr.baleChatId, caption, mediaData });
-                                }
-                            }
-                        }
-                    } catch (e) {
-                         console.error("Error sending created bijak notifications", e);
-                    }
-                    setCreatedTxForAutoSend(null);
-                }, 2000);
-
+                updateNextBijak();
                 alert('بیجک ثبت شد و جهت تایید به مدیریت ارسال گردید.');
                 setRecipientName(''); setDriverName(''); setPlateNumber(''); setDestination('');
             } else {
@@ -323,72 +284,11 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         if (!confirm('آیا تایید می‌کنید؟ پس از تایید، بیجک به صورت خودکار برای انبار و مدیریت ارسال می‌شود.')) return;
         
         try {
-            const isCorrection = tx.updatedAt && tx.updatedAt > (tx.createdAt + 60000); 
-            const titleSuffix = isCorrection ? ' (اصلاحیه)' : '';
-
             const updatedTx = { ...tx, status: 'APPROVED' as const, approvedBy: currentUser.fullName };
             await updateWarehouseTransaction(updatedTx);
-            
-            setApprovedTxForAutoSend(updatedTx);
-            
-            setTimeout(async () => {
-                const managerElement = document.getElementById(`print-bijak-${updatedTx.id}-price`);
-                const warehouseElement = document.getElementById(`print-bijak-${updatedTx.id}-noprice`);
-                
-                let commonDetails = `🔢 شماره: ${updatedTx.number}\n`;
-                commonDetails += `📅 تاریخ: ${formatDate(updatedTx.date)}\n`;
-                commonDetails += `👤 گیرنده: ${updatedTx.recipientName}\n`;
-                commonDetails += `✅ تایید شده توسط: ${currentUser.fullName}\n`;
-                commonDetails += `------------------\n`;
-                commonDetails += `📋 *لیست اقلام:* \n`;
-                updatedTx.items.forEach((item, idx) => { commonDetails += `${idx + 1}️⃣ ${item.itemName} | تعداد: ${item.quantity}\n`; });
-                
-                if (settings && settings.companyNotifications) {
-                    const companyConfig = settings.companyNotifications[updatedTx.company];
-                    const managerNumber = companyConfig?.salesManager;
-                    const groupNumber = companyConfig?.warehouseGroup;
-
-                    try {
-                        if (managerNumber && managerElement) {
-                            const canvas = await html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
-                            const base64 = canvas.toDataURL('image/png').split(',')[1];
-                            const managerCaption = `🏭 *شرکت: ${updatedTx.company}*\n📑 *حواله خروج - تایید شده${titleSuffix}*\n${commonDetails}`;
-                            
-                            await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: managerCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${updatedTx.number}_Price.png` } }).catch(console.error);
-                        }
-
-                        if (warehouseElement) {
-                            const canvas = await html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
-                            const base64 = canvas.toDataURL('image/png').split(',')[1];
-                            const warehouseCaption = `📦 *بیجک انبار #${updatedTx.number}*\n` +
-                                `🏢 شرکت: ${updatedTx.company || '-'}\n` +
-                                `👤 گیرنده: ${updatedTx.recipientName || '-'}\n` +
-                                `📅 تاریخ: ${updatedTx.date}\n` +
-                                `📦 کالاها:\n` +
-                                updatedTx.items.map(it => `- ${it.name} (${it.quantity} ${it.unit || 'عدد'})`).join('\n') +
-                                (updatedTx.description ? `\n📝 توضیحات: ${updatedTx.description}` : '') +
-                                `\n🔄 وضعیت: ${updatedTx.status}`;
-                            const mediaData = { data: base64, filename: `Bijak_${updatedTx.number}.png`, mimeType: 'image/png' };
-
-                            if (groupNumber) {
-                                await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warehouseCaption, mediaData }).catch(console.error);
-                            }
-                            if (companyConfig?.telegramChannelId) {
-                                await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption: warehouseCaption, mediaData }).catch(console.error);
-                            }
-                            if (companyConfig?.baleChannelId) {
-                                await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption: warehouseCaption, mediaData }).catch(console.error);
-                            }
-                        }
-                    } catch(e) { console.error("Auto send error", e); }
-                }
-                
-                setApprovedTxForAutoSend(null);
-                loadData();
-                setViewBijak(null);
-                alert("تایید و ارسال شد.");
-            }, 2500); 
-
+            loadData();
+            setViewBijak(null);
+            alert("تایید و ارسال شد.");
         } catch (e) { alert("خطا در عملیات تایید"); }
     };
 

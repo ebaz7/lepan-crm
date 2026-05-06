@@ -939,7 +939,15 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                     <div className="mt-2">
                                         <label className="text-sm font-bold text-gray-700 block mb-1">گروه دستی بیجک‌ها (Telegram Chat ID)</label>
-                                        <input type="text" value={settings.botBijakGroupId || ''} onChange={e => setSettings({...settings, botBijakGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="Chat ID (e.g. -100123...)" />
+                                        <input type="text" value={settings.botBijakGroupId || ''} onChange={e => setSettings({...settings, botBijakGroupId: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="-100..." />
+                                     </div>
+                                     <div className="mt-2 text-right">
+                                         <label className="text-sm font-bold text-gray-700 block mb-1">گروه بیجک‌ها (Bale ID)</label>
+                                         <input type="text" value={settings.botBijakGroupIdBale || ''} onChange={e => setSettings({...settings, botBijakGroupIdBale: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="ID..." />
+                                     </div>
+                                     <div className="mt-2 text-right">
+                                         <label className="text-sm font-bold text-gray-700 block mb-1">گروه بیجک‌ها (WhatsApp ID)</label>
+                                         <input type="text" value={settings.botBijakGroupIdWhatsApp || ''} onChange={e => setSettings({...settings, botBijakGroupIdWhatsApp: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="...@g.us" />
                                     </div>
                                     
                                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">

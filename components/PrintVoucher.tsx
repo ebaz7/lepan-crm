@@ -531,9 +531,24 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                          <div className="p-2 border-b"><input className="w-full text-xs p-1 border rounded" placeholder="جستجو..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
                          <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => {
                              let targetId = c.number;
-                             if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
-                             if (sharePlatform === 'bale') targetId = c.baleId || c.number;
-                             return (<button key={c.id} onClick={() => { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={()=> { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>);
+                             if (sharePlatform === 'telegram') targetId = (c.telegramId || '').trim() || c.number;
+                             if (sharePlatform === 'bale') targetId = (c.baleId || '').trim() || c.number;
+                             return (
+                               <div key={c.id} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0">
+                                 <div className="truncate flex-1">
+                                   <div className="font-bold text-gray-800 truncate">{c.name}</div>
+                                   <div className="text-[9px] text-gray-500 font-mono mt-0.5">
+                                     {sharePlatform === 'telegram' ? (c.telegramId || c.number) : sharePlatform === 'bale' ? (c.baleId || c.number) : c.number}
+                                   </div>
+                                 </div>
+                                 <button 
+                                   onClick={() => { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} 
+                                   className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap"
+                                 >
+                                   ارسال
+                                 </button>
+                               </div>
+                             );
                          })}</div>
                          <div className="p-2 bg-gray-50 border-t"><button onClick={()=>{const n=prompt("شماره یا شناسه دستی:"); if(n) handleShare(n);}} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:bg-white rounded border border-blue-100 transition-colors">ارسال به شماره دستی...</button></div>
                      </div>

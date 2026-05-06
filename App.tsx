@@ -104,10 +104,25 @@ function App() {
               const usersList = await getUsers();
               let targetUser: User | undefined;
               let caption = '';
+              const mode = settings?.botPaymentNotificationMode || 'step_by_step';
+              
               if (type === 'create') {
                   targetUser = usersList.find(u => u.role === UserRole.FINANCIAL && u.phoneNumber);
                   caption = `📢 *درخواست پرداخت جدید*\nشماره: ${order.trackingNumber}\nمبلغ: ${formatCurrency(order.totalAmount)}\nدرخواست کننده: ${order.requester}\n\nلطفا بررسی نمایید.`;
               } else if (type === 'approve') {
+                  const isFinal = order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.PAID;
+                  
+                  if (mode === 'after_submit') {
+                      processingJobRef.current = false;
+                      setBackgroundJobs(prev => prev.slice(1));
+                      return;
+                  }
+                  if (mode === 'after_final' && !isFinal) {
+                      processingJobRef.current = false;
+                      setBackgroundJobs(prev => prev.slice(1));
+                      return;
+                  }
+
                   if (order.status === OrderStatus.APPROVED_FINANCE) { targetUser = usersList.find(u => u.role === UserRole.MANAGER && u.phoneNumber); caption = `✅ *تایید مالی انجام شد*\nشماره: ${order.trackingNumber}\nمنتظر تایید مدیریت.`; }
                   else if (order.status === OrderStatus.APPROVED_MANAGER) { targetUser = usersList.find(u => u.role === UserRole.CEO && u.phoneNumber); caption = `✅ *تایید مدیریت انجام شد*\nشماره: ${order.trackingNumber}\nمنتظر تایید نهایی مدیرعامل.`; }
                   else if (order.status === OrderStatus.APPROVED_CEO) { targetUser = usersList.find(u => u.role === UserRole.FINANCIAL && u.phoneNumber); caption = `💰 *دستور پرداخت تایید نهایی شد*\nشماره: ${order.trackingNumber}\nلطفا پرداخت نمایید.`; }

@@ -1091,6 +1091,91 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
     } catch (e) { console.error("Payment Notification Helper Error:", e); }
 };
 
+export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP') => {
+    try {
+        const isEdit = eventType === 'EDIT';
+        const isDelete = eventType === 'DELETE';
+        const settings = db.settings || {};
+        
+        // Generate image using Renderer
+        const Renderer = await import('./renderer.js');
+        const img = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete });
+        
+        let header = isDelete ? `❌ *حذف شد: حواله خروج انبار (بیجک)*` : (isEdit ? `✏️ *ویرایش شد: حواله خروج انبار*` : `🚨 *حواله خروج انبار (بیجک)*`);
+        let footerText = stepName === 'ثبت اولیه' ? 'لطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.' : `تایید شده توسط: ${tx.approvedBy || '-'}`;
+        
+        const caption = `${header}\n🔢 شماره: ${tx.number}\n🏢 شرکت: ${tx.company || '-'}\n📅 تاریخ: ${toShamsiFull(tx.date)}\n👤 گیرنده: ${tx.recipientName || '-'}\n📦 کالاها:\n${tx.items.map(it => `- ${it.itemName} (${it.quantity} ${it.unit || 'واحد'})`).join('\n')}${tx.description ? `\n📝 توضیحات: ${tx.description}` : ''}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${tx.status || 'PENDING'}\n${footerText}`;
+
+        const mediaData = { data: img.toString('base64'), filename: `Bijak_${tx.number}.png`, mimeType: 'image/png' };
+
+        // 1. Send to Global Bijak Groups (if configured)
+        const tgGroupId = settings.botBijakGroupId || '';
+        const baleGroupId = settings.botBijakGroupIdBale || '';
+        const waGroupId = settings.botBijakGroupIdWhatsApp || '';
+
+        // Only send to groups if APPROVED or specific mode
+        if (tx.status === 'APPROVED' || isDelete || isEdit) {
+            if (tgGroupId && settings.telegramBotToken) {
+                const mod = await import('./telegram.js');
+                if (mod?.sendBotPhoto) mod.sendBotPhoto(sanitizeGroupId(tgGroupId), img, caption).catch(console.error);
+            }
+            if (baleGroupId && settings.baleBotToken) {
+                const mod = await import('./bale.js');
+                if (mod?.sendBotPhoto) mod.sendBotPhoto(sanitizeGroupId(baleGroupId), img, caption).catch(console.error);
+            }
+            if (waGroupId && settings.whatsappEnabled) {
+                const mod = await import('./whatsapp.js');
+                if (mod?.sendMessage) mod.sendMessage(waGroupId, caption, mediaData).catch(console.error);
+            }
+        }
+
+        // 2. Send to Company-Specific Groups/Managers
+        const companyConfig = settings.companyNotifications?.[tx.company];
+        if (companyConfig) {
+            const targets = [];
+            if (tx.status === 'APPROVED' && companyConfig.warehouseGroup) targets.push({ type: 'wa', id: companyConfig.warehouseGroup });
+            if (tx.status === 'APPROVED' && companyConfig.telegramChannelId) targets.push({ type: 'tg', id: companyConfig.telegramChannelId });
+            if (tx.status === 'APPROVED' && companyConfig.baleChannelId) targets.push({ type: 'bale', id: companyConfig.baleChannelId });
+            
+            // On creation, maybe notify Sales Manager
+            if (stepName === 'ثبت اولیه' && companyConfig.salesManager) targets.push({ type: 'wa', id: companyConfig.salesManager });
+
+            for (const t of targets) {
+                if (t.type === 'wa' && settings.whatsappEnabled) {
+                    const mod = await import('./whatsapp.js');
+                    mod.sendMessage(t.id, caption, mediaData).catch(console.error);
+                }
+                if (t.type === 'tg' && settings.telegramBotToken) {
+                    const mod = await import('./telegram.js');
+                    mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
+                }
+                if (t.type === 'bale' && settings.baleBotToken) {
+                    const mod = await import('./bale.js');
+                    mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
+                }
+            }
+        }
+
+        // 3. If Pending, Notify CEO/Managers (Users with CEO role)
+        if (tx.status === 'PENDING' && stepName === 'ثبت اولیه') {
+            const managers = (db.users || []).filter(u => u.role === 'ceo' || u.role === 'admin');
+            for (const mgr of managers) {
+                if (mgr.telegramId && settings.telegramBotToken) {
+                   const mod = await import('./telegram.js');
+                   mod.sendBotPhoto(mgr.telegramId, img, caption).catch(console.error);
+                }
+                if (mgr.baleId && settings.baleBotToken) {
+                   const mod = await import('./bale.js');
+                   mod.sendBotPhoto(mgr.baleId, img, caption).catch(console.error);
+                }
+            }
+        }
+
+    } catch (e) {
+        console.error("notifyWarehouseBijak Error:", e);
+    }
+};
+
 export const handleCallback = async (platform, chatId, userId, data, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn) => {
     const db = getDb();
     const settings = db.settings || {};
