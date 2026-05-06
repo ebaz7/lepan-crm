@@ -395,11 +395,21 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
                         await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: warningCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_DELETED_${txToDelete.number}.png` } });
                     }
-                    if (groupNumber && warehouseElement) {
+                    if (warehouseElement) {
                         // @ts-ignore
                         const canvas = await window.html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200 });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
-                        await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warningCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_DELETED_${txToDelete.number}.png` } });
+                        const mediaData = { data: base64, filename: `Bijak_DELETED_${txToDelete.number}.png` };
+                        
+                        if (groupNumber) {
+                            await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warningCaption, mediaData: { ...mediaData, mimeType: 'image/png' } });
+                        }
+                        if (companyConfig?.telegramChannelId) {
+                            await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption: warningCaption, mediaData });
+                        }
+                        if (companyConfig?.baleChannelId) {
+                            await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption: warningCaption, mediaData });
+                        }
                     }
                 } catch(e) { console.error("Error sending delete notification", e); }
                 

@@ -331,6 +331,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     // --- Render Logic ---
+    const getAllChannelsForForward = (): ChannelItem[] => {
+        const list: ChannelItem[] = [];
+        
+        list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true });
+        
+        users.forEach(u => {
+            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar || null, isOnline: false });
+        });
+        
+        groups.forEach(g => {
+            list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isOnline: false });
+        });
+        
+        return list;
+    };
+
     const getSortedChannels = (): ChannelItem[] => {
         const list: ChannelItem[] = [];
 
@@ -1097,7 +1113,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                     <AudioPlayer url={msg.audioUrl} isMe={isMe} duration={msg.audioDuration} />
                                                 </div>
                                             ) : (
-                                                <div className="whitespace-pre-wrap leading-relaxed message-content">{msg.message}</div>
+                                                <div 
+                                                    className="whitespace-pre-wrap leading-relaxed message-content cursor-pointer"
+                                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.message); alert('متن کپی شد'); }}
+                                                    title="برای کپی کلیک کنید"
+                                                >
+                                                    {msg.message}
+                                                </div>
                                             )}
 
                                             {/* Footer */}
@@ -1257,12 +1279,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-2">
-                            {getSortedChannels().map((item: ChannelItem) => (
+                            {getAllChannelsForForward().map((item: ChannelItem) => (
                                 <div key={item.id} onClick={() => handleForward(item.id, item.type)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
                                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
                                         {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
                                     </div>
-                                    <div className="font-bold text-sm">{item.name}</div>
+                                    <div className="font-bold text-sm tracking-tight">{item.name} <span className="text-xs text-gray-400 font-normal mr-2">({item.type === 'private' ? 'شخصی' : item.type === 'public' ? 'عمومی' : 'گروه'})</span></div>
                                 </div>
                             ))}
                         </div>
