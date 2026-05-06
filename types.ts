@@ -70,6 +70,7 @@ export interface Contact {
   number: string;
   isGroup: boolean;
   baleId?: string;
+  telegramId?: string;
 }
 
 export interface PrintField {

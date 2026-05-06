@@ -74,8 +74,14 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
           try {
             const users = await getUsers();
             const userContacts = users
-                .filter(u => u.phoneNumber)
-                .map(u => ({ id: u.id, name: u.fullName, number: u.phoneNumber!, isGroup: false }));
+                .map(u => ({ 
+                    id: u.id, 
+                    name: u.fullName, 
+                    number: u.phoneNumber || '',
+                    telegramId: u.telegramChatId || (u as any).telegramId,
+                    baleId: u.baleChatId || (u as any).baleId,
+                    isGroup: false 
+                })).filter(u => u.number || u.telegramId || u.baleId);
             setAllContacts([...saved, ...userContacts]);
           } catch (e) {
             setAllContacts(saved);
@@ -222,7 +228,15 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
                 </div>
             </div>
         </div>
-        {sharePlatform && (<div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col h-[70vh] animate-fade-in"><div className="p-3 border-b bg-gray-50 flex items-center justify-between"><span className="font-bold text-gray-800">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)} className="bg-red-100 text-red-600 rounded-lg p-1.5 hover:bg-red-200"><X size={18}/></button></div><div className="p-3 border-b"><div className="bg-gray-100 rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-gray-400 ml-2"/><input className="bg-transparent w-full outline-none text-sm" placeholder="جستجو نام یا شماره..." autoFocus value={contactSearch} onChange={e => setContactSearch(e.target.value)}/></div></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{contactsLoading ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Loader2 size={32} className="animate-spin"/> <span>در حال دریافت لیست...</span></div>) : filteredContacts.length === 0 ? (<div className="text-center text-gray-400 mt-10">مخاطبی یافت نشد</div>) : (filteredContacts.map(c => (<button key={c.id} onClick={() => generateAndSend(c.number, hidePrices, "📄 *بیجک ارسالی*", sharePlatform)} className="w-full text-right p-3 hover:bg-blue-50 rounded-xl border border-transparent hover:border-blue-100 flex items-center gap-3 transition-colors group"><div className={`p-2 rounded-full ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={18}/> : <Smartphone size={18}/>}</div><div className="flex-1"><div className="font-bold text-gray-800 text-sm group-hover:text-blue-700">{c.name}</div><div className="text-xs text-gray-500 font-mono mt-0.5">{c.number}</div></div><div className="bg-gray-100 px-3 py-1 rounded-lg text-xs font-bold text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">ارسال</div></button>)))}</div><div className="p-3 border-t bg-gray-50"><button onClick={() => { const num = prompt("شماره یا شناسه را وارد کنید:"); if(num) generateAndSend(num, hidePrices, "📄 *بیجک ارسالی*", sharePlatform); }} className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors">ورود دستی</button></div></div></div>)}
+        {sharePlatform && (<div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col h-[70vh] animate-fade-in"><div className="p-3 border-b bg-gray-50 flex items-center justify-between"><span className="font-bold text-gray-800">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)} className="bg-red-100 text-red-600 rounded-lg p-1.5 hover:bg-red-200"><X size={18}/></button></div><div className="p-3 border-b"><div className="bg-gray-100 rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-gray-400 ml-2"/><input className="bg-transparent w-full outline-none text-sm" placeholder="جستجو نام یا شماره..." autoFocus value={contactSearch} onChange={e => setContactSearch(e.target.value)}/></div></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{contactsLoading ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Loader2 size={32} className="animate-spin"/> <span>در حال دریافت لیست...</span></div>) : filteredContacts.length === 0 ? (<div className="text-center text-gray-400 mt-10">مخاطبی یافت نشد</div>) : (filteredContacts.map(c => {
+                                let targetId = c.number;
+                                if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
+                                if (sharePlatform === 'bale') targetId = c.baleId || c.number;
+                                return (<button key={c.id} onClick={() => {
+                                    if (!targetId) { alert("آیدی این پلتفرم برای کاربر مورد نظر ثبت نشده است."); return; }
+                                    generateAndSend(targetId, hidePrices, "📄 *بیجک ارسالی*", sharePlatform)
+                            }} className="w-full text-right p-3 hover:bg-blue-50 rounded-xl border border-transparent hover:border-blue-100 flex items-center gap-3 transition-colors group"><div className={`p-2 rounded-full ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={18}/> : <Smartphone size={18}/>}</div><div className="flex-1"><div className="font-bold text-gray-800 text-sm group-hover:text-blue-700">{c.name}</div><div className="text-xs text-gray-500 font-mono mt-0.5">{targetId || c.number}</div></div><div className="bg-gray-100 px-3 py-1 rounded-lg text-xs font-bold text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">ارسال</div></button>);
+                            }))}</div><div className="p-3 border-t bg-gray-50"><button onClick={() => { const num = prompt("شماره یا شناسه را وارد کنید:"); if(num) generateAndSend(num, hidePrices, "📄 *بیجک ارسالی*", sharePlatform); }} className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors">ورود دستی</button></div></div></div>)}
         <div className="order-2 w-full flex justify-center pb-10" ref={containerWrapperRef}>
             <div style={{ 
               width: '148mm', 

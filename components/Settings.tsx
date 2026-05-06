@@ -134,6 +134,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [contactBaleId, setContactBaleId] = useState('');
+  const [contactTelegramId, setContactTelegramId] = useState('');
   const [isGroupContact, setIsGroupContact] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null); 
   
@@ -337,6 +338,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
           name: contactName.trim(), 
           number: contactNumber.trim(), 
           baleId: contactBaleId.trim(),
+          telegramId: contactTelegramId.trim(),
           isGroup: isGroupContact 
       }; 
       
@@ -356,6 +358,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       setContactName(c.name);
       setContactNumber(c.number);
       setContactBaleId(c.baleId || '');
+      setContactTelegramId(c.telegramId || '');
       setIsGroupContact(c.isGroup);
   };
 
@@ -370,6 +373,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       setContactName(''); 
       setContactNumber(''); 
       setContactBaleId('');
+      setContactTelegramId('');
       setIsGroupContact(false); 
       setEditingContactId(null);
   };
@@ -546,12 +550,13 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             </div>
                             <div className="border-t pt-6">
                                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20}/> دفترچه تلفن (مخاطبین و گروه‌ها)</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 items-end bg-gray-50 p-4 rounded-xl">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 items-end bg-gray-50 p-4 rounded-xl">
                                     <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">نام مخاطب / گروه</label><input className="w-full border rounded-lg p-2 text-sm" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="مثال: مدیر مالی"/></div>
-                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شماره / شناسه گروه (واتساپ)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="98912... / 123@g.us"/></div>
-                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">آیدی بله (اختیاری)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactBaleId} onChange={e => setContactBaleId(e.target.value)} placeholder="@id"/></div>
-                                    <div className="flex items-center gap-2 mb-2"><input type="checkbox" id="isGroup" checked={isGroupContact} onChange={e => setIsGroupContact(e.target.checked)} className="w-4 h-4"/><label htmlFor="isGroup" className="text-xs font-bold text-gray-600">این یک گروه است</label></div>
-                                    <div className="flex gap-2 w-full md:w-auto">{editingContactId && <button type="button" onClick={resetContactForm} className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={18}/></button>}<button type="button" onClick={handleAddOrUpdateContact} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex-1">{editingContactId ? 'ویرایش' : 'افزودن'}</button></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">شماره / شناسه گروه (واتساپ)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="9891... / 123@g.us"/></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">آیدی بله</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactBaleId} onChange={e => setContactBaleId(e.target.value)} placeholder="@id"/></div>
+                                    <div className="flex-1 w-full"><label className="text-xs font-bold text-gray-500 block mb-1">آیدی تلگرام</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={contactTelegramId} onChange={e => setContactTelegramId(e.target.value)} placeholder="آیدی یا Chat ID"/></div>
+                                    <div className="flex items-center gap-2 mb-2 lg:col-span-2"><input type="checkbox" id="isGroup" checked={isGroupContact} onChange={e => setIsGroupContact(e.target.checked)} className="w-4 h-4"/><label htmlFor="isGroup" className="text-xs font-bold text-gray-600">این یک گروه است</label></div>
+                                    <div className="flex gap-2 w-full lg:col-span-2 justify-end">{editingContactId && <button type="button" onClick={resetContactForm} className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={18}/></button>}<button type="button" onClick={handleAddOrUpdateContact} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex-1 lg:flex-none">{editingContactId ? 'ویرایش' : 'افزودن'}</button></div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
                                     {settings.savedContacts?.map(c => (

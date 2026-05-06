@@ -109,7 +109,8 @@ export const sendBotMessage = (chatId, text, opts) => {
 
 export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     if (!bot) return Promise.reject("Bot not initialized");
-    return bot.sendPhoto(chatId, buffer, { caption, ...opts });
+    const fileOptions = { filename: opts?.filename || 'image.png', contentType: opts?.contentType || 'image/png' };
+    return bot.sendPhoto(chatId, buffer, { caption, ...opts }, fileOptions);
 };
 
 export const deleteBotMessage = (chatId, messageId) => {

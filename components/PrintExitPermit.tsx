@@ -321,7 +321,12 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                      <div className="mt-2 bg-white rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
                          <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
                          <div className="p-2 border-b"><input className="w-full text-xs p-1.5 border rounded outline-none" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
-                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => (<button key={c.id} onClick={() => handleShare(c.number)} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={(e) => { e.stopPropagation(); handleShare(c.number); }} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>))}</div>
+                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => {
+                             let targetId = c.number;
+                             if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
+                             if (sharePlatform === 'bale') targetId = c.baleId || c.number;
+                             return (<button key={c.id} onClick={() => { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={(e) => { e.stopPropagation(); if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>);
+                         })}</div>
                          <div className="p-2 border-t bg-gray-50"><button onClick={() => { const n = prompt('شناسه یا شماره:'); if(n) handleShare(n); }} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:bg-white rounded border border-blue-100 transition-colors">شماره/شناسه دستی</button></div>
                      </div>
                 )}

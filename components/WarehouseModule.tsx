@@ -147,6 +147,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [showPrintStockReport, setShowPrintStockReport] = useState(false); 
 
     // Auto Send on Approval/Edit/Delete
+    const [createdTxForAutoSend, setCreatedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [approvedTxForAutoSend, setApprovedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [editedBijakForAutoSend, setEditedBijakForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [deletedTxForAutoSend, setDeletedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
@@ -269,6 +270,44 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             if(type === 'OUT') updateNextBijak();
             
             if(type === 'OUT') {
+                setCreatedTxForAutoSend(tx);
+                setTimeout(async () => {
+                    try {
+                        const element = document.getElementById(`print-bijak-created-${tx.id}-price`);
+                        if (element) {
+                            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
+                            const base64 = canvas.toDataURL('image/png').split(',')[1];
+                            
+                            let caption = `🚨 *ثبت حواله خروج انبار (بیجک)*\n`;
+                            caption += `🔢 شماره: ${tx.number}\n`;
+                            caption += `🏢 شرکت: ${tx.company || '-'}\n`;
+                            caption += `👤 کاربر ایجاد کننده: ${currentUser.fullName}\n`;
+                            caption += `📅 تاریخ: ${formatDate(tx.date)}\n`;
+                            caption += `------------------\nلطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.`;
+                            
+                            const mediaData = { data: base64, filename: `Bijak_Created_${tx.number}.png`, mimeType: 'image/png' };
+                            
+                            const usersList = await getUsers();
+                            const managers = usersList.filter(u => u.role === UserRole.CEO || u.role === UserRole.MANAGER);
+                            
+                            for (const mgr of managers) {
+                                if (mgr.phoneNumber) {
+                                    await apiCall('/send-whatsapp', 'POST', { number: mgr.phoneNumber, message: caption, mediaData });
+                                }
+                                if (mgr.telegramId || mgr.telegramChatId) {
+                                    await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: mgr.telegramId || mgr.telegramChatId, caption, mediaData });
+                                }
+                                if (mgr.baleId || mgr.baleChatId) {
+                                    await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: mgr.baleId || mgr.baleChatId, caption, mediaData });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                         console.error("Error sending created bijak notifications", e);
+                    }
+                    setCreatedTxForAutoSend(null);
+                }, 2000);
+
                 alert('بیجک ثبت شد و جهت تایید به مدیریت ارسال گردید.');
                 setRecipientName(''); setDriverName(''); setPlateNumber(''); setDestination('');
             } else {
@@ -315,7 +354,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             const base64 = canvas.toDataURL('image/png').split(',')[1];
                             const managerCaption = `🏭 *شرکت: ${updatedTx.company}*\n📑 *حواله خروج - تایید شده${titleSuffix}*\n${commonDetails}`;
                             
-                            await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: managerCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${updatedTx.number}_Price.png` } });
+                            await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: managerCaption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${updatedTx.number}_Price.png` } }).catch(console.error);
                         }
 
                         if (warehouseElement) {
@@ -329,16 +368,16 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 updatedTx.items.map(it => `- ${it.name} (${it.quantity} ${it.unit || 'عدد'})`).join('\n') +
                                 (updatedTx.description ? `\n📝 توضیحات: ${updatedTx.description}` : '') +
                                 `\n🔄 وضعیت: ${updatedTx.status}`;
-                            const mediaData = { data: base64, filename: `Bijak_${updatedTx.number}.png` };
+                            const mediaData = { data: base64, filename: `Bijak_${updatedTx.number}.png`, mimeType: 'image/png' };
 
                             if (groupNumber) {
-                                await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warehouseCaption, mediaData: { ...mediaData, mimeType: 'image/png' } });
+                                await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: warehouseCaption, mediaData }).catch(console.error);
                             }
                             if (companyConfig?.telegramChannelId) {
-                                await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption: warehouseCaption, mediaData });
+                                await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption: warehouseCaption, mediaData }).catch(console.error);
                             }
                             if (companyConfig?.baleChannelId) {
-                                await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption: warehouseCaption, mediaData });
+                                await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption: warehouseCaption, mediaData }).catch(console.error);
                             }
                         }
                     } catch(e) { console.error("Auto send error", e); }
@@ -438,18 +477,29 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                  if (element) {
                      try {
                          const users = await getUsers();
-                         const ceo = users.find(u => u.role === UserRole.CEO && u.phoneNumber);
-                         if (ceo) {
+                         const ceos = users.filter((u: any) => u.role === UserRole.CEO && (u.phoneNumber || u.telegramId || u.baleId || u.telegramChatId || u.baleChatId));
+                         if (ceos.length > 0) {
                              const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
-                            const base64 = canvas.toDataURL('image/png').split(',')[1];
+                             const base64 = canvas.toDataURL('image/png').split(',')[1];
+                            const mediaData = { data: base64, mimeType: 'image/png', filename: `Bijak_Edit_${updatedTx.number}.png` };
                             
-                            let caption = `📝 *اصلاحیه بیجک (جهت تایید مجدد)*\n`;
-                            caption += `شماره: ${updatedTx.number}\n`;
-                            caption += `گیرنده: ${updatedTx.recipientName}\n`;
-                            caption += `ویرایش توسط: ${currentUser.fullName}\n\n`;
-                            caption += `لطفا بررسی نمایید.`;
+                            for (const ceo of ceos) {
+                                let caption = `📝 *اصلاحیه بیجک (جهت تایید مجدد)*\n`;
+                                caption += `شماره: ${updatedTx.number}\n`;
+                                caption += `گیرنده: ${updatedTx.recipientName}\n`;
+                                caption += `ویرایش توسط: ${currentUser.fullName}\n\n`;
+                                caption += `لطفا بررسی نمایید.`;
 
-                            await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_Edit_${updatedTx.number}.png` } });
+                                if (ceo.phoneNumber) {
+                                  await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData });
+                                }
+                                if ((ceo as any).telegramId || (ceo as any).telegramChatId) {
+                                  await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: (ceo as any).telegramId || (ceo as any).telegramChatId, caption, mediaData });
+                                }
+                                if ((ceo as any).baleId || (ceo as any).baleChatId) {
+                                  await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: (ceo as any).baleId || (ceo as any).baleChatId, caption, mediaData });
+                                }
+                            }
                          }
                      } catch(e) { console.error(e); }
                  }
@@ -553,6 +603,11 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         <div className="bg-white rounded-2xl shadow-sm border h-[calc(100vh-100px)] flex flex-col overflow-hidden animate-fade-in relative">
             
             {/* Hidden Print Elements for Auto-Send */}
+            {createdTxForAutoSend && (
+                <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                    <div id={`print-bijak-created-${createdTxForAutoSend.id}-price`}><PrintBijak tx={createdTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>
+                </div>
+            )}
             {approvedTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>

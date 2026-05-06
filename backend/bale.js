@@ -161,7 +161,8 @@ export const sendBotMessage = (chatId, text, opts) => {
 export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     const form = new FormData();
     form.append('chat_id', chatId);
-    form.append('photo', buffer, { filename: 'image.png' });
+    const filename = (opts && opts.filename) ? opts.filename : 'image.png';
+    form.append('photo', buffer, { filename });
     form.append('caption', caption);
     if (opts && opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
     return callApi('sendPhoto', form, true);

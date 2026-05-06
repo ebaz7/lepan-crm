@@ -1156,7 +1156,7 @@ app.post('/api/send-bot-message', async (req, res) => {
             const tg = await safeImport('./backend/telegram.js');
             if (tg && tg.sendBotPhoto && mediaData) {
                 const buffer = Buffer.from(mediaData.data, 'base64');
-                await tg.sendBotPhoto(chatId, buffer, caption);
+                await tg.sendBotPhoto(chatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
             } else if (tg && tg.sendBotMessage) {
                 await tg.sendBotMessage(chatId, caption);
             }
@@ -1164,7 +1164,7 @@ app.post('/api/send-bot-message', async (req, res) => {
             const bale = await safeImport('./backend/bale.js');
             if (bale && bale.sendBotPhoto && mediaData) {
                 const buffer = Buffer.from(mediaData.data, 'base64');
-                await bale.sendBotPhoto(chatId, buffer, caption);
+                await bale.sendBotPhoto(chatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
             } else if (bale && bale.sendBotMessage) {
                 await bale.sendBotMessage(chatId, caption);
             }
