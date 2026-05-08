@@ -271,13 +271,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
-  // Mobile Specific Nav Items (Bottom Bar)
-  const bottomNavItems = [
-      { id: 'dashboard', label: 'خانه', icon: Home },
-      { id: 'create', label: 'ثبت', icon: PlusCircle, show: canCreatePayment },
-      { id: 'manage', label: 'کارتابل', icon: ListChecks, show: canViewPayment },
-      { id: 'chat', label: 'گفتگو', icon: MessageSquare },
-  ].filter(i => i.show !== false);
+  // Mobile Specific Nav Items (Bottom Bar) dynamically built based on permissions
+  let bottomNavItems = [];
+  let showMoreButton = false;
+  if (navItems.length <= 5) {
+      bottomNavItems = navItems;
+  } else {
+      bottomNavItems = navItems.slice(0, 4);
+      showMoreButton = true;
+  }
 
   const NotificationDropdown = () => ( 
     <div className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 text-gray-800 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">
@@ -475,6 +477,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         })}
         
         {/* Menu Button */}
+        {showMoreButton && (
         <button 
             onClick={() => setShowMobileMenu(true)} 
             className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${showMobileMenu ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400'}`}
@@ -482,6 +485,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             <Menu size={24} strokeWidth={showMobileMenu ? 2.5 : 2} />
             <span className="text-[10px] font-bold">بیشتر</span>
         </button>
+        )}
       </div>
 
       {/* Main Content Area */}

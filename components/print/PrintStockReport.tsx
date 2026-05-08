@@ -107,10 +107,10 @@ const PrintStockReport: React.FC<PrintStockReportProps> = ({ data, onClose }) =>
                                         {group.items.map((item: any, i: number) => (
                                             <tr key={i} style={{ borderBottom: '1px solid #d1d5db' }}>
                                                 <td style={{ width: '40%', borderLeft: '1px solid black', padding: '4px', textAlign: 'right', fontWeight: 'bold', overflow: 'hidden', whiteSpace: 'nowrap' }}>{item.name}</td>
-                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '4px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }}>{item.quantity}</td>
-                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '4px', textAlign: 'center', fontFamily: 'monospace' }}>{item.weight > 0 ? item.weight : 0}</td>
+                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '4px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }}>{item.quantity ? Number(item.quantity).toFixed(2) : '0.00'}</td>
+                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '4px', textAlign: 'center', fontFamily: 'monospace' }}>{item.weight > 0 ? Number(item.weight).toFixed(2) : '0.00'}</td>
                                                 <td style={{ width: '20%', padding: '4px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280' }}>
-                                                    {item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}
+                                                    {item.containerCount > 0 ? Number(item.containerCount).toFixed(2) : '-'}
                                                 </td>
                                             </tr>
                                         ))}

@@ -382,7 +382,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     padding: 8mm; 
                     margin: 0 auto; 
                     width: 148mm; 
-                    height: 209mm;
+                    min-height: 209mm;
                     background: white; 
                     direction: rtl; 
                     display: flex;
@@ -456,6 +456,31 @@ export const generateRecordImage = async (record, type, options = {}) => {
                             </tr>
                         </tbody>
                     </table>
+                    
+                    ${options.stockInfo && options.stockInfo.length > 0 ? `
+                    <div style="margin-top: 10px; font-size: 11px;">
+                        <h4 style="margin: 0 0 5px 0; font-weight: bold; font-size: 11px; color: #4b5563;">📊 مانده موجودی پس از خروج:</h4>
+                        <table style="border: 1px solid #9ca3af; margin-top: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="background-color: #e5e7eb; padding: 2px;">کالا</th>
+                                    <th style="background-color: #e5e7eb; padding: 2px; width: 60px;">مانده (کارتن)</th>
+                                    <th style="background-color: #e5e7eb; padding: 2px; width: 70px;">مانده (وزن)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${options.stockInfo.map(s => `
+                                    <tr>
+                                        <td style="text-align: right; font-weight: bold; padding: 2px 8px; font-size: 10px;">${s.name}</td>
+                                        <td style="padding: 2px; font-size: 10px; font-weight: bold; color: ${s.qty < 0 ? '#dc2626' : '#166534'}">${s.qty.toFixed(2)}</td>
+                                        <td style="padding: 2px; font-size: 10px; color: ${s.weight < 0 ? '#dc2626' : '#166534'}">${s.weight.toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
                     ${record.description ? `<div style="margin-top: 10px; font-size: 10px; border: 1px solid #eee; padding: 5px; border-radius: 4px;"><b>توضیحات:</b> ${record.description}</div>` : ''}
                 </div>
 
@@ -494,7 +519,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
     }
 };
 
-export const generatePdfBuffer = async (html) => {
+export const generatePdfBuffer = async (html, options = {}) => {
     try {
         const browser = await getBrowser();
         const page = await browser.newPage();
@@ -506,7 +531,8 @@ export const generatePdfBuffer = async (html) => {
         }
         
         await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A4', printBackground: true });
+        const pdfOptions = { format: 'A4', printBackground: true, ...options };
+        const pdf = await page.pdf(pdfOptions);
         await page.close();
         return pdf;
     } catch(e) {

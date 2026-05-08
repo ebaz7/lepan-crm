@@ -1119,8 +1119,8 @@ export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP')
         
         // Generate images using Renderer
         const Renderer = await import('./renderer.js');
-        const imgWithPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: false });
-        const imgNoPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: true });
+        const imgWithPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: false, stockInfo });
+        const imgNoPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: true, stockInfo });
         
         let header = isDelete ? `❌ *حذف شد: حواله خروج انبار (بیجک)*` : (isEdit ? `✏️ *ویرایش شد: حواله خروج انبار*` : `🚨 *حواله خروج انبار (بیجک)*`);
         let footerText = stepName === 'ثبت اولیه' ? '⚠️ *لطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.*' : `✅ *تایید نهایی توسط:* ${tx.approvedBy || '-'}`;
@@ -1866,6 +1866,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             tx.approvedBy = user.fullName + ' (Bot)';
             saveDb(db);
             sendFn(chatId, `✅ بیجک #${tx.number} تایید نهایی شد.`);
+            notifyWarehouseBijak(tx, db, 'تایید نهایی').catch(e => console.error("Bot Bijak Notify Error:", e));
         }
         return;
     }
@@ -1913,55 +1914,64 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             // Generate HTML designed for A4 Landscape
             let html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>
                 @page { size: A4 landscape; margin: 0; }
-                body { font-family: 'Vazirmatn', sans-serif; background: white; margin: 0; padding: 5mm; }
-                .report-container { width: 280mm; margin: 0 auto; border: 2px solid black; }
-                .header { background-color: #fde047; border-bottom: 2px solid black; padding: 10px; text-align: center; font-size: 24px; font-weight: 900; }
-                .grid-container { display: flex; flex-wrap: wrap; align-items: stretch; }
-                .company-column { flex: 1; min-width: 90mm; border-left: 2px solid black; display: flex; flex-direction: column; }
-                .company-column:last-child { border-left: none; }
-                .company-title { background-color: #d8b4fe; border-bottom: 2px solid black; padding: 10px; font-weight: 900; text-align: center; font-size: 16px; min-height: 24px; }
-                table { width: 100%; border-collapse: collapse; font-size: 12px; flex: 1; table-layout: fixed; }
-                th { background-color: #f3f4f6; border-bottom: 1px solid black; border-left: 1px solid black; padding: 6px; font-weight: 900; }
-                td { border-bottom: 1px solid #d1d5db; border-left: 1px solid black; padding: 6px; text-align: center; }
-                tr:last-child td { border-bottom: none; }
-                .last-cell { border-left: none; }
-                .footer { background-color: #fde047; border-top: 2px solid black; padding: 6px; text-align: center; font-size: 12px; font-weight: 900; }
-                .qty-cell { font-family: monospace; font-weight: bold; }
+                body { font-family: 'Vazirmatn', sans-serif; background: white; margin: 0; }
             </style></head><body>
-                <div class="report-container">
-                    <div class="header">گزارش موجودی کلی انبارها</div>
-                    <div class="grid-container">
-                        ${reportData.map((grp, idx) => `
-                            <div class="company-column">
-                                <div class="company-title" style="background:${idx === 0 ? '#d8b4fe' : idx === 1 ? '#fdba74' : '#93c5fd'}">${grp.company}</div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style="width:40%">نخ / کالا</th>
-                                            <th style="width:20%">کارتن</th>
-                                            <th style="width:20%">وزن</th>
-                                            <th style="width:20%" class="last-cell">کانتینر</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${grp.items.length > 0 ? grp.items.map(i => `
-                                            <tr>
-                                                <td style="text-align:right; font-weight:bold; overflow:hidden; white-space:nowrap;">${i.name}</td>
-                                                <td class="qty-cell">${i.quantity.toFixed(2)}</td>
-                                                <td class="qty-cell">${i.weight.toFixed(2)}</td>
-                                                <td class="qty-cell last-cell">${i.containerCount > 0 ? i.containerCount.toFixed(2) : '-'}</td>
-                                            </tr>
-                                        `).join('') : '<tr><td colspan="4" style="padding:40px; color:#9ca3af; font-weight:bold;">موجودی صفر</td></tr>'}
-                                    </tbody>
-                                </table>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="footer">گزارش سیستم مدیریت انبار - تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}</div>
+            <div style="width: 290mm; min-height: 200mm; direction: rtl; padding: 5mm; box-sizing: border-box; margin: 0 auto; color: black;">
+                <div style="text-align: center; background-color: #fde047; border: 2px solid black; padding: 8px; margin-bottom: 10px; font-weight: 900; font-size: 20px;">موجودی کلی انبارها</div>
+                <table style="width: 100%; border-collapse: collapse; border: 2px solid black; table-layout: fixed;">
+                    <thead>
+                        <tr>
+                            ${reportData.map((group, index) => {
+                                const headerColor = index === 0 ? '#d8b4fe' : index === 1 ? '#fdba74' : '#93c5fd';
+                                return `
+                                    <th style="border-left: 2px solid black; vertical-align: top; padding: 0;">
+                                        <div style="background-color: ${headerColor}; color: black; padding: 8px; border-bottom: 2px solid black; font-size: 14px; font-weight: 900;">${group.company}</div>
+                                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                            <thead>
+                                                <tr style="background-color: #f3f4f6;">
+                                                    <th style="width: 40%; border-left: 1px solid black; border-bottom: 1px solid black; padding: 4px;">نخ / کالا</th>
+                                                    <th style="width: 20%; border-left: 1px solid black; border-bottom: 1px solid black; padding: 4px;">کارتن</th>
+                                                    <th style="width: 20%; border-left: 1px solid black; border-bottom: 1px solid black; padding: 4px;">وزن</th>
+                                                    <th style="width: 20%; border-bottom: 1px solid black; padding: 4px;">کانتینر</th>
+                                                </tr>
+                                            </thead>
+                                        </table>
+                                    </th>
+                                `;
+                            }).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            ${reportData.map((group, index) => `
+                                <td style="border-left: 2px solid black; vertical-align: top; padding: 0;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                        <tbody>
+                                            ${group.items.map((item, i) => `
+                                                <tr style="border-bottom: 1px solid #d1d5db;">
+                                                    <td style="width: 40%; border-left: 1px solid black; padding: 4px; text-align: right; font-weight: bold; overflow: hidden; white-space: nowrap;">${item.name}</td>
+                                                    <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace; font-weight: bold;">${item.quantity.toFixed(2)}</td>
+                                                    <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace;">${item.weight > 0 ? item.weight.toFixed(2) : '0.00'}</td>
+                                                    <td style="width: 20%; padding: 4px; text-align: center; font-family: monospace; color: #6b7280;">
+                                                        ${item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                            ${group.items.length === 0 ? `<tr><td colspan="4" style="padding: 20px; text-align: center; color: #9ca3af;">موجودی صفر</td></tr>` : ''}
+                                        </tbody>
+                                    </table>
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="text-align: center; background-color: #fde047; border: 2px solid black; border-top: none; padding: 4px; font-weight: bold; font-size: 12px;">
+                    گزارش سیستم مدیریت انبار - تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}
                 </div>
+            </div>
             </body></html>`;
 
-            const pdfBuffer = await Renderer.generatePdfBuffer(html);
+            const pdfBuffer = await Renderer.generatePdfBuffer(html, { landscape: true });
             if (pdfBuffer && pdfBuffer.length > 100) {
                 await sendDocFn(chatId, pdfBuffer, `Stock_Report_${Date.now()}.pdf`, 'گزارش موجودی انبار');
             } else {
