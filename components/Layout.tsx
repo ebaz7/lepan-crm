@@ -39,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   
   // Mobile Drawer State
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // PWA & Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -373,105 +374,150 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Desktop Sidebar */}
-      <aside className="w-64 bg-slate-800 text-white flex-shrink-0 hidden md:flex flex-col no-print shadow-xl relative h-screen sticky top-0">
-          <div className="p-6 border-b border-slate-700 flex items-center gap-3"><div className="bg-blue-500 p-2 rounded-lg"><FileText className="w-6 h-6 text-white" /></div><div><h1 className="text-lg font-bold tracking-wide">سیستم مالی</h1><span className="text-xs text-slate-400">پنل کاربری</span></div></div>
-          <div className="p-4 bg-slate-700/50 mx-4 mt-4 rounded-xl flex items-center gap-3 border border-slate-600 relative group cursor-pointer hover:bg-slate-600 transition-colors" onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری"><div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden shrink-0">{currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover"/> : <UserIcon size={20} className="text-blue-300" />}</div><div className="overflow-hidden flex-1"><p className="text-sm font-bold truncate">{currentUser.fullName}</p><p className="text-xs text-slate-400 truncate">نقش: {currentUser.role}</p></div><div className="absolute right-2 top-2 bg-slate-500 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Settings size={14} /></div></div>
+      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-40 bg-white/70 backdrop-blur-2xl border-l border-gray-200/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className="p-6 border-b border-gray-200/50 flex items-center justify-between gap-3">
+              <div className={`flex items-center gap-3 overflow-hidden ${!isSidebarOpen && 'hidden'}`}>
+                  <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-600/20"><FileText className="w-5 h-5" /></div>
+                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">سیستم مالی</h1><span className="text-[10px] text-gray-500 font-bold">پنل کاربری</span></div>
+              </div>
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-600 transition-colors mx-auto">
+                 <Menu size={20}/>
+              </button>
+          </div>
           
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-              {navItems.map((item) => { const Icon = item.icon; return (<React.Fragment key={item.id}><button onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-700'}`}><Icon size={20} /><span className="font-medium">{item.label}</span></button></React.Fragment>); })}
+          <div className={`p-4 bg-white/50 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-gray-100 relative group cursor-pointer hover:bg-white hover:shadow-sm transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden shrink-0 text-white shadow-md">
+                 {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover"/> : <span className="font-bold">{currentUser.fullName.charAt(0)}</span>}
+              </div>
+              {isSidebarOpen && (
+                 <div className="overflow-hidden flex-1">
+                     <p className="text-sm font-bold truncate text-gray-800">{currentUser.fullName}</p>
+                     <p className="text-[10px] text-gray-500 truncate font-bold bg-gray-100 inline-block px-1.5 py-0.5 rounded mt-0.5">نقش: {currentUser.role}</p>
+                 </div>
+              )}
+          </div>
+          
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+              {navItems.map((item) => { 
+                  const Icon = item.icon; 
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-600 hover:bg-gray-100'} ${!isSidebarOpen && 'justify-center'}`} title={item.label}>
+                        <Icon size={20} className={isActive ? '' : 'group-hover:scale-110 transition-transform'} />
+                        {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
+                    </button>
+                  ); 
+              })}
               
-              <div className="pt-4 mt-2 border-t border-slate-700 relative" ref={notifRef}>
-                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-white bg-slate-700 shadow-inner' : 'text-slate-300 hover:bg-slate-700'}`}>
+              <div className="pt-4 mt-2 border-t border-gray-200/50 relative" ref={notifRef}>
+                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-600 hover:bg-gray-100'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
                       <div className="relative">
                           <Bell size={20} />
-                          {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-800 animate-bounce">{unreadCount}</span>)}
+                          {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-bounce">{unreadCount}</span>)}
                       </div>
-                      <span className="font-bold">مرکز اعلان‌ها</span>
+                      {isSidebarOpen && <span className="font-bold whitespace-nowrap">مرکز اعلان‌ها</span>}
                   </button>
                   {showNotifDropdown && <NotificationDropdown />}
                   
-                  {!notifEnabled && (
-                      <button onClick={handleToggleNotif} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-4 rounded-2xl text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30 animate-pulse font-black shadow-lg shadow-red-500/10 active:scale-95">
-                          <BellRing size={20} />
-                          <span>فعال‌سازی نوتـیفـیکیشـن (الزامی)</span>
+                  {!notifEnabled && isSidebarOpen && (
+                      <button onClick={handleToggleNotif} className="mt-4 w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs bg-red-50 text-red-600 hover:bg-red-100 transition-all font-black border border-red-100">
+                          <BellRing size={18} />
+                          <span>فعال‌سازی نوتـیفـیکیشـن</span>
                       </button>
                   )}
               </div>
           </nav>
           
-          <div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 text-red-400 hover:text-red-300 hover:bg-slate-700 rounded-lg transition-colors"><LogOut size={20} /><span>خروج از سیستم</span></button></div>
+          <div className="p-4 border-t border-gray-200/50">
+              <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors font-bold ${!isSidebarOpen && 'justify-center'}`} title="خروج از سیستم">
+                  <LogOut size={20} />
+                  {isSidebarOpen && <span className="whitespace-nowrap">خروج از سیستم</span>}
+              </button>
+          </div>
       </aside>
       
-      {/* Mobile Drawer (Refined Design) */}
+      {/* Mobile Drawer (Refined Glass Design) */}
       {showMobileMenu && (
-          <div className="fixed inset-0 z-[60] md:hidden animate-fade-in">
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
-              <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] max-h-[85vh] overflow-y-auto animate-slide-up pb-safe shadow-2xl flex flex-col">
+          <div className="fixed inset-0 z-[60] md:hidden animate-fade-in flex justify-end">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
+              <div className="relative w-72 bg-white/80 backdrop-blur-2xl h-full shadow-2xl flex flex-col transform transition-transform border-l border-white/50 animate-slide-in-right">
                   {/* Header */}
-                  <div className="p-5 border-b flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-[2rem]">
+                  <div className="p-6 border-b border-white/40 flex justify-between items-center bg-white/40">
                       <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold border border-blue-200 shadow-sm">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 border border-white">
                               {currentUser.fullName.charAt(0)}
                           </div>
                           <div>
-                              <div className="font-black text-gray-800 text-sm">منوی کاربری</div>
-                              <div className="text-[10px] text-gray-500">{currentUser.fullName}</div>
+                              <div className="font-black text-gray-800 text-sm">{currentUser.fullName}</div>
+                              <div className="text-[10px] text-gray-500 font-bold bg-gray-100/50 px-2 rounded-full inline-block">{currentUser.role}</div>
                           </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                          <button onClick={handleLogout} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors" title="خروج">
-                              <LogOut size={20}/>
-                          </button>
-                          <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
                       </div>
                   </div>
                   
-                  {/* Notification Toggle (if not enabled) */}
+                  {/* Notification Toggle */}
                   {!notifEnabled && (
-                      <div className="mx-5 mt-5 bg-red-50 border border-red-100 p-3 rounded-2xl flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-red-600 text-xs font-bold">
-                              <Bell size={16} />
-                              <span>اعلان‌ها غیرفعال است</span>
+                      <div className="px-5 mt-5">
+                          <div className="bg-red-50/80 border border-red-100 p-3 rounded-2xl flex flex-col gap-2 shadow-sm backdrop-blur-md">
+                              <div className="flex items-center gap-2 text-red-600 text-xs font-bold">
+                                  <Bell size={16} />
+                                  <span>اعلان‌ها غیرفعال است</span>
+                              </div>
+                              <button onClick={handleToggleNotif} className="bg-red-600 text-white w-full py-2 rounded-xl text-xs font-bold shadow-md hover:bg-red-700">
+                                  فعال‌سازی (الزامی)
+                              </button>
                           </div>
-                          <button onClick={handleToggleNotif} className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:bg-red-700 animate-pulse">
-                              فعال‌سازی
-                          </button>
                       </div>
                   )}
 
-                  {/* Grid Menu */}
-                  <div className="p-5 grid grid-cols-3 gap-3">
-                      {navItems.map((item) => {
-                          const Icon = item.icon;
-                          const isActive = activeTab === item.id;
-                          return (
-                              <button 
-                                key={item.id} 
-                                onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }}
-                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border aspect-square transition-all active:scale-95 ${isActive ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200' : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'}`}
-                              >
-                                  <Icon size={24} strokeWidth={isActive ? 2.5 : 1.5} />
-                                  <span className="text-[10px] font-bold text-center leading-tight">{item.label}</span>
-                              </button>
-                          );
-                      })}
+                  {/* Settings User Shortcut */}
+                  <div className="px-5 mt-4">
+                      <button onClick={() => { setShowMobileMenu(false); setShowProfileModal(true); }} className="w-full flex items-center gap-3 p-3 bg-white/60 hover:bg-white/90 rounded-2xl border border-white shadow-sm transition-colors text-gray-700 font-bold text-xs">
+                          <Settings size={18} className="text-gray-500"/> تنظیمات پروفایل
+                      </button>
+                  </div>
+
+                  {/* List Menu */}
+                  <div className="p-3 flex-1 overflow-y-auto custom-scrollbar mt-2">
+                      <div className="space-y-1">
+                          {navItems.map((item) => {
+                              const Icon = item.icon;
+                              const isActive = activeTab === item.id;
+                              return (
+                                  <button 
+                                    key={item.id} 
+                                    onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-600 hover:bg-white/80'}`}
+                                  >
+                                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                                      <span className="text-xs font-bold">{item.label}</span>
+                                  </button>
+                              );
+                          })}
+                      </div>
+                  </div>
+                  
+                  <div className="p-5 border-t border-white/50 bg-white/40">
+                      <button onClick={handleLogout} className="w-full p-3 bg-white/60 text-red-600 rounded-2xl border border-white font-bold text-sm hover:bg-red-50 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                          <LogOut size={18}/> خروج از سیستم
+                      </button>
                   </div>
               </div>
           </div>
       )}
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex justify-around items-center py-2 pb-safe z-50 shadow-[0_-4px_20px_-1px_rgba(0,0,0,0.05)]">
+      <div className="md:hidden fixed bottom-4 left-4 right-4 bg-white/80 backdrop-blur-2xl border border-gray-200/50 flex justify-around items-center py-2 px-2 pb-safe z-50 shadow-[0_8px_30px_rgba(0,0,0,0.08)] rounded-3xl">
         {bottomNavItems.map((item) => { 
             const Icon = item.icon; 
+            const isActive = activeTab === item.id;
             return (
                 <button 
                     key={item.id} 
                     onClick={() => setActiveTab(item.id)} 
-                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${activeTab === item.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400'}`}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all flex-1 ${isActive ? 'text-blue-600 bg-white shadow-sm font-black' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    <Icon size={24} strokeWidth={activeTab === item.id ? 2.5 : 2} className={activeTab === item.id ? 'drop-shadow-sm' : ''} />
-                    <span className="text-[10px] font-bold">{item.label}</span>
+                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                    <span className="text-[9px] font-bold mt-0.5">{item.label}</span>
                 </button>
             ); 
         })}
@@ -480,10 +526,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         {showMoreButton && (
         <button 
             onClick={() => setShowMobileMenu(true)} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${showMobileMenu ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400'}`}
+            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all flex-1 ${showMobileMenu ? 'text-blue-600 bg-white shadow-sm font-black' : 'text-gray-500 hover:text-gray-700'}`}
         >
-            <Menu size={24} strokeWidth={showMobileMenu ? 2.5 : 2} />
-            <span className="text-[10px] font-bold">بیشتر</span>
+            <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
+            <span className="text-[9px] font-bold mt-0.5">موارد بیشتر</span>
         </button>
         )}
       </div>
@@ -491,16 +537,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative min-w-0">
         {/* Mobile Header */}
-        <header className="bg-white shadow-sm p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-40 safe-pt sticky top-0">
+        <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/50 p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-40 safe-pt py-3 sticky top-0 shadow-sm">
             <div className="flex items-center gap-3">
-                {activeTab !== 'dashboard' && (<button onClick={() => setActiveTab('dashboard')} className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={24} /></button>)}
-                <div className="flex items-center gap-2" onClick={() => setShowProfileModal(true)}>
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-blue-200">
+                <div className="flex items-center gap-3" onClick={() => setShowProfileModal(true)}>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-blue-500/20 border-2 border-white">
                         {currentUser.fullName.charAt(0)}
                     </div>
-                    <div>
-                        <h1 className="font-black text-gray-800 text-sm tracking-tight">{navItems.find(i => i.id === activeTab)?.label || 'سیستم مالی'}</h1>
-                    </div>
+                </div>
+                <div>
+                   <h1 className="font-black text-gray-800 text-sm tracking-tight">{navItems.find(i => i.id === activeTab)?.label || 'سیستم مالی'}</h1>
                 </div>
             </div>
             <div className="flex items-center gap-2">
@@ -508,7 +553,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     <select 
                         value={financialYear} 
                         onChange={(e) => setFinancialYear(e.target.value)}
-                        className="bg-gray-100 text-gray-700 font-bold border-none outline-none rounded-lg text-sm px-2 py-1 mr-2"
+                        className="bg-white/50 backdrop-blur-md border border-gray-200/50 text-gray-700 font-bold rounded-xl text-xs px-2 py-2 mr-2 shadow-sm"
                         dir="ltr"
                     >
                         {settings?.fiscalYears?.map(fy => (
@@ -523,9 +568,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     </select>
                 )}
                 <div className="relative notification-trigger" ref={mobileNotifRef}>
-                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                        <Bell size={20} className="text-gray-600" />
-                        {unreadCount > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 backdrop-blur-md border border-gray-200/50 rounded-xl hover:bg-white transition-colors shadow-sm">
+                        <Bell size={20} className="text-gray-700" />
+                        {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
                     </button>
                     {showNotifDropdown && <NotificationDropdown />}
                 </div>
