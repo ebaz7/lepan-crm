@@ -273,14 +273,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
   // Mobile Specific Nav Items (Bottom Bar) dynamically built based on permissions
-  let bottomNavItems = [];
-  let showMoreButton = false;
-  if (navItems.length <= 5) {
-      bottomNavItems = navItems;
-  } else {
-      bottomNavItems = navItems.slice(0, 4);
-      showMoreButton = true;
-  }
+  let bottomNavItems = navItems.slice(0, 4);
+  let showMoreButton = true;
 
   const NotificationDropdown = () => ( 
     <div className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 text-gray-800 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">

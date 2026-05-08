@@ -163,9 +163,9 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const displayDestinations = permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: 'legacy', recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }];
   
   const totalCartonsReq = displayItems.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0);
-  const totalWeightReq = displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0);
+  const totalWeightReq = Number(displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0).toFixed(2));
   const totalCartonsDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
-  const totalWeightDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0);
+  const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(2));
   const showDeliveryColumns = displayItems.some(i => i.deliveredCartonCount !== undefined);
 
   const content = (
@@ -216,13 +216,13 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         <>
                                             <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{item.cartonCount}</td>
                                             <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{item.deliveredCartonCount ?? item.cartonCount}</td>
-                                            <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{item.weight}</td>
-                                            <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{item.deliveredWeight ?? item.weight}</td>
+                                            <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{Number(Number(item.weight).toFixed(2))}</td>
+                                            <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{Number(Number(item.deliveredWeight ?? item.weight).toFixed(2))}</td>
                                         </>
                                     ) : (
                                         <>
                                             <td className="border-2 border-black p-2 font-mono font-bold">{item.cartonCount}</td>
-                                            <td className="border-2 border-black p-2 font-mono font-bold">{item.weight}</td>
+                                            <td className="border-2 border-black p-2 font-mono font-bold">{Number(Number(item.weight).toFixed(2))}</td>
                                         </>
                                     )}
                                 </tr>

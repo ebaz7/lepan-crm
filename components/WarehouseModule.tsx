@@ -505,24 +505,24 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             {/* Hidden Print Elements for Auto-Send */}
             {createdTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-created-${createdTxForAutoSend.id}-price`}><PrintBijak tx={createdTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>
+                    <div id={`print-bijak-created-${createdTxForAutoSend.id}-price`}><PrintBijak tx={createdTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
                 </div>
             )}
             {approvedTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>
-                    <div id={`print-bijak-${approvedTxForAutoSend.id}-noprice`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} /></div>
+                    <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-${approvedTxForAutoSend.id}-noprice`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={safeTransactions} /></div>
                 </div>
             )}
             {deletedTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-price`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>
-                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-noprice`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} /></div>
+                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-price`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-noprice`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={safeTransactions} /></div>
                 </div>
             )}
             {editedBijakForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-edit-${editedBijakForAutoSend.id}`}><PrintBijak tx={editedBijakForAutoSend} onClose={()=>{}} embed forceHidePrices={false} /></div>
+                    <div id={`print-bijak-edit-${editedBijakForAutoSend.id}`}><PrintBijak tx={editedBijakForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
                 </div>
             )}
             
@@ -949,6 +949,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     tx={viewBijak} 
                     onClose={() => setViewBijak(null)} 
                     settings={settings}
+                    transactions={safeTransactions}
                     onApprove={canApprove && viewBijak.status === 'PENDING' ? () => handleApproveBijak(viewBijak) : undefined}
                     onReject={canApprove && viewBijak.status === 'PENDING' ? () => handleRejectBijak(viewBijak) : undefined} 
                 />

@@ -16,15 +16,34 @@ interface PrintBijakProps {
   forceHidePrices?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
+  transactions?: WarehouseTransaction[];
 }
 
-const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, forceHidePrices, onApprove, onReject }) => {
+const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, forceHidePrices, onApprove, onReject, transactions }) => {
   const [processing, setProcessing] = useState(false);
   const [hidePrices, setHidePrices] = useState(forceHidePrices || false);
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [allContacts, setAllContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [contactsLoading, setContactsLoading] = useState(false);
+
+  const stockInfo = React.useMemo(() => {
+     if (!transactions || !tx.items) return [];
+     return tx.items.map(item => {
+         let qty = 0; let weight = 0;
+         transactions.filter(t => t.company === tx.company && t.status !== 'REJECTED').forEach(t => {
+             if (Array.isArray(t.items)) {
+                 t.items.forEach(ti => {
+                     if (ti.itemId === item.itemId || ti.itemName === item.itemName) {
+                         if (t.type === 'IN') { qty += (Number(ti.quantity) || 0); weight += (Number(ti.weight) || 0); }
+                         else { qty -= (Number(ti.quantity) || 0); weight -= (Number(ti.weight) || 0); }
+                     }
+                 });
+             }
+         });
+         return { name: item.itemName, qty, weight };
+     });
+  }, [transactions, tx]);
 
   // Scaling State
   const [scale, setScale] = useState(1);
@@ -195,8 +214,22 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
                 <div className="text-left space-y-1"><div className="text-lg font-black border-2 border-black px-3 py-1 rounded">NO: {tx.number}</div><div className="text-sm font-bold">تاریخ: {formatDate(tx.date)}</div></div>
             </div>
             <div className="border rounded-lg p-3 mb-4 bg-gray-50 text-sm print:bg-white print:border-black relative z-10"><div className="grid grid-cols-2 gap-4"><div><span className="text-gray-500 ml-2">تحویل گیرنده:</span> <span className="font-bold">{tx.recipientName}</span></div><div><span className="text-gray-500 ml-2">مقصد:</span> <span className="font-bold">{tx.destination || '-'}</span></div><div><span className="text-gray-500 ml-2">راننده:</span> <span className="font-bold">{tx.driverName || '-'}</span></div><div><span className="text-gray-500 ml-2">پلاک:</span> <span className="font-bold font-mono dir-ltr">{tx.plateNumber || '-'}</span></div></div></div>
-            <div className="flex-1 relative z-10"><table className="w-full text-sm border-collapse border border-black"><thead className="bg-gray-200 print:bg-gray-100"><tr><th className="border border-black p-2 w-10 text-center">#</th><th className="border border-black p-2">شرح کالا</th><th className="border border-black p-2 w-20 text-center">تعداد</th><th className="border border-black p-2 w-24 text-center">وزن (KG)</th>{!hidePrices && <th className="border border-black p-2 w-28 text-center">فی (ریال)</th>}</tr></thead><tbody>{tx.items.map((item, idx) => (<tr key={idx}><td className="border border-black p-2 text-center">{idx + 1}</td><td className="border border-black p-2 font-bold">{item.itemName}</td><td className="border border-black p-2 text-center">{item.quantity}</td><td className="border border-black p-2 text-center">{item.weight}</td>{!hidePrices && <td className="border border-black p-2 text-center font-mono">{item.unitPrice ? formatCurrency(item.unitPrice).replace('ریال', '') : '-'}</td>}</tr>))}<tr className="bg-gray-100 font-bold print:bg-white"><td colSpan={2} className="border border-black p-2 text-left pl-4">جمع کل:</td><td className="border border-black p-2 text-center">{tx.items.reduce((a,b)=>a+b.quantity,0)}</td><td className="border border-black p-2 text-center">{tx.items.reduce((a,b)=>a+b.weight,0)}</td>{!hidePrices && <td className="border border-black p-2 bg-gray-200"></td>}</tr></tbody></table>{tx.description && <div className="mt-4 border p-2 rounded text-sm"><span className="font-bold block mb-1">توضیحات:</span>{tx.description}</div>}</div>
+            <div className="flex-1 relative z-10"><table className="w-full text-sm border-collapse border border-black"><thead className="bg-gray-200 print:bg-gray-100"><tr><th className="border border-black p-2 w-10 text-center">#</th><th className="border border-black p-2">شرح کالا</th><th className="border border-black p-2 w-20 text-center">تعداد</th><th className="border border-black p-2 w-24 text-center">وزن (KG)</th>{!hidePrices && <th className="border border-black p-2 w-28 text-center">فی (ریال)</th>}</tr></thead><tbody>{tx.items.map((item, idx) => (<tr key={idx}><td className="border border-black p-2 text-center">{idx + 1}</td><td className="border border-black p-2 font-bold">{item.itemName}</td><td className="border border-black p-2 text-center">{item.quantity}</td><td className="border border-black p-2 text-center">{Number(Number(item.weight).toFixed(2))}</td>{!hidePrices && <td className="border border-black p-2 text-center font-mono">{item.unitPrice ? formatCurrency(item.unitPrice).replace('ریال', '') : '-'}</td>}</tr>))}<tr className="bg-gray-100 font-bold print:bg-white"><td colSpan={2} className="border border-black p-2 text-left pl-4">جمع کل:</td><td className="border border-black p-2 text-center">{tx.items.reduce((a,b)=>a+(Number(b.quantity)||0),0)}</td><td className="border border-black p-2 text-center">{Number(tx.items.reduce((a,b)=>a+(Number(b.weight)||0),0).toFixed(2))}</td>{!hidePrices && <td className="border border-black p-2 bg-gray-200"></td>}</tr></tbody></table>{tx.description && <div className="mt-4 border p-2 rounded text-sm"><span className="font-bold block mb-1">توضیحات:</span>{tx.description}</div>}</div>
             
+            {stockInfo.length > 0 && (
+                <div className="mt-4 border border-black p-2 rounded text-[10px] relative z-10">
+                    <span className="font-bold block mb-1">موجودی اقلام بیجک:</span>
+                    <div className="flex flex-wrap gap-4">
+                        {stockInfo.map((s, idx) => (
+                            <div key={idx} className="flex gap-1 border-r border-black/20 pr-4 first:border-0 first:pr-0">
+                                <span className="font-bold bg-gray-100 px-1 rounded">{s.name}:</span>
+                                <div>تعداد: {s.qty} / وزن: {Number(s.weight.toFixed(2))} Kg</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="mt-8 pt-4 border-t-2 border-black grid grid-cols-3 gap-4 text-center relative z-10 h-24">
                 <div className="flex flex-col items-center justify-between"><div className="mb-1 flex items-center justify-center h-full"><Stamp title="انباردار (ثبت)" name={tx.createdBy || 'کاربر انبار'} color="blue" /></div><div className="w-full border-t border-gray-400 pt-1 text-[9px] font-bold text-gray-600">امضا انباردار</div></div>
                 <div className="flex flex-col items-center justify-between"><div className="mb-1 flex items-center justify-center h-full">{tx.approvedBy ? <Stamp title="تایید مدیریت" name={tx.approvedBy} color="green" /> : <span className="text-gray-300 text-[10px]">منتظر تایید</span>}</div><div className="w-full border-t border-gray-400 pt-1 text-[9px] font-bold text-gray-600">امضا مدیریت</div></div>
