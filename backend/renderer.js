@@ -444,14 +444,14 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                     <td>${idx + 1}</td>
                                     <td style="text-align: right; font-weight: bold; padding-right: 8px;">${item.itemName}</td>
                                     <td>${item.quantity}</td>
-                                    <td>${item.weight || 0}</td>
+                                    <td>${item.weight ? Number(item.weight).toFixed(2) : 0}</td>
                                     ${showPrices ? `<td style="font-family: monospace;">${item.unitPrice ? parseInt(item.unitPrice).toLocaleString() : '-'}</td>` : ''}
                                 </tr>
                             `).join('')}
                             <tr style="background-color: #f3f4f6; font-weight: bold;">
                                 <td colspan="2" style="text-align: left; padding-left: 10px;">جمع کل:</td>
                                 <td>${(record.items || []).reduce((a, b) => a + (Number(b.quantity) || 0), 0)}</td>
-                                <td>${(record.items || []).reduce((a, b) => a + (Number(b.weight) || 0), 0)}</td>
+                                <td>${(record.items || []).reduce((a, b) => a + (Number(b.weight) || 0), 0).toFixed(2)}</td>
                                 ${showPrices ? '<td></td>' : ''}
                             </tr>
                         </tbody>

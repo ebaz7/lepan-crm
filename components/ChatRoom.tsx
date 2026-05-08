@@ -334,14 +334,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const getAllChannelsForForward = (): ChannelItem[] => {
         const list: ChannelItem[] = [];
         
-        list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true });
+        list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true, lastMsg: null, unread: 0 });
         
         users.forEach(u => {
-            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar || null, isOnline: false });
+            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar || null, isOnline: false, lastMsg: null, unread: 0 });
         });
         
         groups.forEach(g => {
-            list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isOnline: false });
+            list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isOnline: false, lastMsg: null, unread: 0 });
         });
         
         return list;

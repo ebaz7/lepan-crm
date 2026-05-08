@@ -166,7 +166,7 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
 
     for (const item of limitedResults) {
         try {
-            const img = await Renderer.generateRecordImage(item, imageType);
+            const img = await Renderer.generateRecordImage(item, imageType, { forceHidePrices: false });
             
             let caption = '';
             let pdfCallback = '';
@@ -1097,98 +1097,108 @@ export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP')
         const isDelete = eventType === 'DELETE';
         const settings = db.settings || {};
         
+        // Calculate remaining balance for items in this Bijak
+        const txs = Array.isArray(db.warehouseTransactions) ? db.warehouseTransactions : [];
+        const stockInfo = (tx.items || []).map(item => {
+            let qty = 0; let weight = 0;
+            txs.filter(t => t.company === tx.company && t.status !== 'REJECTED').forEach(t => {
+                if (Array.isArray(t.items)) {
+                    t.items.forEach(ti => {
+                        if (ti.itemId === item.itemId || ti.itemName === item.itemName) {
+                            if (t.type === 'IN') { qty += (ti.quantity || 0); weight += (ti.weight || 0); }
+                            else { qty -= (ti.quantity || 0); weight -= (ti.weight || 0); }
+                        }
+                    });
+                }
+            });
+            return { name: item.itemName, qty, weight };
+        });
+
         // Use full date helper if available
         const dateStr = toShamsiFull ? toShamsiFull(tx.date) : new Date(tx.date).toLocaleDateString('fa-IR');
         
-        // Generate image using Renderer
+        // Generate images using Renderer
         const Renderer = await import('./renderer.js');
-        const img = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete });
+        const imgWithPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: false });
+        const imgNoPrice = await Renderer.generateRecordImage(tx, 'BIJAK', { isEdit, isDelete, forceHidePrices: true });
         
         let header = isDelete ? `❌ *حذف شد: حواله خروج انبار (بیجک)*` : (isEdit ? `✏️ *ویرایش شد: حواله خروج انبار*` : `🚨 *حواله خروج انبار (بیجک)*`);
         let footerText = stepName === 'ثبت اولیه' ? '⚠️ *لطفا جهت بررسی و تایید به کارتابل انبار مراجعه فرمایید.*' : `✅ *تایید نهایی توسط:* ${tx.approvedBy || '-'}`;
         
-        let caption = `${header}\n`;
-        caption += `━━━━━━━━━━━━━━\n`;
-        caption += `🔢 *شماره:* ${tx.number}\n`;
-        caption += `🏢 *شرکت:* ${tx.company || '-'}\n`;
-        caption += `📅 *تاریخ:* ${dateStr}\n`;
-        caption += `👤 *گیرنده:* ${tx.recipientName || '-'}\n`;
-        caption += `📍 *مقصد:* ${tx.destination || '-'}\n`;
-        caption += `🚚 *راننده:* ${tx.driverName || '-'}\n`;
-        caption += `🆔 *پلاک:* \`${tx.plateNumber || '-'}\`\n`;
-        caption += `━━━━━━━━━━━━━━\n`;
-        caption += `📦 *اقلام حواله:* \n`;
-        tx.items.forEach((it, idx) => {
-            caption += `${idx + 1}. ${it.itemName} | ${it.quantity} ${it.unit || 'واحد'}\n`;
-        });
-        if (tx.description) caption += `📝 *توضیحات:* ${tx.description}\n`;
-        caption += `━━━━━━━━━━━━━━\n`;
-        caption += `🔄 *وضعیت:* ${tx.status || 'PENDING'}\n`;
-        caption += `📢 *مرحله:* ${stepName}\n`;
-        caption += `${footerText}`;
+        let commonDetails = `🔢 *شماره:* ${tx.number}\n`;
+        commonDetails += `🏢 *شرکت:* ${tx.company || '-'}\n`;
+        commonDetails += `📅 *تاریخ:* ${dateStr}\n`;
+        commonDetails += `👤 *گیرنده:* ${tx.recipientName || '-'}\n`;
+        commonDetails += `📍 *مقصد:* ${tx.destination || '-'}\n`;
+        commonDetails += `🚚 *راننده:* ${tx.driverName || '-'}\n`;
+        commonDetails += `🆔 *پلاک:* \`${tx.plateNumber || '-'}\`\n`;
+        commonDetails += `━━━━━━━━━━━━━━\n`;
 
-        const mediaData = { data: img.toString('base64'), filename: `Bijak_${tx.number}.png`, mimeType: 'image/png' };
+        const getItemsText = (showPrice) => {
+            let text = `📦 *اقلام حواله:* \n`;
+            tx.items.forEach((it, idx) => {
+                text += `${idx + 1}. ${it.itemName} | ${it.quantity} ${it.unit || 'واحد'}${showPrice && it.unitPrice ? ` | في: ${Number(it.unitPrice).toLocaleString()}` : ''}\n`;
+            });
+            return text;
+        };
 
-        // 1. Send to Global Bijak Groups (if configured)
+        const stockText = `━━━━━━━━━━━━━━\n📊 *مانده موجودی این کالاها:* \n${stockInfo.map(s => `🔹 ${s.name}: ${s.qty.toFixed(2)} واحد | ${s.weight.toFixed(2)} KG`).join('\n')}\n`;
+        
+        const footer = `━━━━━━━━━━━━━━\n${tx.description ? `📝 *توضیحات:* ${tx.description}\n━━━━━━━━━━━━━━\n` : ''}🔄 *وضعیت:* ${tx.status || 'PENDING'}\n📢 *مرحله:* ${stepName}\n${footerText}`;
+
+        const privateCaption = `${header}\n━━━━━━━━━━━━━━\n${commonDetails}${getItemsText(true)}${stockText}${footer}`;
+        const groupCaption = `${header}\n━━━━━━━━━━━━━━\n${commonDetails}${getItemsText(false)}${stockText}${footer}`;
+
+        const mediaDataNoPrice = { data: imgNoPrice.toString('base64'), filename: `Bijak_${tx.number}.png`, mimeType: 'image/png' };
+        const mediaDataWithPrice = { data: imgWithPrice.toString('base64'), filename: `Bijak_${tx.number}_Price.png`, mimeType: 'image/png' };
+
+        // Helper to send based on target type
+        const sendToTarget = async (t, isPrivate) => {
+            const img = isPrivate ? imgWithPrice : imgNoPrice;
+            const caption = isPrivate ? privateCaption : groupCaption;
+            const media = isPrivate ? mediaDataWithPrice : mediaDataNoPrice;
+
+            if (t.type === 'wa' && settings.whatsappEnabled) {
+                const mod = await import('./whatsapp.js');
+                mod.sendMessage(t.id, caption, media).catch(console.error);
+            }
+            if (t.type === 'tg' && settings.telegramBotToken) {
+                const mod = await import('./telegram.js');
+                mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
+            }
+            if (t.type === 'bale' && settings.baleBotToken) {
+                const mod = await import('./bale.js');
+                mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
+            }
+        };
+
+        // 1. Send to Global Bijak Groups (if configured) -> NO PRICE
         const tgGroupId = settings.botBijakGroupId || '';
         const baleGroupId = settings.botBijakGroupIdBale || '';
         const waGroupId = settings.botBijakGroupIdWhatsApp || '';
 
-        // Only send to groups if APPROVED or specific mode
         if (tx.status === 'APPROVED' || isDelete || isEdit) {
-            if (tgGroupId && settings.telegramBotToken) {
-                const mod = await import('./telegram.js');
-                if (mod?.sendBotPhoto) mod.sendBotPhoto(sanitizeGroupId(tgGroupId), img, caption).catch(console.error);
-            }
-            if (baleGroupId && settings.baleBotToken) {
-                const mod = await import('./bale.js');
-                if (mod?.sendBotPhoto) mod.sendBotPhoto(sanitizeGroupId(baleGroupId), img, caption).catch(console.error);
-            }
-            if (waGroupId && settings.whatsappEnabled) {
-                const mod = await import('./whatsapp.js');
-                if (mod?.sendMessage) mod.sendMessage(waGroupId, caption, mediaData).catch(console.error);
-            }
+            if (tgGroupId) sendToTarget({ type: 'tg', id: tgGroupId }, false);
+            if (baleGroupId) sendToTarget({ type: 'bale', id: baleGroupId }, false);
+            if (waGroupId) sendToTarget({ type: 'wa', id: waGroupId }, false);
         }
 
-        // 2. Send to Company-Specific Groups/Managers
+        // 2. Send to Company-Specific Groups/Managers -> GROUPS NO PRICE
         const companyConfig = settings.companyNotifications?.[tx.company];
         if (companyConfig) {
-            const targets = [];
-            if (tx.status === 'APPROVED' && companyConfig.warehouseGroup) targets.push({ type: 'wa', id: companyConfig.warehouseGroup });
-            if (tx.status === 'APPROVED' && companyConfig.telegramChannelId) targets.push({ type: 'tg', id: companyConfig.telegramChannelId });
-            if (tx.status === 'APPROVED' && companyConfig.baleChannelId) targets.push({ type: 'bale', id: companyConfig.baleChannelId });
+            if (tx.status === 'APPROVED' && companyConfig.warehouseGroup) sendToTarget({ type: 'wa', id: companyConfig.warehouseGroup }, false);
+            if (tx.status === 'APPROVED' && companyConfig.telegramChannelId) sendToTarget({ type: 'tg', id: companyConfig.telegramChannelId }, false);
+            if (tx.status === 'APPROVED' && companyConfig.baleChannelId) sendToTarget({ type: 'bale', id: companyConfig.baleChannelId }, false);
             
-            // On creation, maybe notify Sales Manager
-            if (stepName === 'ثبت اولیه' && companyConfig.salesManager) targets.push({ type: 'wa', id: companyConfig.salesManager });
-
-            for (const t of targets) {
-                if (t.type === 'wa' && settings.whatsappEnabled) {
-                    const mod = await import('./whatsapp.js');
-                    mod.sendMessage(t.id, caption, mediaData).catch(console.error);
-                }
-                if (t.type === 'tg' && settings.telegramBotToken) {
-                    const mod = await import('./telegram.js');
-                    mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
-                }
-                if (t.type === 'bale' && settings.baleBotToken) {
-                    const mod = await import('./bale.js');
-                    mod.sendBotPhoto(sanitizeGroupId(t.id), img, caption).catch(console.error);
-                }
-            }
+            if (stepName === 'ثبت اولیه' && companyConfig.salesManager) sendToTarget({ type: 'wa', id: companyConfig.salesManager }, false);
         }
 
-        // 3. If Pending, Notify CEO/Managers (Users with CEO role)
+        // 3. If Pending, Notify CEO/Managers (Private) -> WITH PRICE
         if (tx.status === 'PENDING' && stepName === 'ثبت اولیه') {
             const managers = (db.users || []).filter(u => u.role === 'ceo' || u.role === 'admin');
             for (const mgr of managers) {
-                if (mgr.telegramId && settings.telegramBotToken) {
-                   const mod = await import('./telegram.js');
-                   mod.sendBotPhoto(mgr.telegramId, img, caption).catch(console.error);
-                }
-                if (mgr.baleId && settings.baleBotToken) {
-                   const mod = await import('./bale.js');
-                   mod.sendBotPhoto(mgr.baleId, img, caption).catch(console.error);
-                }
+                if (mgr.telegramId) sendToTarget({ type: 'tg', id: mgr.telegramId }, true);
+                if (mgr.baleId) sendToTarget({ type: 'bale', id: mgr.baleId }, true);
             }
         }
 
@@ -1876,8 +1886,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'WH_RPT_STOCK') {
         await sendFn(chatId, "⏳ در حال محاسبه موجودی و تولید PDF...");
         try {
-            // Calculate Stock Logic (simplified from WarehouseModule)
-            // Fix: Check undefined arrays
             const items = Array.isArray(db.warehouseItems) ? db.warehouseItems : [];
             const txs = Array.isArray(db.warehouseTransactions) ? db.warehouseTransactions : [];
             const companies = [...new Set(txs.map(t => t.company).filter(Boolean))];
@@ -1886,7 +1894,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 const companyItems = items.map(catItem => {
                     let qty = 0; let weight = 0;
                     txs.filter(t => t.company === company && t.status !== 'REJECTED').forEach(t => {
-                        // Check if items array exists on transaction
                         if (Array.isArray(t.items)) {
                             t.items.forEach(ti => {
                                 if (ti.itemId === catItem.id) {
@@ -1896,37 +1903,63 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                             });
                         }
                     });
-                    return { name: catItem.name, quantity: qty, weight: weight };
-                });
+                    const cap = catItem.containerCapacity || 0;
+                    const containerCount = (cap > 0 && qty > 0) ? (qty / cap) : 0;
+                    return { name: catItem.name, quantity: qty, weight: weight, containerCount };
+                }).filter(i => Math.abs(i.quantity) > 0.001 || Math.abs(i.weight) > 0.001);
                 return { company, items: companyItems };
             });
 
-            // Generate HTML Table for PDF
-            let html = `
-            <!DOCTYPE html>
-            <html lang="fa" dir="rtl">
-            <head><meta charset="UTF-8"><style>
-                body { font-family: 'Vazirmatn', sans-serif; padding: 20px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-                th, td { border: 1px solid #333; padding: 8px; text-align: center; }
-                th { background-color: #f3f4f6; }
-                .company-header { background-color: #e5e7eb; font-weight: bold; text-align: right; padding: 10px; }
-            </style></head>
-            <body>
-                <h2 style="text-align:center">گزارش موجودی انبار</h2>
-                <div style="text-align:center; font-size:12px; margin-bottom:20px;">تاریخ: ${new Date().toLocaleDateString('fa-IR')}</div>
-            `;
-
-            reportData.forEach(grp => {
-                html += `<div class="company-header">${grp.company}</div>
-                <table>
-                    <thead><tr><th>کالا</th><th>تعداد</th><th>وزن (KG)</th></tr></thead>
-                    <tbody>
-                        ${grp.items.map(i => `<tr><td>${i.name}</td><td>${i.quantity}</td><td>${i.weight}</td></tr>`).join('')}
-                    </tbody>
-                </table>`;
-            });
-            html += `</body></html>`;
+            // Generate HTML designed for A4 Landscape
+            let html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>
+                @page { size: A4 landscape; margin: 0; }
+                body { font-family: 'Vazirmatn', sans-serif; background: white; margin: 0; padding: 5mm; }
+                .report-container { width: 280mm; margin: 0 auto; border: 2px solid black; }
+                .header { background-color: #fde047; border-bottom: 2px solid black; padding: 10px; text-align: center; font-size: 24px; font-weight: 900; }
+                .grid-container { display: flex; flex-wrap: wrap; align-items: stretch; }
+                .company-column { flex: 1; min-width: 90mm; border-left: 2px solid black; display: flex; flex-direction: column; }
+                .company-column:last-child { border-left: none; }
+                .company-title { background-color: #d8b4fe; border-bottom: 2px solid black; padding: 10px; font-weight: 900; text-align: center; font-size: 16px; min-height: 24px; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; flex: 1; table-layout: fixed; }
+                th { background-color: #f3f4f6; border-bottom: 1px solid black; border-left: 1px solid black; padding: 6px; font-weight: 900; }
+                td { border-bottom: 1px solid #d1d5db; border-left: 1px solid black; padding: 6px; text-align: center; }
+                tr:last-child td { border-bottom: none; }
+                .last-cell { border-left: none; }
+                .footer { background-color: #fde047; border-top: 2px solid black; padding: 6px; text-align: center; font-size: 12px; font-weight: 900; }
+                .qty-cell { font-family: monospace; font-weight: bold; }
+            </style></head><body>
+                <div class="report-container">
+                    <div class="header">گزارش موجودی کلی انبارها</div>
+                    <div class="grid-container">
+                        ${reportData.map((grp, idx) => `
+                            <div class="company-column">
+                                <div class="company-title" style="background:${idx === 0 ? '#d8b4fe' : idx === 1 ? '#fdba74' : '#93c5fd'}">${grp.company}</div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style="width:40%">نخ / کالا</th>
+                                            <th style="width:20%">کارتن</th>
+                                            <th style="width:20%">وزن</th>
+                                            <th style="width:20%" class="last-cell">کانتینر</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${grp.items.length > 0 ? grp.items.map(i => `
+                                            <tr>
+                                                <td style="text-align:right; font-weight:bold; overflow:hidden; white-space:nowrap;">${i.name}</td>
+                                                <td class="qty-cell">${i.quantity.toFixed(2)}</td>
+                                                <td class="qty-cell">${i.weight.toFixed(2)}</td>
+                                                <td class="qty-cell last-cell">${i.containerCount > 0 ? i.containerCount.toFixed(2) : '-'}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="4" style="padding:40px; color:#9ca3af; font-weight:bold;">موجودی صفر</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="footer">گزارش سیستم مدیریت انبار - تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}</div>
+                </div>
+            </body></html>`;
 
             const pdfBuffer = await Renderer.generatePdfBuffer(html);
             if (pdfBuffer && pdfBuffer.length > 100) {
@@ -1934,7 +1967,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             } else {
                 await sendFn(chatId, "⚠️ خطا در تولید PDF.\n(خروجی خالی)");
             }
-
         } catch (e) {
             console.error("Stock Report Error:", e);
             await sendFn(chatId, `⚠️ خطا در تولید گزارش: ${e.message}`);

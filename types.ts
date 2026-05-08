@@ -234,6 +234,8 @@ export interface SystemSettings {
   botAccountingGroupIdBale?: string;
   botAccountingGroupIdWhatsApp?: string;
   botBijakGroupId?: string;
+  botBijakGroupIdBale?: string;
+  botBijakGroupIdWhatsApp?: string;
   botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' | 'all' }[];
   botForceJoinEnabled?: boolean;
@@ -300,6 +302,7 @@ export enum OrderStatus {
   APPROVED_FINANCE = 'تایید مالی / در انتظار مدیریت',
   APPROVED_MANAGER = 'تایید مدیریت / در انتظار مدیرعامل',
   APPROVED_CEO = 'تایید نهایی',
+  PAID = 'پرداخت شده',
   REJECTED = 'رد شده',
   REVOCATION_PENDING_FINANCE = 'درخواست ابطال (مالی)',
   REVOCATION_PENDING_MANAGER = 'تایید ابطال (مدیریت)',
