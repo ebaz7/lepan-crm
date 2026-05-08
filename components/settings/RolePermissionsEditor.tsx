@@ -72,7 +72,9 @@ const PERMISSION_GROUPS = [
             { id: 'canEditAll', label: 'ویرایش تمام دستورات' },
             { id: 'canDeleteAll', label: 'حذف تمام دستورات' },
             { id: 'canManageTrade', label: 'دسترسی به بخش بازرگانی' },
-            { id: 'canManageSettings', label: 'دسترسی به تنظیمات سیستم' }
+            { id: 'canManageSettings', label: 'دسترسی به تنظیمات سیستم' },
+            { id: 'canViewKnowledgeBase', label: 'دسترسی به اطلاعات حساب‌ها و بانک‌ها' },
+            { id: 'canManageKnowledgeBase', label: 'مدیریت اطلاعات حساب‌ها و بانک‌ها' }
         ] 
     }
 ];

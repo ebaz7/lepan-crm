@@ -18,6 +18,7 @@ import NotificationController from './components/NotificationController';
 import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
 import { Tickets } from './components/Tickets';
+import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { getOrders, getSettings, getMessages, saveSettings } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
@@ -436,6 +437,7 @@ function App() {
                     {activeTab === 'tickets' && <Tickets />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
+                    {activeTab === 'knowledge' && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
                     {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                     {activeTab === 'chat' && (
                         <ChatRoom 

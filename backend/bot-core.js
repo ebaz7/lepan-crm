@@ -58,7 +58,8 @@ const KEYBOARDS = {
             [{ text: '💰 مدیریت پرداخت', callback_data: 'MENU_PAY' }, { text: '🚛 مدیریت خروج', callback_data: 'MENU_EXIT' }],
             [{ text: '📦 انبار و موجودی', callback_data: 'MENU_WH' }, { text: '🌍 بازرگانی', callback_data: 'MENU_TRADE' }],
             [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }],
-            [{ text: '📊 گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }, { text: '👤 پروفایل', callback_data: 'MENU_PROFILE' }]
+            [{ text: '📊 گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }, { text: 'ℹ️ اطلاعات شرکت و بانک‌ها', callback_data: 'ACT_KNOWLEDGE' }],
+            [{ text: '👤 پروفایل', callback_data: 'MENU_PROFILE' }]
         ]
     },
     SALES: {
@@ -1459,6 +1460,60 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
     if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
     if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+
+    // Knowledge Base logic
+    if (data === 'ACT_KNOWLEDGE') {
+        const companies = settings.companies || [];
+        const customItems = settings.knowledgeBaseItems || [];
+        
+        if (companies.length === 0 && customItems.length === 0) {
+            return sendFn(chatId, "ℹ️ هیچ اطلاعاتی ثبت نشده است.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]] } });
+        }
+        
+        const btns = [];
+        companies.forEach(c => {
+            btns.push([{ text: `🏢 شرکت: ${c.name}`, callback_data: `KNOWLEDGE_CO_${c.id}` }]);
+        });
+        customItems.forEach(c => {
+            btns.push([{ text: `📄 یادداشت: ${c.title}`, callback_data: `KNOWLEDGE_CUST_${c.id}` }]);
+        });
+        btns.push([{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]);
+        
+        return sendFn(chatId, "ℹ️ اطلاعات شرکت و حساب‌ها\nموردی را برای مشاهده انتخاب کنید:", { reply_markup: { inline_keyboard: btns } });
+    }
+
+    if (data.startsWith('KNOWLEDGE_CO_')) {
+        const id = data.replace('KNOWLEDGE_CO_', '');
+        const company = (settings.companies || []).find(c => c.id === id);
+        if (!company) return sendFn(chatId, "❌ یافت نشد.");
+        
+        let text = `📌 *مشخصات شرکت ${company.name}*\n\n`;
+        if (company.nationalId) text += `▫️ شناسه ملی: \`${company.nationalId}\`\n`;
+        if (company.registrationNumber) text += `▫️ شماره ثبت: \`${company.registrationNumber}\`\n`;
+        if (company.phone) text += `▫️ تلفن: \`${company.phone}\`\n`;
+        
+        if (company.banks && company.banks.length > 0) {
+            text += `\n💳 *اطلاعات حساب‌ها:*\n—\n`;
+            company.banks.forEach(b => {
+                text += `🔹 بانک ${b.bankName}\n🔸 شماره حساب: \`${b.accountNumber}\`\n`;
+                if (b.sheba) text += `🔸 شبا: \`IR${b.sheba.replace(/^IR/i, '')}\`\n`;
+                text += `—\n`;
+            });
+        } else {
+            text += `\n⚠️ (حساب بانکی ثبت نشده)\n`;
+        }
+        
+        return sendFn(chatId, text, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'ACT_KNOWLEDGE' }]] } });
+    }
+
+    if (data.startsWith('KNOWLEDGE_CUST_')) {
+        const id = data.replace('KNOWLEDGE_CUST_', '');
+        const item = (settings.knowledgeBaseItems || []).find(c => c.id === id);
+        if (!item) return sendFn(chatId, "❌ یافت نشد.");
+        
+        const text = `📌 *${item.title}*\n\n${item.content || '...'}`;
+        return sendFn(chatId, text, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'ACT_KNOWLEDGE' }]] } });
+    }
 
     // Sales logic
     if (data === 'ACT_SEND_CO_INFO') {

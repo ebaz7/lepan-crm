@@ -3,11 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3 } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions } from '../services/storageService';
-
 import { isInFinancialYear } from '../utils/dateUtils';
+import { getRandomQuote } from '../utils/quotes';
 
 interface DashboardProps {
   orders: PaymentOrder[];
@@ -36,6 +36,27 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   // Data for additional counts
   const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
   const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>([]);
+
+  // Personal Note State
+  const [personalNote, setPersonalNote] = useState('');
+  useEffect(() => {
+     if (currentUser?.id) {
+         const saved = localStorage.getItem(`personal_note_${currentUser.id}`);
+         if (saved) setPersonalNote(saved);
+     }
+  }, [currentUser]);
+
+  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setPersonalNote(e.target.value);
+      if (currentUser?.id) {
+          localStorage.setItem(`personal_note_${currentUser.id}`, e.target.value);
+      }
+  };
+
+  const dailyQuote = useMemo(() => getRandomQuote(), []);
+  const todayDateStr = useMemo(() => {
+      return new Intl.DateTimeFormat('fa-IR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date());
+  }, []);
 
   // Permission Check
   const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canViewPaymentOrders: false };
@@ -152,6 +173,50 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   return (
     <div className="space-y-6 pb-20 md:pb-0 animate-fade-in">
         
+        {/* GENERIC DASHBOARD WIDGETS (For everyone) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Right section: Calendar & Daily Quote */}
+            <div className="lg:col-span-1 space-y-6">
+                {/* Date Widget */}
+                <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200 relative overflow-hidden flex flex-col justify-center items-center text-center">
+                    <div className="absolute top-0 left-0 p-4 opacity-10"><CalendarIcon size={120}/></div>
+                    <div className="relative z-10 space-y-2">
+                        <div className="text-indigo-100 text-sm font-bold opacity-90 mb-1">امروز</div>
+                        <div className="text-2xl font-black">{todayDateStr}</div>
+                        <div className="text-xs bg-black/20 text-indigo-100 px-3 py-1 rounded-full inline-block mt-2">روز خوبی داشته باشید</div>
+                    </div>
+                </div>
+
+                {/* Daily Quote Widget */}
+                <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-5"><BookOpen size={80}/></div>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-4">
+                            <PenTool size={18} className="text-orange-500" />
+                            <h3 className="font-bold text-gray-800 text-sm">بیت روز</h3>
+                        </div>
+                        <p className="text-gray-700 font-bold leading-loose text-center py-2" style={{ whiteSpace: 'pre-line' }}>{dailyQuote.text}</p>
+                        <p className="text-left text-xs text-gray-500 mt-4 font-bold flex items-center justify-end gap-1">— {dailyQuote.author} <Edit3 size={12}/></p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Left section: Personal Notepad */}
+            <div className="lg:col-span-2 bg-yellow-50 rounded-2xl p-6 border border-yellow-200 shadow-sm flex flex-col shadow-yellow-100/50 relative">
+                <div className="absolute top-0 left-0 p-4 opacity-5"><Edit3 size={100}/></div>
+                <div className="flex items-center gap-2 mb-4 relative z-10">
+                    <Edit3 size={20} className="text-yellow-600" />
+                    <h3 className="font-bold text-gray-800">یادداشت‌های شخصی من</h3>
+                </div>
+                <textarea 
+                    value={personalNote}
+                    onChange={handleNoteChange}
+                    className="flex-1 w-full bg-transparent border-none outline-none resize-none text-gray-700 leading-relaxed custom-scrollbar relative z-10"
+                    placeholder="در اینجا می‌توانید یادداشت‌ها و کارهای روزمره خود را بنویسید (فقط برای شما قابل مشاهده است و در مرورگر ذخیره می‌شود)..."
+                />
+            </div>
+        </div>
+
         {/* ACTIONABLE CARTABLE SECTION */}
         {showActionSection && (
             <div className="mb-8">

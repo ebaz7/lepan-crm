@@ -130,6 +130,8 @@ export interface RolePermissions {
   canViewSecurity?: boolean;
   canCreateSecurityLog?: boolean;
   canApproveSecuritySupervisor?: boolean;
+  canViewKnowledgeBase?: boolean;
+  canManageKnowledgeBase?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -190,6 +192,14 @@ export interface CustomerTicket {
   updatedAt: number;
 }
 
+export interface KnowledgeBaseItem {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SystemSettings {
   currentTrackingNumber: number;
   currentExitPermitNumber: number;
@@ -202,6 +212,7 @@ export interface SystemSettings {
   rolePermissions?: Record<string, RolePermissions>;
   customRoles?: CustomRole[];
   savedContacts?: Contact[];
+  knowledgeBaseItems?: KnowledgeBaseItem[];
   pwaIcon?: string;
   botCompanyInfo?: string; // fallback / general
   companyAddress?: string;
