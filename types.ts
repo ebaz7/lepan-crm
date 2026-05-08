@@ -41,6 +41,7 @@ export interface CompanyBank {
   bankName: string;
   accountNumber: string;
   sheba?: string;
+  cardNumber?: string;
   formLayoutId?: string;
   internalTransferTemplateId?: string;
   enableDualPrint?: boolean;

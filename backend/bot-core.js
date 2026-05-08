@@ -1472,7 +1472,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         
         const btns = [];
         companies.forEach(c => {
-            btns.push([{ text: `🏢 شرکت: ${c.name}`, callback_data: `KNOWLEDGE_CO_${c.id}` }]);
+            btns.push([{ text: `🏢 شرکت/فرد: ${c.name}`, callback_data: `KNOWLEDGE_CO_${c.id}` }]);
         });
         customItems.forEach(c => {
             btns.push([{ text: `📄 یادداشت: ${c.title}`, callback_data: `KNOWLEDGE_CUST_${c.id}` }]);
@@ -1487,23 +1487,45 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         const company = (settings.companies || []).find(c => c.id === id);
         if (!company) return sendFn(chatId, "❌ یافت نشد.");
         
-        let text = `📌 *مشخصات شرکت ${company.name}*\n\n`;
+        let text = `📌 *مشخصات ${company.name}*\n\n`;
         if (company.nationalId) text += `▫️ شناسه ملی: \`${company.nationalId}\`\n`;
         if (company.registrationNumber) text += `▫️ شماره ثبت: \`${company.registrationNumber}\`\n`;
         if (company.phone) text += `▫️ تلفن: \`${company.phone}\`\n`;
+        if (company.address) text += `▫️ آدرس: ${company.address}\n`;
         
+        const btns = [];
         if (company.banks && company.banks.length > 0) {
-            text += `\n💳 *اطلاعات حساب‌ها:*\n—\n`;
+            text += `\n*برای مشاهده اطلاعات کامل هر حساب، روی دکمه‌های زیر کلیک کنید:*`;
             company.banks.forEach(b => {
-                text += `🔹 بانک ${b.bankName}\n🔸 شماره حساب: \`${b.accountNumber}\`\n`;
-                if (b.sheba) text += `🔸 شبا: \`IR${b.sheba.replace(/^IR/i, '')}\`\n`;
-                text += `—\n`;
+                btns.push([{ text: `🏦 ${b.bankName} (${b.accountNumber.slice(-4)})`, callback_data: `KNOW_BANK_${company.id}_${b.id}` }]);
             });
         } else {
             text += `\n⚠️ (حساب بانکی ثبت نشده)\n`;
         }
         
-        return sendFn(chatId, text, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'ACT_KNOWLEDGE' }]] } });
+        btns.push([{ text: '🔙 بازگشت', callback_data: 'ACT_KNOWLEDGE' }]);
+        return sendFn(chatId, text, { reply_markup: { inline_keyboard: btns } });
+    }
+
+    if (data.startsWith('KNOW_BANK_')) {
+        const parts = data.replace('KNOW_BANK_', '').split('_');
+        const companyId = parts[0];
+        const bankId = parts[1];
+        
+        const company = (settings.companies || []).find(c => c.id === companyId);
+        if (!company) return sendFn(chatId, "❌ یافت نشد.");
+        
+        const bank = (company.banks || []).find(b => b.id === bankId);
+        if (!bank) return sendFn(chatId, "❌ یافت نشد.");
+        
+        let text = `💳 *اطلاعات حساب بانکی*\n\n`;
+        text += `👤 صاحب حساب: *${company.name}*\n`;
+        text += `🏦 بانک: *${bank.bankName}*\n`;
+        text += `🔸 شماره حساب: \`${bank.accountNumber}\`\n`;
+        if (bank.cardNumber) text += `🔸 شماره کارت: \`${bank.cardNumber}\`\n`;
+        if (bank.sheba) text += `🔸 شبا: \`IR${bank.sheba.replace(/^IR/i, '')}\`\n`;
+        
+        return sendFn(chatId, text, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: `KNOWLEDGE_CO_${company.id}` }]] } });
     }
 
     if (data.startsWith('KNOWLEDGE_CUST_')) {
