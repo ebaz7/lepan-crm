@@ -63,18 +63,24 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
     // Market Prices (Simulated for Now, can be connected to real API)
     const [prices, setPrices] = useState({
-        usd: '۶۲,۵۰۰',
-        eur: '۶۷,۸۰۰',
-        gold: '۳,۳۸۰,۰۰۰',
-        updated: '۱۴:۲۰'
+        usd: 'در حال بروزرسانی...',
+        eur: 'در حال بروزرسانی...',
+        gold: 'در حال بروزرسانی...',
+        updated: '--:--'
     });
 
     useEffect(() => {
-        // Here we could fetch real prices from an API like bonbast or similar
         const fetchPrices = () => {
-             // In a real app: fetch('...').then(res => res.json()).then(setPrices)
+             fetch('/api/market-prices')
+                 .then(res => res.json())
+                 .then(data => {
+                     if (data) setPrices(data);
+                 })
+                 .catch(e => console.error(e));
         };
         fetchPrices();
+        const interval = setInterval(fetchPrices, 600000); // refresh every 10 min
+        return () => clearInterval(interval);
     }, []);
 
     // ... (rest of logic) ...
@@ -259,55 +265,34 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             </div>
         </div>
 
-        {/* NOTES PREVIEW SECTION - Google Keep Style Preview */}
-        <div className="bg-yellow-50/50 rounded-2xl p-6 border border-yellow-100 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                    <Edit3 size={20} className="text-yellow-600" />
-                    <h3 className="font-black text-gray-800">برنامه یادداشت و تسک</h3>
-                </div>
-                <button 
-                    onClick={() => {
-                        window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'knowledge' }));
-                    }}
-                    className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-black hover:bg-yellow-200 transition-colors shadow-sm border border-yellow-200"
-                >
-                    بازکردن برنامه اصلی
-                </button>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {notes.length === 0 ? (
-                    <div className="col-span-full py-8 text-center text-gray-400 text-sm border-2 border-dashed border-yellow-200 rounded-xl">
-                        یادداشتی برای نمایش در پیشخوان وجود ندارد.
+        {/* GOOGLE CALENDAR WIDGET */}
+        {(settings?.googleCalendarId && (permissions.canManageKnowledgeBase || currentUser.role === 'admin')) && (
+            <div className="bg-white rounded-2xl p-4 border border-blue-100 shadow-sm animate-fade-in relative z-10 w-full mb-6">
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                        <CalendarIcon className="text-blue-500" size={20}/>
+                        <h3 className="font-bold text-gray-800 text-sm">تقویم و یادداشت‌های استودیو (Google Calendar)</h3>
                     </div>
-                ) : (
-                    notes.slice(0, 4).map(note => (
-                        <div 
-                            key={note.id} 
-                            onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'knowledge' }))}
-                            className={`${note.color || 'bg-white'} p-4 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative group`}
-                        >
-                            <h4 className="font-bold text-gray-800 text-sm mb-2 truncate">{note.title || 'بدون عنوان'}</h4>
-                            <div className="space-y-2">
-                                {note.content && <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">{note.content}</p>}
-                                {note.tasks && note.tasks.length > 0 && (
-                                    <div className="space-y-1 my-1">
-                                        {note.tasks.slice(0, 3).map(task => (
-                                            <div key={task.id} className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                                                {task.isCompleted ? <ListChecks size={10} className="text-blue-500"/> : <Clock size={10} className="text-gray-300"/>}
-                                                <span className={task.isCompleted ? 'line-through opacity-50' : ''}>{task.text}</span>
-                                            </div>
-                                        ))}
-                                        {note.tasks.length > 3 && <div className="text-[9px] text-gray-400">...</div>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))
-                )}
+                    <a 
+                        href={`https://calendar.google.com/calendar/r`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold hover:bg-blue-100 transition-colors"
+                    >
+                        باز کردن در گوگل
+                    </a>
+                </div>
+                <div className="w-full h-[400px] rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
+                    <iframe 
+                        src={`https://calendar.google.com/calendar/embed?height=400&wkst=7&bgcolor=%23ffffff&ctz=Asia%2FTehran&showTitle=0&showPrint=0&showTabs=1&showCalendars=0&showTz=0&src=${encodeURIComponent(settings.googleCalendarId)}`}
+                        style={{border: 'solid 1px #777', width: '100%', height: '100%'}} 
+                        frameBorder="0" 
+                        scrolling="yes"
+                        title="Google Calendar"
+                    ></iframe>
+                </div>
             </div>
-        </div>
+        )}
 
         {/* ACTIONABLE CARTABLE SECTION */}
         {showActionSection && (

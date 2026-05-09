@@ -13,6 +13,7 @@ import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
 import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak } from './backend/bot-core.js';
+import { scrapeMarketPrices } from './backend/scraper.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -172,6 +173,29 @@ setTimeout(performAutoBackup, 15000);
 // Shared helpers moved to utils.js
 
 // --- NOTIFICATION HELPER ---
+
+let latestMarketPrices = {
+    usd: '...',
+    eur: '...',
+    gold: '...',
+    updated: 'در حال بروزرسانی...'
+};
+
+const updateMarketPrices = async () => {
+    console.log(">>> Fetching Market Prices...");
+    const prices = await scrapeMarketPrices();
+    if (prices) {
+        latestMarketPrices = prices;
+        console.log("✅ Market Prices Updated:", prices);
+    } else {
+        console.log("❌ Failed to update market prices.");
+    }
+};
+
+cron.schedule('*/30 * * * *', updateMarketPrices);
+// Initial fetch
+setTimeout(updateMarketPrices, 10000);
+
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
@@ -216,6 +240,10 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
 // 1. SEQUENCE GENERATORS
 app.get('/api/vapid-key', (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
+});
+
+app.get('/api/market-prices', (req, res) => {
+    res.json(latestMarketPrices);
 });
 
 // --- PRODUCT MANAGEMENT API ---
