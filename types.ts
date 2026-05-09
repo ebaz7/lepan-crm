@@ -566,6 +566,22 @@ export interface ChatGroup {
     createdAt?: number;
 }
 
+export interface TaskGroup {
+    id: string;
+    name: string;
+    members: string[];
+    createdBy: string;
+    createdAt: number;
+}
+
+export interface SystemAnnouncement {
+    id: string;
+    message: string;
+    createdBy: string;
+    createdAt: number;
+    targetUsers?: string[]; // Empty means all users
+}
+
 export interface GroupTask {
     id: string;
     groupId: string;

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, updateGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage } from '../services/storageService';
+import { sendMessage, deleteMessage, getGroups, createGroup, updateGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage, getTaskGroups, createTaskGroup, updateTaskGroup, deleteTaskGroup } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { generateUUID, formatDate } from '../constants';
+import { TaskGroup } from '../types';
 import { 
     Send, User as UserIcon, MessageSquare, Users, Plus, ListTodo, Paperclip, 
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
@@ -22,7 +23,7 @@ interface ChatRoomProps {
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
 
 interface ChannelItem {
-    type: 'public' | 'private' | 'group';
+    type: 'public' | 'private' | 'group' | 'task_group';
     id: string;
     name: string;
     avatar: string | null;
@@ -126,10 +127,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [users, setUsers] = useState<User[]>([]);
     const [groups, setGroups] = useState<ChatGroup[]>([]);
     const [tasks, setTasks] = useState<GroupTask[]>([]);
+    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
     
     // --- UI State ---
     const [activeTab, setActiveTab] = useState<TabType>('CHATS');
-    const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group', id: string | null} | null>(null);
+    const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group' | 'task_group', id: string | null} | null>(null);
     const [searchTerm, setSearchTerm] = useState(''); // Main List Search
     const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
@@ -255,6 +257,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setGroups(visibleGroups);
+
+            const taskGps = await getTaskGroups();
+            const visibleTaskGps = taskGps.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
+            setTaskGroups(visibleTaskGps);
             
             const tskList = await getTasks();
             setTasks(tskList);
@@ -281,7 +287,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     // --- Helpers ---
-    const getUnreadCount = (channelId: string, type: 'private' | 'group' | 'public') => {
+    const getUnreadCount = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
+        if (type === 'task_group') return 0;
         return messages.filter(m => {
             if (m.senderUsername === currentUser.username) return false;
             const isRead = m.readBy?.includes(currentUser.username);
@@ -296,7 +303,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }).length;
     };
 
-    const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public') => {
+    const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
+        if (type === 'task_group') return null;
         const relevant = messages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
@@ -306,7 +314,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return relevant.length > 0 ? relevant[relevant.length - 1] : null;
     };
 
-    const markAsRead = async (channelId: string, type: 'private' | 'group' | 'public') => {
+    const markAsRead = async (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
+        if (type === 'task_group') return;
         const unreadMsgs = messages.filter(m => {
             if (m.senderUsername === currentUser.username) return false;
             if (m.readBy?.includes(currentUser.username)) return false;
@@ -376,9 +385,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     lastMsg: last, unread: getUnreadCount(g.id, 'group')
                 });
             });
+        } else if (activeTab === 'TASKS') {
+            taskGroups.forEach(g => {
+                list.push({
+                    type: 'task_group', id: g.id, name: g.name,
+                    avatar: null, isOnline: false,
+                    lastMsg: null, unread: 0
+                });
+            });
         }
 
         return list.filter(item => item.name.includes(searchTerm)).sort((a, b) => {
+            // Task groups might not have timestamps right now, just fallback to alphabetical if no timestamp
+            if (activeTab === 'TASKS') return a.name.localeCompare(b.name);
             const timeA = a.lastMsg?.timestamp || 0;
             const timeB = b.lastMsg?.timestamp || 0;
             return timeB - timeA;
@@ -699,7 +718,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     // Corrected Forward Logic
-    const handleForward = async (targetId: string, targetType: 'private' | 'group' | 'public') => {
+    const handleForward = async (targetId: string, targetType: 'private' | 'group' | 'public' | 'task_group') => {
+        if (targetType === 'task_group') return;
         const ids = Array.from(selectedMessages);
         for (const id of ids) {
             const original = messages.find(m => m.id === id);
@@ -862,7 +882,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
                             <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
                         </div>
-                        {activeTab === 'GROUPS' && <button onClick={() => setShowGroupModal(true)} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
+                        {(activeTab === 'GROUPS' || activeTab === 'TASKS') && <button onClick={() => {
+                            if (activeTab === 'TASKS') {
+                                const name = prompt('نام گروه تسک جدید:');
+                                if (name) {
+                                    const newTaskGroup: TaskGroup = {
+                                        id: generateUUID(),
+                                        name,
+                                        members: [currentUser.username],
+                                        createdBy: currentUser.username,
+                                        createdAt: Date.now()
+                                    };
+                                    createTaskGroup(newTaskGroup).then(() => setTaskGroups(prev => [...prev, newTaskGroup]));
+                                }
+                            } else {
+                                setShowGroupModal(true)
+                            }
+                        }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
                     </div>
                     <div className="relative">
                         <input className="w-full bg-white border rounded-xl pl-8 pr-3 py-2 text-sm" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -872,71 +908,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {activeTab === 'TASKS' ? (
-                        <div className="flex flex-col h-full bg-gray-50">
-                            <div className="p-4 border-b bg-white">
-                                <button 
-                                    onClick={() => {
-                                        const title = prompt('عنوان تسک؟');
-                                        if (title) {
-                                            const newTask: GroupTask = {
-                                                id: generateUUID(),
-                                                groupId: activeChannel?.type === 'group' ? activeChannel.id! : 'personal',
-                                                title,
-                                                status: 'pending',
-                                                assignedTo: [],
-                                                createdBy: currentUser.username,
-                                                createdAt: Date.now()
-                                            };
-                                            createTask(newTask).then(() => {
-                                                setTasks(prev => [newTask, ...prev]);
-                                            });
-                                        }
-                                    }}
-                                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white p-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100"
-                                >
-                                    <Plus size={18}/> تسک جدید
-                                </button>
-                            </div>
-                            <div className="p-2 space-y-2 overflow-y-auto">
-                                {tasks.length === 0 ? (
-                                    <div className="text-center text-gray-400 py-20">
-                                        <ListTodo size={48} className="mx-auto mb-2 opacity-20"/>
-                                        <p className="text-sm">تسک یا پروژه‌ای یافت نشد</p>
-                                    </div>
-                                ) : tasks.map(task => (
-                                    <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm group">
-                                        <div className="flex items-start gap-3">
-                                            <button 
-                                                onClick={() => {
-                                                    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-                                                    const updatedTask = { ...task, status: newStatus as any };
-                                                    updateTask(updatedTask).then(() => {
-                                                        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
-                                                    });
-                                                }}
-                                                className={`mt-0.5 rounded-md border-2 transition-colors ${task.status === 'completed' ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}
-                                            >
-                                                {task.status === 'completed' ? <Check size={14} className="text-white"/> : <div className="w-3.5 h-3.5"/>}
-                                            </button>
-                                            <div className="flex-1 min-w-0">
-                                                <h5 className={`text-sm font-bold truncate ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{task.title}</h5>
-                                                <div className="flex items-center justify-between mt-2">
-                                                    <span className="text-[10px] text-gray-400">{formatDate(task.createdAt)}</span>
-                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={() => deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)))} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 size={14}/></button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : getSortedChannels().map((item: ChannelItem) => (
+                    {getSortedChannels().map((item: ChannelItem) => (
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 relative group">
                             <div className="relative">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : item.type === 'task_group' ? 'bg-gradient-to-br from-purple-400 to-purple-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
                                     {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
                                 </div>
                                 {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>}
@@ -951,7 +926,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <p className="text-xs text-gray-500 truncate max-w-[150px]">
-                                        {item.lastMsg ? (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : item.lastMsg.message) : 'پیامی نیست'}
+                                        {item.type === 'task_group' ? 'لیست تسک‌ها...' : item.lastMsg ? (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : item.lastMsg.message) : 'پیامی نیست'}
                                     </p>
                                     {item.unread > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold shadow-sm">{item.unread}</span>}
                                 </div>
@@ -976,40 +951,105 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 }}>
                                     <h3 className="font-bold text-gray-800 text-sm">
                                         {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
-                                         activeChannel.type === 'group' ? groups.find(g=>g.id===activeChannel.id)?.name : 'کانال عمومی'}
+                                         activeChannel.type === 'group' ? groups.find(g=>g.id===activeChannel.id)?.name :
+                                         activeChannel.type === 'task_group' ? taskGroups.find(g=>g.id===activeChannel.id)?.name : 'کانال عمومی'}
                                     </h3>
                                     <span className="text-[10px] text-blue-500">
                                         {activeChannel.type === 'private' ? (
                                             users.find(u=>u.username===activeChannel.id)?.lastSeen && (Date.now() - (users.find(u=>u.username===activeChannel.id)?.lastSeen || 0) < 300000) ? 'آنلاین' : 
                                             `آخرین بازدید ${formatLastSeen(users.find(u=>u.username===activeChannel.id)?.lastSeen)}`
-                                        ) : 'اطلاعات گروه'}
+                                        ) : activeChannel.type === 'task_group' ? 'گروه تسک' : 'اطلاعات گروه'}
                                     </span>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                {selectionMode ? (
-                                    <div className="flex gap-2 animate-fade-in">
-                                        <button onClick={() => setShowForwardModal(true)} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100" title="فوروارد"><Forward size={18}/></button>
-                                        <button onClick={() => handleDelete(false)} className="p-2 bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100" title="حذف برای من"><Trash2 size={18}/></button>
-                                        <button onClick={() => handleDelete(true)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100" title="حذف دو طرفه"><Trash2 size={18}/></button>
-                                        <button onClick={() => { setSelectionMode(false); setSelectedMessages(new Set()); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
-                                    </div>
-                                ) : (
-                                    <button onClick={() => setShowInnerSearch(!showInnerSearch)} className={`p-2 rounded-full ${showInnerSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}><Search size={20}/></button>
-                                )}
-                            </div>
+                            {activeChannel.type !== 'task_group' && (
+                                <div className="flex gap-2">
+                                    {selectionMode ? (
+                                        <div className="flex gap-2 animate-fade-in">
+                                            <button onClick={() => setShowForwardModal(true)} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100" title="فوروارد"><Forward size={18}/></button>
+                                            <button onClick={() => handleDelete(false)} className="p-2 bg-orange-50 text-orange-600 rounded-full hover:bg-orange-100" title="حذف برای من"><Trash2 size={18}/></button>
+                                            <button onClick={() => handleDelete(true)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100" title="حذف دو طرفه"><Trash2 size={18}/></button>
+                                            <button onClick={() => { setSelectionMode(false); setSelectedMessages(new Set()); }} className="p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => setShowInnerSearch(!showInnerSearch)} className={`p-2 rounded-full ${showInnerSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}><Search size={20}/></button>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Inner Search */}
-                        {showInnerSearch && (
-                            <div className="bg-white p-2 border-b flex items-center gap-2 animate-slide-down">
-                                <input className="flex-1 bg-gray-100 border-none rounded-lg py-2 px-4 text-sm" placeholder="جستجو در پیام‌ها..." value={innerSearchTerm} onChange={e => setInnerSearchTerm(e.target.value)} autoFocus />
-                                <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }}><X size={20} className="text-gray-500"/></button>
+                        {activeChannel.type === 'task_group' ? (
+                            <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-y-auto w-full custom-scrollbar">
+                                <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                                    <h4 className="font-bold text-gray-800">تسک‌های این گروه</h4>
+                                    <button 
+                                        onClick={() => {
+                                            const title = prompt('عنوان تسک؟');
+                                            if (title) {
+                                                const newTask: GroupTask = {
+                                                    id: generateUUID(),
+                                                    groupId: activeChannel.id!,
+                                                    title,
+                                                    status: 'pending',
+                                                    assignedTo: [],
+                                                    createdBy: currentUser.username,
+                                                    createdAt: Date.now()
+                                                };
+                                                createTask(newTask).then(() => {
+                                                    setTasks(prev => [newTask, ...prev]);
+                                                });
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition"
+                                    >
+                                        <Plus size={18}/> تسک جدید
+                                    </button>
+                                </div>
+                                <div className="p-4 space-y-3">
+                                    {tasks.filter(t => t.groupId === activeChannel.id).length === 0 ? (
+                                        <div className="text-center text-gray-400 py-20">
+                                            <ListTodo size={48} className="mx-auto mb-2 opacity-20"/>
+                                            <p className="text-sm">تسکی یافت نشد</p>
+                                        </div>
+                                    ) : tasks.filter(t => t.groupId === activeChannel.id).map(task => (
+                                        <div key={task.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm group hover:shadow transition">
+                                            <div className="flex justify-between items-start">
+                                                 <div className="flex items-start gap-4 flex-1">
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+                                                            const updatedTask = { ...task, status: newStatus as any };
+                                                            updateTask(updatedTask).then(() => {
+                                                                setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+                                                            });
+                                                        }}
+                                                        className={`mt-0.5 rounded-full border-2 transition-colors flex items-center justify-center ${task.status === 'completed' ? 'bg-green-500 border-green-500 w-5 h-5' : 'border-gray-300 w-5 h-5 bg-white'}`}
+                                                    >
+                                                        {task.status === 'completed' && <Check size={14} className="text-white"/>}
+                                                    </button>
+                                                    <div>
+                                                        <h5 className={`font-bold ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{task.title}</h5>
+                                                        <span className="text-[10px] text-gray-400 block mt-1">{formatDate(task.createdAt)}</span>
+                                                    </div>
+                                                 </div>
+                                                 <button onClick={() => deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)))} className="p-2 text-red-500 hover:bg-red-50 rounded-lg shrink-0 opacity-0 group-hover:opacity-100 transition"><Trash2 size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                {/* Inner Search */}
+                                {showInnerSearch && (
+                                    <div className="bg-white p-2 border-b flex items-center gap-2 animate-slide-down">
+                                        <input className="flex-1 bg-gray-100 border-none rounded-lg py-2 px-4 text-sm" placeholder="جستجو در پیام‌ها..." value={innerSearchTerm} onChange={e => setInnerSearchTerm(e.target.value)} autoFocus />
+                                        <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }}><X size={20} className="text-gray-500"/></button>
+                                    </div>
+                                )}
 
-                        {/* Messages List */}
-                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
+                                {/* Messages List */}
+                                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
                             {displayMessages.map((msg: ChatMessage) => {
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
@@ -1202,6 +1242,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 </button>
                             )}
                         </div>
+                        </>
+                        )}
                     </>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-[#f0f2f5]">

@@ -1,5 +1,5 @@
 
-import { PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident } from '../types';
+import { PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement } from '../types';
 import { apiCall } from './apiService';
 
 // Safely return array
@@ -111,10 +111,19 @@ export const createGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { r
 export const updateGroup = async (group: ChatGroup): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>(`/groups/${group.id}`, 'PUT', group); };
 export const deleteGroup = async (id: string): Promise<ChatGroup[]> => { return await apiCall<ChatGroup[]>(`/groups/${id}`, 'DELETE'); };
 
+export const getTaskGroups = async (): Promise<TaskGroup[]> => { const res = await apiCall<TaskGroup[]>('/task-groups'); return safeArray(res); };
+export const createTaskGroup = async (group: TaskGroup): Promise<TaskGroup[]> => { return await apiCall<TaskGroup[]>('/task-groups', 'POST', group); };
+export const updateTaskGroup = async (group: TaskGroup): Promise<TaskGroup[]> => { return await apiCall<TaskGroup[]>(`/task-groups/${group.id}`, 'PUT', group); };
+export const deleteTaskGroup = async (id: string): Promise<TaskGroup[]> => { return await apiCall<TaskGroup[]>(`/task-groups/${id}`, 'DELETE'); };
+
 export const getTasks = async (): Promise<GroupTask[]> => { const res = await apiCall<GroupTask[]>('/tasks'); return safeArray(res); };
 export const createTask = async (task: GroupTask): Promise<GroupTask[]> => { return await apiCall<GroupTask[]>('/tasks', 'POST', task); };
 export const updateTask = async (task: GroupTask): Promise<GroupTask[]> => { return await apiCall<GroupTask[]>(`/tasks/${task.id}`, 'PUT', task); };
 export const deleteTask = async (id: string): Promise<GroupTask[]> => { return await apiCall<GroupTask[]>(`/tasks/${id}`, 'DELETE'); };
+
+export const getSystemAnnouncements = async (): Promise<SystemAnnouncement[]> => { const res = await apiCall<SystemAnnouncement[]>('/announcements'); return safeArray(res); };
+export const createSystemAnnouncement = async (announcement: SystemAnnouncement): Promise<SystemAnnouncement[]> => { return await apiCall<SystemAnnouncement[]>('/announcements', 'POST', announcement); };
+export const deleteSystemAnnouncement = async (id: string): Promise<SystemAnnouncement[]> => { return await apiCall<SystemAnnouncement[]>(`/announcements/${id}`, 'DELETE'); };
 
 export const getTradeRecords = async (): Promise<TradeRecord[]> => { const res = await apiCall<TradeRecord[]>('/trade'); return safeArray(res); };
 export const saveTradeRecord = async (record: TradeRecord): Promise<TradeRecord[]> => { return await apiCall<TradeRecord[]>('/trade', 'POST', record); };

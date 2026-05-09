@@ -13,7 +13,6 @@ import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
 import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak } from './backend/bot-core.js';
-import { scrapeMarketPrices } from './backend/scraper.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -173,29 +172,6 @@ setTimeout(performAutoBackup, 15000);
 // Shared helpers moved to utils.js
 
 // --- NOTIFICATION HELPER ---
-
-let latestMarketPrices = {
-    usd: '...',
-    eur: '...',
-    gold: '...',
-    updated: 'در حال بروزرسانی...'
-};
-
-const updateMarketPrices = async () => {
-    console.log(">>> Fetching Market Prices...");
-    const prices = await scrapeMarketPrices();
-    if (prices) {
-        latestMarketPrices = prices;
-        console.log("✅ Market Prices Updated:", prices);
-    } else {
-        console.log("❌ Failed to update market prices.");
-    }
-};
-
-cron.schedule('*/30 * * * *', updateMarketPrices);
-// Initial fetch
-setTimeout(updateMarketPrices, 10000);
-
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
     const db = getDb();
     const subs = db.subscriptions || [];
@@ -240,10 +216,6 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
 // 1. SEQUENCE GENERATORS
 app.get('/api/vapid-key', (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
-});
-
-app.get('/api/market-prices', (req, res) => {
-    res.json(latestMarketPrices);
 });
 
 // --- PRODUCT MANAGEMENT API ---
@@ -1164,10 +1136,19 @@ app.post('/api/groups', (req, res) => { const db = getDb(); if(!db.groups) db.gr
 app.put('/api/groups/:id', (req, res) => { const db = getDb(); const idx = db.groups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.groups[idx] = { ...db.groups[idx], ...req.body }; saveDb(db); res.json(db.groups); } else res.status(404).send('Not Found'); });
 app.delete('/api/groups/:id', (req, res) => { const db = getDb(); db.groups = db.groups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.groups); });
 
+app.get('/api/task-groups', (req, res) => res.json(getDb().taskGroups || []));
+app.post('/api/task-groups', (req, res) => { const db = getDb(); if(!db.taskGroups) db.taskGroups=[]; db.taskGroups.push(req.body); saveDb(db); res.json(db.taskGroups); });
+app.put('/api/task-groups/:id', (req, res) => { const db = getDb(); const idx = db.taskGroups.findIndex(g => g.id === req.params.id); if(idx > -1) { db.taskGroups[idx] = { ...db.taskGroups[idx], ...req.body }; saveDb(db); res.json(db.taskGroups); } else res.status(404).send('Not Found'); });
+app.delete('/api/task-groups/:id', (req, res) => { const db = getDb(); db.taskGroups = db.taskGroups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.taskGroups); });
+
 app.get('/api/tasks', (req, res) => res.json(getDb().tasks || []));
 app.post('/api/tasks', (req, res) => { const db = getDb(); if(!db.tasks) db.tasks=[]; db.tasks.push(req.body); saveDb(db); res.json(db.tasks); });
 app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
 app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
+
+app.get('/api/announcements', (req, res) => res.json(getDb().announcements || []));
+app.post('/api/announcements', (req, res) => { const db = getDb(); if(!db.announcements) db.announcements=[]; db.announcements.push(req.body); saveDb(db); res.json(db.announcements); });
+app.delete('/api/announcements/:id', (req, res) => { const db = getDb(); db.announcements = db.announcements.filter(a => a.id !== req.params.id); saveDb(db); res.json(db.announcements); });
 
 // 9. FILE UPLOAD
 app.post('/api/upload', (req, res) => {

@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole } from '../types';
+import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3 } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions, getNotes } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -61,27 +61,51 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         };
     }, []);
 
-    // Market Prices (Simulated for Now, can be connected to real API)
-    const [prices, setPrices] = useState({
-        usd: 'در حال بروزرسانی...',
-        eur: 'در حال بروزرسانی...',
-        gold: 'در حال بروزرسانی...',
-        updated: '--:--'
-    });
+    const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
+    const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+    const [announceText, setAnnounceText] = useState('');
+    const [announceTarget, setAnnounceTarget] = useState('');
+    
+    // Add users fetching for target dropdown
+    const [allUsers, setAllUsers] = useState<User[]>([]);
+    useEffect(() => {
+        import('../services/authService').then(mod => {
+            mod.getUsers().then(u => setAllUsers(u || []));
+        });
+    }, []);
+
+    const handleCreateAnnouncement = async () => {
+        if (!announceText.trim()) return;
+        const targetUsers = announceTarget ? [announceTarget] : [];
+        const newAnn: SystemAnnouncement = {
+            id: Date.now().toString(),
+            message: announceText,
+            createdBy: currentUser.username,
+            createdAt: Date.now(),
+            targetUsers
+        };
+        const mod = await import('../services/storageService');
+        await mod.createSystemAnnouncement(newAnn);
+        setAnnouncements(prev => [...prev, newAnn]);
+        setShowAnnounceModal(false);
+        setAnnounceText('');
+        setAnnounceTarget('');
+    };
 
     useEffect(() => {
-        const fetchPrices = () => {
-             fetch('/api/market-prices')
-                 .then(res => res.json())
-                 .then(data => {
-                     if (data) setPrices(data);
-                 })
-                 .catch(e => console.error(e));
-        };
-        fetchPrices();
-        const interval = setInterval(fetchPrices, 600000); // refresh every 10 min
-        return () => clearInterval(interval);
+        import('../services/storageService').then(mod => {
+            mod.getSystemAnnouncements().then(anns => {
+                setAnnouncements(anns || []);
+            }).catch(console.error);
+        });
     }, []);
+
+    const visibleAnnouncements = useMemo(() => {
+        return announcements.filter(a => {
+            if (!a.targetUsers || a.targetUsers.length === 0) return true; // all
+            return a.targetUsers.includes(currentUser.username);
+        });
+    }, [announcements, currentUser]);
 
     // ... (rest of logic) ...
 
@@ -221,40 +245,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                 </div>
             </div>
 
-            {/* Market Prices Ticker */}
-            <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm flex items-center gap-6 overflow-x-auto no-scrollbar min-w-[350px]">
-                <div className="flex flex-col shrink-0">
-                    <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                       <TrendingUp size={10}/> نبض بازار
-                    </div>
-                    <div className="text-[9px] text-gray-400 font-bold">بروزرسانی: {prices.updated}</div>
-                </div>
-                
-                <div className="flex items-center gap-8">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400">دلار (آزاد)</span>
-                        <div className="flex items-center gap-1">
-                            <span className="text-sm font-black text-gray-800">{prices.usd}</span>
-                            <span className="text-[10px] text-gray-400">تومان</span>
-                        </div>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400">یورو</span>
-                        <div className="flex items-center gap-1">
-                            <span className="text-sm font-black text-gray-800">{prices.eur}</span>
-                            <span className="text-[10px] text-gray-400">تومان</span>
-                        </div>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400">طلای ۱۸ عیار</span>
-                        <div className="flex items-center gap-1">
-                            <span className="text-sm font-black text-gray-800">{prices.gold}</span>
-                            <span className="text-[10px] text-gray-400">تومان</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Slick Poetry - Smaller and More Elegant */}
             <div className="flex-1 bg-white rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group min-h-[80px]">
                 <div className="absolute right-0 top-0 h-full w-1 bg-rose-200"></div>
@@ -265,34 +255,105 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             </div>
         </div>
 
-        {/* GOOGLE CALENDAR WIDGET */}
-        {(settings?.googleCalendarId && (permissions.canManageKnowledgeBase || currentUser.role === 'admin')) && (
-            <div className="bg-white rounded-2xl p-4 border border-blue-100 shadow-sm animate-fade-in relative z-10 w-full mb-6">
+        {/* ANNOUNCEMENTS SECTION */}
+        {(visibleAnnouncements.length > 0 || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
+            <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 shadow-sm relative">
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
-                        <CalendarIcon className="text-blue-500" size={20}/>
-                        <h3 className="font-bold text-gray-800 text-sm">تقویم و یادداشت‌های استودیو (Google Calendar)</h3>
+                        <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600 animate-pulse">
+                            <Activity size={20} />
+                        </div>
+                        <h3 className="font-black text-gray-800">اعلانات مدیران</h3>
                     </div>
-                    <a 
-                        href={`https://calendar.google.com/calendar/r`} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold hover:bg-blue-100 transition-colors"
-                    >
-                        باز کردن در گوگل
-                    </a>
+                    {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                        <button onClick={() => setShowAnnounceModal(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
+                            <Plus size={14}/> اعلامیه جدید
+                        </button>
+                    )}
                 </div>
-                <div className="w-full h-[400px] rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
-                    <iframe 
-                        src={`https://calendar.google.com/calendar/embed?height=400&wkst=7&bgcolor=%23ffffff&ctz=Asia%2FTehran&showTitle=0&showPrint=0&showTabs=1&showCalendars=0&showTz=0&src=${encodeURIComponent(settings.googleCalendarId)}`}
-                        style={{border: 'solid 1px #777', width: '100%', height: '100%'}} 
-                        frameBorder="0" 
-                        scrolling="yes"
-                        title="Google Calendar"
-                    ></iframe>
-                </div>
+                {visibleAnnouncements.length === 0 ? (
+                    <div className="text-center text-sm text-gray-400 py-4 opacity-50 font-bold">بدون اعلامیه جدید</div>
+                ) : (
+                    <div className="space-y-3">
+                        {visibleAnnouncements.map((ann, i) => (
+                            <div key={ann.id || i} className="bg-white p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
+                                <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1">
+                                    <BookOpen size={16} />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-xs font-black text-blue-800">{ann.createdBy}</span>
+                                        <div className="flex items-center gap-2">
+                                            {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold">پیام اختصاصی</span>}
+                                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                                                <button onClick={async () => {
+                                                    const mod = await import('../services/storageService');
+                                                    await mod.deleteSystemAnnouncement(ann.id);
+                                                    setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
+                                                }} className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 p-1 rounded transition-all"><Trash2 size={12}/></button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <p className="text-sm font-bold text-gray-700" style={{ whiteSpace: 'pre-wrap' }}>{ann.message}</p>
+                                    <div className="text-[10px] text-gray-400 mt-2 text-left">{(() => { const d = getShamsiDateFromIso(new Date(ann.createdAt).toISOString()); return `${d.year}/${d.month}/${d.day}`; })()} - {new Date(ann.createdAt).toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'})}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         )}
+
+        {/* NOTES PREVIEW SECTION - Google Keep Style Preview */}
+        <div className="bg-yellow-50/50 rounded-2xl p-6 border border-yellow-100 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <Edit3 size={20} className="text-yellow-600" />
+                    <h3 className="font-black text-gray-800">برنامه یادداشت و تسک</h3>
+                </div>
+                <button 
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'knowledge' }));
+                    }}
+                    className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-black hover:bg-yellow-200 transition-colors shadow-sm border border-yellow-200"
+                >
+                    بازکردن برنامه اصلی
+                </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {notes.length === 0 ? (
+                    <div className="col-span-full py-8 text-center text-gray-400 text-sm border-2 border-dashed border-yellow-200 rounded-xl">
+                        یادداشتی برای نمایش در پیشخوان وجود ندارد.
+                    </div>
+                ) : (
+                    notes.slice(0, 4).map(note => (
+                        <div 
+                            key={note.id} 
+                            onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'knowledge' }))}
+                            className={`${note.color || 'bg-white'} p-4 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative group`}
+                        >
+                            <h4 className="font-bold text-gray-800 text-sm mb-2 truncate">{note.title || 'بدون عنوان'}</h4>
+                            <div className="space-y-2">
+                                {note.content && <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">{note.content}</p>}
+                                {note.tasks && note.tasks.length > 0 && (
+                                    <div className="space-y-1 my-1">
+                                        {note.tasks.slice(0, 3).map(task => (
+                                            <div key={task.id} className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                                {task.isCompleted ? <ListChecks size={10} className="text-blue-500"/> : <Clock size={10} className="text-gray-300"/>}
+                                                <span className={task.isCompleted ? 'line-through opacity-50' : ''}>{task.text}</span>
+                                            </div>
+                                        ))}
+                                        {note.tasks.length > 3 && <div className="text-[9px] text-gray-400">...</div>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
 
         {/* ACTIONABLE CARTABLE SECTION */}
         {showActionSection && (
@@ -474,6 +535,53 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         ) : (
                             <div>گزارش زمانی (همانند قبل)</div>
                         )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Announce Modal */}
+        {showAnnounceModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+                    <div className="p-4 border-b flex justify-between items-center bg-blue-50/50">
+                        <div className="flex items-center gap-2 text-blue-800">
+                            <Activity size={20} />
+                            <h3 className="font-bold">ثبت اعلامیه جدید</h3>
+                        </div>
+                        <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><XCircle size={20}/></button>
+                    </div>
+                    <div className="p-4 flex flex-col gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-600 block mb-1">مخاطب (اختیاری - خالی برای همه)</label>
+                            <select 
+                                className="w-full border rounded-xl p-2.5 text-sm dir-rtl outline-none focus:ring-2 focus:ring-blue-100"
+                                value={announceTarget}
+                                onChange={(e) => setAnnounceTarget(e.target.value)}
+                            >
+                                <option value="">همه پرسنل</option>
+                                {allUsers.map(u => (
+                                    <option key={u.id} value={u.username}>{u.fullName || u.username}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-gray-400 mt-1">اگر کاربری را انتخاب کنید، پیام فقط برای او نمایش داده می‌شود.</p>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-600 block mb-1">متن پیام</label>
+                            <textarea 
+                                className="w-full border rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-100 outline-none resize-none"
+                                rows={4}
+                                value={announceText}
+                                onChange={(e) => setAnnounceText(e.target.value)}
+                                placeholder="موضوع مورد نظر خود را بنویسید..."
+                            ></textarea>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                        <button onClick={() => setShowAnnounceModal(false)} className="px-4 py-2 text-gray-600 text-sm font-bold hover:bg-gray-200 rounded-xl transition-colors">انصراف</button>
+                        <button onClick={handleCreateAnnouncement} disabled={!announceText.trim()} className="px-5 py-2 bg-blue-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <Send size={16}/> انتشار پیام
+                        </button>
                     </div>
                 </div>
             </div>
