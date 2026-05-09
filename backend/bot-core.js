@@ -498,6 +498,13 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         if (session.state === 'GUEST_WAIT_CONTACT_MSG') {
             const ticketId = Math.floor(10000 + Math.random() * 90000).toString();
             
+            let messageText = text;
+            if (!text && rawMsg) {
+                if (rawMsg.photo) messageText = '📷 یک عکس ارسال شد';
+                else if (rawMsg.document) messageText = '📎 یک فایل ارسال شد';
+                else if (rawMsg.voice) messageText = '🎤 یک پیام صوتی ارسال شد';
+            }
+
             const newTicket = {
                 id: ticketId,
                 chatId: chatId,
@@ -506,7 +513,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 messages: [{
                     id: generateUUID(),
                     sender: 'customer',
-                    text: text,
+                    text: messageText,
                     timestamp: new Date().toISOString()
                 }],
                 status: 'OPEN',
@@ -517,11 +524,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             db.tickets = db.tickets || [];
             db.tickets.push(newTicket);
             saveDb(db);
-            session.state = 'IDLE';
+            session.state = 'GUEST_ACTIVE_TICKET';
+            session.data.ticketId = ticketId;
             
             // Forward to sales notification users
             if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
-                 const forwardText = `📞 *تیکت جدید (کد پیگیری: ${ticketId})*\n👤 کاربر: ${newTicket.customerName}\n💬 متن:\n${text}`;
+                 const forwardText = `📞 *تیکت جدید (کد پیگیری: ${ticketId})*\n👤 کاربر: ${newTicket.customerName}\n💬 متن:\n${messageText}`;
                  const baleModule = await import('./bale.js');
                  const tgModule = await import('./telegram.js');
                  
@@ -549,9 +557,61 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                  }
             }
             
-            return sendFn(chatId, `✅ پیام شما ارسال شد.\n🔖 کد پیگیری شما: \`${ticketId}\`\n\nجهت پیگیری پاسخ از منوی اصلی اقدام نمایید.`, {
-                reply_markup: { inline_keyboard: [[{ text: '🔙 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
+            return sendFn(chatId, `✅ تیکت شما ایجاد شد.\n🔖 شناسه تیکت: \`${ticketId}\`\n\nهم‌اکنون مستقیماً به چت پشتیبانی متصل هستید و مدیران شرکت پیام شما را دریافت کردند. می‌توانید ادامه پیام‌ها یا فایل‌های خود را همینجا ارسال کنید. جهت خروج از حالت پشتیبانی، روی دکمه زیر کلیک کنید:`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 پایان مکالمه', callback_data: 'GUEST_MAIN' }]] }
             });
+        }
+
+        if (session.state === 'GUEST_ACTIVE_TICKET' || session.state === 'GUEST_WAIT_TICKET_REPLY') {
+            db.tickets = db.tickets || [];
+            const ticket = db.tickets.find(t => t.id === session.data.ticketId);
+            if (ticket) {
+                if (ticket.status !== 'OPEN') {
+                    session.state = 'IDLE';
+                    return sendFn(chatId, `❌ این تیکت بسته شده است.`);
+                }
+                
+                let messageText = text;
+                if (!text && rawMsg) {
+                    if (rawMsg.photo) messageText = '📷 یک عکس ارسال شد';
+                    else if (rawMsg.document) messageText = '📎 یک فایل ارسال شد';
+                    else if (rawMsg.voice) messageText = '🎤 یک پیام صوتی ارسال شد';
+                }
+
+                ticket.messages.push({
+                    id: generateUUID(),
+                    sender: 'customer',
+                    text: messageText || '📎 مدیا',
+                    timestamp: new Date().toISOString()
+                });
+                ticket.updatedAt = Date.now();
+                saveDb(db);
+                
+                if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
+                     const forwardText = `📞 *پاسخ کاربر در تیکت #${ticket.id}*\n👤 کاربر: ${ticket.customerName}\n💬 متن:\n${messageText}`;
+                     const baleModule = await import('./bale.js');
+                     const tgModule = await import('./telegram.js');
+                     for (const item of settings.salesNotificationUsers) {
+                         const username = typeof item === 'string' ? item : item.username;
+                         const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
+                         const targetUser = db.users.find(u => u.username === username);
+                         if (targetUser) {
+                             if (platforms.includes('telegram') && targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
+                             if (platforms.includes('bale') && targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
+                         } else if (!isNaN(Number(username))) {
+                             if (platforms.includes('telegram')) tgModule.sendBotMessage(username, forwardText).catch(e => {});
+                             if (platforms.includes('bale')) baleModule.sendBotMessage(username, forwardText).catch(e => {});
+                         }
+                     }
+                }
+                
+                session.state = 'GUEST_ACTIVE_TICKET';
+                return sendFn(chatId, `✅ ارسال شد.`, {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 پایان مکالمه', callback_data: 'GUEST_MAIN' }]] }
+                });
+            } else {
+                session.state = 'IDLE';
+            }
         }
 
         if (session.state === 'GUEST_WAIT_TRACK_CODE') {
@@ -604,44 +664,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             }
         }
         
-        if (session.state === 'GUEST_WAIT_TICKET_REPLY') {
-            db.tickets = db.tickets || [];
-            const ticket = db.tickets.find(t => t.id === session.data.ticketId);
-            if (ticket) {
-                ticket.messages.push({
-                    id: generateUUID(),
-                    sender: 'customer',
-                    text: text,
-                    timestamp: new Date().toISOString()
-                });
-                ticket.updatedAt = Date.now();
-                saveDb(db);
-                
-                // Notify sales
-                if (settings.salesNotificationUsers && settings.salesNotificationUsers.length > 0) {
-                     const forwardText = `📞 *پاسخ جدید مشتری در تیکت #${ticket.id}*\n👤 کاربر: ${ticket.customerName}\n💬 متن:\n${text}`;
-                     const baleModule = await import('./bale.js');
-                     const tgModule = await import('./telegram.js');
-                     for (const item of settings.salesNotificationUsers) {
-                         const username = typeof item === 'string' ? item : item.username;
-                         const platforms = typeof item === 'string' ? ['telegram', 'bale'] : item.platforms;
-                         const targetUser = db.users.find(u => u.username === username);
-                         if (targetUser) {
-                             if (platforms.includes('telegram') && targetUser.telegramChatId) tgModule.sendBotMessage(targetUser.telegramChatId, forwardText).catch(e => {});
-                             if (platforms.includes('bale') && targetUser.baleChatId) baleModule.sendBotMessage(targetUser.baleChatId, forwardText).catch(e => {});
-                         } else if (!isNaN(Number(username))) {
-                             if (platforms.includes('telegram')) tgModule.sendBotMessage(username, forwardText).catch(e => {});
-                             if (platforms.includes('bale')) baleModule.sendBotMessage(username, forwardText).catch(e => {});
-                         }
-                     }
-                }
-                
-                session.state = 'IDLE';
-                return sendFn(chatId, `✅ پاسخ شما با موفقیت به تیکت #${ticket.id} اضافه شد.`, {
-                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو', callback_data: 'GUEST_MAIN' }]] }
-                });
-            }
-        }
 
         if (session.state === 'GUEST_WAIT_ORDER_DESC') {
             const selectedProduct = session.data.selectedProduct;
@@ -1411,9 +1433,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
         if (data === 'GUEST_CONTACT') {
             session.state = 'GUEST_WAIT_CONTACT_MSG';
-            const defaultMsg = "لطفاً پیام خود را برای مدیر فروش بنویسید (در صورت نیاز به تماس، شماره خود را نیز درج کنید):";
-            const customMsg = settings.salesContactMessage || defaultMsg;
-            return sendFn(userId, customMsg, {
+            const defaultMsg = "لطفاً پیام خود را شرح دهید (در صورت نیاز فایل یا عکس نیز می‌توانید ارسال کنید):";
+            return sendFn(userId, defaultMsg, {
                 reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'GUEST_MAIN' }]] }
             });
         }

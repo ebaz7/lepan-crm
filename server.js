@@ -963,12 +963,13 @@ app.post('/api/tickets/:id/reply', async (req, res) => {
 
     // Send to customer
     try {
+        const replyMarkup = { inline_keyboard: [[{ text: '➕ ارسال پاسخ', callback_data: `GUEST_TICKET_REPLY_${ticket.id}` }]] };
         if (ticket.platform === 'telegram') {
             const tg = await safeImport('./backend/telegram.js');
-            if (tg?.sendBotMessage) await tg.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`);
+            if (tg?.sendBotMessage) await tg.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`, { reply_markup: replyMarkup });
         } else if (ticket.platform === 'bale') {
             const bale = await safeImport('./backend/bale.js');
-            if (bale?.sendBotMessage) await bale.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`);
+            if (bale?.sendBotMessage) await bale.sendBotMessage(ticket.chatId, `📩 *پاسخ پشتیبانی به درخواست #${ticket.id}:*\n\n${text}`, { reply_markup: replyMarkup });
         }
     } catch (e) { console.error("Ticket reply err:", e); }
 
