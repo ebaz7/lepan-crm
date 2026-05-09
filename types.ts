@@ -247,6 +247,12 @@ export interface SystemSettings {
   googleCalendarId?: string;
   whatsappNumber?: string;
   geminiApiKey?: string;
+  deepseekApiKey?: string;
+  botAiSource?: 'gemini' | 'deepseek' | 'hybrid';
+  botAiEnabled?: boolean;
+  excelPriority?: boolean;
+  autoPriceUpdateInterval?: number;
+  supportUsername?: string;
   warehouseSequences?: Record<string, number>;
   companyNotifications?: Record<string, CompanyNotificationConfig>;
   defaultWarehouseGroup?: string; // WhatsApp Default

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -1129,12 +1129,102 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                     
                     {activeCategory === 'integrations' && (
                         <div className="space-y-6 animate-fade-in">
-                            <div className="bg-white p-4 rounded-xl border border-gray-200">
-                                <h3 className="font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><Link size={20}/> تنظیمات اتصال (SMS / تقویم)</h3>
-                                <div className="space-y-4">
-                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">API Key سامانه پیامک</label><input type="password" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.smsApiKey} onChange={(e) => setSettings({...settings, smsApiKey: e.target.value})} /></div>
-                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">شماره فرستنده پیامک</label><input type="text" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.smsSenderNumber} onChange={(e) => setSettings({...settings, smsSenderNumber: e.target.value})} /></div>
-                                    <div><label className="text-sm font-bold text-gray-700 block mb-1">Google Calendar ID</label><input type="text" className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.googleCalendarId} onChange={(e) => setSettings({...settings, googleCalendarId: e.target.value})} /></div>
+                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                <h3 className="font-bold text-gray-800 mb-6 border-b pb-3 flex items-center gap-2">
+                                    <Cpu size={22} className="text-blue-600"/> کنترل پنل هوش مصنوعی و داده‌ها
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="p-4 bg-red-50 rounded-xl border border-red-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <Zap className="text-red-600" size={20}/>
+                                                <span className="font-black text-red-900 text-sm">کلید قطع اضطراری AI</span>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" className="sr-only peer" checked={!settings.botAiEnabled} onChange={(e) => setSettings({...settings, botAiEnabled: !e.target.checked})} />
+                                                <div className="w-11 h-6 bg-red-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                            </label>
+                                        </div>
+                                        <p className="text-[10px] text-red-700 font-bold leading-relaxed">
+                                            با فعال کردن این گزینه، تمامی درخواست‌های API به مدل‌های هوش مصنوعی (Gemini/DeepSeek) بلافاصله متوقف می‌شود.
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <Layers className="text-blue-600" size={20}/>
+                                                <span className="font-black text-blue-900 text-sm">منبع داده فعال</span>
+                                            </div>
+                                            <select 
+                                                className="bg-white border rounded-lg p-1.5 text-xs font-black outline-none focus:ring-2 ring-blue-500"
+                                                value={settings.botAiSource || 'hybrid'}
+                                                onChange={(e) => setSettings({...settings, botAiSource: e.target.value as any})}
+                                            >
+                                                <option value="gemini">Google Gemini</option>
+                                                <option value="deepseek">DeepSeek AI</option>
+                                                <option value="hybrid">ترکیبی (Hybrid)</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-gray-600">اولویت فایل اکسل (Offline)</span>
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded text-blue-600" 
+                                                checked={settings.excelPriority}
+                                                onChange={(e) => setSettings({...settings, excelPriority: e.target.checked})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">DeepSeek API Key</label>
+                                            <input type="password" placeholder="..." className="w-full border rounded-xl p-3 text-sm dir-ltr" value={settings.deepseekApiKey || ''} onChange={(e) => setSettings({...settings, deepseekApiKey: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">بازه بروزرسانی خودکار (ساعت)</label>
+                                            <select 
+                                                className="w-full border rounded-xl p-3 text-sm font-bold"
+                                                value={settings.autoPriceUpdateInterval || 6}
+                                                onChange={(e) => setSettings({...settings, autoPriceUpdateInterval: Number(e.target.value)})}
+                                            >
+                                                {[1, 3, 6, 12, 24].map(h => <option key={h} value={h}>{h} ساعت یکبار</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">آیدی پشتیبانی تلگرام</label>
+                                            <input type="text" placeholder="@support_user" className="w-full border rounded-xl p-3 text-sm dir-ltr" value={settings.supportUsername || ''} onChange={(e) => setSettings({...settings, supportUsername: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                <h3 className="font-bold text-gray-800 mb-6 border-b pb-3 flex items-center gap-2">
+                                    <Link size={22} className="text-indigo-600"/> سرویس‌های خارجی و API
+                                </h3>
+                                <div className="space-y-4 max-w-2xl">
+                                    <div className="group">
+                                        <label className="text-xs font-black text-gray-500 block mb-1 group-focus-within:text-indigo-600 transition-colors tracking-widest">API KEY سامانه پیامک</label>
+                                        <input type="password" placeholder="••••••••••••••" className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr focus:ring-4 ring-indigo-50/50 outline-none transition-all" value={settings.smsApiKey} onChange={(e) => setSettings({...settings, smsApiKey: e.target.value})} />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">شماره فرستنده SMS</label>
+                                            <input type="text" placeholder="1000..." className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.smsSenderNumber} onChange={(e) => setSettings({...settings, smsSenderNumber: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">GOOGLE CALENDAR ID</label>
+                                            <input type="text" placeholder="primary or email@gmail.com" className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.googleCalendarId} onChange={(e) => setSettings({...settings, googleCalendarId: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 flex gap-3 items-start">
+                                        <div className="bg-white p-2 rounded-lg text-indigo-600 shadow-sm"><Globe size={20}/></div>
+                                        <p className="text-[10px] font-bold text-indigo-700 leading-relaxed">
+                                            اطلاعات Google Calendar برای نمایش تاریخ و یادآوری‌ها در داشبورد استفاده می‌شود. حتما دسترسی "Make Public" یا اشتراک‌گذاری با سرویس مربوطه را تنظیم کنید.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

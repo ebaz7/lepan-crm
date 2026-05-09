@@ -264,8 +264,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canManageWarehouse) navItems.push({ id: 'warehouse', label: 'مدیریت انبار', icon: Package });
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
-  navItems.push({ id: 'notes', label: 'یادداشت‌ من', icon: Edit3 });
-  if (canSeeKnowledgeBase) navItems.push({ id: 'knowledge', label: 'اطلاعات حساب‌ها', icon: BookOpen });
+  if (canSeeKnowledgeBase) navItems.push({ id: 'knowledge', label: 'اطلاعات و یادداشت ها', icon: BookOpen });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });
   if (canSeeProducts) {
       navItems.push({ id: 'products', label: 'کالاها', icon: Package });

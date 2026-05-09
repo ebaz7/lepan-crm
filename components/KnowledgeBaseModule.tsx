@@ -71,6 +71,20 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
         onSave(finalNote);
     };
 
+    const getShamsiReminderLabel = (isoStr: string) => {
+        if (!isoStr) return null;
+        try {
+            const date = new Date(isoStr);
+            return new Intl.DateTimeFormat('fa-IR', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            }).format(date);
+        } catch { return null; }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm rtl text-right">
             <div className={`w-full max-w-xl rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in max-h-[90vh] ${color}`}>
@@ -127,14 +141,21 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
                         
                         <div className="flex-1"></div>
 
-                        <div className="flex items-center gap-2 bg-black/5 px-3 py-1.5 rounded-lg">
-                            <Bell size={14} className="text-gray-500"/>
-                            <input 
-                                type="datetime-local"
-                                value={reminder}
-                                onChange={(e) => setReminder(e.target.value)}
-                                className="bg-transparent border-none outline-none text-[10px] font-bold text-gray-600 cursor-pointer"
-                            />
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 bg-black/5 px-3 py-1.5 rounded-lg">
+                                <Bell size={14} className="text-gray-500"/>
+                                <input 
+                                    type="datetime-local"
+                                    value={reminder}
+                                    onChange={(e) => setReminder(e.target.value)}
+                                    className="bg-transparent border-none outline-none text-[10px] font-bold text-gray-600 cursor-pointer"
+                                />
+                            </div>
+                            {reminder && (
+                                <div className="text-[9px] font-black text-blue-600 text-left px-1">
+                                    {getShamsiReminderLabel(reminder)}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -947,13 +968,33 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                         })}
                 </div>
             )}
-            {/* Personal Note Modal */}
+            {/* Modals */}
             {showPersonalModal && (
                 <PersonalNoteModal 
                     note={editingPersonalNote}
                     onClose={() => setShowPersonalModal(false)}
                     onSave={handleSavePersonalNote}
                     userId={currentUser.id}
+                />
+            )}
+            {showModal && (
+                <ItemModal 
+                    editingItem={editingItem} 
+                    titleStr={titleStr} 
+                    setTitleStr={setTitleStr} 
+                    contentStr={contentStr} 
+                    setContentStr={setContentStr} 
+                    onClose={closeModal} 
+                    onSave={handleSaveItem} 
+                />
+            )}
+            {showCompanyModal && (
+                <CompanyModal 
+                    editingCompany={editingCompany}
+                    setEditingCompany={setEditingCompany}
+                    onClose={() => setShowCompanyModal(false)}
+                    onSave={handleSaveCompany}
+                    companies={companies}
                 />
             )}
         </div>

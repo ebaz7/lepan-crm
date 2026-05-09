@@ -50,10 +50,34 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   }, [currentUser]);
 
   const dailyQuote = useMemo(() => getRandomQuote(), []);
-  const shamsiDate = useMemo(() => {
-      const parts = new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).split(' ');
-      return { weekday: parts[0], day: parts[1], month: parts[2], year: new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(new Date()) };
-  }, []);
+    const shamsiDate = useMemo(() => {
+        const parts = new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).split(' ');
+        return { 
+            weekday: parts[0], 
+            day: parts[1], 
+            month: parts[2], 
+            year: new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(new Date()),
+            full: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full' }).format(new Date())
+        };
+    }, []);
+
+    // Market Prices (Simulated for Now, can be connected to real API)
+    const [prices, setPrices] = useState({
+        usd: '۶۲,۵۰۰',
+        eur: '۶۷,۸۰۰',
+        gold: '۳,۳۸۰,۰۰۰',
+        updated: '۱۴:۲۰'
+    });
+
+    useEffect(() => {
+        // Here we could fetch real prices from an API like bonbast or similar
+        const fetchPrices = () => {
+             // In a real app: fetch('...').then(res => res.json()).then(setPrices)
+        };
+        fetchPrices();
+    }, []);
+
+    // ... (rest of logic) ...
 
   // Permission Check
   const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canViewPaymentOrders: false };
@@ -170,31 +194,67 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   return (
     <div className="space-y-6 pb-20 md:pb-0 animate-fade-in">
         
-        {/* TOP SECTION: MINIMAL DATE & SLICK POETRY */}
-        <div className="flex flex-col md:flex-row gap-4">
+        {/* TOP SECTION: MINIMAL DATE, PRICES & SLICK POETRY */}
+        <div className="flex flex-col lg:flex-row gap-4">
             {/* Minimal Date Card - Smaller & Sleek */}
-            <div className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm flex items-center gap-4 min-w-[200px] shrink-0">
-                <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 flex items-center justify-center">
+            <div className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm flex items-center gap-4 min-w-[220px] shrink-0 relative group overflow-hidden">
+                <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity"><CalendarIcon size={40}/></div>
+                <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 flex items-center justify-center relative z-10">
                     <CalendarIcon size={24} />
                 </div>
-                <div className="flex flex-col">
-                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{shamsiDate.weekday}</div>
+                <div className="flex flex-col relative z-10">
+                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                        {shamsiDate.weekday}
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse ml-auto" title="همگام‌سازی با گوگل کلندر"></span>
+                    </div>
                     <div className="flex items-baseline gap-1">
                         <span className="text-2xl font-black text-gray-800">{shamsiDate.day}</span>
                         <span className="text-sm font-bold text-gray-600">{shamsiDate.month}</span>
+                    </div>
+                    <div className="text-[9px] text-gray-400 font-bold mt-1 line-clamp-1">{shamsiDate.year} شمسی</div>
+                </div>
+            </div>
+
+            {/* Market Prices Ticker */}
+            <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm flex items-center gap-6 overflow-x-auto no-scrollbar min-w-[350px]">
+                <div className="flex flex-col shrink-0">
+                    <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                       <TrendingUp size={10}/> نبض بازار
+                    </div>
+                    <div className="text-[9px] text-gray-400 font-bold">بروزرسانی: {prices.updated}</div>
+                </div>
+                
+                <div className="flex items-center gap-8">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400">دلار (آزاد)</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-sm font-black text-gray-800">{prices.usd}</span>
+                            <span className="text-[10px] text-gray-400">تومان</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400">یورو</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-sm font-black text-gray-800">{prices.eur}</span>
+                            <span className="text-[10px] text-gray-400">تومان</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400">طلای ۱۸ عیار</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-sm font-black text-gray-800">{prices.gold}</span>
+                            <span className="text-[10px] text-gray-400">تومان</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Slick Poetry - Smaller and More Elegant */}
-            <div className="flex-1 bg-white rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group">
+            <div className="flex-1 bg-white rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group min-h-[80px]">
                 <div className="absolute right-0 top-0 h-full w-1 bg-rose-200"></div>
                 <div className="relative z-10 flex flex-col items-center">
                     <div className="text-[10px] font-bold text-rose-300 mb-1 flex items-center gap-1"><PenTool size={10}/> زمزمه روز</div>
                     <p className="text-gray-700 font-bold text-sm text-center italic leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{dailyQuote.text}</p>
-                    <div className="text-[9px] text-gray-400 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                        — {dailyQuote.author}
-                    </div>
                 </div>
             </div>
         </div>
