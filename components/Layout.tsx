@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
@@ -406,9 +407,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                   const Icon = item.icon; 
                   const isActive = activeTab === item.id;
                   return (
-                    <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-600 hover:bg-gray-100'} ${!isSidebarOpen && 'justify-center'}`} title={item.label}>
-                        <Icon size={20} className={isActive ? '' : 'group-hover:scale-110 transition-transform'} />
-                        {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
+                    <button 
+                        key={item.id} 
+                        onClick={() => setActiveTab(item.id)} 
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} 
+                        title={item.label}
+                    >
+                        <div className="relative z-10 flex items-center gap-3">
+                            <Icon size={20} className={isActive ? '' : 'group-hover:scale-110 transition-transform'} />
+                            {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
+                        </div>
+                        {isActive && (
+                            <motion.div
+                                layoutId="desktopActiveTab"
+                                className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20"
+                                transition={{ type: "spring", bounce: 0.35, duration: 0.6 }}
+                            />
+                        )}
                     </button>
                   ); 
               })}

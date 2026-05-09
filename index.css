@@ -4,29 +4,29 @@
 
 @layer base {
   :root {
-    --app-bg: #f5f5f7; /* Apple system background */
-    --glass-bg: rgba(255, 255, 255, 0.45);
-    --glass-bg-hover: rgba(255, 255, 255, 0.6);
-    --glass-border: rgba(255, 255, 255, 0.5);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+    --app-bg: #ffffff;
+    --glass-bg: rgba(255, 255, 255, 0.85); /* More matte glass */
+    --glass-bg-hover: rgba(255, 255, 255, 0.95);
+    --glass-border: rgba(0, 0, 0, 0.05);
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
     --text-primary: #1d1d1f;
-    --text-secondary: #86868b;
+    --text-secondary: #6e6e73;
     --border-color: rgba(0, 0, 0, 0.08);
   }
   
   .dark {
     --app-bg: #000000;
-    --glass-bg: rgba(28, 28, 30, 0.5);
-    --glass-bg-hover: rgba(44, 44, 46, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+    --glass-bg: rgba(28, 28, 30, 0.8); /* Matte dark glass */
+    --glass-bg-hover: rgba(44, 44, 46, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
     --text-primary: #f5f5f7;
     --text-secondary: #86868b;
     --border-color: rgba(255, 255, 255, 0.1);
   }
 }
 
-/* Background Blobs for depth */
+/* Background Blobs - Disabled in light mode for pure white look, kept subtle in dark */
 .bg-blobs {
   position: fixed;
   top: 0;
@@ -38,12 +38,20 @@
   background: var(--app-bg);
 }
 
-.blob {
+.dark .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.25;
+  filter: blur(120px);
+  opacity: 0.15;
   animation: blob-float 30s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
+}
+
+.blob {
+  display: none; /* Hidden by default (light mode) */
+}
+
+.dark .blob {
+  display: block;
 }
 
 .blob-1 {

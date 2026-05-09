@@ -163,6 +163,39 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const recordedMimeTypeRef = useRef<string>('');
     const recordingStartTimeRef = useRef<number>(0);
 
+    const handleCopyMessage = (msg: ChatMessage) => {
+        const textToCopy = msg.message || (msg.attachment ? msg.attachment.fileName : 'فایل');
+        if (!textToCopy) return;
+
+        const doCopy = async () => {
+            try {
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(textToCopy);
+                    alert('متن پیام کپی شد');
+                } else {
+                    throw new Error();
+                }
+            } catch (err) {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('متن پیام کپی شد');
+                } catch (e) {
+                    console.error('Copy failed', e);
+                }
+                document.body.removeChild(textArea);
+            }
+        };
+        doCopy();
+    };
+
     const scrollToBottom = () => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -1049,7 +1082,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 )}
 
                                 {/* Messages List */}
-                                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-[url('https://web.telegram.org/img/bg_0.png')]">
+                                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-white dark:bg-black">
                             {displayMessages.map((msg: ChatMessage) => {
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
@@ -1066,7 +1099,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                  <button onClick={() => setReplyingTo(msg)} className="p-1.5 glass-panel rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
                                                  <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 glass-panel rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
-                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
+                                                 <button onClick={() => handleCopyMessage(msg)} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
                                                  {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 glass-panel rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
@@ -1155,7 +1188,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             ) : (
                                                 <div 
                                                     className="whitespace-pre-wrap leading-relaxed message-content cursor-pointer"
-                                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.message); alert('متن کپی شد'); }}
+                                                    onClick={(e) => { e.stopPropagation(); handleCopyMessage(msg); }}
                                                     title="برای کپی کلیک کنید"
                                                 >
                                                     {msg.message}
@@ -1175,7 +1208,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                  <button onClick={() => setReplyingTo(msg)} className="p-1.5 glass-panel rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
                                                  <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 glass-panel rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
-                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
+                                                 <button onClick={() => handleCopyMessage(msg)} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
                                                  {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 glass-panel rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
@@ -1263,7 +1296,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         style={{ top: Math.min(contextMenuMsg.y, window.innerHeight - 200), left: Math.min(contextMenuMsg.x, window.innerWidth - 200) }}
                     >
                         <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
-                        <button onClick={() => { navigator.clipboard.writeText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
+                        <button onClick={() => { handleCopyMessage(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
                         <button onClick={() => { handleNativeShare(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Share2 size={16}/> اشتراک‌گذاری</button>
                         <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setShowForwardModal(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Forward size={16}/> فوروارد</button>
                         {contextMenuMsg.msg.senderUsername === currentUser.username && (

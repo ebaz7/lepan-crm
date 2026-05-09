@@ -524,27 +524,12 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                 </div>
                                 <div className="space-y-4">
-                                    <h4 className="font-bold text-sm text-gray-600">تنظیمات ربات‌ها (Token)</h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات تلگرام</label>
-                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramBotToken || ''} onChange={e => setSettings({...settings, telegramBotToken: e.target.value})} placeholder="123456:ABC-..." type="password"/>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500 block mb-1">شناسه عددی مدیر (تلگرام)</label>
-                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramAdminId || ''} onChange={e => setSettings({...settings, telegramAdminId: e.target.value})} placeholder="12345678"/>
-                                        </div>
-                                        <div className="border-t pt-3">
-                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات بله</label>
-                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.baleBotToken || ''} onChange={e => setSettings({...settings, baleBotToken: e.target.value})} placeholder="Token..." type="password"/>
-                                        </div>
-                                        <div className="border-t pt-3">
-                                            <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (اختیاری)</label>
-                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
-                                        </div>
-                                    </div>
-                                    <div className="bg-blue-50 p-3 rounded-lg text-[10px] text-blue-800 leading-relaxed">
-                                        نکته: برای دریافت پیام‌های سیستم در تلگرام/بله، ابتدا ربات را استارت کنید. شناسه عددی خود را می‌توانید از ربات‌های userinfobot بگیرید.
+                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-800">
+                                        <h4 className="font-bold text-sm mb-2">اطلاعات واتساپ</h4>
+                                        <p className="text-xs leading-relaxed">
+                                            سرویس واتساپ برای ارسال اعلان‌های خروج، بیجک و دستور پرداخت‌ها استفاده می‌شود.
+                                            در صورت بروز مشکل در ارسال، از دکمه بازنشانی کامل استفاده کنید.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -570,40 +555,17 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     ))}
                                 </div>
                             </div>
-                            <BotManager />
                         </div>
                     )}
                     
                     {activeCategory === 'warehouse' && (
                         <div className="space-y-6 animate-fade-in">
-                            <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Warehouse size={20}/> تنظیمات انبار</h3>
-                            
-                            {/* UPDATED: Default Group Settings with 3 Columns */}
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">شناسه گروه‌های حسابداری (اتصال به ربات‌ها)</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">تلگرام (Chat ID)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdTele || ''} onChange={e => setSettings({...settings, botAccountingGroupIdTele: e.target.value})} placeholder="-100..." /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">بله (شناسه گروه/کانال)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdBale || ''} onChange={e => setSettings({...settings, botAccountingGroupIdBale: e.target.value})} placeholder="ID..." /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 block mb-1">واتساپ (ID گروه)</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={settings.botAccountingGroupIdWhatsApp || ''} onChange={e => setSettings({...settings, botAccountingGroupIdWhatsApp: e.target.value})} placeholder="...@g.us" /></div>
+                            <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Warehouse size={20}/> انبار و لجستیک</h3>
+                            <div className="space-y-4 font-bold text-sm text-gray-600">
+                                <div>
+                                    <label className="text-sm font-bold text-gray-700 block mb-1">شماره مدیر فروش (پیش‌فرض)</label>
+                                    <input className="w-full border rounded-lg p-3 dir-ltr text-left" value={settings.defaultSalesManager || ''} onChange={e => setSettings({...settings, defaultSalesManager: e.target.value})} placeholder="98912..." />
                                 </div>
-                                <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                                    <label className="text-xs font-bold text-blue-700 block mb-2">زمان‌بندی اطلاع‌رسانی دستور پرداخت به گروه‌ها</label>
-                                    <select 
-                                        className="w-full border rounded-lg p-2 text-sm glass-panel"
-                                        value={settings.botPaymentNotificationMode || 'step_by_step'}
-                                        onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as any})}
-                                    >
-                                        <option value="after_submit">بلافاصله پس از ثبت درخواست (توسط درخواست‌کننده)</option>
-                                        <option value="after_final">فقط پس از تایید نهایی مدیرعامل</option>
-                                        <option value="step_by_step">مرحله به مرحله (پس از هر تایید)</option>
-                                    </select>
-                                    <p className="text-[10px] text-blue-600 mt-2 font-medium">نکته: پیام‌ها به تمام گروه‌های تعریف شده بالا (تلگرام و بله) به صورت همزمان ارسال خواهند شد.</p>
-                                </div>
-                            </div>
-                            
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <h4 className="font-bold text-sm text-gray-700 mb-3 border-b pb-1">مدیریت سال مالی (سال فعال: {financialYear || settings.fiscalYears?.find(fy => fy.id === settings.activeFiscalYearId)?.label || 'نامشخص'})</h4>
-                                <FiscalYearManager settings={settings} />
                             </div>
                             
                             <div className="space-y-4">
@@ -832,24 +794,44 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         <div className="space-y-6 animate-fade-in">
                             <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Power size={20}/> تنظیمات ربات و فروشگاه</h3>
                             
-                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
-                                <h4 className="font-bold text-sm text-gray-700">اطلاعات ارتباطی شرکت (برای مشتریان)</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">آدرس شرکت</label>
-                                        <textarea rows={2} value={settings.companyAddress || ''} onChange={e => setSettings({...settings, companyAddress: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: تهران، خیابان..."></textarea>
+                                    <h4 className="font-bold text-sm text-gray-700">اطلاعات ارتباطی (نمایش در ربات)</h4>
+                                    <div className="space-y-4 glass-panel p-4 rounded-xl border">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">آدرس شرکت</label>
+                                            <textarea rows={2} value={settings.companyAddress || ''} onChange={e => setSettings({...settings, companyAddress: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: تهران، خیابان..."></textarea>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">شماره‌های تماس</label>
+                                            <input type="text" value={settings.companyPhone || ''} onChange={e => setSettings({...settings, companyPhone: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: 021-12345678" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">اطلاعات حساب بانکی</label>
+                                            <textarea rows={2} value={settings.companyBank || ''} onChange={e => setSettings({...settings, companyBank: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="بانک ملت - IR..."></textarea>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">شماره‌های تماس</label>
-                                        <input type="text" value={settings.companyPhone || ''} onChange={e => setSettings({...settings, companyPhone: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: 021-12345678" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">اطلاعات حساب بانکی (شبا / کارتی)</label>
-                                        <textarea rows={2} value={settings.companyBank || ''} onChange={e => setSettings({...settings, companyBank: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="مثال: بانک ملت - شماره شبا IR... به نام..."></textarea>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">سایر اطلاعات (نمایش در پیام معرفی)</label>
-                                        <textarea rows={3} value={settings.botCompanyInfo || ''} onChange={e => setSettings({...settings, botCompanyInfo: e.target.value})} className="w-full border rounded p-2 text-sm" placeholder="توضیحات کلی شرکت برای مشتری..."></textarea>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h4 className="font-bold text-sm text-gray-700">تنظیمات اتصال ربات‌ها (Tokens)</h4>
+                                    <div className="space-y-3 glass-panel p-4 rounded-xl border">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات تلگرام</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramBotToken || ''} onChange={e => setSettings({...settings, telegramBotToken: e.target.value})} placeholder="123456:ABC-..." type="password"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">شناسه عددی مدیر (تلگرام)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.telegramAdminId || ''} onChange={e => setSettings({...settings, telegramAdminId: e.target.value})} placeholder="12345678"/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">توکن ربات بله</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.baleBotToken || ''} onChange={e => setSettings({...settings, baleBotToken: e.target.value})} placeholder="Token..." type="password"/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (هوش مصنوعی)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

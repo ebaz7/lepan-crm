@@ -2,6 +2,7 @@
 import React from 'react';
 import { Home, PlusCircle, ListChecks, User as UserIcon, Menu, Sun, Moon } from 'lucide-react';
 import { User } from '../../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface MobileLayoutProps {
   children: React.ReactNode;
@@ -61,41 +62,41 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-6 left-6 right-6 glass-panel border border-white/50 dark:border-white/10 flex justify-around items-center py-3 rounded-[2.5rem] z-50 shadow-2xl backdrop-blur-3xl">
-        <button 
-          onClick={() => setActiveTab('dashboard')} 
-          className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'dashboard' ? 'text-blue-600 scale-110 font-bold' : 'text-gray-400'}`}
-        >
-          <Home size={22} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
-          <span className="text-[9px] font-bold">خانه</span>
-        </button>
+      <nav className="fixed bottom-6 left-6 right-6 glass-panel border border-white/50 dark:border-white/10 flex justify-around items-center py-2 rounded-[2.5rem] z-50 shadow-2xl backdrop-blur-3xl px-2">
+        {(['dashboard', 'create', 'manage', 'settings'] as const).map((id) => {
+          const isActive = activeTab === id;
+          const config = {
+            dashboard: { icon: Home, label: 'خانه' },
+            create: { icon: PlusCircle, label: 'ثبت جدید' },
+            manage: { icon: ListChecks, label: 'کارتابل' },
+            settings: { icon: Menu, label: 'منو' }
+          }[id];
+          const Icon = config.icon;
 
-        <button 
-          onClick={() => setActiveTab('create')} 
-          className={`flex flex-col items-center gap-1 ${activeTab === 'create' ? 'text-blue-600' : 'text-gray-400'}`}
-        >
-          <PlusCircle size={24} strokeWidth={activeTab === 'create' ? 2.5 : 2} />
-          <span className="text-[10px] font-bold">ثبت جدید</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('manage')} 
-          className={`flex flex-col items-center gap-1 ${activeTab === 'manage' ? 'text-blue-600' : 'text-gray-400'} relative`}
-        >
-          <div className="relative">
-            <ListChecks size={24} strokeWidth={activeTab === 'manage' ? 2.5 : 2} />
-            {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>}
-          </div>
-          <span className="text-[10px] font-bold">کارتابل</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('settings')} 
-          className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-600' : 'text-gray-400'}`}
-        >
-          <Menu size={24} strokeWidth={activeTab === 'settings' ? 2.5 : 2} />
-          <span className="text-[10px] font-bold">منو</span>
-        </button>
+          return (
+            <button 
+              key={id}
+              onClick={() => setActiveTab(id)} 
+              className={`flex flex-col items-center gap-1 p-2 transition-all duration-300 flex-1 relative`}
+            >
+              <div className="relative z-10 flex flex-col items-center">
+                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-600' : 'text-gray-400'} />
+                <span className={`text-[9px] font-bold ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>{config.label}</span>
+                {isActive && unreadCount > 0 && id === 'manage' && (
+                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
+                )}
+              </div>
+              
+              {isActive && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/30 rounded-2xl -z-0"
+                  transition={{ type: "spring", bounce: 0.35, duration: 0.6 }}
+                />
+              )}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
