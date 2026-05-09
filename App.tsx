@@ -150,6 +150,19 @@ function App() {
 
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
 
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+        if (e.detail) setActiveTab(e.detail);
+    };
+    const handleOpenNotes = () => setActiveTab('notes');
+    window.addEventListener('CHANGE_TAB' as any, handleTabChange);
+    window.addEventListener('OPEN_NOTES_TAB' as any, handleOpenNotes);
+    return () => {
+        window.removeEventListener('CHANGE_TAB' as any, handleTabChange);
+        window.removeEventListener('OPEN_NOTES_TAB' as any, handleOpenNotes);
+    };
+  }, []);
+
   const handleLogout = () => { setCurrentUser(null); isFirstLoad.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
 
   useEffect(() => {
@@ -437,7 +450,7 @@ function App() {
                     {activeTab === 'tickets' && <Tickets />}
                     {activeTab === 'users' && <ManageUsers />}
                     {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
-                    {activeTab === 'knowledge' && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
+                    {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
                     {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                     {activeTab === 'chat' && (
                         <ChatRoom 

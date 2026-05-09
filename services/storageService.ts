@@ -120,6 +120,14 @@ export const getTradeRecords = async (): Promise<TradeRecord[]> => { const res =
 export const saveTradeRecord = async (record: TradeRecord): Promise<TradeRecord[]> => { return await apiCall<TradeRecord[]>('/trade', 'POST', record); };
 export const updateTradeRecord = async (record: TradeRecord): Promise<TradeRecord[]> => { return await apiCall<TradeRecord[]>(`/trade/${record.id}`, 'PUT', record); };
 export const deleteTradeRecord = async (id: string): Promise<TradeRecord[]> => { return await apiCall<TradeRecord[]>(`/trade/${id}`, 'DELETE'); };
+
+// Notes Service
+import { Note } from '../types';
+export const getNotes = async (): Promise<Note[]> => { const res = await apiCall<Note[]>('/notes'); return safeArray(res); };
+export const saveNote = async (note: Note): Promise<Note[]> => { return await apiCall<Note[]>('/notes', 'POST', note); };
+export const updateNote = async (note: Note): Promise<Note[]> => { return await apiCall<Note[]>(`/notes/${note.id}`, 'PUT', note); };
+export const deleteNote = async (id: string): Promise<Note[]> => { return await apiCall<Note[]>(`/notes/${id}`, 'DELETE'); };
+
 export const uploadFile = async (fileName: string, fileData: string): Promise<{ fileName: string, url: string }> => { return await apiCall<{ fileName: string, url: string }>('/upload', 'POST', { fileName, fileData }); };
 export const getWarehouseItems = async (): Promise<WarehouseItem[]> => { const res = await apiCall<WarehouseItem[]>('/warehouse/items'); return safeArray(res); };
 export const saveWarehouseItem = async (item: WarehouseItem): Promise<WarehouseItem[]> => { return await apiCall<WarehouseItem[]>('/warehouse/items', 'POST', item); };

@@ -1309,9 +1309,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
-                [{ text: '📞 ارتباط با بخش فروش (تیکت)', callback_data: 'GUEST_CONTACT' }],
-                [{ text: '🔍 پیگیری درخواست', callback_data: 'GUEST_TRACK' }],
-                [{ text: '🏢 اطلاعات شرکت', callback_data: 'GUEST_COMPANY_INFO' }]
+                [{ text: '🎫 ثبت تیکت / ارتباط با پشتیبانی', callback_data: 'GUEST_CONTACT_FLOW' }],
+                [{ text: '🔍 پیگیری تیکت یا سفارش', callback_data: 'GUEST_TRACK' }],
+                [{ text: '🏢 اطلاعات شرکت و حساب‌ها', callback_data: 'GUEST_COMPANY_INFO' }]
             ];
             
             if (settings.botStoreLinks && settings.botStoreLinks.length > 0) {
@@ -1400,6 +1400,15 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             });
         }
 
+        if (data === 'GUEST_CONTACT_FLOW') {
+            const defaultMsg = "💬 شما در حال ارتباط با بخش پشتیبانی هستید.\n\nبرای ثبت تیکت جدید و دریافت کد پیگیری، روی دکمه زیر کلیک کنید:";
+            const contactMsg = settings.salesContactMessage || "برای تماس مستقیم با شماره‌های زیر در ارتباط باشید...";
+            
+            return sendFn(userId, `${contactMsg}\n\n${defaultMsg}`, {
+                reply_markup: { inline_keyboard: [[{ text: '📝 ثبت تیکت جدید', callback_data: 'GUEST_CONTACT' }], [{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
+            });
+        }
+
         if (data === 'GUEST_CONTACT') {
             session.state = 'GUEST_WAIT_CONTACT_MSG';
             const defaultMsg = "لطفاً پیام خود را برای مدیر فروش بنویسید (در صورت نیاز به تماس، شماره خود را نیز درج کنید):";
@@ -1424,6 +1433,23 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         }
 
         if (data === 'GUEST_COMPANY_INFO') {
+            const companies = settings.companies || [];
+            const customItems = settings.knowledgeBaseItems || [];
+            
+            // If admin enabled guest access or no specific host info, show the list
+            if (settings.botAllowGuestKnowledgeBase || (companies.length > 0 && !settings.companyAddress && !settings.companyPhone)) {
+                const btns = [];
+                companies.slice(0, 10).forEach(c => {
+                    btns.push([{ text: `🏢 ${c.name}`, callback_data: `GUEST_KNOWLEDGE_CO_${c.id}` }]);
+                });
+                customItems.slice(0, 5).forEach(c => {
+                    btns.push([{ text: `📄 ${c.title}`, callback_data: `GUEST_KNOWLEDGE_CUST_${c.id}` }]);
+                });
+                btns.push([{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]);
+                
+                return sendFn(userId, "🏢 اطلاعات شرکت‌ها و حساب‌ها\nلطفاً مورد مورد نظر را انتخاب کنید:", { reply_markup: { inline_keyboard: btns } });
+            }
+
             const parts = [];
             if (settings.botCompanyInfo) parts.push(`ℹ️ *درباره ما:*\n${settings.botCompanyInfo}`);
             if (settings.companyAddress) parts.push(`📍 *آدرس:*\n${settings.companyAddress}`);
@@ -1434,6 +1460,52 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             return sendFn(userId, info, {
                 reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] }
             });
+        }
+
+        if (data.startsWith('GUEST_KNOWLEDGE_CO_')) {
+            const id = data.replace('GUEST_KNOWLEDGE_CO_', '');
+            const company = (settings.companies || []).find(c => c.id === id);
+            if (!company) return sendFn(userId, "❌ یافت نشد.");
+            
+            let text = `🏢 *مشخصات ${company.name}*\n\n`;
+            if (company.nationalId) text += `▫️ شناسه ملی: \`${company.nationalId}\`\n`;
+            if (company.phone) text += `▫️ تلفن: \`${company.phone}\`\n`;
+            if (company.address) text += `▫️ آدرس: ${company.address}\n`;
+            
+            const btns = [];
+            if (company.banks && company.banks.length > 0) {
+                text += `\n*حساب‌های بانکی:*`;
+                company.banks.forEach(b => {
+                    btns.push([{ text: `🏦 ${b.bankName} (${b.accountNumber.slice(-4)})`, callback_data: `GUEST_KNOW_BANK_${company.id}_${b.id}` }]);
+                });
+            }
+            btns.push([{ text: '🔙 بازگشت', callback_data: 'GUEST_COMPANY_INFO' }]);
+            return sendFn(userId, text, { reply_markup: { inline_keyboard: btns } });
+        }
+
+        if (data.startsWith('GUEST_KNOW_BANK_')) {
+            const parts = data.replace('GUEST_KNOW_BANK_', '').split('_');
+            const companyId = parts[0];
+            const bankId = parts[1];
+            const company = (settings.companies || []).find(c => c.id === companyId);
+            const bank = (company?.banks || []).find(b => b.id === bankId);
+            if (!bank) return sendFn(userId, "❌ یافت نشد.");
+            
+            let text = `💳 *اطلاعات حساب بانکی*\n\n`;
+            text += `👤 صاحب حساب: *${company.name}*\n`;
+            text += `🏦 بانک: *${bank.bankName}*\n`;
+            text += `🔸 شماره حساب: \`${bank.accountNumber}\`\n`;
+            if (bank.cardNumber) text += `🔸 شماره کارت: \`${bank.cardNumber}\`\n`;
+            if (bank.sheba) text += `🔸 شبا: \`IR${bank.sheba.replace(/^IR/i, '')}\`\n`;
+            
+            return sendFn(userId, text, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: `GUEST_KNOWLEDGE_CO_${company.id}` }]] } });
+        }
+
+        if (data.startsWith('GUEST_KNOWLEDGE_CUST_')) {
+            const id = data.replace('GUEST_KNOWLEDGE_CUST_', '');
+            const item = (settings.knowledgeBaseItems || []).find(c => c.id === id);
+            if (!item) return sendFn(userId, "❌ یافت نشد.");
+            return sendFn(userId, `📌 *${item.title}*\n\n${item.content}`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_COMPANY_INFO' }]] } });
         }
         
         if (data === 'GUEST_SHOW_ID') {

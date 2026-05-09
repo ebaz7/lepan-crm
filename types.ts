@@ -193,6 +193,26 @@ export interface CustomerTicket {
   updatedAt: number;
 }
 
+export interface NoteTask {
+  id: string;
+  text: string;
+  isCompleted: boolean;
+}
+
+export interface Note {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  tasks?: NoteTask[];
+  color?: string;
+  type?: 'note' | 'list';
+  reminderTime?: number;
+  isPinned?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface KnowledgeBaseItem {
   id: string;
   title: string;
