@@ -58,7 +58,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   }, [embed]);
 
   const Stamp = ({ title, name, date, time, isSecurity }: { title: string, name: string, date?: string, time?: string, isSecurity?: boolean }) => (
-      <div className={`border-2 ${isSecurity ? 'border-black text-black' : 'border-blue-800 text-blue-800'} rounded-xl p-2 rotate-[-5deg] opacity-90 inline-block bg-white/80 print:bg-transparent shadow-sm min-w-[90px]`}>
+      <div className={`border-2 ${isSecurity ? 'border-black text-black' : 'border-blue-800 text-blue-800'} rounded-xl p-2 rotate-[-5deg] opacity-90 inline-block glass-panel/80 print:bg-transparent shadow-sm min-w-[90px]`}>
           <div className="text-[10px] font-bold border-b border-current mb-1 pb-1 text-center">{title}</div>
           <div className="text-sm font-black text-center px-2">{name}</div>
           {date && <div className="text-[10px] text-center mt-1">{date}</div>}
@@ -170,7 +170,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
   const content = (
       <div id={containerId} 
-        className="printable-content bg-white mx-auto shadow-2xl relative text-gray-900 flex flex-col" 
+        className="printable-content glass-panel mx-auto shadow-2xl relative text-gray-900 flex flex-col" 
         style={{ 
             direction: 'rtl', 
             width: '210mm', 
@@ -186,7 +186,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
                 <div className="flex flex-col"><h1 className="text-3xl font-black mb-1">مجوز خروج کالا از کارخانه</h1><p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                <div className="text-left space-y-2"><div className="text-xl font-black bg-gray-100 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div><div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div></div>
+                <div className="text-left space-y-2"><div className="text-xl font-black bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div><div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div></div>
             </div>
             <div className="flex-1 space-y-6">
                 <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Package size={20}/> لیست اقلام و کالاها</h3>
@@ -199,7 +199,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                 <th className="border-2 border-black p-1" colSpan={showDeliveryColumns ? 2 : 1}>وزن (KG)</th>
                             </tr>
                             {showDeliveryColumns && (
-                                <tr className="bg-gray-50 text-xs">
+                                <tr className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 text-xs">
                                     <th className="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th>
                                     <th className="border-2 border-black p-1 w-20 bg-green-50 text-green-800">خروجی</th>
                                     <th className="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th>
@@ -250,7 +250,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><MapPin size={20}/> مشخصات گیرنده</h3>
                     <div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm space-y-2">
                         {displayDestinations.map((dest, idx) => (
-                            <div key={idx} className="border-b-2 border-gray-200 pb-2 last:border-0 last:pb-0">
+                            <div key={idx} className="border-b-2 border-gray-200/50 dark:border-white/10 pb-2 last:border-0 last:pb-0">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><span className="font-bold text-gray-500 ml-2">تحویل گیرنده:</span> <span className="font-bold text-lg">{dest.recipientName}</span></div>
                                     <div><span className="font-bold text-gray-500 ml-2">شماره تماس:</span> <span className="font-mono dir-ltr">{dest.phone || '-'}</span></div>
@@ -265,7 +265,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                     <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Truck size={20}/> مشخصات حمل</h3><div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm flex gap-8"><div><span className="font-bold text-gray-500 ml-2">نام راننده:</span> <span className="font-bold text-lg">{permit.driverName}</span></div><div><span className="font-bold text-gray-500 ml-2">شماره پلاک:</span> <span className="font-mono font-bold text-lg dir-ltr">{permit.plateNumber}</span></div></div></div>
                 )}
                 
-                {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات</h3><div className="border-2 border-black rounded-xl p-3 bg-white text-sm min-h-[40px]">{permit.description}</div></div>)}
+                {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات</h3><div className="border-2 border-black rounded-xl p-3 glass-panel text-sm min-h-[40px]">{permit.description}</div></div>)}
             </div>
 
             <div className="mt-auto pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end">
@@ -306,19 +306,19 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start md:justify-center p-4 overflow-y-auto animate-fade-in safe-pb">
         <div className="relative md:absolute md:top-4 md:left-4 z-50 flex flex-col gap-2 no-print w-full md:w-auto mb-4 md:mb-0 order-1">
-            <div className="bg-white p-3 rounded-xl shadow-lg flex flex-col gap-2 w-full max-w-sm">
+            <div className="glass-panel p-3 rounded-xl shadow-lg flex flex-col gap-2 w-full max-w-sm">
                 <div className="flex justify-between items-center border-b pb-2"><span className="font-bold text-sm">پنل عملیات</span><button onClick={onClose}><X size={20} className="text-gray-400 hover:text-red-500"/></button></div>
                 {(onApprove || onReject) && (<div className="flex gap-2 mb-1">{onApprove && <button onClick={onApprove} className="flex-1 bg-green-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-green-700 transition-colors shadow-sm">تایید</button>}{onReject && <button onClick={onReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm">رد</button>}</div>)}
                 {onEdit && <button onClick={onEdit} className="w-full bg-amber-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-600 flex items-center justify-center gap-1 mb-1"><Edit size={14}/> اصلاح مجوز</button>}
                 <div className="flex gap-2"><button onClick={handleDownloadPDF} disabled={processing} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دانلود PDF</button><button onClick={() => window.print()} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 flex items-center justify-center gap-1"><Printer size={14}/> چاپ</button></div>
                 <div className="border-t mt-2 pt-2 flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'glass-panel border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
                 </div>
                 {sharePlatform && (
-                     <div className="mt-2 bg-white rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
+                     <div className="mt-2 glass-panel rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
                          <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
                          <div className="p-2 border-b"><input className="w-full text-xs p-1.5 border rounded outline-none" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
                          <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => {
@@ -327,7 +327,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                              if (sharePlatform === 'bale') targetId = c.baleId || c.number;
                              return (<button key={c.id} onClick={() => { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={(e) => { e.stopPropagation(); if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>);
                          })}</div>
-                         <div className="p-2 border-t bg-gray-50"><button onClick={() => { const n = prompt('شناسه یا شماره:'); if(n) handleShare(n); }} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:bg-white rounded border border-blue-100 transition-colors">شماره/شناسه دستی</button></div>
+                         <div className="p-2 border-t bg-gray-50"><button onClick={() => { const n = prompt('شناسه یا شماره:'); if(n) handleShare(n); }} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:glass-panel rounded border border-blue-100 transition-colors">شماره/شناسه دستی</button></div>
                      </div>
                 )}
             </div>

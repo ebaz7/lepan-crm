@@ -224,7 +224,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
     const formatUSD = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     const content = (
-        <div id={elementId} className="printable-content bg-white p-4 text-black text-[10px] relative border-black" 
+        <div id={elementId} className="printable-content glass-panel p-4 text-black text-[10px] relative border-black" 
             style={{
                 backgroundColor: '#ffffff',
                 color: '#000000',
@@ -236,11 +236,11 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
             }}
         >
             {/* Header */}
-            <div className="border border-black mb-1 text-center bg-white text-black">
+            <div className="border border-black mb-1 text-center glass-panel text-black">
                 <div className="bg-gray-200 font-black py-2 border-b border-black text-sm text-black">
                     گزارش جامع خرید ارز - سال {selectedYear}
                 </div>
-                <div className="flex justify-between px-2 py-1 bg-white font-bold text-black">
+                <div className="flex justify-between px-2 py-1 glass-panel font-bold text-black">
                     <span>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</span>
                     {filters.company && <span>شرکت: {filters.company}</span>}
                 </div>
@@ -268,36 +268,36 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                     <col style={{width: '60px'}} /> {/* Return Date */}
                 </colgroup>
                 <thead>
-                    <tr className="bg-gray-100 text-black">
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">ردیف</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">شرح کالا</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">شماره سفارش<br/>(پرونده)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">شماره ثبت<br/>سفارش</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">نام شرکت</th>
+                    <tr className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-black">
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">ردیف</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">شرح کالا</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">شماره سفارش<br/>(پرونده)</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">شماره ثبت<br/>سفارش</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">نام شرکت</th>
                         <th colSpan={3} className="border border-black p-1 bg-blue-100 font-black text-center">ارز خریداری شده</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">تاریخ<br/>خرید ارز</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">ارز خریداری شده<br/>(ریال)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">محل ارسال<br/>(صرافی)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">کارگزار</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center bg-white">ارز موجود<br/>نزد هر بانک</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">تاریخ<br/>خرید ارز</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">ارز خریداری شده<br/>(ریال)</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">محل ارسال<br/>(صرافی)</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">کارگزار</th>
+                        <th rowSpan={2} className="border border-black p-1 font-black text-center glass-panel">ارز موجود<br/>نزد هر بانک</th>
                         <th colSpan={2} className="border border-black p-1 bg-green-100 font-black text-center">وضعیت تحویل</th>
                         <th colSpan={2} className="border border-black p-1 bg-red-100 font-black text-center">عودت</th>
                     </tr>
                     <tr className="bg-gray-100 text-black">
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">(دلار آمریکا)</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">مقدار</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">نوع</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">مقدار تحویل شده</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">وضعیت</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">مبلغ</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center bg-white">تاریخ</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">(دلار آمریکا)</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">مقدار</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">نوع</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">مقدار تحویل شده</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">وضعیت</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">مبلغ</th>
+                        <th className="border border-black p-1 text-[9px] font-bold text-center glass-panel">تاریخ</th>
                     </tr>
                 </thead>
                 <tbody>
                     {processedGroups.map((group, gIndex) => (
                         <React.Fragment key={gIndex}>
                             {group.tranches.map((t: any, tIndex: number) => (
-                                <tr key={`${gIndex}_${tIndex}`} className="hover:bg-gray-50 leading-tight text-black">
+                                <tr key={`${gIndex}_${tIndex}`} className="hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 leading-tight text-black">
                                     {/* Row Span Logic: Only render details on first tranche */}
                                     {tIndex === 0 && (
                                         <>
@@ -345,22 +345,22 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
     );
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border h-full flex flex-col">
+        <div className="glass-panel p-4 rounded-lg shadow-sm border h-full flex flex-col">
             {/* Controls */}
-            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200 no-print">
+            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200/50 dark:border-white/10 no-print">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex gap-2 items-center flex-wrap">
                         {/* ... Controls ... */}
-                        <div className="flex items-center gap-2 bg-white border rounded px-2 py-1">
+                        <div className="flex items-center gap-2 glass-panel border rounded px-2 py-1">
                             <span className="text-xs font-bold text-gray-600">سال مالی:</span>
                             <select className="bg-transparent text-sm font-bold outline-none" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
-                        <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showFilters ? 'bg-blue-200 text-blue-800' : 'bg-white border text-gray-700'}`}>
+                        <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showFilters ? 'bg-blue-200 text-blue-800' : 'glass-panel border text-gray-700'}`}>
                             <Filter size={16}/> فیلترها
                         </button>
-                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-indigo-200 text-indigo-800' : 'bg-white border text-gray-700'}`}>
+                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-indigo-200 text-indigo-800' : 'glass-panel border text-gray-700'}`}>
                             <RefreshCw size={16}/> نرخ تبدیل
                         </button>
                     </div>
@@ -373,7 +373,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
 
                 {/* Filters & Rates Panels (omitted for brevity, same as before) */}
                 {showFilters && (
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-white p-3 rounded border animate-fade-in">
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 glass-panel p-3 rounded border animate-fade-in">
                         {/* ... */}
                     </div>
                 )}

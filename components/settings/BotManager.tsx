@@ -43,7 +43,7 @@ const BotManager: React.FC = () => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mt-6 animate-fade-in">
+        <div className="glass-panel p-6 rounded-xl border border-gray-200/50 dark:border-white/10 shadow-sm mt-6 animate-fade-in">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
                 <Power size={20} className="text-red-500"/>
                 مدیریت سرویس‌های پیام‌رسان (Restart Bots)

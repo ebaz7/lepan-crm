@@ -31,7 +31,7 @@ const CurrencyGuaranteeSection: React.FC<Props> = ({
     onToggleDelivery 
 }) => {
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+        <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
                 <ShieldCheck size={20} className="text-purple-600"/> 
                 چک ضمانت ارزی (رفع تعهد)
@@ -50,7 +50,7 @@ const CurrencyGuaranteeSection: React.FC<Props> = ({
                 <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-700">نام بانک (شرکت)</label>
                     <select 
-                        className="w-full border rounded p-2 text-sm bg-white" 
+                        className="w-full border rounded p-2 text-sm glass-panel" 
                         value={currencyGuarantee.bank} 
                         onChange={e => setCurrencyGuarantee({...currencyGuarantee, bank: e.target.value})}
                     >

@@ -189,7 +189,7 @@ export default function SalesCRMModule() {
             <h2 className="text-2xl font-black text-gray-800">مدیریت مخاطبین فروش</h2>
             
             {/* Tabs for Navigation */}
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200/50 dark:border-white/10">
                 <button 
                     onClick={() => setActiveTab('contacts')}
                     className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'contacts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}
@@ -207,11 +207,11 @@ export default function SalesCRMModule() {
             {activeTab === 'contacts' ? (
                 <>
                     {/* Bulk Messaging */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm">
                         <h3 className="font-bold text-lg mb-4">ارسال پیام همگانی به مشتریان</h3>
                         <div className="space-y-4">
                             <div className="flex gap-4 mb-2">
-                                <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 flex-1 justify-center">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer border p-2 rounded-xl bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-1 justify-center">
                                     <input type="radio" checked={broadcastTarget === 'all_subscribers'} onChange={() => setBroadcastTarget('all_subscribers')} />
                                     <span>همه اعضای ربات</span>
                                 </label>
@@ -240,7 +240,7 @@ export default function SalesCRMModule() {
                     </div>
 
                     {/* Birthday Template Settings */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm">
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Gift className="text-pink-500"/> تنظیمات تبریک تولد</h3>
                         <div className="space-y-4">
                             <textarea 
@@ -261,13 +261,13 @@ export default function SalesCRMModule() {
                     </div>
 
                     {/* Contacts Table / Cards */}
-                    <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className="glass-panel p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm">
                             <div className="flex flex-wrap gap-2 w-full md:w-auto">
                                 <label className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-emerald-200 border border-emerald-200">
                                      <Upload size={18}/> ایمپورت اکسل
                                      <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
                                 </label>
-                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> نمونه اکسل</button>
+                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> نمونه اکسل</button>
                                 <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> اکسپورت</button>
                                 <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100"><Plus size={18}/> افزودن دستی</button>
                             </div>
@@ -319,8 +319,8 @@ export default function SalesCRMModule() {
                                         {c.birthday && <div className="text-[10px] text-gray-400 mt-1">تولد: {c.birthday}</div>}
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 bg-white rounded-xl shadow-sm"><Edit2 size={16}/></button>
-                                        <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 bg-white rounded-xl shadow-sm"><Trash2 size={16}/></button>
+                                        <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 glass-panel rounded-xl shadow-sm"><Edit2 size={16}/></button>
+                                        <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 glass-panel rounded-xl shadow-sm"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
                             ))}
@@ -329,7 +329,7 @@ export default function SalesCRMModule() {
                     </div>
                 </>
             ) : (
-                <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm animate-fade-in">
+                <div className="glass-panel p-4 md:p-6 rounded-2xl border border-gray-200 shadow-sm animate-fade-in">
                     <h3 className="font-bold text-lg mb-6">لیست لیدهای ربات (اعضای جدید)</h3>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-right">
@@ -375,7 +375,7 @@ export default function SalesCRMModule() {
             {/* Edit Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
+                    <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
                         <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                             <h3 className="font-bold text-lg">{editingContact ? 'ویرایش مخاطب' : 'افزودن مخاطب جدید'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-white/20 rounded-lg"><X size={20}/></button>

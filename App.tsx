@@ -35,6 +35,29 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        setTheme('dark');
+        document.documentElement.classList.add('dark');
+    } else {
+        setTheme('light');
+        document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+      const newTheme = theme === 'light' ? 'dark' : 'light';
+      setTheme(newTheme);
+      localStorage.setItem('theme', newTheme);
+      if (newTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+      }
+  };
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
   const [loading, setLoading] = useState(false);
@@ -408,18 +431,20 @@ function App() {
             financialYear={financialYear}
             setFinancialYear={setFinancialYear}
             settings={settings}
+            theme={theme}
+            toggleTheme={toggleTheme}
             >
             
             <NotificationController currentUser={currentUser} />
 
             {toast && toast.show && (
-                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] bg-white border-l-4 border-blue-600 shadow-2xl rounded-lg p-4 flex items-start gap-4 min-w-[300px] max-w-sm animate-slide-down" onClick={closeToast}>
-                    <div className="bg-blue-100 p-2 rounded-full text-blue-600"><Bell size={20} className="animate-pulse" /></div>
+                <div className="fixed top-24 md:top-4 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel border border-white/40 dark:border-white/10 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[300px] max-w-[90vw] animate-slide-down backdrop-blur-3xl" onClick={closeToast}>
+                    <div className="bg-blue-500/20 p-2 rounded-xl text-blue-600 dark:text-blue-400"><Bell size={20} className="animate-pulse" /></div>
                     <div className="flex-1">
-                        <h4 className="font-bold text-gray-800 text-sm mb-1">{toast.title}</h4>
-                        <p className="text-xs text-gray-600 leading-relaxed">{toast.message}</p>
+                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1">{toast.title}</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1"><X size={18} /></button>
                 </div>
             )}
 

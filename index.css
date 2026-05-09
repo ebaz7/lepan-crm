@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --app-bg: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); /* Apple-like colorful light gradient */
+    --glass-bg: rgba(255, 255, 255, 0.65);
+    --glass-bg-hover: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --border-color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .dark {
+    --app-bg: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); /* Deep dark modern gradient */
+    --glass-bg: rgba(15, 23, 42, 0.55);
+    --glass-bg-hover: rgba(15, 23, 42, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
 /* Font Face - Updated for better Offline Support */
 @font-face {
   font-family: 'Vazirmatn';
@@ -13,12 +37,64 @@
 
 body {
   font-family: 'Vazirmatn', sans-serif;
-  background-color: #f3f4f6;
+  background: var(--app-bg);
+  background-attachment: fixed;
+  color: var(--text-primary);
   overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile PWA */
   -webkit-font-smoothing: antialiased;
   -moz-osx-osx-font-smoothing: grayscale;
   /* Disable text selection highlight for app-like feel */
   -webkit-tap-highlight-color: transparent;
+  transition: background 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+
+/* Glassmorphism Global Restyling for generic util classes */
+.bg-white, .bg-gray-50, .bg-white\/80, .bg-white\/50, .bg-white\/40, .bg-white\/60 {
+  background-color: var(--glass-bg) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-color: var(--glass-border) !important;
+}
+
+.bg-white:not(body):not(.notification-dropdown-container) {
+  box-shadow: var(--glass-shadow);
+}
+
+.dark .text-gray-800, .dark .text-gray-900, .dark .text-gray-700 {
+  color: #f8fafc !important;
+}
+.dark .text-gray-600, .dark .text-gray-500 {
+  color: #cbd5e1 !important;
+}
+.dark .border-gray-200, .dark .border-gray-100, .dark .border-blue-100 {
+  border-color: var(--glass-border) !important;
+}
+.dark .bg-gray-100, .dark .bg-blue-50, .dark .bg-indigo-50, .dark .bg-rose-50, .dark .bg-green-50, .dark .bg-yellow-50 {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: #f8fafc !important;
+}
+.dark .text-blue-600, .dark .text-indigo-600, .dark .text-blue-800 {
+  color: #60a5fa !important;
+}
+
+@layer utilities {
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+  .glass-panel:hover {
+    background: var(--glass-bg-hover);
+  }
+  .glass-header {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+  }
 }
 
 /* Safe Area Utilities for Mobile */

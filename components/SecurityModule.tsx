@@ -527,7 +527,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     };
 
     const DateFilter = () => (
-        <div className="flex gap-1 items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+        <div className="flex gap-1 items-center bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-1 rounded-lg border border-gray-200/50 dark:border-white/10">
             <Calendar size={16} className="text-gray-500 ml-1"/>
             <select className="bg-transparent text-sm p-1 outline-none" value={selectedDate.day} onChange={e=>setSelectedDate({...selectedDate, day: +e.target.value})}>{Array.from({length:31},(_,i)=>i+1).map(d=><option key={d} value={d}>{d}</option>)}</select>
             <span className="text-gray-400">/</span>
@@ -541,12 +541,12 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const isLandscapeMode = (printTarget && (printTarget.type === 'daily_log')) || (viewCartableItem && (viewCartableItem.category === 'log' || viewCartableItem.type === 'log'));
 
     return (
-        <div className="p-4 md:p-6 bg-gray-50 h-[calc(100vh-100px)] overflow-y-auto animate-fade-in relative">
+        <div className="p-4 md:p-6 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 h-[calc(100vh-100px)] overflow-y-auto animate-fade-in relative">
             
             {/* Shift Meta Modal */}
             {showShiftModal && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5">
+                    <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-5">
                         <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">اطلاعات شیفت ({formatDate(getIsoSelectedDate())})</h3><button onClick={()=>setShowShiftModal(false)}><X/></button></div>
                         <div className="space-y-4">
                             <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-gray-600"><div>شیفت</div><div>نگهبان</div><div>ورود / خروج</div></div>
@@ -563,7 +563,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             {/* Print Preview Modal */}
             {showPrintModal && printTarget && (
                 <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print">
+                    <div className="glass-panel p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print">
                         <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"><Printer size={16}/> چاپ</button>
                         <button onClick={handleDownloadPDF} disabled={isGeneratingPdf} className="bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2">{isGeneratingPdf ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>} دانلود PDF</button>
                         <button onClick={() => setShowPrintModal(false)} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">بستن</button>
@@ -572,7 +572,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     {/* SCALED CONTAINER WRAPPER */}
                     <div className="overflow-auto bg-gray-200 p-4 rounded shadow-inner max-h-[80vh] w-full flex justify-center">
                          <ScaledContainer isLandscape={printTarget.type === 'daily_log'}>
-                            <div id="printable-area-view" className="bg-white shadow-lg">
+                            <div id="printable-area-view" className="glass-panel shadow-lg">
                                 {printTarget.type === 'daily_log' && <PrintSecurityDailyLog date={printTarget.date} logs={printTarget.logs} meta={printTarget.meta} />}
                                 {printTarget.type === 'daily_delay' && <PrintPersonnelDelay delays={printTarget.delays} meta={printTarget.meta} />}
                                 {printTarget.type === 'incident' && <PrintIncidentReport incident={printTarget.incident} />}
@@ -585,7 +585,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             {/* Cartable Action Modal */}
             {viewCartableItem && (
                 <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print w-full max-w-2xl justify-between items-center">
+                    <div className="glass-panel p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print w-full max-w-2xl justify-between items-center">
                         <div className="font-bold text-lg text-gray-800">{viewCartableItem.type === 'daily_approval' || viewCartableItem.type === 'daily_archive' ? `گزارش روزانه - ${formatDate(viewCartableItem.date)}` : 'بررسی'}</div>
                         <div className="flex gap-2">
                              <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded font-bold shadow"><Printer size={18}/></button>
@@ -604,7 +604,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     {/* SCALED CONTAINER WRAPPER */}
                     <div className="overflow-auto bg-gray-200 p-4 rounded shadow-inner max-h-[80vh] w-full flex justify-center">
                         <ScaledContainer isLandscape={isLandscapeMode}>
-                            <div className="bg-white shadow-lg" id="printable-area-view">
+                            <div className="glass-panel shadow-lg" id="printable-area-view">
                                 {(viewCartableItem.type === 'daily_approval' || viewCartableItem.type === 'daily_archive') && viewCartableItem.category === 'log' && (
                                     <PrintSecurityDailyLog 
                                         date={viewCartableItem.date} 
@@ -643,7 +643,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             {/* Input Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">{activeTab === 'logs' ? 'ثبت ورود و خروج' : activeTab === 'delays' ? 'ثبت تاخیر پرسنل' : 'ثبت وقایع'}</h3><button onClick={resetForms}><X size={20}/></button></div>
                         {activeTab === 'logs' && (
                             <div className="space-y-3">
@@ -705,18 +705,18 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Shield className="text-blue-600"/> واحد انتظامات</h1>
                 <div className="flex flex-wrap gap-2 items-center w-full xl:w-auto">
-                    {(activeTab === 'logs' || activeTab === 'delays') && (<div className="flex gap-2"><button onClick={() => setShowShiftModal(true)} className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1"><FileText size={16}/> شیفت</button><DateFilter /></div>)}
-                    <div className="flex bg-white p-1 rounded-xl shadow-sm border overflow-x-auto"><button onClick={() => setActiveTab('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>نگهبانی</button><button onClick={() => setActiveTab('delays')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'delays' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>تاخیر</button><button onClick={() => setActiveTab('incidents')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'incidents' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>وقایع</button><div className="w-px bg-gray-300 mx-1"></div><button onClick={() => setActiveTab('cartable')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'cartable' ? 'bg-orange-600 text-white' : 'text-gray-600'}`}>کارتابل</button><button onClick={() => setActiveTab('in_progress')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'in_progress' ? 'bg-indigo-600 text-white' : 'text-gray-600'}`}>در جریان</button><button onClick={() => setActiveTab('archive')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'archive' ? 'bg-green-600 text-white' : 'text-gray-600'}`}>بایگانی</button></div>
+                    {(activeTab === 'logs' || activeTab === 'delays') && (<div className="flex gap-2"><button onClick={() => setShowShiftModal(true)} className="glass-panel border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1"><FileText size={16}/> شیفت</button><DateFilter /></div>)}
+                    <div className="flex glass-panel p-1 rounded-xl shadow-sm border overflow-x-auto"><button onClick={() => setActiveTab('logs')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>نگهبانی</button><button onClick={() => setActiveTab('delays')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'delays' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>تاخیر</button><button onClick={() => setActiveTab('incidents')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'incidents' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}>وقایع</button><div className="w-px bg-gray-300 mx-1"></div><button onClick={() => setActiveTab('cartable')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'cartable' ? 'bg-orange-600 text-white' : 'text-gray-600'}`}>کارتابل</button><button onClick={() => setActiveTab('in_progress')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'in_progress' ? 'bg-indigo-600 text-white' : 'text-gray-600'}`}>در جریان</button><button onClick={() => setActiveTab('archive')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'archive' ? 'bg-green-600 text-white' : 'text-gray-600'}`}>بایگانی</button></div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[500px]">
+            <div className="glass-panel rounded-2xl shadow-sm border border-gray-200 min-h-[500px]">
                 {activeTab === 'logs' && (
                     <>
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
                             <h2 className="font-bold text-gray-700">دفتر ثبت ورود و خروج کالا و خودرو</h2>
                             <div className="flex gap-2">
-                                <button onClick={() => { setPrintTarget({ type: 'daily_log', date: getIsoSelectedDate(), logs: displayLogs, meta: metaForm }); setShowPrintModal(true); }} className="bg-white border text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-100"><Printer size={14}/> چاپ روزانه</button>
+                                <button onClick={() => { setPrintTarget({ type: 'daily_log', date: getIsoSelectedDate(), logs: displayLogs, meta: metaForm }); setShowPrintModal(true); }} className="glass-panel border text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-100"><Printer size={14}/> چاپ روزانه</button>
                                 {canEdit(SecurityStatus.PENDING_FACTORY) && <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-blue-700"><Plus size={14}/> ثبت مورد جدید</button>}
                             </div>
                         </div>
@@ -751,7 +751,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
                             <h2 className="font-bold text-gray-700">لیست تاخیر پرسنل</h2>
                             <div className="flex gap-2">
-                                <button onClick={() => { setPrintTarget({ type: 'daily_delay', date: getIsoSelectedDate(), delays: displayDelays, meta: metaForm }); setShowPrintModal(true); }} className="bg-white border text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-100"><Printer size={14}/> چاپ فرم تاخیر</button>
+                                <button onClick={() => { setPrintTarget({ type: 'daily_delay', date: getIsoSelectedDate(), delays: displayDelays, meta: metaForm }); setShowPrintModal(true); }} className="glass-panel border text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-100"><Printer size={14}/> چاپ فرم تاخیر</button>
                                 {canEdit(SecurityStatus.PENDING_FACTORY) && <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-blue-700"><Plus size={14}/> ثبت تاخیر</button>}
                             </div>
                         </div>
@@ -787,7 +787,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                         </div>
                         <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {allDailyIncidents.map(inc => (
-                                <div key={inc.id} className="border rounded-xl p-4 hover:shadow-md transition-shadow bg-white relative">
+                                <div key={inc.id} className="border rounded-xl p-4 hover:shadow-md transition-shadow glass-panel relative">
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold">گزارش #{inc.reportNumber}</span>
                                         <span className="text-[10px] text-gray-400">{new Date(inc.createdAt).toLocaleTimeString('fa-IR')}</span>
@@ -813,7 +813,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                         {getCartableItems().length === 0 ? <div className="text-center text-gray-400 py-10">کارتابل شما خالی است.</div> : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {getCartableItems().map((item, idx) => (
-                                    <div key={idx} onClick={() => setViewCartableItem(item)} className="bg-white border rounded-xl p-4 shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-l-orange-500">
+                                    <div key={idx} onClick={() => setViewCartableItem(item)} className="glass-panel border rounded-xl p-4 shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-l-orange-500">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="font-bold text-sm text-gray-800">{item.type === 'daily_approval' ? 'تایید گزارش روزانه' : item.type === 'incident' ? 'تایید واقعه' : 'تایید تاخیر'}</span>
                                             <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded animate-pulse">اقدام فوری</span>
@@ -837,7 +837,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                         <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Archive size={18}/> آرشیو گزارشات</h3>
                         <div className="space-y-2">
                             {getArchivedItems().map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg border hover:bg-gray-50">
+                                <div key={idx} className="flex justify-between items-center glass-panel p-3 rounded-lg border hover:bg-gray-50">
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2 rounded-full ${item.category === 'log' ? 'bg-blue-100 text-blue-600' : item.category === 'delay' ? 'bg-red-100 text-red-600' : 'bg-purple-100 text-purple-600'}`}>
                                             {item.category === 'log' ? <ListChecks size={16}/> : item.category === 'delay' ? <Clock size={16}/> : <AlertTriangle size={16}/>}

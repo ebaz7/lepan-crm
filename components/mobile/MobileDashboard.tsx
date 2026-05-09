@@ -33,25 +33,25 @@ const MobileDashboard: React.FC<Props> = ({ orders, currentUser, onNavigate }) =
 
       {/* Main Action Grid */}
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => onNavigate('create')} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
+        <button onClick={() => onNavigate('create')} className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
           <div className="bg-green-100 p-3 rounded-2xl text-green-600 shadow-sm"><Banknote size={26}/></div>
           <span className="font-bold text-xs text-gray-700">ثبت پرداخت</span>
         </button>
         
-        <button onClick={() => onNavigate('manage')} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
+        <button onClick={() => onNavigate('manage')} className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
           <div className="bg-orange-100 p-3 rounded-2xl text-orange-600 shadow-sm"><Activity size={26}/></div>
           <span className="font-bold text-xs text-gray-700">کارتابل مالی</span>
         </button>
 
         {canCreateExit && (
-            <button onClick={() => onNavigate('create-exit')} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
+            <button onClick={() => onNavigate('create-exit')} className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
             <div className="bg-blue-100 p-3 rounded-2xl text-blue-600 shadow-sm"><Truck size={26}/></div>
             <span className="font-bold text-xs text-gray-700">ثبت خروج</span>
             </button>
         )}
 
         {canManageExit && (
-            <button onClick={() => onNavigate('manage-exit')} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
+            <button onClick={() => onNavigate('manage-exit')} className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-3 active:scale-95 transition-all">
             <div className="bg-purple-100 p-3 rounded-2xl text-purple-600 shadow-sm"><ShieldCheck size={26}/></div>
             <span className="font-bold text-xs text-gray-700">کارتابل خروج</span>
             </button>
@@ -61,7 +61,7 @@ const MobileDashboard: React.FC<Props> = ({ orders, currentUser, onNavigate }) =
       {/* Stats Vertical Stack */}
       <h3 className="font-bold text-gray-800 text-sm px-1 mt-4">وضعیت کلی سیستم</h3>
       <div className="space-y-3">
-        <div onClick={() => onNavigate('manage')} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.98] transition-transform">
+        <div onClick={() => onNavigate('manage')} className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.98] transition-transform">
           <div className="flex items-center gap-3">
             <div className="bg-amber-50 p-2.5 rounded-xl text-amber-600"><Clock size={20}/></div>
             <span className="font-bold text-xs text-gray-600">در انتظار بررسی (مالی)</span>
@@ -69,7 +69,7 @@ const MobileDashboard: React.FC<Props> = ({ orders, currentUser, onNavigate }) =
           <span className="text-lg font-black text-amber-600 font-mono">{pendingCount}</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600"><CheckCircle size={20}/></div>
             <span className="font-bold text-xs text-gray-600">درخواست‌های من</span>
@@ -77,7 +77,7 @@ const MobileDashboard: React.FC<Props> = ({ orders, currentUser, onNavigate }) =
           <span className="text-lg font-black text-blue-600 font-mono">{myRequests}</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="glass-panel p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-green-50 p-2.5 rounded-xl text-green-600"><Package size={20}/></div>
             <span className="font-bold text-xs text-gray-600">پرداخت‌های نهایی</span>

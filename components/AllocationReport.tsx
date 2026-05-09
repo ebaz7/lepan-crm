@@ -328,7 +328,7 @@ const AllocationReport: React.FC<AllocationReportProps> = ({ records, onUpdateRe
     };
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border overflow-x-auto">
+        <div className="glass-panel p-4 rounded-lg shadow-sm border overflow-x-auto">
             {/* Show Print Component Overlay if requested */}
             {showPrint && (
                 <PrintAllocationReport 
@@ -341,19 +341,19 @@ const AllocationReport: React.FC<AllocationReportProps> = ({ records, onUpdateRe
             )}
 
             {/* Top Bar: Rates & Actions */}
-            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200 no-print">
+            <div className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-3 rounded mb-4 border border-gray-200/50 dark:border-white/10 no-print">
                 <div className="flex justify-between items-start flex-wrap gap-4">
                     
                     {/* Toggle Rates Button */}
                     <div className="flex gap-2">
-                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-blue-200 text-blue-800' : 'bg-white border text-gray-700'}`}>
+                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-blue-200 text-blue-800' : 'glass-panel border text-gray-700'}`}>
                             <Settings size={16}/> تنظیم نرخ‌ها
                         </button>
                     </div>
 
                     {/* Rates Inputs (Collapsible) */}
                     {showRates && (
-                        <div className="w-full grid grid-cols-2 md:grid-cols-5 gap-4 bg-white p-3 rounded border border-blue-100 mb-2 animate-fade-in">
+                        <div className="w-full grid grid-cols-2 md:grid-cols-5 gap-4 glass-panel p-3 rounded border border-blue-100 mb-2 animate-fade-in">
                             <div><label className="block text-[10px] text-gray-500 font-bold mb-1">یورو به دلار (EUR)</label><input type="number" step="0.01" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.eurToUsd} onChange={e => setRates({...rates, eurToUsd: parseFloat(e.target.value) || 0})} /></div>
                             <div><label className="block text-[10px] text-gray-500 font-bold mb-1">درهم به دلار (AED)</label><input type="number" step="0.001" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.aedToUsd} onChange={e => setRates({...rates, aedToUsd: parseFloat(e.target.value) || 0})} /></div>
                             <div><label className="block text-[10px] text-gray-500 font-bold mb-1">یوان به دلار (CNY)</label><input type="number" step="0.001" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.cnyToUsd} onChange={e => setRates({...rates, cnyToUsd: parseFloat(e.target.value) || 0})} /></div>
@@ -377,14 +377,14 @@ const AllocationReport: React.FC<AllocationReportProps> = ({ records, onUpdateRe
                         <input className="w-full border rounded-lg p-2 pl-9 text-sm" placeholder="جستجو در تمام ستون‌ها (پرونده، کالا، بانک، شرکت...)" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                         <Search size={16} className="absolute left-3 top-2.5 text-gray-400"/>
                     </div>
-                    <button onClick={() => setShowFilters(!showFilters)} className={`px-3 py-2 rounded-lg border flex items-center gap-2 text-sm ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white hover:bg-gray-50'}`}>
+                    <button onClick={() => setShowFilters(!showFilters)} className={`px-3 py-2 rounded-lg border flex items-center gap-2 text-sm ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'glass-panel hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200'}`}>
                         <Filter size={16}/> فیلترهای پیشرفته
                     </button>
                 </div>
 
                 {/* Advanced Filters Panel */}
                 {showFilters && (
-                    <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white p-3 rounded border border-gray-200 animate-fade-in">
+                    <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 glass-panel p-3 rounded border border-gray-200 animate-fade-in">
                         <div>
                             <label className="text-xs font-bold text-gray-500 block mb-1">فیلتر شرکت</label>
                             <select className="w-full border rounded p-1.5 text-sm" value={filters.company} onChange={e => setFilters({...filters, company: e.target.value})}>

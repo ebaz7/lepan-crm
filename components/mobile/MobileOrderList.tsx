@@ -44,7 +44,7 @@ const MobileOrderList: React.FC<Props> = ({ orders, currentUser, refreshData }) 
   return (
     <div className="space-y-4">
       {/* Mobile Search & Filter Header */}
-      <div className="sticky top-0 bg-gray-100 pt-2 pb-2 z-40 space-y-2">
+      <div className="sticky top-0 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 pt-2 pb-2 z-40 space-y-2">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <input 
@@ -56,15 +56,15 @@ const MobileOrderList: React.FC<Props> = ({ orders, currentUser, refreshData }) 
             />
             <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
           </div>
-          <button onClick={refreshData} className="bg-white p-3 rounded-xl shadow-sm text-gray-600">
+          <button onClick={refreshData} className="glass-panel p-3 rounded-xl shadow-sm text-gray-600">
             <RefreshCcw size={20} />
           </button>
         </div>
         
         <div className="flex p-1 bg-gray-200 rounded-xl">
-          <button onClick={() => setFilter('all')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'all' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>همه</button>
-          <button onClick={() => setFilter('pending')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'pending' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>جاری</button>
-          <button onClick={() => setFilter('completed')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'completed' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>بایگانی</button>
+          <button onClick={() => setFilter('all')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'all' ? 'glass-panel shadow text-gray-800' : 'text-gray-500'}`}>همه</button>
+          <button onClick={() => setFilter('pending')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'pending' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>جاری</button>
+          <button onClick={() => setFilter('completed')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${filter === 'completed' ? 'glass-panel shadow text-green-600' : 'text-gray-500'}`}>بایگانی</button>
         </div>
       </div>
 
@@ -87,7 +87,7 @@ const MobileOrderList: React.FC<Props> = ({ orders, currentUser, refreshData }) 
 
       {/* Detail Modal (Reusing existing PrintVoucher but making it full screen) */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-[100] bg-white overflow-y-auto">
+        <div className="fixed inset-0 z-[100] glass-panel overflow-y-auto">
             <PrintVoucher 
                 order={selectedOrder} 
                 onClose={() => setSelectedOrder(null)} 

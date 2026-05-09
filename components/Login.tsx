@@ -183,12 +183,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative font-sans" dir="rtl">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-4 relative font-sans" dir="rtl">
       
       {/* Settings Button */}
       <button 
         onClick={() => setShowServerConfig(!showServerConfig)} 
-        className="absolute top-6 left-6 p-3 bg-white rounded-full shadow-md text-gray-500 hover:text-blue-600 transition-colors z-50"
+        className="absolute top-6 left-6 p-3 glass-panel rounded-full shadow-md text-gray-500 hover:text-blue-600 transition-colors z-50"
         title="تنظیمات اتصال"
       >
         <Settings size={24} />
@@ -197,7 +197,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       {/* Database Restore Button (Corner fallback) */}
       <button 
         onClick={() => setShowRestoreModal(true)} 
-        className="absolute top-6 right-6 p-3 bg-white rounded-full shadow-md text-amber-500 hover:text-amber-700 transition-colors z-50 md:flex hidden"
+        className="absolute top-6 right-6 p-3 glass-panel rounded-full shadow-md text-amber-500 hover:text-amber-700 transition-colors z-50 md:flex hidden"
         title="بازگردانی دیتابیس (اضطراری)"
       >
         <Database size={24} />
@@ -206,7 +206,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       {/* Restore Modal */}
       {showRestoreModal && (
           <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+              <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
                   <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
                       <Database size={32}/>
                   </div>
@@ -245,7 +245,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
       )}
 
-      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-100 relative overflow-hidden animate-fade-in">
+      <div className="glass-panel p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-100 relative overflow-hidden animate-fade-in">
         
         {showServerConfig ? (
             <div className="animate-fade-in space-y-6">
@@ -268,7 +268,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 type="text" 
                                 value={serverUrl} 
                                 onChange={(e) => { setServerUrl(e.target.value); setTestStatus('idle'); }} 
-                                className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 pl-12 text-left dir-ltr font-mono font-bold text-gray-700 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all outline-none" 
+                                className="w-full border-2 border-gray-200/50 dark:border-white/10 rounded-xl px-4 py-4 pl-12 text-left dir-ltr font-mono font-bold text-gray-700 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all outline-none" 
                                 placeholder="192.168.1.50:3000"
                                 autoCapitalize="off"
                                 autoCorrect="off"
@@ -318,7 +318,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <KeyRound size={40} className="-rotate-3" />
                     </div>
                     <h1 className="text-3xl font-black text-gray-800 tracking-tight">ورود به سیستم</h1>
-                    <div className="mt-3 flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-full border border-gray-200">
+                    <div className="mt-3 flex items-center gap-2 px-3 py-1 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 rounded-full border border-gray-200">
                         <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-purple-500' : 'bg-green-500'}`}></div>
                         <p className="text-gray-500 text-xs font-bold">{isNative ? 'نسخه موبایل' : 'نسخه وب'}</p>
                     </div>
@@ -345,12 +345,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-gray-700 block mr-1">نام کاربری</label>
-                      <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-white text-left dir-ltr outline-none font-medium" required />
+                      <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all glass-panel text-left dir-ltr outline-none font-medium" required />
                   </div>
                   
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-gray-700 block mr-1">رمز عبور</label>
-                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all bg-white text-left dir-ltr outline-none font-medium" required />
+                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all glass-panel text-left dir-ltr outline-none font-medium" required />
                   </div>
 
                   <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-xl shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-70 text-lg mt-4">

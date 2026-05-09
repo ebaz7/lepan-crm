@@ -288,7 +288,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const TimelineStep = ({ status, label, icon: Icon }: any) => {
-        let colorClass = 'bg-gray-100 text-gray-400 border-gray-200';
+        let colorClass = 'bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-400 border-gray-200/50 dark:border-white/10';
         if (status === 'current') colorClass = 'bg-blue-100 text-blue-600 border-blue-500 animate-pulse ring-2 ring-blue-200';
         if (status === 'done') colorClass = 'bg-green-500 text-white border-green-600 shadow-md';
         if (status === 'rejected') colorClass = 'bg-red-500 text-white border-red-600';
@@ -312,7 +312,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     // Mobile Card Renderer
     const MobilePermitCard = ({ p, canAct }: { p: ExitPermit, canAct: boolean }) => (
-        <div className={`bg-white rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
+        <div className={`glass-panel rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
             <div className="flex justify-between items-start mb-2">
                 <div>
                     <span className="text-xs font-mono text-gray-400">#{p.permitNumber}</span>
@@ -368,7 +368,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
 
         return (
-            <div key={p.id} className={`bg-white rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
+            <div key={p.id} className={`glass-panel rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
                 {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
                 {p.status === ExitPermitStatus.REJECTED && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
                 
@@ -436,7 +436,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             {/* Header / Tabs */}
             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex justify-between items-center glass-panel p-4 rounded-2xl shadow-sm border border-gray-200">
                     <h1 className="text-xl font-black text-gray-800 flex items-center gap-2"><Truck className="text-teal-600"/> کارتابل خروج</h1>
                     <button onClick={loadData} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><RefreshCw size={18} className={loading ? 'animate-spin' : ''}/></button>
                 </div>
@@ -444,27 +444,27 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 <div className="flex p-1 bg-gray-200 rounded-xl overflow-x-auto no-scrollbar">
                     <button 
                         onClick={() => setActiveTab('CARTABLE')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'bg-white text-blue-700 shadow-md' : 'text-gray-500'}`}
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'glass-panel text-blue-700 shadow-md' : 'text-gray-500'}`}
                     >
                         <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
                         کارتابل من ({myCartablePermits.length})
                     </button>
                     <button 
                         onClick={() => setActiveTab('FLOW')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
                     >
                         جریان فعال
                     </button>
                     <button 
                         onClick={() => setActiveTab('ARCHIVE')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
                     >
                         بایگانی
                     </button>
                 </div>
 
                 <div className="relative">
-                    <input className="w-full bg-white border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="جستجو در لیست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="جستجو در لیست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
             </div>
@@ -476,7 +476,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         <Loader2 className="animate-spin text-blue-500"/> در حال بارگذاری...
                     </div>
                 ) : displayPermits.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+                    <div className="text-center py-20 glass-panel rounded-2xl border border-dashed border-gray-300">
                         <div className="text-gray-400 font-bold">موردی یافت نشد.</div>
                         {activeTab === 'CARTABLE' && <div className="text-xs text-gray-300 mt-2">خوشبختانه کارتابل شما خالی است! 🎉</div>}
                     </div>
@@ -487,7 +487,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             {/* Modals */}
             {viewPermit && (
-                <div className={isMobile ? "fixed inset-0 z-[100] bg-white overflow-y-auto" : ""}>
+                <div className={isMobile ? "fixed inset-0 z-[100] glass-panel overflow-y-auto" : ""}>
                     <PrintExitPermit 
                         permit={viewPermit} 
                         onClose={() => setViewPermit(null)} 

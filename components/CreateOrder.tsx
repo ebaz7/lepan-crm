@@ -330,10 +330,10 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in relative">
+    <div className="glass-panel rounded-2xl shadow-sm border border-gray-200/50 dark:border-white/10 overflow-hidden animate-fade-in relative">
         {showAddBankModal && (
             <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 animate-scale-in">
+                <div className="glass-panel rounded-xl shadow-xl w-full max-w-sm p-5 animate-scale-in">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><Landmark size={18} className="text-blue-600"/> افزودن بانک جدید</h3>
                         <button onClick={() => setShowAddBankModal(false)} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
@@ -349,7 +349,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                             <input className="w-full border rounded-lg p-2 text-sm dir-ltr text-left" placeholder="xxxx-xxxx-xxxx-xxxx" value={newBankAccount} onChange={e => setNewBankAccount(e.target.value)} />
                         </div>
                         <div className="flex gap-2 mt-4 pt-2 border-t">
-                            <button onClick={() => setShowAddBankModal(false)} className="flex-1 py-2 rounded-lg border text-gray-600 hover:bg-gray-50 text-sm">انصراف</button>
+                            <button onClick={() => setShowAddBankModal(false)} className="flex-1 py-2 rounded-lg border text-gray-600 hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 text-sm">انصراف</button>
                             <button onClick={handleSaveNewBank} className="flex-1 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-bold">ذخیره بانک</button>
                         </div>
                     </div>
@@ -360,7 +360,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
         <div className="p-6 border-b border-gray-100 flex items-center gap-3"><div className="bg-green-50 p-2 rounded-lg text-green-600"><Plus size={24} /></div><h2 className="text-xl font-bold text-gray-800">ثبت دستور پرداخت جدید</h2></div>
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Building2 size={16}/> شرکت پرداخت کننده</label><select className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-white" value={payingCompany} onChange={handleCompanyChange} onKeyDown={handleKeyDown}><option value="">-- انتخاب کنید --</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="space-y-2"><label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Building2 size={16}/> شرکت پرداخت کننده</label><select className="w-full border border-gray-300 rounded-xl px-4 py-3 glass-panel" value={payingCompany} onChange={handleCompanyChange} onKeyDown={handleKeyDown}><option value="">-- انتخاب کنید --</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Hash size={16}/> شماره دستور پرداخت</label>
                     <div className="relative">
@@ -369,7 +369,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                             type="button"
                             onClick={() => fetchNextNumber(payingCompany)} 
                             disabled={loadingNum}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 glass-panel rounded-full text-blue-500 hover:bg-blue-50 transition-colors"
                             title="بروزرسانی شماره از سرور"
                         >
                             <RefreshCcw size={16} className={loadingNum ? 'animate-spin' : ''}/>
@@ -377,7 +377,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                     </div>
                 </div>
                 <div className="space-y-2"><label className="text-sm font-medium text-gray-700">گیرنده وجه (ذینفع)</label><input required type="text" className="w-full border border-gray-300 rounded-xl px-4 py-3" placeholder="نام شخص یا شرکت..." value={formData.payee} onChange={e => setFormData({ ...formData, payee: e.target.value })} onKeyDown={handleKeyDown} /></div>
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Calendar size={16} />تاریخ پرداخت (شمسی)</label><div className="grid grid-cols-3 gap-2"><select className="border border-gray-300 rounded-xl px-2 py-3 bg-white" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: Number(e.target.value)})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border border-gray-300 rounded-xl px-2 py-3 bg-white" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: Number(e.target.value)})}>{MONTHS.map((m, idx) => <option key={idx} value={idx + 1}>{m}</option>)}</select><select className="border border-gray-300 rounded-xl px-2 py-3 bg-white" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: Number(e.target.value)})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
+                <div className="space-y-2"><label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Calendar size={16} />تاریخ پرداخت (شمسی)</label><div className="grid grid-cols-3 gap-2"><select className="border border-gray-300 rounded-xl px-2 py-3 glass-panel" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: Number(e.target.value)})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border border-gray-300 rounded-xl px-2 py-3 glass-panel" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: Number(e.target.value)})}>{MONTHS.map((m, idx) => <option key={idx} value={idx + 1}>{m}</option>)}</select><select className="border border-gray-300 rounded-xl px-2 py-3 glass-panel" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: Number(e.target.value)})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
             </div>
             
             <div className="space-y-2"><div className="flex justify-between items-center"><label className="text-sm font-bold text-gray-700">شرح پرداخت</label><button type="button" onClick={handleEnhance} disabled={isEnhancing || !formData.description} className="text-xs flex items-center gap-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">{isEnhancing ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}بهبود متن با هوش مصنوعی</button></div><textarea required rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 resize-none" placeholder="توضیحات کامل دستور پرداخت..." value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} onKeyDown={handleKeyDown} /></div>
@@ -390,7 +390,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                         <button type="button" onClick={handleAnalyzePayment} disabled={analyzing || sumPaymentLines === 0} className="flex items-center gap-1.5 text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors disabled:opacity-50">
                             {analyzing ? <Loader2 size={14} className="animate-spin"/> : <BrainCircuit size={14}/>} تحلیل هوشمند
                         </button>
-                        <div className="text-sm text-gray-500 bg-white px-3 py-1 rounded-lg border">جمع کل: <span className="font-bold text-blue-600 font-mono">{formatCurrency(sumPaymentLines)}</span></div>
+                        <div className="text-sm text-gray-500 glass-panel px-3 py-1 rounded-lg border">جمع کل: <span className="font-bold text-blue-600 font-mono">{formatCurrency(sumPaymentLines)}</span></div>
                     </div>
                 </div>
 
@@ -405,11 +405,11 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-4 glass-panel p-4 rounded-xl border border-gray-200 shadow-sm">
                     {/* ... Existing Fields ... */}
                     <div className="md:col-span-2 space-y-1">
                         <label className="text-xs text-gray-500">نوع</label>
-                        <select className="w-full border rounded-lg p-2 text-sm bg-white" value={newLine.method} onChange={e => setNewLine({ ...newLine, method: e.target.value as PaymentMethod })}>
+                        <select className="w-full border rounded-lg p-2 text-sm glass-panel" value={newLine.method} onChange={e => setNewLine({ ...newLine, method: e.target.value as PaymentMethod })}>
                             <option value={PaymentMethod.TRANSFER}>{PaymentMethod.TRANSFER}</option>
                             <option value={PaymentMethod.CHEQUE}>{PaymentMethod.CHEQUE}</option>
                             <option value={PaymentMethod.SHEBA}>{PaymentMethod.SHEBA}</option> 
@@ -426,7 +426,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                             
                             <div className="md:col-span-2 space-y-1">
                                 <label className="text-xs text-gray-500">نام بانک مبدا</label>
-                                <div className="flex gap-1"><select className="w-full border rounded-lg p-2 text-sm bg-white" value={newLine.bankName} onChange={e => setNewLine({ ...newLine, bankName: e.target.value })}><option value="">-- انتخاب --</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select><button type="button" onClick={openAddBankModal} className="bg-blue-100 text-blue-600 rounded-lg px-2 hover:bg-blue-200 border border-blue-200" title="افزودن بانک جدید"><Plus size={16}/></button></div>
+                                <div className="flex gap-1"><select className="w-full border rounded-lg p-2 text-sm glass-panel" value={newLine.bankName} onChange={e => setNewLine({ ...newLine, bankName: e.target.value })}><option value="">-- انتخاب --</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select><button type="button" onClick={openAddBankModal} className="bg-blue-100 text-blue-600 rounded-lg px-2 hover:bg-blue-200 border border-blue-200" title="افزودن بانک جدید"><Plus size={16}/></button></div>
                             </div>
                         </>
                     ) : <div className="md:col-span-4 hidden md:block"></div>}
@@ -474,7 +474,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
 
                     <div className="md:col-span-2 space-y-1"><label className="text-xs text-gray-500">{newLine.method === PaymentMethod.SATNA ? 'بابت (شرح)' : 'شرح (اختیاری)'}</label><input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="..." value={newLine.description} onChange={e => setNewLine({ ...newLine, description: e.target.value })} onKeyDown={handleKeyDown}/></div>
                     
-                    {newLine.method === PaymentMethod.CHEQUE && (<div className="md:col-span-12 bg-yellow-50 p-2 rounded-lg border border-yellow-200 mt-1 flex items-center gap-4"><label className="text-xs font-bold text-gray-700 flex items-center gap-1 min-w-fit"><Calendar size={14}/> تاریخ سررسید چک:</label><div className="flex gap-2 flex-1"><select className="border rounded px-2 py-1 text-sm bg-white flex-1" value={newLine.chequeDate.d} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, d: Number(e.target.value)}})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border rounded px-2 py-1 text-sm bg-white flex-1" value={newLine.chequeDate.m} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, m: Number(e.target.value)}})}>{MONTHS.map((m, idx) => <option key={idx} value={idx + 1}>{m}</option>)}</select><select className="border rounded px-2 py-1 text-sm bg-white flex-1" value={newLine.chequeDate.y} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, y: Number(e.target.value)}})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>)}
+                    {newLine.method === PaymentMethod.CHEQUE && (<div className="md:col-span-12 bg-yellow-50 p-2 rounded-lg border border-yellow-200 mt-1 flex items-center gap-4"><label className="text-xs font-bold text-gray-700 flex items-center gap-1 min-w-fit"><Calendar size={14}/> تاریخ سررسید چک:</label><div className="flex gap-2 flex-1"><select className="border rounded px-2 py-1 text-sm glass-panel flex-1" value={newLine.chequeDate.d} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, d: Number(e.target.value)}})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border rounded px-2 py-1 text-sm glass-panel flex-1" value={newLine.chequeDate.m} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, m: Number(e.target.value)}})}>{MONTHS.map((m, idx) => <option key={idx} value={idx + 1}>{m}</option>)}</select><select className="border rounded px-2 py-1 text-sm glass-panel flex-1" value={newLine.chequeDate.y} onChange={e => setNewLine({...newLine, chequeDate: {...newLine.chequeDate, y: Number(e.target.value)}})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>)}
                     <div className="md:col-span-1">
                         <button type="button" onClick={addPaymentLine} disabled={!newLine.amount} className={`w-full text-white p-2 rounded-lg transition-colors shadow-lg disabled:opacity-50 flex items-center justify-center ${editingLineId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'}`}>
                             {editingLineId ? <Save size={20} /> : <Plus size={20} />}
@@ -484,9 +484,9 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                 
                 <div className="space-y-2">
                     {paymentLines.map((line) => (
-                        <div key={line.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
+                        <div key={line.id} className="flex items-center justify-between glass-panel p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
                             <div className="flex gap-4 text-sm items-center flex-wrap">
-                                <span className="font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded">{line.method}</span>
+                                <span className="font-bold text-gray-800 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-2 py-1 rounded">{line.method}</span>
                                 <span className="text-blue-600 font-bold font-mono text-lg">{formatCurrency(line.amount)}</span>
                                 {line.chequeNumber && <span className="text-gray-600 text-xs bg-yellow-50 px-2 py-1 rounded border border-yellow-100">شماره چک: {line.chequeNumber} {line.chequeDate && `(${line.chequeDate})`}</span>}
                                 {line.bankName && <span className="text-gray-600 text-xs bg-blue-50 px-2 py-1 rounded border border-blue-100">{line.bankName}</span>}
@@ -516,11 +516,11 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
                 <label className="text-sm font-bold text-gray-700 mb-3 block flex items-center gap-2"><Paperclip size={18} />ضمیمه‌ها</label>
                 <div className="flex items-center gap-4">
                     <input type="file" id="attachment" className="hidden" accept="image/*,application/pdf" onChange={handleFileChange} disabled={uploading}/>
-                    <label htmlFor="attachment" className={`bg-white border-2 border-dashed border-gray-300 text-gray-600 px-6 py-3 rounded-xl cursor-pointer hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center gap-2 text-sm font-medium ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <label htmlFor="attachment" className={`glass-panel border-2 border-dashed border-gray-300 text-gray-600 px-6 py-3 rounded-xl cursor-pointer hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center gap-2 text-sm font-medium ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         {uploading ? <Loader2 size={18} className="animate-spin"/> : <UploadCloud size={18}/>} {uploading ? 'در حال آپلود...' : 'انتخاب فایل'}
                     </label>
                 </div>
-                {attachments.length > 0 && <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">{attachments.map((file, idx) => (<div key={idx} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 text-sm shadow-sm group"><a href={file.data} target="_blank" className="text-blue-600 truncate hover:underline flex items-center gap-2"><Paperclip size={14}/> {file.fileName}</a><button type="button" onClick={() => removeAttachment(idx)} className="text-gray-400 hover:text-red-500 p-1"><X size={16} /></button></div>))}</div>}
+                {attachments.length > 0 && <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">{attachments.map((file, idx) => (<div key={idx} className="flex items-center justify-between glass-panel p-3 rounded-xl border border-gray-200 text-sm shadow-sm group"><a href={file.data} target="_blank" className="text-blue-600 truncate hover:underline flex items-center gap-2"><Paperclip size={14}/> {file.fileName}</a><button type="button" onClick={() => removeAttachment(idx)} className="text-gray-400 hover:text-red-500 p-1"><X size={16} /></button></div>))}</div>}
             </div>
             
             <div className="pt-4"><button type="submit" disabled={isSubmitting || uploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:hover:scale-100">{isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}ثبت نهایی دستور پرداخت</button></div>

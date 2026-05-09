@@ -413,22 +413,22 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row min-h-[600px] mb-20 animate-fade-in">
+    <div className="glass-panel rounded-2xl shadow-sm border border-gray-200/50 dark:border-white/10 overflow-hidden flex flex-col md:flex-row min-h-[600px] mb-20 animate-fade-in">
         
         {/* Sidebar */}
-        <div className="w-full md:w-64 bg-gray-50 border-b md:border-b-0 md:border-l border-gray-200 p-4">
+        <div className="w-full md:w-64 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border-b md:border-b-0 md:border-l border-gray-200 p-4">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 px-2"><SettingsIcon size={24} className="text-blue-600"/> تنظیمات</h2>
             <nav className="space-y-1">
-                <button onClick={() => setActiveCategory('system')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'system' ? 'bg-white shadow text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><AppWindow size={18}/> عمومی و سیستم</button>
-                <button onClick={() => setActiveCategory('fiscal')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'fiscal' ? 'bg-white shadow text-emerald-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FolderSync size={18}/> مدیریت سال مالی</button>
-                <button onClick={() => setActiveCategory('data')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'data' ? 'bg-white shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Database size={18}/> اطلاعات پایه</button>
-                <button onClick={() => setActiveCategory('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'templates' ? 'bg-white shadow text-teal-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><LayoutTemplate size={18}/> قالب‌های چاپ</button>
-                <button onClick={() => setActiveCategory('commerce')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'commerce' ? 'bg-white shadow text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Container size={18}/> تنظیمات بازرگانی</button>
-                <button onClick={() => setActiveCategory('warehouse')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'warehouse' ? 'bg-white shadow text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Warehouse size={18}/> انبار</button>
-                <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'bg-white shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
-                <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'bg-white shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
-                <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'bg-white shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
-                <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'bg-white shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
+                <button onClick={() => setActiveCategory('system')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'system' ? 'glass-panel shadow text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200'}`}><AppWindow size={18}/> عمومی و سیستم</button>
+                <button onClick={() => setActiveCategory('fiscal')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'fiscal' ? 'glass-panel shadow text-emerald-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FolderSync size={18}/> مدیریت سال مالی</button>
+                <button onClick={() => setActiveCategory('data')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'data' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Database size={18}/> اطلاعات پایه</button>
+                <button onClick={() => setActiveCategory('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'templates' ? 'glass-panel shadow text-teal-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><LayoutTemplate size={18}/> قالب‌های چاپ</button>
+                <button onClick={() => setActiveCategory('commerce')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'commerce' ? 'glass-panel shadow text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Container size={18}/> تنظیمات بازرگانی</button>
+                <button onClick={() => setActiveCategory('warehouse')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'warehouse' ? 'glass-panel shadow text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Warehouse size={18}/> انبار</button>
+                <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'glass-panel shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
+                <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'glass-panel shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
+                <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
+                <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
             </nav>
         </div>
 
@@ -499,7 +499,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                     <div className="flex flex-col items-center gap-2"><Loader2 className="animate-spin text-gray-400" size={32}/><span className="text-xs text-gray-500">در حال بررسی وضعیت...</span></div>
                                                 ) : whatsappStatus?.qr ? (
                                                     <div className="flex flex-col items-center animate-scale-in">
-                                                        <div className="bg-white p-2 rounded-lg shadow-sm mb-3"><QRCode value={whatsappStatus.qr} size={180} /></div>
+                                                        <div className="glass-panel p-2 rounded-lg shadow-sm mb-3"><QRCode value={whatsappStatus.qr} size={180} /></div>
                                                         <p className="text-xs text-gray-600 font-bold mb-1">اسکن کنید</p>
                                                         <p className="text-[10px] text-gray-400">QR کد هر 30 ثانیه منقضی می‌شود</p>
                                                     </div>
@@ -560,7 +560,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
                                     {settings.savedContacts?.map(c => (
-                                        <div key={c.id} className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm group hover:border-blue-300 transition-colors">
+                                        <div key={c.id} className="flex items-center justify-between p-3 glass-panel border rounded-lg shadow-sm group hover:border-blue-300 transition-colors">
                                             <div className="flex items-center gap-3 overflow-hidden">
                                                 <div className={`p-2 rounded-full shrink-0 ${c.isGroup ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{c.isGroup ? <Users size={16}/> : <Smartphone size={16}/>}</div>
                                                 <div className="truncate"><div className="font-bold text-xs text-gray-800 truncate">{c.name}</div><div className="text-[10px] text-gray-400 font-mono truncate">{c.number}</div></div>
@@ -589,7 +589,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                                     <label className="text-xs font-bold text-blue-700 block mb-2">زمان‌بندی اطلاع‌رسانی دستور پرداخت به گروه‌ها</label>
                                     <select 
-                                        className="w-full border rounded-lg p-2 text-sm bg-white"
+                                        className="w-full border rounded-lg p-2 text-sm glass-panel"
                                         value={settings.botPaymentNotificationMode || 'step_by_step'}
                                         onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as any})}
                                     >
@@ -644,7 +644,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                 <MessageCircle size={12}/> واتساپ (گروه)
                                                             </div>
                                                             <select 
-                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
                                                                 value={conf.warehouseGroup || ''} 
                                                                 onChange={e => {
                                                                     const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, warehouseGroup: e.target.value } };
@@ -664,7 +664,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                 <Send size={12}/> بله (شناسه)
                                                             </div>
                                                             <input 
-                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
                                                                 placeholder="ID..." 
                                                                 value={conf.baleChannelId || ''}
                                                                 onChange={e => {
@@ -680,7 +680,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                 <Send size={12}/> تلگرام (Chat ID)
                                                             </div>
                                                             <input 
-                                                                className="w-full border rounded p-1.5 text-xs dir-ltr bg-white" 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
                                                                 placeholder="-100..." 
                                                                 value={conf.telegramChannelId || ''}
                                                                 onChange={e => {
@@ -748,15 +748,15 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="font-bold text-sm text-gray-700">{editingCompanyId ? 'ویرایش شرکت' : 'افزودن شرکت جدید'}</h4>
-                                    {editingCompanyId && <button type="button" onClick={resetCompanyForm} className="text-xs text-red-500 bg-white border border-red-100 px-2 py-1 rounded">انصراف</button>}
+                                    {editingCompanyId && <button type="button" onClick={resetCompanyForm} className="text-xs text-red-500 glass-panel border border-red-100 px-2 py-1 rounded">انصراف</button>}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                     <div><label className="text-xs font-bold block mb-1 text-gray-500">نام شرکت</label><input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="نام شرکت..." value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} /></div>
                                     <div className="flex gap-2 items-end">
-                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">لوگو</label><div className="flex items-center gap-2 border rounded-lg p-1 bg-white h-[42px]"><input type="file" ref={companyLogoInputRef} className="hidden" onChange={handleLogoUpload} accept="image/*"/><button type="button" onClick={() => companyLogoInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLogo}>{isUploadingLogo ? '...' : 'انتخاب'}</button>{newCompanyLogo && <img src={newCompanyLogo} className="h-8 w-8 object-contain"/>}</div></div>
-                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">سربرگ (A4)</label><div className="flex items-center gap-2 border rounded-lg p-1 bg-white h-[42px]"><input type="file" ref={companyLetterheadInputRef} className="hidden" onChange={handleLetterheadUpload} accept="image/*"/><button type="button" onClick={() => companyLetterheadInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLetterhead}>{isUploadingLetterhead ? '...' : 'انتخاب'}</button>{newCompanyLetterhead && <span className="text-[10px] text-green-600 truncate">دارد</span>}</div></div>
+                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">لوگو</label><div className="flex items-center gap-2 border rounded-lg p-1 glass-panel h-[42px]"><input type="file" ref={companyLogoInputRef} className="hidden" onChange={handleLogoUpload} accept="image/*"/><button type="button" onClick={() => companyLogoInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLogo}>{isUploadingLogo ? '...' : 'انتخاب'}</button>{newCompanyLogo && <img src={newCompanyLogo} className="h-8 w-8 object-contain"/>}</div></div>
+                                        <div className="flex-1"><label className="text-xs font-bold block mb-1 text-gray-500">سربرگ (A4)</label><div className="flex items-center gap-2 border rounded-lg p-1 glass-panel h-[42px]"><input type="file" ref={companyLetterheadInputRef} className="hidden" onChange={handleLetterheadUpload} accept="image/*"/><button type="button" onClick={() => companyLetterheadInputRef.current?.click()} className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200" disabled={isUploadingLetterhead}>{isUploadingLetterhead ? '...' : 'انتخاب'}</button>{newCompanyLetterhead && <span className="text-[10px] text-green-600 truncate">دارد</span>}</div></div>
                                     </div>
-                                    <div className={`flex items-center gap-2 bg-white px-2 py-2 rounded border cursor-pointer flex-1 h-[42px] ${newCompanyShowInWarehouse ? 'border-green-200 bg-green-50 text-green-700' : ''}`} onClick={() => setNewCompanyShowInWarehouse(!newCompanyShowInWarehouse)}><input type="checkbox" checked={newCompanyShowInWarehouse} onChange={e => setNewCompanyShowInWarehouse(e.target.checked)} className="w-4 h-4"/><span className="text-xs font-bold select-none">نمایش در انبار</span></div>
+                                    <div className={`flex items-center gap-2 glass-panel px-2 py-2 rounded border cursor-pointer flex-1 h-[42px] ${newCompanyShowInWarehouse ? 'border-green-200 bg-green-50 text-green-700' : ''}`} onClick={() => setNewCompanyShowInWarehouse(!newCompanyShowInWarehouse)}><input type="checkbox" checked={newCompanyShowInWarehouse} onChange={e => setNewCompanyShowInWarehouse(e.target.checked)} className="w-4 h-4"/><span className="text-xs font-bold select-none">نمایش در انبار</span></div>
                                     <div><label className="text-xs font-bold block mb-1 text-gray-500">شناسه ملی</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyNatId} onChange={e => setNewCompanyNatId(e.target.value)}/></div>
                                     <div><label className="text-xs font-bold block mb-1 text-gray-500">شماره ثبت</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyRegNum} onChange={e => setNewCompanyRegNum(e.target.value)}/></div>
                                     <div><label className="text-xs font-bold block mb-1 text-gray-500">کد اقتصادی</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" value={newCompanyEcoCode} onChange={e => setNewCompanyEcoCode(e.target.value)}/></div>
@@ -767,7 +767,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 </div>
                                 
                                 {/* Company Banks Management */}
-                                <div className="bg-white p-3 rounded-lg border border-gray-100 mb-4">
+                                <div className="glass-panel p-3 rounded-lg border border-gray-100 mb-4">
                                     <h5 className="font-bold text-xs text-gray-600 mb-2">حساب‌های بانکی شرکت</h5>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2 items-end">
                                         <div className="flex-1"><input className="w-full border rounded p-1.5 text-xs" placeholder="نام بانک" value={tempBankName} onChange={e=>setTempBankName(e.target.value)}/></div>
@@ -793,7 +793,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 <button type="button" onClick={handleSaveCompany} className={`w-full text-white px-4 py-2 rounded-lg text-sm h-10 font-bold shadow-sm ${editingCompanyId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{editingCompanyId ? 'ذخیره تغییرات شرکت' : 'افزودن شرکت'}</button>
                                 <div className="space-y-2 mt-6 max-h-64 overflow-y-auto border-t pt-4">
                                     {settings.companies?.map(c => (
-                                        <div key={c.id} className="flex flex-col bg-white p-3 rounded border shadow-sm gap-2">
+                                        <div key={c.id} className="flex flex-col glass-panel p-3 rounded border shadow-sm gap-2">
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-2">{c.logo && <img src={c.logo} className="w-6 h-6 object-contain"/>}<span className="text-sm font-bold">{c.name}</span></div>
                                                 <div className="flex gap-1"><button type="button" onClick={() => handleEditCompany(c)} className="text-blue-500 p-1 hover:bg-blue-50 rounded"><Pencil size={14}/></button><button type="button" onClick={() => handleRemoveCompany(c.id)} className="text-red-500 p-1 hover:bg-red-50 rounded"><Trash2 size={14}/></button></div>
@@ -803,7 +803,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 </div>
                             </div>
                             
-                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                            <div className="glass-panel p-4 rounded-xl border border-gray-200">
                                 <h3 className="font-bold text-gray-800 border-b pb-2 mb-3">بانک‌های عامل (عمومی)</h3>
                                 <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام بانک..." value={newOperatingBank} onChange={e=>setNewOperatingBank(e.target.value)}/><button type="button" onClick={handleAddOperatingBank} className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
                                 <div className="flex flex-wrap gap-2">{settings.operatingBankNames?.map(b => <span key={b} className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-1">{b} <button onClick={()=>handleRemoveOperatingBank(b)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
@@ -815,12 +815,12 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                     {activeCategory === 'commerce' && (
                         <div className="space-y-6 animate-fade-in">
                             <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Container size={20}/> تنظیمات بازرگانی</h3>
-                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                            <div className="glass-panel p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-sm text-gray-700 mb-2">گروه‌های کالایی</h4>
                                 <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام گروه..." value={newCommodity} onChange={e=>setNewCommodity(e.target.value)}/><button type="button" onClick={handleAddCommodity} className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
                                 <div className="flex flex-wrap gap-2">{settings.commodityGroups?.map(c => <span key={c} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">{c} <button onClick={()=>handleRemoveCommodity(c)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                            <div className="glass-panel p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-sm text-gray-700 mb-2">شرکت‌های بیمه</h4>
                                 <div className="flex gap-2 mb-2"><input type="text" className="border rounded p-2 text-sm flex-1" placeholder="نام شرکت بیمه..." value={newInsuranceCompany} onChange={e=>setNewInsuranceCompany(e.target.value)}/><button type="button" onClick={handleAddInsuranceCompany} className="bg-green-600 text-white px-3 py-2 rounded text-sm font-bold">افزودن</button></div>
                                 <div className="flex flex-wrap gap-2">{settings.insuranceCompanies?.map(c => <span key={c} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">{c} <button onClick={()=>handleRemoveInsuranceCompany(c)} className="text-red-500 hover:bg-red-100 rounded-full p-0.5"><X size={12}/></button></span>)}</div>
@@ -863,7 +863,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 
                                 <div className="space-y-3">
                                     {(settings.botForceJoinChannels || []).map((channel, cIdx) => (
-                                        <div key={cIdx} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                                        <div key={cIdx} className="glass-panel p-3 rounded-xl border border-gray-100 shadow-sm space-y-3">
                                             <div className="flex gap-2">
                                                 <input type="text" placeholder="نام کانال (مثلا: کانال رسمی)" value={channel.name} onChange={e => { const newArr = [...(settings.botForceJoinChannels||[])]; newArr[cIdx].name = e.target.value; setSettings({...settings, botForceJoinChannels: newArr}); }} className="flex-1 border rounded p-2 text-sm" />
                                                 <select 
@@ -913,7 +913,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             <button type="button" onClick={() => { const newArr = [...(settings.botStoreLinks||[])]; newArr.splice(lIdx, 1); setSettings({...settings, botStoreLinks: newArr}); }} className="bg-red-50 text-red-600 p-2 rounded hover:bg-red-100"><Trash2 size={16} /></button>
                                         </div>
                                     ))}
-                                    <button type="button" onClick={() => setSettings({...settings, botStoreLinks: [...(settings.botStoreLinks||[]), {title:'', url:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1 bg-white border border-blue-200 px-3 py-1.5 rounded-lg hover:shadow-sm transition-all">+ افزودن دکمه جدید</button>
+                                    <button type="button" onClick={() => setSettings({...settings, botStoreLinks: [...(settings.botStoreLinks||[]), {title:'', url:''}]})} className="text-sm text-blue-600 font-bold flex items-center gap-1 glass-panel border border-blue-200 px-3 py-1.5 rounded-lg hover:shadow-sm transition-all">+ افزودن دکمه جدید</button>
                                 </div>
                             </div>
 
@@ -931,7 +931,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                     <div className="mt-2">
                                         <label className="text-sm font-bold text-gray-700 block mb-1">حالت ارسال دستورپرداخت (بات تلگرام)</label>
-                                        <select value={settings.botPaymentNotificationMode || 'step_by_step'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'after_submit'|'after_final'|'step_by_step'})} className="w-full border rounded-lg p-2 text-sm bg-white">
+                                        <select value={settings.botPaymentNotificationMode || 'step_by_step'} onChange={e => setSettings({...settings, botPaymentNotificationMode: e.target.value as 'after_submit'|'after_final'|'step_by_step'})} className="w-full border rounded-lg p-2 text-sm glass-panel">
                                             <option value="after_submit">بعد از ثبت درخواست</option>
                                             <option value="after_final">بعد از تایید نهایی</option>
                                             <option value="step_by_step">مرحله به مرحله (بعد از هر وضعیت)</option>
@@ -964,7 +964,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             </div>
                                             <div className="bg-white/50 p-4 rounded-xl border border-blue-200">
                                                 <h4 className="font-bold text-sm text-blue-800 mb-3 flex items-center gap-2"><Users size={16}/> مدیران پاسخگو و دریافت‌کنندگان پیام‌های مشتریان</h4>
-                                                <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto border rounded-xl p-3 bg-white shadow-inner">
+                                                <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto border rounded-xl p-3 glass-panel shadow-inner">
                                                     {(settings.salesNotificationUsers || []).map((item, idx) => {
                                                         const username = item.username;
                                                         const platforms = item.platforms;
@@ -1041,7 +1041,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                 key={u.id} 
                                                                 type="button" 
                                                                 onClick={() => setSettings({...settings, salesNotificationUsers: [...(settings.salesNotificationUsers || []), {username: u.username, name: u.fullName, platforms: ['telegram', 'bale']}]})}
-                                                                className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100 hover:border-blue-300 hover:shadow-sm transition-all text-right"
+                                                                className="flex items-center gap-2 p-2 glass-panel rounded-lg border border-gray-100 hover:border-blue-300 hover:shadow-sm transition-all text-right"
                                                             >
                                                                 <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px]"><Plus size={10}/></div>
                                                                 <span className="text-xs font-bold truncate flex-1">{u.fullName}</span>
@@ -1049,7 +1049,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                         ))}
                                                     </div>
                                                     
-                                                    <div className="flex flex-col gap-2 bg-white p-3 rounded-xl shadow-sm">
+                                                    <div className="flex flex-col gap-2 glass-panel p-3 rounded-xl shadow-sm">
                                                         <span className="text-[10px] font-bold text-gray-400">افزودن بصورت شناسه‌ی دستی:</span>
                                                         <div className="flex gap-2">
                                                             <input id="manual-manager-name" type="text" placeholder="نام مدیر..." className="flex-1 border rounded p-2 text-xs" />
@@ -1074,7 +1074,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <p className="text-[10px] text-gray-400 mt-3 bg-white p-2 rounded border border-gray-100 leading-relaxed">
+                                                <p className="text-[10px] text-gray-400 mt-3 glass-panel p-2 rounded border border-gray-100 leading-relaxed">
                                                     💡 پیام‌های مشتریان و سفارشات ثبت شده در ربات برای این کاربران ارسال خواهد شد.
                                                     <br/>
                                                     ⚠️ مدیران باید حتماً ربات را در پلتفرم مربوطه (تلگرام یا بله) <b>استارت</b> کرده باشند.
@@ -1108,7 +1108,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {settings.printTemplates?.map(t => (
-                                    <div key={t.id} className="bg-white p-4 rounded-xl border hover:shadow-md transition-all group relative overflow-hidden">
+                                    <div key={t.id} className="glass-panel p-4 rounded-xl border hover:shadow-md transition-all group relative overflow-hidden">
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <h4 className="font-bold text-gray-800">{t.name}</h4>
@@ -1129,7 +1129,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                     
                     {activeCategory === 'integrations' && (
                         <div className="space-y-6 animate-fade-in">
-                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                            <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm">
                                 <h3 className="font-bold text-gray-800 mb-6 border-b pb-3 flex items-center gap-2">
                                     <Cpu size={22} className="text-blue-600"/> کنترل پنل هوش مصنوعی و داده‌ها
                                 </h3>
@@ -1142,7 +1142,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             </div>
                                             <label className="relative inline-flex items-center cursor-pointer">
                                                 <input type="checkbox" className="sr-only peer" checked={!settings.botAiEnabled} onChange={(e) => setSettings({...settings, botAiEnabled: !e.target.checked})} />
-                                                <div className="w-11 h-6 bg-red-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                                <div className="w-11 h-6 bg-red-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:glass-panel after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                                             </label>
                                         </div>
                                         <p className="text-[10px] text-red-700 font-bold leading-relaxed">
@@ -1157,7 +1157,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <span className="font-black text-blue-900 text-sm">منبع داده فعال</span>
                                             </div>
                                             <select 
-                                                className="bg-white border rounded-lg p-1.5 text-xs font-black outline-none focus:ring-2 ring-blue-500"
+                                                className="glass-panel border rounded-lg p-1.5 text-xs font-black outline-none focus:ring-2 ring-blue-500"
                                                 value={settings.botAiSource || 'hybrid'}
                                                 onChange={(e) => setSettings({...settings, botAiSource: e.target.value as any})}
                                             >
@@ -1200,7 +1200,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                            <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm">
                                 <h3 className="font-bold text-gray-800 mb-6 border-b pb-3 flex items-center gap-2">
                                     <Link size={22} className="text-indigo-600"/> سرویس‌های خارجی و API
                                 </h3>
@@ -1220,7 +1220,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                         </div>
                                     </div>
                                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 flex gap-3 items-start">
-                                        <div className="bg-white p-2 rounded-lg text-indigo-600 shadow-sm"><Globe size={20}/></div>
+                                        <div className="glass-panel p-2 rounded-lg text-indigo-600 shadow-sm"><Globe size={20}/></div>
                                         <p className="text-[10px] font-bold text-indigo-700 leading-relaxed">
                                             اطلاعات Google Calendar برای نمایش تاریخ و یادآوری‌ها در داشبورد استفاده می‌شود. حتما دسترسی "Make Public" یا اشتراک‌گذاری با سرویس مربوطه را تنظیم کنید.
                                         </p>
@@ -1230,7 +1230,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         </div>
                     )}
 
-                    <div className="flex justify-end pt-4 border-t sticky bottom-0 bg-white p-4 shadow-inner md:shadow-none md:static">
+                    <div className="flex justify-end pt-4 border-t sticky bottom-0 glass-panel p-4 shadow-inner md:shadow-none md:static">
                         <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70">
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} ذخیره تنظیمات
                         </button>

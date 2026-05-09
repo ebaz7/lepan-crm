@@ -39,7 +39,7 @@ export const PrintSecurityDailyLog: React.FC<DailyLogProps> = ({ date, logs, met
     );
 
     return (
-        <div className="printable-content bg-white text-black font-sans relative" 
+        <div className="printable-content glass-panel text-black font-sans relative" 
             style={{ 
                 // A4 Landscape fixed dims
                 width: '296mm', 
@@ -243,7 +243,7 @@ export const PrintIncidentReport: React.FC<{ incident: SecurityIncident }> = ({ 
     };
 
     return (
-        <div className="printable-content bg-white text-black font-sans relative" 
+        <div className="printable-content glass-panel text-black font-sans relative" 
             style={{ 
                 // A4 Portrait
                 width: '210mm', 

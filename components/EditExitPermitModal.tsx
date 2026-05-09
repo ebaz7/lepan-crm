@@ -187,8 +187,8 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
             </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+        <div className="glass-panel rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 glass-panel z-10">
                 <div className="flex items-center gap-3">
                     <div className="bg-orange-50 p-2 rounded-lg text-orange-600"><Save size={20} /></div>
                     <h2 className="text-xl font-bold text-gray-800">ویرایش مجوز خروج</h2>
@@ -209,9 +209,9 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <div><label className="text-sm font-bold block mb-1 flex items-center gap-1"><Hash size={16}/> شماره مجوز</label><input type="number" className="w-full border rounded-xl p-3 bg-white text-left dir-ltr font-bold text-orange-600" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} onBlur={handleNumberBlur} required /></div>
-                    <div><label className="text-sm font-bold block mb-1">تاریخ خروج</label><div className="flex gap-2"><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: Number(e.target.value)})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: Number(e.target.value)})}>{months.map((m, i) => <option key={i} value={i+1}>{m}</option>)}</select><select className="border rounded-xl p-2 bg-white flex-1" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: Number(e.target.value)})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-4 rounded-xl border border-gray-200/50 dark:border-white/10">
+                    <div><label className="text-sm font-bold block mb-1 flex items-center gap-1"><Hash size={16}/> شماره مجوز</label><input type="number" className="w-full border rounded-xl p-3 glass-panel text-left dir-ltr font-bold text-orange-600" value={permitNumber} onChange={e => setPermitNumber(e.target.value)} onBlur={handleNumberBlur} required /></div>
+                    <div><label className="text-sm font-bold block mb-1">تاریخ خروج</label><div className="flex gap-2"><select className="border rounded-xl p-2 glass-panel flex-1" value={shamsiDate.day} onChange={e => setShamsiDate({...shamsiDate, day: Number(e.target.value)})}>{days.map(d => <option key={d} value={d}>{d}</option>)}</select><select className="border rounded-xl p-2 glass-panel flex-1" value={shamsiDate.month} onChange={e => setShamsiDate({...shamsiDate, month: Number(e.target.value)})}>{months.map((m, i) => <option key={i} value={i+1}>{m}</option>)}</select><select className="border rounded-xl p-2 glass-panel flex-1" value={shamsiDate.year} onChange={e => setShamsiDate({...shamsiDate, year: Number(e.target.value)})}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
                 </div>
                 <div className="space-y-4">
                     <div className="flex justify-between items-center"><h3 className="font-bold text-gray-800 flex items-center gap-2"><Package size={20} className="text-blue-600"/> مشخصات اقلام و کالاها</h3><button type="button" onClick={handleAddItem} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-blue-100 font-bold"><Plus size={14}/> افزودن کالا</button></div>

@@ -181,7 +181,7 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
             </div>
 
             {/* Custom Role Input */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col md:flex-row gap-4 items-end shadow-sm">
+            <div className="glass-panel p-4 rounded-xl border border-gray-200/50 dark:border-white/10 flex flex-col md:flex-row gap-4 items-end shadow-sm">
                 <div className="flex-1 w-full space-y-1">
                     <label className="text-xs font-bold text-gray-500">افزودن نقش سفارشی جدید</label>
                     <input 
@@ -203,14 +203,14 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
             {/* Roles List */}
             <div className="space-y-3">
                 {allRoles.map(role => (
-                    <div key={role.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                    <div key={role.id} className="glass-panel border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
                         {/* Header */}
                         <div 
-                            className={`p-4 flex justify-between items-center cursor-pointer select-none transition-colors ${expandedRole === role.id ? 'bg-blue-50' : 'bg-gray-50 hover:bg-gray-100'}`}
+                            className={`p-4 flex justify-between items-center cursor-pointer select-none transition-colors ${expandedRole === role.id ? 'bg-blue-50' : 'bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200'}`}
                             onClick={() => toggleExpand(role.id)}
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${role.id === UserRole.ADMIN ? 'bg-red-100 text-red-600' : 'bg-white border text-gray-600'}`}>
+                                <div className={`p-2 rounded-lg ${role.id === UserRole.ADMIN ? 'bg-red-100 text-red-600' : 'glass-panel border text-gray-600'}`}>
                                     <ShieldCheck size={20}/>
                                 </div>
                                 <div>
@@ -234,7 +234,7 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                         
                         {/* Body (Permissions) */}
                         {expandedRole === role.id && (
-                            <div className="p-4 bg-white border-t border-gray-100 animate-fade-in">
+                            <div className="p-4 glass-panel border-t border-gray-100 animate-fade-in">
                                 {role.id === UserRole.ADMIN ? (
                                     <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm font-bold text-center border border-red-100 flex items-center justify-center gap-2">
                                         <Lock size={16}/>
@@ -279,7 +279,7 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                                                                     className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-green-50' : 'hover:bg-gray-50'}`}
                                                                     onClick={() => handlePermissionChange(role.id, perm.id, !isChecked)}
                                                                 >
-                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-green-500 border-green-500' : 'glass-panel border-gray-300'}`}>
                                                                         {isChecked && <CheckSquare size={14} className="text-white"/>}
                                                                     </div>
                                                                     <span className={`text-xs select-none ${isChecked ? 'text-gray-800 font-bold' : 'text-gray-600'}`}>{perm.label}</span>

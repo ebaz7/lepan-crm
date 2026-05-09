@@ -870,17 +870,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-[calc(100vh-80px)] md:bg-gray-100 rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200 relative font-sans">
+        <div className="flex h-[calc(100vh-80px)] md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
-            <div className={`w-full md:w-80 bg-white border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
-                <div className="p-3 border-b bg-gray-50">
+                <div className="p-3 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <div className="flex justify-between items-center mb-3">
                         <div className="flex gap-2 bg-gray-200 p-1 rounded-lg text-xs font-bold w-full">
-                            <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'CHATS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>گفتگوها</button>
-                            <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
-                            <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
+                            <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'CHATS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گفتگوها</button>
+                            <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
+                            <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
                         </div>
                         {(activeTab === 'GROUPS' || activeTab === 'TASKS') && <button onClick={() => {
                             if (activeTab === 'TASKS') {
@@ -901,7 +901,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
                     </div>
                     <div className="relative">
-                        <input className="w-full bg-white border rounded-xl pl-8 pr-3 py-2 text-sm" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <input className="w-full glass-panel border rounded-xl pl-8 pr-3 py-2 text-sm" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         <Search size={16} className="absolute left-2.5 top-2.5 text-gray-400"/>
                     </div>
                 </div>
@@ -942,7 +942,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
-                        <div className="bg-white p-2 px-4 flex justify-between items-center shadow-sm z-50 sticky top-0 safe-pt">
+                        <div className="glass-panel p-2 px-4 flex justify-between items-center shadow-sm z-50 sticky top-0 safe-pt">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => window.history.back()} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
                                 <div className="flex flex-col cursor-pointer" onClick={() => {
@@ -980,7 +980,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                         {activeChannel.type === 'task_group' ? (
                             <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-y-auto w-full custom-scrollbar">
-                                <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                                <div className="p-4 border-b glass-panel flex justify-between items-center sticky top-0 z-10 shadow-sm">
                                     <h4 className="font-bold text-gray-800">تسک‌های این گروه</h4>
                                     <button 
                                         onClick={() => {
@@ -1012,7 +1012,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             <p className="text-sm">تسکی یافت نشد</p>
                                         </div>
                                     ) : tasks.filter(t => t.groupId === activeChannel.id).map(task => (
-                                        <div key={task.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm group hover:shadow transition">
+                                        <div key={task.id} className="glass-panel p-4 rounded-xl border border-gray-100 shadow-sm group hover:shadow transition">
                                             <div className="flex justify-between items-start">
                                                  <div className="flex items-start gap-4 flex-1">
                                                     <button 
@@ -1023,7 +1023,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
                                                             });
                                                         }}
-                                                        className={`mt-0.5 rounded-full border-2 transition-colors flex items-center justify-center ${task.status === 'completed' ? 'bg-green-500 border-green-500 w-5 h-5' : 'border-gray-300 w-5 h-5 bg-white'}`}
+                                                        className={`mt-0.5 rounded-full border-2 transition-colors flex items-center justify-center ${task.status === 'completed' ? 'bg-green-500 border-green-500 w-5 h-5' : 'border-gray-300 w-5 h-5 glass-panel'}`}
                                                     >
                                                         {task.status === 'completed' && <Check size={14} className="text-white"/>}
                                                     </button>
@@ -1042,7 +1042,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <>
                                 {/* Inner Search */}
                                 {showInnerSearch && (
-                                    <div className="bg-white p-2 border-b flex items-center gap-2 animate-slide-down">
+                                    <div className="glass-panel p-2 border-b flex items-center gap-2 animate-slide-down">
                                         <input className="flex-1 bg-gray-100 border-none rounded-lg py-2 px-4 text-sm" placeholder="جستجو در پیام‌ها..." value={innerSearchTerm} onChange={e => setInnerSearchTerm(e.target.value)} autoFocus />
                                         <button onClick={() => { setShowInnerSearch(false); setInnerSearchTerm(''); }}><X size={20} className="text-gray-500"/></button>
                                     </div>
@@ -1064,10 +1064,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         {/* Actions Button - LEFT for ME, RIGHT for OTHER */}
                                         {isMe && (
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
-                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
-                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 bg-white rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
-                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
+                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 glass-panel rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
+                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 glass-panel rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
+                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 glass-panel rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
 
@@ -1077,7 +1077,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             </div>
                                         )}
                                         
-                                        <div className={`relative max-w-[75%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'bg-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+                                        <div className={`relative max-w-[75%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'glass-panel rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
                                             
                                             {/* Forward Header */}
                                             {msg.isForwarded && msg.forwardFrom && (
@@ -1173,10 +1173,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         {/* Actions Button - LEFT for ME, RIGHT for OTHER */}
                                         {!isMe && (
                                             <div className="flex flex-col gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 bg-white rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
-                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 bg-white rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
-                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 bg-white rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
-                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 bg-white rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
+                                                 <button onClick={() => setReplyingTo(msg)} className="p-1.5 glass-panel rounded-full text-blue-600 shadow-sm hover:scale-110" title="پاسخ"><CornerUpLeft size={12}/></button>
+                                                 <button onClick={() => { setSelectedMessages(new Set([msg.id])); setShowForwardModal(true); }} className="p-1.5 glass-panel rounded-full text-green-600 shadow-sm hover:scale-110" title="فوروارد"><Forward size={12}/></button>
+                                                 <button onClick={() => { navigator.clipboard.writeText(msg.message); }} className="p-1.5 glass-panel rounded-full text-gray-600 shadow-sm hover:scale-110" title="کپی"><Copy size={12}/></button>
+                                                 {(msg.attachment || msg.audioUrl) && <button onClick={() => handleNativeShare(msg)} className="p-1.5 glass-panel rounded-full text-orange-600 shadow-sm hover:scale-110" title="اشتراک"><Share2 size={12}/></button>}
                                             </div>
                                         )}
                                     </div>
@@ -1186,10 +1186,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         {/* Input Area */}
-                        <div className="bg-white p-2 flex items-end gap-2 border-t relative z-20 pb-safe">
+                        <div className="glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-safe">
                             {/* Reply/Edit Preview */}
                             {(replyingTo || editingMessageId) && (
-                                <div className="absolute bottom-full left-0 right-0 bg-white border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
+                                <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
                                     <div className="flex items-center gap-2 border-r-4 border-blue-500 pr-2">
                                         {editingMessageId ? <Edit2 size={18} className="text-blue-500"/> : <Reply size={18} className="text-blue-500"/>}
                                         <div className="flex flex-col text-xs">
@@ -1204,7 +1204,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => document.getElementById('chat-file-menu')?.classList.toggle('hidden')} className="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors mb-1 relative">
                                 <Paperclip size={24}/>
                                 {/* Attachment Menu */}
-                                <div id="chat-file-menu" className="hidden absolute bottom-14 right-0 bg-white shadow-xl rounded-xl border p-2 flex flex-col gap-2 min-w-[150px] animate-scale-in z-50">
+                                <div id="chat-file-menu" className="hidden absolute bottom-14 right-0 glass-panel shadow-xl rounded-xl border p-2 flex flex-col gap-2 min-w-[150px] animate-scale-in z-50">
                                     <button onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded text-sm text-gray-700"><ImageIcon size={18} className="text-blue-500"/> گالری (عکس/فیلم)</button>
                                     <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded text-sm text-gray-700"><File size={18} className="text-orange-500"/> فایل</button>
                                 </div>
@@ -1259,7 +1259,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {contextMenuMsg && (
                 <div className="fixed inset-0 z-[200]" onClick={() => setContextMenuMsg(null)}>
                     <div 
-                        className="absolute bg-white rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
+                        className="absolute glass-panel rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
                         style={{ top: Math.min(contextMenuMsg.y, window.innerHeight - 200), left: Math.min(contextMenuMsg.x, window.innerWidth - 200) }}
                     >
                         <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
@@ -1306,7 +1306,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* 3. Forward Modal */}
             {showForwardModal && (
                 <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
+                    <div className="glass-panel rounded-xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                             <span className="font-bold">ارسال به...</span>
                             <button onClick={() => setShowForwardModal(false)}><X size={20}/></button>
@@ -1337,7 +1337,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* 3.1 Group Creation Modal */}
             {showGroupModal && (
                 <div className="fixed inset-0 bg-black/50 z-[202] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden animate-scale-in">
+                    <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden animate-scale-in">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                             <h3 className="font-bold flex items-center gap-2"><Users size={20} className="text-orange-500"/> ساخت گروه جدید</h3>
                             <button onClick={() => setShowGroupModal(false)} className="p-2 hover:bg-gray-200 rounded-full"><X size={20}/></button>
@@ -1357,7 +1357,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <label className="text-xs font-bold text-gray-500 mb-1 block">انتخاب اعضا</label>
                                 <div className="max-h-48 overflow-y-auto space-y-1 p-1 bg-gray-50 rounded-xl border border-gray-100">
                                     {users.filter(u => u.username !== currentUser.username).map(user => (
-                                        <label key={user.username} className="flex justify-between items-center p-2 hover:bg-white rounded-lg cursor-pointer group transition-colors">
+                                        <label key={user.username} className="flex justify-between items-center p-2 hover:glass-panel rounded-lg cursor-pointer group transition-colors">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs uppercase">
                                                     {user.fullName.charAt(0)}
@@ -1389,7 +1389,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* 4. Group Info & Management Modal */}
             {showGroupInfo && (
                 <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-2xl w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
+                    <div className="glass-panel rounded-2xl w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
                         <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 p-8 text-white flex flex-col items-center">
                             <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="relative group/avatar">
@@ -1455,7 +1455,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     }}
                                     className={`w-12 h-6 rounded-full relative p-1 transition-colors ${mutedChannels.has(showGroupInfo.id) ? 'bg-gray-300' : 'bg-green-500'}`}
                                 >
-                                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${mutedChannels.has(showGroupInfo.id) ? 'left-1' : 'right-1'}`}></div>
+                                    <div className={`w-4 h-4 glass-panel rounded-full absolute top-1 transition-all ${mutedChannels.has(showGroupInfo.id) ? 'left-1' : 'right-1'}`}></div>
                                 </button>
                             </div>
 
@@ -1487,14 +1487,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                     <div className="flex gap-1 ml-2">
                                                         <button 
                                                             onClick={() => handleToggleAdminStatus(showGroupInfo.id, username)}
-                                                            className={`p-1.5 rounded-lg hover:bg-white shadow-sm transition-all ${isAdmin ? 'text-blue-500' : 'text-gray-400'}`}
+                                                            className={`p-1.5 rounded-lg hover:glass-panel shadow-sm transition-all ${isAdmin ? 'text-blue-500' : 'text-gray-400'}`}
                                                             title={isAdmin ? 'سلب مدیریت' : 'ارتقا به مدیر'}
                                                         >
                                                             <Shield size={14}/>
                                                         </button>
                                                         <button 
                                                             onClick={() => handleRemoveMemberFromGroup(showGroupInfo.id, username)}
-                                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-white shadow-sm rounded-lg transition-all"
+                                                            className="p-1.5 text-red-400 hover:text-red-600 hover:glass-panel shadow-sm rounded-lg transition-all"
                                                             title="حذف از گروه"
                                                         >
                                                             <UserMinus size={14}/>
@@ -1528,11 +1528,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* 5. Contact Info Modal */}
             {showContactInfo && (
                 <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={()=>setShowContactInfo(null)}>
-                    <div className="bg-white rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e=>e.stopPropagation()}>
+                    <div className="glass-panel rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e=>e.stopPropagation()}>
                         <div className="relative bg-gradient-to-br from-blue-500 to-blue-700 p-8 text-white flex flex-col items-center">
                             <button onClick={() => setShowContactInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="w-24 h-24 rounded-full bg-white/20 p-1 mb-3">
-                                <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-blue-600 text-4xl font-black shadow-inner overflow-hidden">
+                                <div className="w-full h-full rounded-full glass-panel flex items-center justify-center text-blue-600 text-4xl font-black shadow-inner overflow-hidden">
                                     {showContactInfo.avatar ? <img src={showContactInfo.avatar} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
                                 </div>
                             </div>
@@ -1547,7 +1547,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     <span className="text-sm font-bold text-gray-700">بی‌صدا کردن</span>
                                 </div>
                                 <button className="w-12 h-6 bg-gray-300 rounded-full relative p-1">
-                                    <div className="w-4 h-4 bg-white rounded-full absolute left-1 transition-all"></div>
+                                    <div className="w-4 h-4 glass-panel rounded-full absolute left-1 transition-all"></div>
                                 </button>
                             </div>
 

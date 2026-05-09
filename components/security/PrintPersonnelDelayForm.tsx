@@ -40,7 +40,7 @@ const PrintPersonnelDelayForm: React.FC<Props> = ({ delays, date, meta }) => {
     return (
         <div 
             id="print-delay-form"
-            className="printable-content bg-white text-black font-sans relative" 
+            className="printable-content glass-panel text-black font-sans relative" 
             style={{ 
                 width: '100%', 
                 height: '100%',

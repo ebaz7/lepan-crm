@@ -45,8 +45,8 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+            <div className="glass-panel rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <h3 className="font-bold text-gray-800">ویرایش {tx.type === 'IN' ? 'رسید انبار' : 'بیجک خروج'}</h3>
                     <button onClick={onClose}><X size={20} className="text-gray-500 hover:text-red-500"/></button>
                 </div>
@@ -500,7 +500,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const canApprove = currentUser.role === UserRole.CEO || currentUser.role === UserRole.ADMIN;
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border h-[calc(100vh-100px)] flex flex-col overflow-hidden animate-fade-in relative">
+        <div className="glass-panel rounded-2xl shadow-sm border h-[calc(100vh-100px)] flex flex-col overflow-hidden animate-fade-in relative">
             
             {/* Hidden Print Elements for Auto-Send */}
             {createdTxForAutoSend && (
@@ -530,16 +530,16 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 <PrintStockReport data={allWarehousesStock} onClose={() => setShowPrintStockReport(false)} />
             )}
 
-            <div className={`bg-gray-100 p-2 flex gap-2 border-b overflow-x-auto no-print ${isMobile ? 'no-scrollbar' : ''}`}>
-                <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>داشبورد</button>
-                <button onClick={() => setActiveTab('items')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'items' ? 'bg-white text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تعریف کالا</button>
-                <button onClick={() => setActiveTab('entry')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry' ? 'bg-white text-green-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>ورود کالا</button>
-                <button onClick={() => setActiveTab('entry_archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry_archive' ? 'bg-white text-emerald-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>رسیدها</button>
-                <button onClick={() => setActiveTab('exit')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'exit' ? 'bg-white text-red-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>خروج کالا</button>
-                <button onClick={() => setActiveTab('archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'archive' ? 'bg-white text-gray-800 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>بیجک‌ها</button>
-                <button onClick={() => setActiveTab('approvals')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'approvals' ? 'bg-white text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تاییدیه</button>
-                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-purple-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>کاردکس</button>
-                <button onClick={() => setActiveTab('stock_report')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stock_report' ? 'bg-white text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>موجودی</button>
+            <div className={`bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-2 flex gap-2 border-b overflow-x-auto no-print ${isMobile ? 'no-scrollbar' : ''}`}>
+                <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'dashboard' ? 'glass-panel text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>داشبورد</button>
+                <button onClick={() => setActiveTab('items')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'items' ? 'glass-panel text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تعریف کالا</button>
+                <button onClick={() => setActiveTab('entry')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry' ? 'glass-panel text-green-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>ورود کالا</button>
+                <button onClick={() => setActiveTab('entry_archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry_archive' ? 'glass-panel text-emerald-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>رسیدها</button>
+                <button onClick={() => setActiveTab('exit')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'exit' ? 'glass-panel text-red-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>خروج کالا</button>
+                <button onClick={() => setActiveTab('archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'archive' ? 'glass-panel text-gray-800 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>بیجک‌ها</button>
+                <button onClick={() => setActiveTab('approvals')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'approvals' ? 'glass-panel text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تاییدیه</button>
+                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'reports' ? 'glass-panel text-purple-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>کاردکس</button>
+                <button onClick={() => setActiveTab('stock_report')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stock_report' ? 'glass-panel text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>موجودی</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -550,7 +550,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         {isMobile ? (
                             <div className="space-y-3">
                                 {pendingBijaks.length === 0 ? <div className="text-center text-gray-400 py-10">موردی نیست</div> : pendingBijaks.map(tx => (
-                                    <div key={tx.id} className="bg-white border rounded-xl p-4 shadow-sm">
+                                    <div key={tx.id} className="glass-panel border rounded-xl p-4 shadow-sm">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="font-bold text-red-600">#{tx.number}</span>
                                             <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
@@ -572,7 +572,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             </div>
                         ) : (
                             // Desktop Table
-                            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                            <div className="glass-panel rounded-xl border shadow-sm overflow-hidden">
                                 <table className="w-full text-sm text-right">
                                     <thead className="bg-gray-100 text-gray-600"><tr><th className="p-4">شماره</th><th className="p-4">تاریخ</th><th className="p-4">شرکت</th><th className="p-4 text-center">عملیات</th></tr></thead>
                                     <tbody className="divide-y">
@@ -618,7 +618,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             <div className="flex-1 w-full space-y-1"><label className="text-xs font-bold text-gray-500">نام کالا</label><input className="w-full border rounded p-2" value={newItemName} onChange={e=>setNewItemName(e.target.value)}/></div>
                             <div className="flex gap-2 w-full md:w-auto">
                                 <div className="flex-1 space-y-1"><label className="text-xs font-bold text-gray-500">کد کالا</label><input className="w-full border rounded p-2" value={newItemCode} onChange={e=>setNewItemCode(e.target.value)}/></div>
-                                <div className="flex-1 space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded p-2 bg-white" value={newItemUnit} onChange={e=>setNewItemUnit(e.target.value)}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>دستگاه</option></select></div>
+                                <div className="flex-1 space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded p-2 glass-panel" value={newItemUnit} onChange={e=>setNewItemUnit(e.target.value)}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>دستگاه</option></select></div>
                             </div>
                             <button onClick={handleAddItem} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 h-[42px] w-full md:w-12 flex items-center justify-center font-bold">
                                 {isMobile ? 'افزودن کالا' : <Plus/>}
@@ -628,7 +628,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         {isMobile ? (
                             <div className="space-y-3">
                                 {items.map(i => (
-                                    <div key={i.id} className="bg-white border rounded-xl p-4 shadow-sm relative">
+                                    <div key={i.id} className="glass-panel border rounded-xl p-4 shadow-sm relative">
                                         <div className="absolute top-4 right-4 text-xs font-mono text-gray-400">{i.code}</div>
                                         <div className="font-bold text-gray-800 text-lg mb-1">{i.name}</div>
                                         <div className="text-xs text-gray-500 mb-3">واحد: {i.unit}</div>
@@ -640,7 +640,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 ))}
                             </div>
                         ) : (
-                             <div className="bg-white border rounded-xl overflow-hidden">
+                             <div className="glass-panel border rounded-xl overflow-hidden">
                                  <table className="w-full text-sm text-right">
                                      <thead className="bg-gray-100"><tr><th className="p-3">کد</th><th className="p-3">نام کالا</th><th className="p-3">واحد</th><th className="p-3 text-center">عملیات</th></tr></thead>
                                      <tbody>{items.map(i => (<tr key={i.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono">{i.code}</td><td className="p-3 font-bold">{i.name}</td><td className="p-3">{i.unit}</td><td className="p-3 text-center"><div className="flex justify-center gap-2"><button onClick={() => setEditingItem(i)} className="text-amber-500 hover:text-amber-700"><Edit size={16}/></button><button onClick={()=>handleDeleteItem(i.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button></div></td></tr>))}</tbody>
@@ -656,19 +656,19 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         <h3 className="font-bold text-green-800 mb-4 flex items-center gap-2"><ArrowDownCircle/> ثبت ورود کالا (رسید انبار)</h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">شرکت مالک</label><select className="w-full border rounded p-2 bg-white" value={selectedCompany} onChange={e=>setSelectedCompany(e.target.value)}><option value="">انتخاب...</option>{companyList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                            <div><label className="block text-xs font-bold mb-1">شماره پروفرما / سند</label><input className="w-full border rounded p-2 bg-white" value={proformaNumber} onChange={e=>setProformaNumber(e.target.value)}/></div>
+                            <div><label className="block text-xs font-bold mb-1">شرکت مالک</label><select className="w-full border rounded p-2 glass-panel" value={selectedCompany} onChange={e=>setSelectedCompany(e.target.value)}><option value="">انتخاب...</option>{companyList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                            <div><label className="block text-xs font-bold mb-1">شماره پروفرما / سند</label><input className="w-full border rounded p-2 glass-panel" value={proformaNumber} onChange={e=>setProformaNumber(e.target.value)}/></div>
                             <div>
                                 <label className="block text-xs font-bold mb-1">تاریخ ورود</label>
                                 <div className="flex gap-1 dir-ltr">
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-4 bg-white p-4 rounded-xl border">
+                        <div className="space-y-4 glass-panel p-4 rounded-xl border">
                             {txItems.map((row, idx) => (
                                 <div key={idx} className="flex flex-col md:flex-row gap-2 items-end border-b pb-4 md:border-b-0 md:pb-0 last:border-0">
                                     <div className="flex-1 w-full"><label className="text-[10px] text-gray-500 mb-1 block">کالا</label><select className="w-full border rounded p-2 text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}><option value="">انتخاب کالا...</option>{items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></div>
@@ -695,14 +695,14 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label className="block text-xs font-bold mb-1">شرکت فرستنده</label>
-                                <select className="w-full border rounded p-2 bg-white" value={selectedCompany} onChange={e => { setSelectedCompany(e.target.value); }}>
+                                <select className="w-full border rounded p-2 glass-panel" value={selectedCompany} onChange={e => { setSelectedCompany(e.target.value); }}>
                                     <option value="">انتخاب...</option>
                                     {companyList.map(c=><option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold mb-1">شماره بیجک</label>
-                                <div className="bg-white p-2 rounded border font-mono text-center text-red-600 font-bold flex justify-center items-center gap-2 h-[42px]">
+                                <div className="glass-panel p-2 rounded border font-mono text-center text-red-600 font-bold flex justify-center items-center gap-2 h-[42px]">
                                     {loadingBijakNum ? <Loader2 className="animate-spin" size={16}/> : (nextBijakNum > 0 ? nextBijakNum : '---')}
                                     <button type="button" onClick={updateNextBijak} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500"><RefreshCcw size={14}/></button>
                                 </div>
@@ -713,9 +713,9 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                              <div>
                                 <label className="block text-xs font-bold mb-1">تاریخ خروج</label>
                                 <div className="flex gap-1 dir-ltr">
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 bg-white" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
                                 </div>
                             </div>
                             <div>
@@ -730,16 +730,16 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 bg-white" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div>
-                            <div><label className="block text-xs font-bold mb-1">راننده</label><input className="w-full border rounded p-2 bg-white" value={driverName} onChange={e=>setDriverName(e.target.value)}/></div>
+                            <div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 glass-panel" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div>
+                            <div><label className="block text-xs font-bold mb-1">راننده</label><input className="w-full border rounded p-2 glass-panel" value={driverName} onChange={e=>setDriverName(e.target.value)}/></div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">پلاک</label><input className="w-full border rounded p-2 bg-white dir-ltr text-center" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/></div>
-                            <div><label className="block text-xs font-bold mb-1">مقصد</label><input className="w-full border rounded p-2 bg-white" value={destination} onChange={e=>setDestination(e.target.value)}/></div>
+                            <div><label className="block text-xs font-bold mb-1">پلاک</label><input className="w-full border rounded p-2 glass-panel dir-ltr text-center" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/></div>
+                            <div><label className="block text-xs font-bold mb-1">مقصد</label><input className="w-full border rounded p-2 glass-panel" value={destination} onChange={e=>setDestination(e.target.value)}/></div>
                         </div>
 
-                        <div className="space-y-4 bg-white p-4 rounded-xl border">
+                        <div className="space-y-4 glass-panel p-4 rounded-xl border">
                              {txItems.map((row, idx) => (
                                 <div key={idx} className="flex flex-col md:flex-row gap-2 items-end border-b pb-4 md:border-b-0 md:pb-0 last:border-0">
                                     <div className="flex-1 w-full"><label className="text-[10px] text-gray-500 mb-1 block">کالا</label><select className="w-full border rounded p-2 text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}><option value="">انتخاب کالا...</option>{items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></div>
@@ -761,7 +761,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {activeTab === 'archive' && (
                     <div className="space-y-4 animate-fade-in">
                         {/* Search Bar */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col gap-2">
+                        <div className="glass-panel p-4 rounded-xl shadow-sm border flex flex-col gap-2">
                              <h3 className="font-bold text-gray-800 flex items-center gap-2"><Archive size={20}/> آرشیو حواله‌های خروج</h3>
                              <div className="flex gap-2">
                                 <select className="border rounded-lg p-2 text-sm flex-1" value={archiveFilterCompany} onChange={e => setArchiveFilterCompany(e.target.value)}><option value="">همه شرکت‌ها</option>{companyList.map(c => <option key={c} value={c}>{c}</option>)}</select>
@@ -773,7 +773,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         {isMobile ? (
                             <div className="space-y-3">
                                 {filteredArchiveBijaks.length === 0 ? <div className="text-center text-gray-400 py-10">موردی یافت نشد</div> : filteredArchiveBijaks.map(tx => (
-                                    <div key={tx.id} className="bg-white border rounded-xl p-4 shadow-sm relative">
+                                    <div key={tx.id} className="glass-panel border rounded-xl p-4 shadow-sm relative">
                                         <div className="absolute top-4 left-4 text-xs bg-gray-100 px-2 py-1 rounded">{tx.status}</div>
                                         <div className="font-bold text-red-600 mb-1">#{tx.number}</div>
                                         <div className="text-sm font-bold text-gray-800 mb-1">{tx.company}</div>
@@ -787,7 +787,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                            <div className="glass-panel rounded-xl border shadow-sm overflow-hidden">
                                 <table className="w-full text-sm text-right">
                                     <thead className="bg-gray-100 text-gray-600"><tr><th className="p-4">شماره</th><th className="p-4">تاریخ</th><th className="p-4">شرکت</th><th className="p-4">گیرنده</th><th className="p-4">وضعیت</th><th className="p-4 text-center">عملیات</th></tr></thead>
                                     <tbody className="divide-y">
@@ -816,7 +816,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {activeTab === 'entry_archive' && (
                     <div className="space-y-4 animate-fade-in">
                         {/* Search Bar */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-col gap-2">
+                        <div className="glass-panel p-4 rounded-xl shadow-sm border flex flex-col gap-2">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><ArrowDownCircle size={20} className="text-green-600"/> آرشیو رسیدهای ورود</h3>
                                 <div className="flex gap-2">
                                 <select className="border rounded-lg p-2 text-sm flex-1" value={archiveFilterCompany} onChange={e => setArchiveFilterCompany(e.target.value)}><option value="">همه شرکت‌ها</option>{companyList.map(c => <option key={c} value={c}>{c}</option>)}</select>
@@ -828,7 +828,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         {isMobile ? (
                             <div className="space-y-3">
                                 {filteredArchiveReceipts.length === 0 ? <div className="text-center text-gray-400 py-10">موردی یافت نشد</div> : filteredArchiveReceipts.map(tx => (
-                                    <div key={tx.id} className="bg-white border rounded-xl p-4 shadow-sm relative">
+                                    <div key={tx.id} className="glass-panel border rounded-xl p-4 shadow-sm relative">
                                         <div className="font-bold text-green-600 mb-1">پروفرما: {tx.proformaNumber}</div>
                                         <div className="text-sm font-bold text-gray-800 mb-1">{tx.company}</div>
                                         <div className="text-xs text-gray-400 mb-3">{formatDate(tx.date)}</div>
@@ -840,7 +840,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                            <div className="glass-panel rounded-xl border shadow-sm overflow-hidden">
                                 <table className="w-full text-sm text-right">
                                     <thead className="bg-gray-100 text-gray-600"><tr><th className="p-4">پروفرما</th><th className="p-4">تاریخ</th><th className="p-4">شرکت</th><th className="p-4 text-center">عملیات</th></tr></thead>
                                     <tbody className="divide-y">
@@ -864,7 +864,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
                 {/* REPORTS TAB (KARDEX) */}
                 {activeTab === 'reports' && (
-                    <div className="bg-white p-4 rounded-xl shadow-sm border h-full">
+                    <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
                         <WarehouseKardexReport items={items} transactions={safeTransactions} companies={companyList} />
                     </div>
                 )}
@@ -872,7 +872,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {/* STOCK REPORT TAB */}
                 {activeTab === 'stock_report' && (
                     <div className="space-y-4">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">
+                        <div className="glass-panel p-4 rounded-xl shadow-sm border flex justify-between items-center">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 size={20} className="text-orange-600"/> موجودی لحظه‌ای انبار</h3>
                             <div className="flex gap-2">
                                 <button onClick={handlePrintStock} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm hover:bg-blue-700">
@@ -889,7 +889,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         {isMobile ? (
                             <div className="space-y-4">
                                 {allWarehousesStock.map(group => (
-                                    <div key={group.company} className="bg-white border rounded-xl p-4 shadow-sm">
+                                    <div key={group.company} className="glass-panel border rounded-xl p-4 shadow-sm">
                                         <h4 className="font-bold text-center border-b pb-2 mb-2 bg-gray-50 -mx-4 -mt-4 p-3 rounded-t-xl">{group.company}</h4>
                                         <div className="space-y-2">
                                             {group.items.map(item => (
@@ -906,7 +906,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white border rounded-xl overflow-hidden">
+                            <div className="glass-panel border rounded-xl overflow-hidden">
                                 {/* Existing table logic logic is complex to reproduce exactly here without making it huge, 
                                     but I will use a simplified robust table for stock 
                                 */}

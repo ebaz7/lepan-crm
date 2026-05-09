@@ -197,7 +197,7 @@ const ProductsModule: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-fade-in" dir="rtl">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 glass-panel p-6 rounded-xl shadow-sm border border-gray-100">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800 flex items-center gap-3">
                         <Package className="text-blue-600 w-8 h-8" />
@@ -206,12 +206,12 @@ const ProductsModule: React.FC = () => {
                     <p className="text-gray-500 mt-1 text-sm font-medium">مدیریت هرمی محصولات، قیمت‌ها و سفارشات مشتریان</p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-all" title="بروزرسانی">
+                    <button onClick={fetchData} className="p-2 border-2 text-gray-600 hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 rounded-xl transition-all" title="بروزرسانی">
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                     {view === 'products' && (
                         <>
-                            <button onClick={downloadSampleExcel} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm" title="دانلود نمونه اکسل">
+                            <button onClick={downloadSampleExcel} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-700 px-3 py-2 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm" title="دانلود نمونه اکسل">
                                 <Download className="w-5 h-5" />
                                 <span className="hidden sm:inline">نمونه اکسل</span>
                             </button>
@@ -246,7 +246,7 @@ const ProductsModule: React.FC = () => {
             </div>
 
             {view === 'products' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="glass-panel rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row gap-4 items-center justify-between">
                         <div className="relative w-full sm:w-96">
                             <Search className="w-5 h-5 absolute right-3 top-2.5 text-gray-400" />
@@ -255,7 +255,7 @@ const ProductsModule: React.FC = () => {
                                 placeholder="جستجو در محصولات و دسته‌ها..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-4 pr-10 py-2 border-2 border-gray-200 focus:border-blue-500 rounded-xl outline-none transition-all" 
+                                className="w-full pl-4 pr-10 py-2 border-2 border-gray-200/50 dark:border-white/10 focus:border-blue-500 rounded-xl outline-none transition-all" 
                             />
                         </div>
                         <button 
@@ -295,7 +295,7 @@ const ProductsModule: React.FC = () => {
                             <div key={group} className="mb-4 last:mb-0">
                                 <button 
                                     onClick={() => toggleGroup(group)}
-                                    className="w-full flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-black text-gray-800 shadow-sm"
+                                    className="w-full flex items-center gap-2 p-3 glass-panel border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-black text-gray-800 shadow-sm"
                                 >
                                     {expandedGroups[group] || isSearching ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                                     <Tag className="w-4 h-4 text-blue-500" />
@@ -315,7 +315,7 @@ const ProductsModule: React.FC = () => {
                                                 </div>
                                                 <div className="space-y-2 mt-2">
                                                     {groupedProducts[group][subgroup].map(p => (
-                                                        <div key={p.id} className="bg-white border border-gray-100 p-3 rounded-xl flex flex-wrap items-center justify-between gap-4 hover:shadow-md transition-shadow">
+                                                        <div key={p.id} className="glass-panel border border-gray-100 p-3 rounded-xl flex flex-wrap items-center justify-between gap-4 hover:shadow-md transition-shadow">
                                                             <div className="flex-1 min-w-[200px]">
                                                                 <div className="font-bold text-gray-800 flex items-center gap-2">
                                                                     {p.name}
@@ -369,7 +369,7 @@ const ProductsModule: React.FC = () => {
             {view === 'orders' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {orders.slice().reverse().map(order => (
-                        <div key={order.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200 flex flex-col justify-between">
+                        <div key={order.id} className="glass-panel rounded-2xl p-5 shadow-sm border border-gray-200 flex flex-col justify-between">
                             <div>
                                 <div className="flex justify-between items-start mb-4">
                                     <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-lg shadow-sm">
@@ -398,13 +398,13 @@ const ProductsModule: React.FC = () => {
                             </div>
                         </div>
                     ))}
-                    {orders.length === 0 && <div className="col-span-full py-12 text-center text-gray-400 text-sm font-bold bg-white border border-dashed border-gray-200 rounded-xl">هیچ سفارشی یافت نشد.</div>}
+                    {orders.length === 0 && <div className="col-span-full py-12 text-center text-gray-400 text-sm font-bold glass-panel border border-dashed border-gray-200 rounded-xl">هیچ سفارشی یافت نشد.</div>}
                 </div>
             )}
 
             {showProductModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
+                    <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
                         <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                             <h3 className="font-bold text-lg">{editingProduct ? 'ویرایش محصول' : 'محصول جدید'}</h3>
                             <button onClick={() => setShowProductModal(false)} className="bg-white/20 hover:bg-white/30 rounded-lg p-1 transition-colors"><X className="w-5 h-5" /></button>
@@ -412,19 +412,19 @@ const ProductsModule: React.FC = () => {
                         <form onSubmit={handleSave} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-2">نام کالا * / پلاک</label>
-                                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">گروه اصلی</label>
-                                    <input type="text" value={formData.group} list="groups-list" onChange={e => setFormData({...formData, group: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <input type="text" value={formData.group} list="groups-list" onChange={e => setFormData({...formData, group: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                     <datalist id="groups-list">
                                         {[...new Set(products.map(p => p.group))].map(g => <option key={String(g)} value={String(g)} />)}
                                     </datalist>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">زیرگروه</label>
-                                    <input type="text" value={formData.subgroup} list="subgroups-list" onChange={e => setFormData({...formData, subgroup: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <input type="text" value={formData.subgroup} list="subgroups-list" onChange={e => setFormData({...formData, subgroup: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                     <datalist id="subgroups-list">
                                         {[...new Set(products.map(p => p.subgroup))].filter(Boolean).map(sg => <option key={String(sg)} value={String(sg)} />)}
                                     </datalist>
@@ -433,21 +433,21 @@ const ProductsModule: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">کد کالا</label>
-                                    <input type="text" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all text-left font-mono" dir="ltr" />
+                                    <input type="text" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all text-left font-mono" dir="ltr" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">واحد</label>
-                                    <input type="text" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
+                                    <input type="text" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-bold" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">قیمت (ریال)</label>
-                                    <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
+                                    <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">موجودی</label>
-                                    <input type="number" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
+                                    <input type="number" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full p-3 bg-gray-50 border-2 border-gray-200 focus:glass-panel focus:border-blue-500 rounded-xl outline-none transition-all font-mono font-bold" />
                                 </div>
                             </div>
 

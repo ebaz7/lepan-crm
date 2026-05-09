@@ -407,9 +407,9 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         switch (activeReport) {
             case 'general':
                 return (
-                    <div className="bg-white p-6 rounded-xl shadow-sm border overflow-x-auto">
+                    <div className="glass-panel p-6 rounded-xl shadow-sm border overflow-x-auto">
                         <table className="w-full text-sm text-right">
-                            <thead className="bg-gray-100 text-gray-700">
+                            <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-700">
                                 <tr>
                                     <th className="p-3">شماره پرونده</th>
                                     <th className="p-3">کالا</th>
@@ -426,7 +426,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                         r.goodsName.includes(reportSearchTerm)
                                     ))
                                     .map(r => (
-                                    <tr key={r.id} className="border-b hover:bg-gray-50">
+                                    <tr key={r.id} className="border-b hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                                         <td className="p-3 font-bold">{r.fileNumber}</td>
                                         <td className="p-3">{r.goodsName}</td>
                                         <td className="p-3">{r.company}</td>
@@ -459,19 +459,19 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             <div className="flex flex-col h-[calc(100vh-100px)] bg-gray-50 rounded-2xl overflow-hidden border">
                 
                 {/* --- RESPONSIVE HEADER NAV FOR MOBILE --- */}
-                <div className="md:hidden bg-white border-b p-3 flex gap-2 overflow-x-auto whitespace-nowrap shadow-sm z-20">
+                <div className="md:hidden glass-panel border-b p-3 flex gap-2 overflow-x-auto whitespace-nowrap shadow-sm z-20">
                     <button onClick={() => setViewMode('dashboard')} className="p-2 bg-gray-100 rounded-lg"><ChevronRight size={20}/></button>
-                    <button onClick={() => setActiveReport('general')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'general' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>لیست کلی</button>
-                    <button onClick={() => setActiveReport('allocation_queue')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'allocation_queue' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>صف تخصیص</button>
-                    <button onClick={() => setActiveReport('currency')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'currency' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>خرید ارز</button>
-                    <button onClick={() => setActiveReport('guarantee')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'guarantee' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>تضامین</button>
-                    <button onClick={() => setActiveReport('insurance_ledger')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'insurance_ledger' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>بیمه</button>
-                    <button onClick={() => setActiveReport('company_performance')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'company_performance' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}>عملکرد</button>
+                    <button onClick={() => setActiveReport('general')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'general' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>لیست کلی</button>
+                    <button onClick={() => setActiveReport('allocation_queue')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'allocation_queue' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>صف تخصیص</button>
+                    <button onClick={() => setActiveReport('currency')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'currency' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>خرید ارز</button>
+                    <button onClick={() => setActiveReport('guarantee')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'guarantee' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>تضامین</button>
+                    <button onClick={() => setActiveReport('insurance_ledger')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'insurance_ledger' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>بیمه</button>
+                    <button onClick={() => setActiveReport('company_performance')} className={`px-3 py-1.5 rounded-lg text-xs border ${activeReport === 'company_performance' ? 'bg-blue-600 text-white' : 'glass-panel text-gray-700'}`}>عملکرد</button>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Desktop Sidebar (Hidden on Mobile) */}
-                    <div className="hidden md:flex w-64 bg-white border-l p-4 flex-col gap-2 flex-shrink-0 h-full overflow-y-auto z-10">
+                    <div className="hidden md:flex w-64 glass-panel border-l p-4 flex-col gap-2 flex-shrink-0 h-full overflow-y-auto z-10">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><FileSpreadsheet size={20}/> گزارشات بازرگانی</h3>
                         
                         <div className="mb-2 relative">
@@ -570,7 +570,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 {/* EDIT METADATA MODAL */}
                 {showEditMetadataModal && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
+                        <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="font-bold text-xl text-gray-800">ویرایش مشخصات پرونده</h3>
                                 <button onClick={() => setShowEditMetadataModal(false)}><X size={24} className="text-gray-400 hover:text-red-500"/></button>
@@ -580,10 +580,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <label className="block text-sm font-bold text-gray-700 mb-1">شماره پرونده</label>
                                     <input className="w-full border rounded-xl p-3 bg-gray-50 font-mono text-left dir-ltr" value={editMetadataForm.fileNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, fileNumber: e.target.value})} />
                                 </div>
-                                <div><label className="block text-sm font-bold text-gray-700 mb-1">نام کالا (شرح کلی)</label><input className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.goodsName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, goodsName: e.target.value})} /></div>
-                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.sellerName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, sellerName: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.mainCurrency || ''} onChange={e => setEditMetadataForm({...editMetadataForm, mainCurrency: e.target.value})}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div></div>
-                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><select className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.commodityGroup || ''} onChange={e => setEditMetadataForm({...editMetadataForm, commodityGroup: e.target.value})}><option value="">انتخاب...</option>{commodityGroups.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.company || ''} onChange={e => setEditMetadataForm({...editMetadataForm, company: e.target.value})}><option value="">انتخاب...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div></div>
-                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">شماره ثبت سفارش</label><input className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.registrationNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, registrationNumber: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">بانک عامل</label><select className="w-full border rounded-xl p-3 bg-white" value={editMetadataForm.operatingBank || ''} onChange={e => setEditMetadataForm({...editMetadataForm, operatingBank: e.target.value})}><option value="">انتخاب...</option>{operatingBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div></div>
+                                <div><label className="block text-sm font-bold text-gray-700 mb-1">نام کالا (شرح کلی)</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.goodsName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, goodsName: e.target.value})} /></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.sellerName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, sellerName: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.mainCurrency || ''} onChange={e => setEditMetadataForm({...editMetadataForm, mainCurrency: e.target.value})}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.commodityGroup || ''} onChange={e => setEditMetadataForm({...editMetadataForm, commodityGroup: e.target.value})}><option value="">انتخاب...</option>{commodityGroups.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.company || ''} onChange={e => setEditMetadataForm({...editMetadataForm, company: e.target.value})}><option value="">انتخاب...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">شماره ثبت سفارش</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.registrationNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, registrationNumber: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">بانک عامل</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.operatingBank || ''} onChange={e => setEditMetadataForm({...editMetadataForm, operatingBank: e.target.value})}><option value="">انتخاب...</option>{operatingBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div></div>
                                 <button onClick={saveMetadata} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 mt-4">ذخیره تغییرات</button>
                             </div>
                         </div>
@@ -593,7 +593,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 {/* Stage Edit Modal */}
                 {editingStage && (
                     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+                        <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-6">
                             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">ویرایش مرحله: {editingStage}</h3><button onClick={() => setEditingStage(null)}><X size={20}/></button></div>
                             <div className="space-y-4">
                                 <label className="flex items-center gap-2"><input type="checkbox" checked={stageFormData.isCompleted} onChange={e => setStageFormData({...stageFormData, isCompleted: e.target.checked})} className="w-5 h-5"/> <span className="font-bold">مرحله تکمیل شده است</span></label>
@@ -609,7 +609,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 )}
 
                 {/* Header */}
-                <div className="bg-white border-b p-4 flex justify-between items-center shadow-sm z-10">
+                <div className="glass-panel border-b p-4 flex justify-between items-center shadow-sm z-10">
                     <div className="flex items-center gap-4">
                         <button onClick={() => setViewMode('dashboard')} className="p-2 hover:bg-gray-100 rounded-full"><ArrowRight /></button>
                         <div>
@@ -641,13 +641,13 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     
                     {activeTab === 'timeline' && (
                         <div className="p-6 max-w-4xl mx-auto">
-                            <div className="relative border-r-2 border-gray-200 mr-4 space-y-8 pr-8">
+                            <div className="relative border-r-2 border-gray-200/50 dark:border-white/10 mr-4 space-y-8 pr-8">
                                 {STAGES.map((stage, idx) => {
                                     const data = getStageData(selectedRecord, stage);
                                     return (
                                         <div key={stage} className="relative">
                                             <div className={`absolute -right-[41px] top-0 w-6 h-6 rounded-full border-4 ${data.isCompleted ? 'bg-green-500 border-green-100' : 'bg-gray-300 border-gray-100'}`}></div>
-                                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStageClick(stage)}>
+                                            <div className="glass-panel p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStageClick(stage)}>
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <h3 className="font-bold text-gray-800 text-sm">{stage}</h3>
@@ -670,7 +670,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     {activeTab === 'proforma' && (
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
                             {/* Proforma Content */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border">
                                 <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">اطلاعات کلی پروفرما</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره پرونده</label><input className="w-full border rounded p-2 text-sm" value={selectedRecord.fileNumber} onChange={e => handleUpdateProforma('fileNumber', e.target.value)}/></div>
@@ -722,7 +722,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border">
                                 <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">اقلام پروفرما</h3>
                                 <div className="flex gap-2 items-end mb-4 bg-gray-50 p-3 rounded-lg flex-wrap">
                                     <div className="flex-1 min-w-[150px] space-y-1"><label className="text-xs text-gray-500">شرح کالا</label><input className="w-full border rounded p-2 text-sm" placeholder="نام کالا" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})}/></div>
@@ -776,7 +776,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 </div>
                             </div>
                             
-                            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border">
                                  <h3 className="font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><Banknote size={20} className="text-purple-600"/> هزینه‌های ثبت سفارش (کارمزد بانکی و...)</h3>
                                  <div className="flex gap-2 items-end mb-4 bg-purple-50 p-3 rounded-lg">
                                      <div className="flex-1 space-y-1"><label className="text-xs text-gray-500">شرح هزینه</label><input className="w-full border rounded p-2 text-sm" value={newLicenseTx.description} onChange={e => setNewLicenseTx({...newLicenseTx, description: e.target.value})}/></div>
@@ -816,13 +816,13 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                         /* ... Currency Purchase Logic ... */
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
                             {/* Tranches Section */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Coins size={20} className="text-amber-600"/> پارت‌های خرید ارز</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end bg-amber-50 p-4 rounded-lg">
                                     <div className="col-span-1 space-y-1">
                                         <label className="text-xs font-bold text-gray-700">نوع ارز</label>
                                         <select 
-                                            className="w-full border rounded p-2 text-sm bg-white" 
+                                            className="w-full border rounded p-2 text-sm glass-panel" 
                                             value={newCurrencyTranche.currencyType} 
                                             onChange={e => setNewCurrencyTranche({...newCurrencyTranche, currencyType: e.target.value})}
                                         >
@@ -951,12 +951,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                         /* ... Shipping Docs Logic ... */
                         <div className="p-6 max-w-5xl mx-auto flex gap-6">
                             <div className="w-48 flex flex-col gap-2">
-                                <button onClick={() => setActiveShippingSubTab('Commercial Invoice')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Commercial Invoice' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white hover:bg-gray-50'}`}>اینویس</button>
-                                <button onClick={() => setActiveShippingSubTab('Packing List')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Packing List' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white hover:bg-gray-50'}`}>پکینگ لیست</button>
-                                <button onClick={() => setActiveShippingSubTab('Bill of Lading')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Bill of Lading' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white hover:bg-gray-50'}`}>بارنامه</button>
-                                <button onClick={() => setActiveShippingSubTab('Certificate of Origin')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Certificate of Origin' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white hover:bg-gray-50'}`}>گواهی مبدا</button>
+                                <button onClick={() => setActiveShippingSubTab('Commercial Invoice')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Commercial Invoice' ? 'bg-blue-600 text-white shadow-lg' : 'glass-panel hover:bg-gray-50'}`}>اینویس</button>
+                                <button onClick={() => setActiveShippingSubTab('Packing List')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Packing List' ? 'bg-blue-600 text-white shadow-lg' : 'glass-panel hover:bg-gray-50'}`}>پکینگ لیست</button>
+                                <button onClick={() => setActiveShippingSubTab('Bill of Lading')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Bill of Lading' ? 'bg-blue-600 text-white shadow-lg' : 'glass-panel hover:bg-gray-50'}`}>بارنامه</button>
+                                <button onClick={() => setActiveShippingSubTab('Certificate of Origin')} className={`p-3 rounded-lg text-sm text-right font-bold ${activeShippingSubTab === 'Certificate of Origin' ? 'bg-blue-600 text-white shadow-lg' : 'glass-panel hover:bg-gray-50'}`}>گواهی مبدا</button>
                             </div>
-                            <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border space-y-6">
+                            <div className="flex-1 glass-panel p-6 rounded-xl shadow-sm border space-y-6">
                                 <h3 className="font-bold text-gray-800 border-b pb-2 mb-4">{activeShippingSubTab === 'Commercial Invoice' ? 'سیاهه تجاری (Invoice)' : activeShippingSubTab === 'Packing List' ? 'لیست عدل‌بندی (Packing List)' : activeShippingSubTab}</h3>
                                 {/* ... Document Form ... */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -982,7 +982,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                             <input className="w-24 border rounded p-2 text-sm dir-ltr bg-gray-100" placeholder="قیمت کل" value={newInvoiceItem.totalPrice || ((newInvoiceItem.weight || 0) * (newInvoiceItem.unitPrice || 0))} readOnly />
                                             <button onClick={handleAddInvoiceItem} className="bg-blue-600 text-white p-2 rounded-lg"><Plus size={16}/></button>
                                         </div>
-                                        <div className="space-y-1">{shippingDocForm.invoiceItems?.map(i => (<div key={i.id} className="flex justify-between bg-white p-2 rounded text-xs border"><span>{i.name}</span><div className="flex gap-2 items-center"><span className="bg-gray-100 px-1 rounded text-gray-500">Part: {i.part}</span><span className="font-mono">{i.weight} KG</span><span className="font-mono">@{i.unitPrice}</span><span className="font-mono font-bold">{formatNumberString(i.totalPrice)}</span><button onClick={()=>handleRemoveInvoiceItem(i.id)} className="text-red-500"><X size={14}/></button></div></div>))}</div>
+                                        <div className="space-y-1">{shippingDocForm.invoiceItems?.map(i => (<div key={i.id} className="flex justify-between glass-panel p-2 rounded text-xs border"><span>{i.name}</span><div className="flex gap-2 items-center"><span className="bg-gray-100 px-1 rounded text-gray-500">Part: {i.part}</span><span className="font-mono">{i.weight} KG</span><span className="font-mono">@{i.unitPrice}</span><span className="font-mono font-bold">{formatNumberString(i.totalPrice)}</span><button onClick={()=>handleRemoveInvoiceItem(i.id)} className="text-red-500"><X size={14}/></button></div></div>))}</div>
                                         <div className="flex justify-between items-center pt-2 border-t border-blue-200"><span className="font-bold text-xs">هزینه حمل (Freight)</span><input className="w-32 border rounded p-1 text-sm dir-ltr" value={shippingDocForm.freightCost} onChange={e => setShippingDocForm({...shippingDocForm, freightCost: Number(e.target.value)})} type="number" /></div>
                                     </div>
                                 )}
@@ -1001,7 +1001,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                             </div>
                                         </div>
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-xs text-right bg-white rounded border border-orange-200">
+                                            <table className="w-full text-xs text-right glass-panel rounded border border-orange-200">
                                                 <thead className="bg-orange-100 text-orange-800"><tr><th className="p-2">شرح</th><th className="p-2">پارت</th><th className="p-2">وزن خالص</th><th className="p-2">وزن ناخالص</th><th className="p-2">تعداد</th><th className="p-2"></th></tr></thead>
                                                 <tbody>
                                                     {shippingDocForm.packingItems?.map(item => (
@@ -1038,7 +1038,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                     {activeTab === 'inspection' && (
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Microscope size={20} className="text-blue-600"/> گواهی‌های بازرسی (COI)</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-blue-50 p-4 rounded-lg">
                                     <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">شرکت بازرسی</label><input className="w-full border rounded p-2 text-sm" value={newInspectionCertificate.company} onChange={e => setNewInspectionCertificate({...newInspectionCertificate, company: e.target.value})} /></div>
@@ -1048,7 +1048,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 </div>
                                 <div className="overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">شرکت</th><th className="p-3">شماره گواهی</th><th className="p-3">هزینه</th><th className="p-3">پارت</th><th className="p-3">حذف</th></tr></thead><tbody>{inspectionForm.certificates?.map(c => (<tr key={c.id} className="border-b hover:bg-gray-50"><td className="p-3">{c.company}</td><td className="p-3 font-mono">{c.certificateNumber}</td><td className="p-3 font-mono">{formatCurrency(c.amount)}</td><td className="p-3">{c.part}</td><td className="p-3"><button onClick={()=>handleDeleteInspectionCertificate(c.id)} className="text-red-500"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
                             </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800">پرداخت‌های بازرسی</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-gray-50 p-4 rounded-lg">
                                     <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newInspectionPayment.bank} onChange={e => setNewInspectionPayment({...newInspectionPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
@@ -1075,7 +1075,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 </button>
                             </div>
 
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Warehouse size={20} className="text-indigo-600"/> قبض انبار و ترخیصیه</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end bg-indigo-50 p-4 rounded-lg">
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره قبض انبار</label><input className="w-full border rounded p-2 text-sm" value={newWarehouseReceipt.number} onChange={e => setNewWarehouseReceipt({...newWarehouseReceipt, number: e.target.value})} /></div>
@@ -1085,7 +1085,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 </div>
                                 <div className="space-y-2">{clearanceForm.receipts?.map(r => (<div key={r.id} className="flex justify-between items-center border p-3 rounded-lg bg-gray-50"><div><span className="font-bold text-sm">شماره: {r.number}</span> <span className="text-xs text-gray-500 mx-2">تاریخ: {r.issueDate}</span> <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{r.part}</span></div><button onClick={()=>handleDeleteWarehouseReceipt(r.id)} className="text-red-500"><Trash2 size={16}/></button></div>))}</div>
                             </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800">هزینه‌های ترخیصیه ( کشتیرانی / ایجنت )</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-gray-50 p-4 rounded-lg">
                                     <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newClearancePayment.bank} onChange={e => setNewClearancePayment({...newClearancePayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
@@ -1101,7 +1101,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     {activeTab === 'green_leaf' && (
                         /* ... Green Leaf Logic ... */
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Leaf size={20} className="text-green-600"/> اظهارنامه و کوتاژ (حقوق ورودی)</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-green-50 p-4 rounded-lg">
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره کوتاژ</label><input className="w-full border rounded p-2 text-sm" value={newCustomsDuty.cottageNumber} onChange={e => setNewCustomsDuty({...newCustomsDuty, cottageNumber: e.target.value})} /></div>
@@ -1113,17 +1113,17 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 <div className="space-y-2">{greenLeafForm.duties?.map(d => (<div key={d.id} className="flex justify-between items-center border p-3 rounded-lg bg-gray-50"><div><span className="font-bold text-sm">کوتاژ: {d.cottageNumber}</span> <span className="text-xs bg-gray-200 px-2 py-0.5 rounded mx-2">{d.paymentMethod === 'Bank' ? 'نقدی' : 'ضمانت‌نامه'}</span> <span className="font-mono font-bold text-green-700">{formatCurrency(d.amount)}</span></div><button onClick={()=>handleDeleteCustomsDuty(d.id)} className="text-red-500"><Trash2 size={16}/></button></div>))}</div>
                             </div>
 
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><ShieldCheck size={20} className="text-orange-600"/> ضمانت‌نامه‌های گمرکی</h3>
                                 <div className="bg-orange-50 p-4 rounded-lg space-y-3">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مربوط به کوتاژ</label><select className="w-full border rounded p-2 text-sm bg-white" value={selectedDutyForGuarantee} onChange={e => setSelectedDutyForGuarantee(e.target.value)}><option value="">انتخاب کوتاژ</option>{greenLeafForm.duties.map(d => <option key={d.id} value={d.id}>{d.cottageNumber} ({formatCurrency(d.amount)})</option>)}</select></div>
+                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مربوط به کوتاژ</label><select className="w-full border rounded p-2 text-sm glass-panel" value={selectedDutyForGuarantee} onChange={e => setSelectedDutyForGuarantee(e.target.value)}><option value="">انتخاب کوتاژ</option>{greenLeafForm.duties.map(d => <option key={d.id} value={d.id}>{d.cottageNumber} ({formatCurrency(d.amount)})</option>)}</select></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره ضمانت‌نامه</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={newGuaranteeDetails.guaranteeNumber} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeNumber: e.target.value})} /></div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره چک تضمین</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={newGuaranteeDetails.chequeNumber} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeNumber: e.target.value})} /></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ چک (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newGuaranteeDetails.chequeAmount)} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeAmount: deformatNumberString(e.target.value)})} /></div>
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک چک</label><select className="w-full border rounded p-2 text-sm bg-white" value={newGuaranteeDetails.chequeBank} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک چک</label><select className="w-full border rounded p-2 text-sm glass-panel" value={newGuaranteeDetails.chequeBank} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">سپرده نقدی (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newGuaranteeDetails.cashAmount)} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, cashAmount: deformatNumberString(e.target.value)})} /></div>
                                     </div>
                                     <button onClick={handleAddGuarantee} className="w-full bg-orange-600 text-white p-2 rounded-lg font-bold hover:bg-orange-700">ثبت ضمانت‌نامه</button>
@@ -1132,12 +1132,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                                <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                     <h3 className="font-bold text-gray-800">مالیات بر ارزش افزوده</h3>
                                     <div className="flex gap-2 items-end"><input className="flex-1 border rounded p-2 text-sm dir-ltr" placeholder="مبلغ (ریال)" value={formatNumberString(newTax.amount)} onChange={e => setNewTax({...newTax, amount: deformatNumberString(e.target.value)})} /><button onClick={handleAddTax} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700"><Plus size={16}/></button></div>
                                     <div className="space-y-1">{greenLeafForm.taxes?.map(t => (<div key={t.id} className="flex justify-between bg-gray-50 p-2 rounded text-sm"><span className="font-mono">{formatCurrency(t.amount)}</span><button onClick={()=>handleDeleteTax(t.id)} className="text-red-500"><X size={14}/></button></div>))}</div>
                                 </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                                <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                     <h3 className="font-bold text-gray-800">عوارض راهداری / هلال احمر</h3>
                                     <div className="flex gap-2 items-end"><input className="flex-1 border rounded p-2 text-sm dir-ltr" placeholder="مبلغ (ریال)" value={formatNumberString(newRoadToll.amount)} onChange={e => setNewRoadToll({...newRoadToll, amount: deformatNumberString(e.target.value)})} /><button onClick={handleAddRoadToll} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700"><Plus size={16}/></button></div>
                                     <div className="space-y-1">{greenLeafForm.roadTolls?.map(t => (<div key={t.id} className="flex justify-between bg-gray-50 p-2 rounded text-sm"><span className="font-mono">{formatCurrency(t.amount)}</span><button onClick={()=>handleDeleteRoadToll(t.id)} className="text-red-500"><X size={14}/></button></div>))}</div>
@@ -1149,7 +1149,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                     {activeTab === 'internal_shipping' && (
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Truck size={20} className="text-indigo-600"/> هزینه‌های حمل داخلی</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-indigo-50 p-4 rounded-lg">
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شرح / پارت</label><input className="w-full border rounded p-2 text-sm" placeholder="مثال: کرایه حمل تا انبار" value={newShippingPayment.part} onChange={e => setNewShippingPayment({...newShippingPayment, part: e.target.value})} /></div>
@@ -1188,7 +1188,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                     {activeTab === 'agent_fees' && (
                         <div className="p-6 max-w-5xl mx-auto space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><UserCheck size={20} className="text-teal-600"/> هزینه‌های ترخیص (کارمزد ترخیص‌کار)</h3>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-teal-50 p-4 rounded-lg">
@@ -1231,7 +1231,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     {activeTab === 'final_calculation' && (
                         /* ... Final Calculation Logic ... */
                         <div id="print-trade-final" className="p-6 max-w-6xl mx-auto space-y-8">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="glass-panel p-6 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
                                 <div><h3 className="font-bold text-gray-800 text-lg mb-1">وضعیت نهایی پرونده</h3><p className="text-xs text-gray-500">مدیریت تعهدات و بایگانی پرونده</p></div>
                                 <div className="flex gap-2 flex-wrap justify-end">
                                     <button onClick={toggleCommitment} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border transition-colors ${selectedRecord.isCommitmentFulfilled ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-green-50'}`}>{selectedRecord.isCommitmentFulfilled ? <CheckCircle2 size={18}/> : <AlertCircle size={18}/>}{selectedRecord.isCommitmentFulfilled ? 'رفع تعهد شده' : 'رفع تعهد نشده'}</button>
@@ -1250,8 +1250,8 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             
                             {/* ACTIVATED PRINT/PDF BUTTONS */}
                             <div className="flex justify-end gap-2" data-html2canvas-ignore>
-                                <button onClick={handlePrintTrade} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-sm"><Printer size={16}/> چاپ گزارش</button>
-                                <button onClick={handleDownloadFinalReportPDF} disabled={isGeneratingPdf} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-sm">{isGeneratingPdf ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>} دانلود PDF (صورتحساب)</button>
+                                <button onClick={handlePrintTrade} className="glass-panel border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-sm"><Printer size={16}/> چاپ گزارش</button>
+                                <button onClick={handleDownloadFinalReportPDF} disabled={isGeneratingPdf} className="glass-panel border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-sm">{isGeneratingPdf ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>} دانلود PDF (صورتحساب)</button>
                             </div>
 
                             {/* --- NEW CALCULATION LOGIC IMPLEMENTATION (WEIGHT BASED + EFFECTIVE RATE) --- */}
@@ -1297,7 +1297,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 return (
                                     <>
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
+                                            <div className="glass-panel p-6 rounded-xl shadow-sm border h-fit">
                                                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Calculator size={20} className="text-rose-600"/> صورت کلی هزینه‌ها</h3>
                                                 <div className="overflow-hidden rounded-lg border">
                                                     <table className="w-full text-sm text-right">
@@ -1343,10 +1343,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                 </div>
                                             </div>
                                             
-                                            <div className="bg-white p-6 rounded-xl shadow-sm border h-fit"><h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-blue-600"/> لیست چک‌های ضمانت</h3><div className="overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">نوع</th><th className="p-3">شماره / بانک</th><th className="p-3">مبلغ (ریال)</th><th className="p-3">وضعیت</th><th className="p-3">عملیات</th></tr></thead><tbody>{getAllGuarantees().map((g, i) => (<tr key={i} className="border-b hover:bg-gray-50"><td className="p-3">{g.type}</td><td className="p-3">{g.number}<br/><span className="text-xs text-gray-500">{g.bank}</span></td><td className="p-3 font-mono">{formatCurrency(g.amount)}</td><td className="p-3"><button onClick={g.toggleFunc} className={`text-xs px-2 py-1 rounded font-bold ${g.isDelivered ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{g.isDelivered ? 'عودت شد' : 'نزد سازمان'}</button></td><td className="p-3"></td></tr>))}</tbody></table></div></div>
+                                            <div className="glass-panel p-6 rounded-xl shadow-sm border h-fit"><h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-blue-600"/> لیست چک‌های ضمانت</h3><div className="overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">نوع</th><th className="p-3">شماره / بانک</th><th className="p-3">مبلغ (ریال)</th><th className="p-3">وضعیت</th><th className="p-3">عملیات</th></tr></thead><tbody>{getAllGuarantees().map((g, i) => (<tr key={i} className="border-b hover:bg-gray-50"><td className="p-3">{g.type}</td><td className="p-3">{g.number}<br/><span className="text-xs text-gray-500">{g.bank}</span></td><td className="p-3 font-mono">{formatCurrency(g.amount)}</td><td className="p-3"><button onClick={g.toggleFunc} className={`text-xs px-2 py-1 rounded font-bold ${g.isDelivered ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{g.isDelivered ? 'عودت شد' : 'نزد سازمان'}</button></td><td className="p-3"></td></tr>))}</tbody></table></div></div>
                                         </div>
 
-                                        <div className="bg-white p-6 rounded-xl shadow-sm border mt-6">
+                                        <div className="glass-panel p-6 rounded-xl shadow-sm border mt-6">
                                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><PieChart size={20} className="text-green-600"/> قیمت تمام شده به تفکیک کالا</h3>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm text-right">
@@ -1426,13 +1426,13 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     {/* ADDED BUTTON HERE */}
                     <button 
                         onClick={() => setShowArchived(!showArchived)} 
-                        className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                        className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'glass-panel text-gray-600 border-gray-300 hover:bg-gray-50'}`}
                     >
                         <Archive size={20} />
                         {showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}
                     </button>
                     {/* END ADDED BUTTON */}
-                    <button onClick={() => setViewMode('reports')} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors">
+                    <button onClick={() => setViewMode('reports')} className="glass-panel border border-gray-300 text-gray-700 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors">
                         <FileSpreadsheet size={20} /> گزارشات
                     </button>
                     <button onClick={() => setShowNewModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors shadow-lg shadow-blue-600/20">
@@ -1445,7 +1445,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {navLevel !== 'GROUP' ? (
                     groupedData.map((item: any) => (
-                        <div key={item.name} onClick={() => item.type === 'company' ? goCompany(item.name) : goGroup(item.name)} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden">
+                        <div key={item.name} onClick={() => item.type === 'company' ? goCompany(item.name) : goGroup(item.name)} className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-2 h-full bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <div className="flex justify-between items-center mb-4">
                                 <div className="bg-blue-50 p-3 rounded-xl text-blue-600 group-hover:scale-110 transition-transform">
@@ -1461,7 +1461,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     safeRecords
                         .filter(r => (showArchived ? r.isArchived : !r.isArchived) && (r.company === selectedCompany) && (r.commodityGroup === selectedGroup) && (r.goodsName.includes(searchTerm) || r.fileNumber.includes(searchTerm)))
                         .map(record => (
-                            <div key={record.id} onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500 relative">
+                            <div key={record.id} onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }} className="glass-panel p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500 relative">
                                 {/* DELETE BUTTON ADDED HERE - Moved to Right to avoid status overlap */}
                                 <button 
                                     onClick={(e) => handleDeleteRecord(record.id, e)} 
@@ -1488,7 +1488,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             {/* New Record Modal */}
             {showNewModal && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-scale-in">
+                    <div className="glass-panel rounded-2xl shadow-xl w-full max-w-md p-6 animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-xl text-gray-800">ثبت پرونده جدید</h3>
                             <button onClick={() => setShowNewModal(false)}><X size={24} className="text-gray-400 hover:text-red-500" /></button>
@@ -1499,9 +1499,9 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3" value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Seller Name..." /></div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><input list="commodity-groups" className="w-full border rounded-xl p-3" value={newCommodityGroup} onChange={e => setNewCommodityGroup(e.target.value)} placeholder="انتخاب..." /><datalist id="commodity-groups">{commodityGroups.map(g => <option key={g} value={g} />)}</datalist></div>
-                                <div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 bg-white" value={newMainCurrency} onChange={e => setNewMainCurrency(e.target.value)}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div>
+                                <div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 glass-panel" value={newMainCurrency} onChange={e => setNewMainCurrency(e.target.value)}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div>
                             </div>
-                            <div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 bg-white" value={newRecordCompany} onChange={e => setNewRecordCompany(e.target.value)}><option value="">انتخاب شرکت...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                            <div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 glass-panel" value={newRecordCompany} onChange={e => setNewRecordCompany(e.target.value)}><option value="">انتخاب شرکت...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                             <button onClick={handleCreateRecord} disabled={!newFileNumber || !newGoodsName || !newRecordCompany} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 mt-4 disabled:opacity-50 transition-all">ایجاد پرونده</button>
                         </div>
                     </div>

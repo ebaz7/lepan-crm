@@ -162,9 +162,9 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
     const selectedField = fields.find(f => f.id === selectedFieldId);
 
     return (
-        <div className="fixed inset-0 bg-gray-100 z-[200] flex flex-col animate-fade-in" onMouseMove={handleDragMove} onMouseUp={handleDragEnd}>
+        <div className="fixed inset-0 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 z-[200] flex flex-col animate-fade-in" onMouseMove={handleDragMove} onMouseUp={handleDragEnd}>
             {/* Header */}
-            <div className="bg-white border-b px-6 py-3 flex justify-between items-center shadow-sm z-10">
+            <div className="glass-panel border-b px-6 py-3 flex justify-between items-center shadow-sm z-10">
                 <div className="flex items-center gap-4">
                     <h2 className="font-bold text-lg text-gray-800">طراحی قالب چاپ</h2>
                     <input 
@@ -182,18 +182,18 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar Controls */}
-                <div className="w-72 bg-white border-l flex flex-col shadow-lg z-10">
+                <div className="w-72 glass-panel border-l flex flex-col shadow-lg z-10">
                     
                     {/* Paper Settings */}
-                    <div className="p-4 border-b bg-gray-50">
+                    <div className="p-4 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                         <h3 className="font-bold text-xs text-gray-500 mb-3 uppercase flex items-center gap-2"><LayoutTemplate size={14}/> تنظیمات کاغذ</h3>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                            <button onClick={() => setPageSize('A4')} className={`text-xs p-1.5 rounded border ${pageSize === 'A4' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white'}`}>A4</button>
-                            <button onClick={() => setPageSize('A5')} className={`text-xs p-1.5 rounded border ${pageSize === 'A5' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white'}`}>A5</button>
+                            <button onClick={() => setPageSize('A4')} className={`text-xs p-1.5 rounded border ${pageSize === 'A4' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'glass-panel'}`}>A4</button>
+                            <button onClick={() => setPageSize('A5')} className={`text-xs p-1.5 rounded border ${pageSize === 'A5' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'glass-panel'}`}>A5</button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => setOrientation('portrait')} className={`text-xs p-1.5 rounded border ${orientation === 'portrait' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white'}`}>عمودی</button>
-                            <button onClick={() => setOrientation('landscape')} className={`text-xs p-1.5 rounded border ${orientation === 'landscape' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white'}`}>افقی</button>
+                            <button onClick={() => setOrientation('portrait')} className={`text-xs p-1.5 rounded border ${orientation === 'portrait' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'glass-panel'}`}>عمودی</button>
+                            <button onClick={() => setOrientation('landscape')} className={`text-xs p-1.5 rounded border ${orientation === 'landscape' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'glass-panel'}`}>افقی</button>
                         </div>
                     </div>
 
@@ -205,7 +205,7 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
                                 <button 
                                     key={f.key} 
                                     onClick={() => addField(f.key, f.label)}
-                                    className="text-xs bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 text-gray-700 rounded p-2 text-right transition-colors"
+                                    className="text-xs bg-gray-50 hover:bg-blue-50 border border-gray-200/50 dark:border-white/10 hover:border-blue-200 text-gray-700 rounded p-2 text-right transition-colors"
                                 >
                                     + {f.label}
                                 </button>
@@ -232,7 +232,7 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
 
                                 <div><label className="text-[10px] block text-gray-500">فاصله حروف (Letter Spacing)</label><input type="number" className="w-full border rounded p-1 text-center dir-ltr" value={selectedField.letterSpacing || 0} onChange={e => updateField(selectedField.id, { letterSpacing: Number(e.target.value) })} /> <span className="text-[9px] text-gray-400">برای حروف چینی شبا استفاده کنید</span></div>
 
-                                <div className="flex gap-2 justify-center bg-white p-2 rounded border">
+                                <div className="flex gap-2 justify-center glass-panel p-2 rounded border">
                                     <button onClick={() => updateField(selectedField.id, { align: 'right' })} className={`p-1 rounded ${selectedField.align === 'right' ? 'bg-blue-100 text-blue-600' : 'text-gray-400'}`}><AlignRight size={16}/></button>
                                     <button onClick={() => updateField(selectedField.id, { align: 'center' })} className={`p-1 rounded ${selectedField.align === 'center' ? 'bg-blue-100 text-blue-600' : 'text-gray-400'}`}><AlignCenter size={16}/></button>
                                     <button onClick={() => updateField(selectedField.id, { align: 'left' })} className={`p-1 rounded ${selectedField.align === 'left' ? 'bg-blue-100 text-blue-600' : 'text-gray-400'}`}><AlignLeft size={16}/></button>
@@ -251,7 +251,7 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
                 {/* Canvas Area */}
                 <div className="flex-1 bg-gray-200 overflow-auto p-8 relative flex justify-center" ref={containerRef}>
                     <div 
-                        className="bg-white shadow-2xl relative transition-transform origin-top"
+                        className="glass-panel shadow-2xl relative transition-transform origin-top"
                         style={{
                             width: `${paperDims.w}mm`,
                             height: `${paperDims.h}mm`,
@@ -308,11 +308,11 @@ const PrintTemplateDesigner: React.FC<Props> = ({ onSave, onCancel, initialTempl
 
                     {/* Floating Controls */}
                     <div className="absolute bottom-6 right-6 flex flex-col gap-2">
-                         <div className="bg-white p-2 rounded shadow flex flex-col gap-2">
+                         <div className="glass-panel p-2 rounded shadow flex flex-col gap-2">
                              <label className="text-xs font-bold text-gray-600 text-center">زوم</label>
                              <input type="range" min="0.3" max="2" step="0.1" value={scale} onChange={e => setScale(Number(e.target.value))} className="w-24" />
                          </div>
-                         <label className="bg-white p-3 rounded shadow cursor-pointer hover:bg-gray-50 flex items-center justify-center" title="آپلود تصویر زمینه">
+                         <label className="glass-panel p-3 rounded shadow cursor-pointer hover:bg-gray-50 flex items-center justify-center" title="آپلود تصویر زمینه">
                              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                              <Upload size={20} className="text-blue-600"/>
                          </label>

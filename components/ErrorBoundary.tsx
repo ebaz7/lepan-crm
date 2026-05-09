@@ -35,8 +35,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center" dir="rtl">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl border border-red-100 max-w-md w-full animate-fade-in">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-6 text-center" dir="rtl">
+          <div className="glass-panel p-8 rounded-2xl shadow-2xl border border-red-100 max-w-md w-full animate-fade-in">
             <div className="bg-red-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="text-red-600" size={40} />
             </div>
@@ -46,7 +46,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               لطفاً صفحه را رفرش کنید.
             </p>
             
-            <div className="bg-gray-100 p-4 rounded-xl text-left dir-ltr mb-6 overflow-auto max-h-40 border border-gray-200">
+            <div className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-4 rounded-xl text-left dir-ltr mb-6 overflow-auto max-h-40 border border-gray-200/50 dark:border-white/10">
               <code className="text-xs text-red-600 font-mono break-all font-bold">
                 {this.state.error?.message || 'Unknown Error'}
               </code>

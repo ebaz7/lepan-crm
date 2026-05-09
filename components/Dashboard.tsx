@@ -202,8 +202,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
   const statusWidgets = [
     { key: OrderStatus.PENDING, label: 'کارتابل مالی', count: countPending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', barColor: 'bg-amber-500' },
-    { key: OrderStatus.APPROVED_FINANCE, label: 'کارتابل مدیریت', count: countFin, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100', barColor: 'bg-blue-500' },
-    { key: OrderStatus.APPROVED_MANAGER, label: 'کارتابل مدیرعامل', count: countMgr, icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', barColor: 'bg-indigo-500' },
+    { key: OrderStatus.APPROVED_FINANCE, label: 'کارتابل مدیریت', count: countFin, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300', border: 'border-blue-100', barColor: 'bg-blue-500' },
+    { key: OrderStatus.APPROVED_MANAGER, label: 'کارتابل مدیرعامل', count: countMgr, icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300', border: 'border-indigo-100', barColor: 'bg-indigo-500' },
     { key: OrderStatus.REJECTED, label: 'رد شده', count: countRejected, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100', barColor: 'bg-red-500' },
     { key: OrderStatus.APPROVED_CEO, label: 'بایگانی', count: completedOrders.length, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', barColor: 'bg-green-500' }
   ];
@@ -227,7 +227,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* TOP SECTION: MINIMAL DATE, PRICES & SLICK POETRY */}
         <div className="flex flex-col lg:flex-row gap-4">
             {/* Minimal Date Card - Smaller & Sleek */}
-            <div className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm flex items-center gap-4 min-w-[220px] shrink-0 relative group overflow-hidden">
+            <div className="glass-panel rounded-2xl p-4 border border-indigo-100 shadow-sm flex items-center gap-4 min-w-[220px] shrink-0 relative group overflow-hidden">
                 <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity"><CalendarIcon size={40}/></div>
                 <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 flex items-center justify-center relative z-10">
                     <CalendarIcon size={24} />
@@ -238,69 +238,76 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse ml-auto" title="همگام‌سازی با گوگل کلندر"></span>
                     </div>
                     <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-black text-gray-800">{shamsiDate.day}</span>
+                        <span className="text-2xl font-black text-gray-800 dark:text-gray-200">{shamsiDate.day}</span>
                         <span className="text-sm font-bold text-gray-600">{shamsiDate.month}</span>
                     </div>
-                    <div className="text-[9px] text-gray-400 font-bold mt-1 line-clamp-1">{shamsiDate.year} شمسی</div>
+                    <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold mt-1 line-clamp-1">{shamsiDate.year} شمسی</div>
                 </div>
             </div>
 
             {/* Slick Poetry - Smaller and More Elegant */}
-            <div className="flex-1 bg-white rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group min-h-[80px]">
+            <div className="flex-1 glass-panel rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group min-h-[80px]">
                 <div className="absolute right-0 top-0 h-full w-1 bg-rose-200"></div>
                 <div className="relative z-10 flex flex-col items-center">
                     <div className="text-[10px] font-bold text-rose-300 mb-1 flex items-center gap-1"><PenTool size={10}/> زمزمه روز</div>
-                    <p className="text-gray-700 font-bold text-sm text-center italic leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{dailyQuote.text}</p>
+                    <p className="text-gray-700 dark:text-gray-300 font-bold text-sm text-center italic leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{dailyQuote.text}</p>
                 </div>
             </div>
         </div>
 
         {/* ANNOUNCEMENTS SECTION */}
         {(visibleAnnouncements.length > 0 || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
-            <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-100 shadow-sm relative">
-                <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600 animate-pulse">
-                            <Activity size={20} />
-                        </div>
-                        <h3 className="font-black text-gray-800">اعلانات مدیران</h3>
-                    </div>
-                    {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
-                        <button onClick={() => setShowAnnounceModal(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                            <Plus size={14}/> اعلامیه جدید
-                        </button>
-                    )}
-                </div>
+            <div className={`rounded-2xl border border-blue-100 shadow-sm relative transition-all ${visibleAnnouncements.length === 0 ? 'bg-transparent p-2 border-dashed' : 'bg-blue-50/50 p-6'}`}>
+                
                 {visibleAnnouncements.length === 0 ? (
-                    <div className="text-center text-sm text-gray-400 py-4 opacity-50 font-bold">بدون اعلامیه جدید</div>
-                ) : (
-                    <div className="space-y-3">
-                        {visibleAnnouncements.map((ann, i) => (
-                            <div key={ann.id || i} className="bg-white p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
-                                <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1">
-                                    <BookOpen size={16} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-xs font-black text-blue-800">{ann.createdBy}</span>
-                                        <div className="flex items-center gap-2">
-                                            {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold">پیام اختصاصی</span>}
-                                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
-                                                <button onClick={async () => {
-                                                    const mod = await import('../services/storageService');
-                                                    await mod.deleteSystemAnnouncement(ann.id);
-                                                    setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
-                                                }} className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 p-1 rounded transition-all"><Trash2 size={12}/></button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <p className="text-sm font-bold text-gray-700" style={{ whiteSpace: 'pre-wrap' }}>{ann.message}</p>
-                                    <div className="text-[10px] text-gray-400 mt-2 text-left">{(() => { const d = getShamsiDateFromIso(new Date(ann.createdAt).toISOString()); return `${d.year}/${d.month}/${d.day}`; })()} - {new Date(ann.createdAt).toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'})}</div>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="flex justify-center items-center">
+                        <button onClick={() => setShowAnnounceModal(true)} className="text-xs text-blue-500 hover:text-blue-600 font-bold transition-colors flex items-center gap-1 py-2">
+                            <Plus size={14}/> ارسال اولین پیام / اعلامیه برای پرسنل
+                        </button>
                     </div>
+                ) : (
+                    <>
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600 animate-pulse">
+                                    <Activity size={20} />
+                                </div>
+                                <h3 className="font-black text-gray-800">اعلانات مدیران</h3>
+                            </div>
+                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                                <button onClick={() => setShowAnnounceModal(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
+                                    <Plus size={14}/> اعلامیه جدید
+                                </button>
+                            )}
+                        </div>
+                        <div className="space-y-3">
+                            {visibleAnnouncements.map((ann, i) => (
+                                <div key={ann.id || i} className="glass-panel p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
+                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1">
+                                        <BookOpen size={16} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-xs font-black text-blue-800">{ann.createdBy}</span>
+                                            <div className="flex items-center gap-2">
+                                                {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold border border-blue-200">پیام اختصاصی</span>}
+                                                {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                                                    <button onClick={async () => {
+                                                        const mod = await import('../services/storageService');
+                                                        await mod.deleteSystemAnnouncement(ann.id);
+                                                        setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
+                                                    }} className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 p-1 rounded transition-all"><Trash2 size={12}/></button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <p className="text-sm font-bold text-gray-700" style={{ whiteSpace: 'pre-wrap' }}>{ann.message}</p>
+                                        <div className="text-[10px] text-gray-400 mt-2 text-left">{(() => { const d = getShamsiDateFromIso(new Date(ann.createdAt).toISOString()); return `${d.year}/${d.month}/${d.day}`; })()} - {new Date(ann.createdAt).toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'})}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
         )}
@@ -332,11 +339,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         <div 
                             key={note.id} 
                             onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'knowledge' }))}
-                            className={`${note.color || 'bg-white'} p-4 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative group`}
+                            className={`${note.color || 'glass-panel'} p-4 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md transition-all cursor-pointer relative group`}
                         >
                             <h4 className="font-bold text-gray-800 text-sm mb-2 truncate">{note.title || 'بدون عنوان'}</h4>
                             <div className="space-y-2">
-                                {note.content && <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">{note.content}</p>}
+                                {note.content && <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">{note.content}</p>}
                                 {note.tasks && note.tasks.length > 0 && (
                                     <div className="space-y-1 my-1">
                                         {note.tasks.slice(0, 3).map(task => (
@@ -410,7 +417,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     {statusWidgets.map((widget) => (
-                        <div key={widget.key} onClick={() => handleWidgetClick(widget.key === OrderStatus.APPROVED_CEO ? 'pending_all' : widget.key as any)} className={`bg-white p-4 rounded-2xl border ${widget.border} shadow-sm transition-all relative overflow-hidden group cursor-pointer hover:shadow-md`}>
+                        <div key={widget.key} onClick={() => handleWidgetClick(widget.key === OrderStatus.APPROVED_CEO ? 'pending_all' : widget.key as any)} className={`glass-panel p-4 rounded-2xl border ${widget.border} shadow-sm transition-all relative overflow-hidden group cursor-pointer hover:shadow-md`}>
                             <div className={`absolute top-0 right-0 w-1.5 h-full ${widget.barColor}`}></div>
                             <div className="flex justify-between items-start mb-2">
                                 <div className={`p-2 rounded-xl ${widget.bg} ${widget.color}`}>
@@ -424,7 +431,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col">
+                    <div className="glass-panel p-6 rounded-2xl border border-gray-200/50 dark:border-white/10 shadow-sm flex flex-col">
                         <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><PieChart size={20} className="text-blue-500"/> توزیع روش‌های پرداخت</h3>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
@@ -439,7 +446,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col">
+                    <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart size={20} className="text-indigo-500"/> پرداخت‌ها بر اساس بانک</h3>
                             <button onClick={() => setShowBankReport(true)} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 transition-colors">گزارش کامل</button>
@@ -458,8 +465,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                     </div>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="glass-panel rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200/50">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><Activity size={20} className="text-orange-500"/> آخرین فعالیت‌ها (پرداخت)</h3>
                         {onViewArchive && <button onClick={onViewArchive} className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">مشاهده آرشیو <ArrowUpRight size={14}/></button>}
                     </div>
@@ -503,7 +510,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* Bank Report Modal */}
         {showBankReport && hasPaymentAccess && (
             <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
+                <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
                     <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><Banknote size={20}/> گزارش تفصیلی بانک‌ها</h3>
                         <button onClick={() => setShowBankReport(false)} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={20} className="text-gray-500"/></button>
@@ -512,14 +519,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         {bankReportTab === 'summary' ? (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-4">
+                                    <div className="glass-panel p-4 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-4">
                                         <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><TrendingUp size={24}/></div>
                                         <div><div className="text-xs text-gray-500 font-bold">پر تراکنش‌ترین بانک</div><div className="text-lg font-black text-gray-800">{topBank.name}</div><div className="text-xs text-indigo-600 font-mono">{formatCurrency(topBank.value)}</div></div>
                                     </div>
                                 </div>
-                                <div className="bg-white rounded-xl border overflow-hidden">
+                                <div className="glass-panel rounded-xl border overflow-hidden">
                                     <table className="w-full text-sm text-right">
-                                        <thead className="bg-gray-100 text-gray-600"><tr><th className="p-3">نام بانک</th><th className="p-3">مجموع پرداختی</th><th className="p-3">درصد از کل</th></tr></thead>
+                                        <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-600"><tr><th className="p-3">نام بانک</th><th className="p-3">مجموع پرداختی</th><th className="p-3">درصد از کل</th></tr></thead>
                                         <tbody className="divide-y">
                                             {bankStats.map((bank, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-50">
@@ -543,7 +550,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* Announce Modal */}
         {showAnnounceModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+                <div className="glass-panel rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
                     <div className="p-4 border-b flex justify-between items-center bg-blue-50/50">
                         <div className="flex items-center gap-2 text-blue-800">
                             <Activity size={20} />

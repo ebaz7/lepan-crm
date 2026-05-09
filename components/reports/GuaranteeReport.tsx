@@ -102,7 +102,7 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
     const totalAmount = filteredData.reduce((sum, item) => sum + item.amount, 0);
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border h-full flex flex-col">
+        <div className="glass-panel p-4 rounded-lg shadow-sm border h-full flex flex-col">
             
             {/* Show Print Modal when active */}
             {showPrintModal && (
@@ -114,7 +114,7 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
             )}
 
             {/* Header / Filters */}
-            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200 flex flex-col md:flex-row gap-4 justify-between items-end md:items-center">
+            <div className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-3 rounded mb-4 border border-gray-200/50 dark:border-white/10 flex flex-col md:flex-row gap-4 justify-between items-end md:items-center">
                 <div className="flex flex-wrap gap-3 flex-1 w-full">
                     <div className="relative">
                         <Search className="absolute right-2 top-2.5 text-gray-400" size={16}/>
@@ -126,7 +126,7 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
                         />
                     </div>
                     
-                    <div className="flex items-center gap-2 bg-white border rounded px-2 py-1">
+                    <div className="flex items-center gap-2 glass-panel border rounded px-2 py-1">
                         <Filter size={16} className="text-gray-500"/>
                         <select className="bg-transparent text-sm outline-none" value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
                             <option value="all">همه وضعیت‌ها</option>
@@ -135,7 +135,7 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-white border rounded px-2 py-1">
+                    <div className="flex items-center gap-2 glass-panel border rounded px-2 py-1">
                         <ShieldCheck size={16} className="text-gray-500"/>
                         <select className="bg-transparent text-sm outline-none" value={sectionFilter} onChange={e => setSectionFilter(e.target.value as any)}>
                             <option value="all">همه بخش‌ها</option>
@@ -154,9 +154,9 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
             </div>
 
             {/* Interactive Table (View Mode) */}
-            <div className="flex-1 overflow-auto bg-white border rounded-lg">
+            <div className="flex-1 overflow-auto glass-panel border rounded-lg">
                 <table className="w-full border-collapse text-center text-sm">
-                    <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 sticky top-0 z-10 shadow-sm">
                         <tr>
                             <th className="p-3 text-gray-600 font-bold border-b">ردیف</th>
                             <th className="p-3 text-gray-600 font-bold border-b">شماره پرونده</th>

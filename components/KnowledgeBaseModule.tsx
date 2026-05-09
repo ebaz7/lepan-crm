@@ -37,7 +37,7 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
     const [content, setContent] = useState(note?.content || '');
     const [tasks, setTasks] = useState<NoteTask[]>(note?.tasks || []);
     const [reminder, setReminder] = useState<string>(note?.reminderTime ? new Date(note.reminderTime).toISOString().slice(0, 16) : '');
-    const [color, setColor] = useState(note?.color || 'bg-white');
+    const [color, setColor] = useState(note?.color || 'glass-panel');
 
     const handleAddTask = () => {
         setTasks([...tasks, { id: Date.now().toString(), text: '', isCompleted: false }]);
@@ -161,7 +161,7 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
 
                     {/* Color Picker */}
                     <div className="flex gap-2 justify-center pt-4 border-t border-black/5">
-                        {['bg-white', 'bg-rose-50', 'bg-amber-50', 'bg-emerald-50', 'bg-blue-50', 'bg-indigo-50', 'bg-purple-50'].map(c => (
+                        {['glass-panel', 'bg-rose-50', 'bg-amber-50', 'bg-emerald-50', 'bg-blue-50', 'bg-indigo-50', 'bg-purple-50'].map(c => (
                             <button 
                                 key={c}
                                 onClick={() => setColor(c)}
@@ -196,8 +196,8 @@ const ItemModal: React.FC<ItemModalProps> = ({
     editingItem, titleStr, setTitleStr, contentStr, setContentStr, onClose, onSave 
 }) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-none">
+        <div className="glass-panel rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-none">
                 <h2 className="font-black text-gray-800 text-lg">{editingItem ? 'ویرایش یادداشت' : 'افزودن یادداشت جدید'}</h2>
                 <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
                     <X size={20} />
@@ -247,7 +247,7 @@ const CompanyModal: React.FC<CompanyModalProps> = ({
     editingCompany, setEditingCompany, onClose, onSave, companies 
 }) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
+        <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-yellow-50 flex-none">
                 <h2 className="font-black text-yellow-900 text-lg">
                     {companies.find(c => c.id === editingCompany?.id) ? 'ویرایش اطلاعات شخص / شرکت' : 'ثبت شخص / شرکت جدید'}
@@ -323,7 +323,7 @@ const CompanyModal: React.FC<CompanyModalProps> = ({
                     
                     <div className="space-y-4">
                         {(editingCompany?.banks || []).map((bank: any, idx: number) => (
-                            <div key={bank.id} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
+                            <div key={bank.id} className="bg-gray-50 border border-gray-200/50 dark:border-white/10 rounded-xl p-4 relative">
                                 <button 
                                     onClick={() => {
                                         const newBanks = editingCompany.banks.filter((b: any) => b.id !== bank.id);
@@ -708,7 +708,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
     return (
         <div className="space-y-6 pb-20 animate-fade-in rtl text-right">
             {/* Header & App Selection */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="glass-panel p-6 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-2xl ${activeTab === 'personal' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}>
@@ -724,16 +724,16 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                         </div>
                     </div>
                     
-                    <div className="flex bg-gray-100 p-1 rounded-2xl self-start md:self-center">
+                    <div className="flex bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-1 rounded-2xl self-start md:self-center">
                         <button 
                             onClick={() => setActiveTab('personal')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'personal' ? 'bg-white shadow-sm text-yellow-600' : 'text-gray-500 hover:text-gray-800'}`}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'personal' ? 'glass-panel shadow-sm text-yellow-600' : 'text-gray-500 hover:text-gray-800'}`}
                         >
                             <UserIcon size={18}/> شخصی
                         </button>
                         <button 
                             onClick={() => setActiveTab('company')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'company' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'company' ? 'glass-panel shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
                         >
                             <BookOpen size={18}/> شرکت
                         </button>
@@ -754,8 +754,8 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                     
                     <div className="flex items-center gap-2">
                         <div className="flex bg-gray-100 p-1 rounded-xl">
-                            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}><Grid size={18}/></button>
-                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}><ListIcon size={18}/></button>
+                            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'glass-panel text-gray-800 shadow-sm' : 'text-gray-400'}`}><Grid size={18}/></button>
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'glass-panel text-gray-800 shadow-sm' : 'text-gray-400'}`}><ListIcon size={18}/></button>
                         </div>
                         <button 
                             onClick={() => {
@@ -779,7 +779,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                             <div 
                                 key={note.id}
                                 onClick={() => { setEditingPersonalNote(note); setShowPersonalModal(true); }}
-                                className={`rounded-2xl p-5 shadow-sm border border-black/5 hover:shadow-md transition-all cursor-pointer relative group flex flex-col ${note.color || 'bg-white'}`}
+                                className={`rounded-2xl p-5 shadow-sm border border-black/5 hover:shadow-md transition-all cursor-pointer relative group flex flex-col ${note.color || 'glass-panel'}`}
                             >
                                 <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                     <button 
@@ -821,7 +821,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                         ))}
                     {personalNotes.length === 0 && (
                         <div className="col-span-full py-20 bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-3xl text-center flex flex-col items-center justify-center gap-4">
-                            <div className="bg-white p-4 rounded-full shadow-sm text-gray-400"><Edit2 size={48}/></div>
+                            <div className="glass-panel p-4 rounded-full shadow-sm text-gray-400"><Edit2 size={48}/></div>
                             <h3 className="font-black text-gray-400">هنوز یادداشتی ننوشته‌اید</h3>
                             <button onClick={() => { setEditingPersonalNote(null); setShowPersonalModal(true); }} className="bg-yellow-500 text-white px-6 py-2 rounded-xl font-bold">اولین یادداشت را ثبت کنید</button>
                         </div>
@@ -922,16 +922,16 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                                     
                                     <div className="space-y-4 text-sm font-bold text-gray-700">
                                         <div className="space-y-1">
-                                            {company.nationalId && <div>شناسه ملی: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.nationalId}</span></div>}
-                                            {company.registrationNumber && <div>شماره ثبت: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.registrationNumber}</span></div>}
-                                            {company.phone && <div>تلفن: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.phone}</span></div>}
+                                            {company.nationalId && <div>شناسه ملی: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.nationalId}</span></div>}
+                                            {company.registrationNumber && <div>شماره ثبت: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.registrationNumber}</span></div>}
+                                            {company.phone && <div>تلفن: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.phone}</span></div>}
                                         </div>
                                         
                                         {company.banks && company.banks.length > 0 ? (
                                             <div className="space-y-3 pt-2">
                                                 <div className="text-xs bg-yellow-100/50 text-yellow-800 px-2 py-1 rounded-lg inline-block">حساب‌های بانکی:</div>
                                                 {company.banks.map(bank => (
-                                                    <div key={bank.id} className="bg-white rounded-xl p-3 shadow-sm border border-yellow-100 relative group/bank">
+                                                    <div key={bank.id} className="glass-panel rounded-xl p-3 shadow-sm border border-yellow-100 relative group/bank">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <span className="font-black text-blue-900 border-r-2 border-blue-500 pr-2">{bank.bankName}</span>
                                                             <div className="flex gap-1 opacity-0 group/bank:opacity-100 transition-opacity">

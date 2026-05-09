@@ -184,7 +184,7 @@ const CompanyPerformanceReport: React.FC<Props> = ({ records }) => {
     };
 
     const content = (
-        <div id={elementId} className="printable-content bg-white p-8 shadow-2xl relative text-black" 
+        <div id={elementId} className="printable-content glass-panel p-8 shadow-2xl relative text-black" 
             style={{ 
                 width: '210mm', 
                 minHeight: '297mm', 
@@ -197,7 +197,7 @@ const CompanyPerformanceReport: React.FC<Props> = ({ records }) => {
                 <div className="bg-blue-100 font-black py-3 border-b border-black text-center text-lg">
                     خلاصه عملکرد شرکت‌ها در سال {selectedYear}
                 </div>
-                <div className="flex justify-between px-4 py-2 bg-gray-50 text-xs font-bold border-b border-black">
+                <div className="flex justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 text-xs font-bold border-b border-black">
                     <span>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</span>
                     <span>تعداد هفته‌های سپری شده: {Math.round(weeksPassed)}</span>
                 </div>
@@ -237,19 +237,19 @@ const CompanyPerformanceReport: React.FC<Props> = ({ records }) => {
     );
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border h-full flex flex-col">
+        <div className="glass-panel p-4 rounded-lg shadow-sm border h-full flex flex-col">
             
             {/* Controls */}
-            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200 no-print">
+            <div className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-3 rounded mb-4 border border-gray-200/50 dark:border-white/10 no-print">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex gap-2 items-center flex-wrap">
-                        <div className="flex items-center gap-2 bg-white border rounded px-2 py-1">
+                        <div className="flex items-center gap-2 glass-panel border rounded px-2 py-1">
                             <span className="text-xs font-bold text-gray-600">سال مالی:</span>
                             <select className="bg-transparent text-sm font-bold outline-none" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
-                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-indigo-200 text-indigo-800' : 'bg-white border text-gray-700'}`}>
+                        <button onClick={() => setShowRates(!showRates)} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${showRates ? 'bg-indigo-200 text-indigo-800' : 'glass-panel border text-gray-700'}`}>
                             <RefreshCw size={16}/> نرخ تبدیل
                         </button>
                     </div>
@@ -262,7 +262,7 @@ const CompanyPerformanceReport: React.FC<Props> = ({ records }) => {
 
                 {/* Rates Panel */}
                 {showRates && (
-                    <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 bg-white p-3 rounded border border-indigo-100 animate-fade-in">
+                    <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 glass-panel p-3 rounded border border-indigo-100 animate-fade-in">
                         <div><label className="block text-[10px] text-gray-500 font-bold">یورو به دلار (EUR)</label><input type="number" step="0.01" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.eurToUsd} onChange={e => setRates({...rates, eurToUsd: parseFloat(e.target.value) || 0})} /></div>
                         <div><label className="block text-[10px] text-gray-500 font-bold">درهم به دلار (AED)</label><input type="number" step="0.001" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.aedToUsd} onChange={e => setRates({...rates, aedToUsd: parseFloat(e.target.value) || 0})} /></div>
                         <div><label className="block text-[10px] text-gray-500 font-bold">یوان به دلار (CNY)</label><input type="number" step="0.001" className="w-full border rounded p-1 text-center dir-ltr font-bold text-sm" value={rates.cnyToUsd} onChange={e => setRates({...rates, cnyToUsd: parseFloat(e.target.value) || 0})} /></div>

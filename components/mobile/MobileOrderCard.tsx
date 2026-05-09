@@ -22,7 +22,7 @@ const MobileOrderCard: React.FC<Props> = ({ order, onView, onDelete, canDelete }
   };
 
   return (
-    <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-200 relative overflow-hidden active:scale-[0.99] transition-transform">
+    <div className="glass-panel rounded-2xl p-4 mb-4 shadow-sm border border-gray-200/50 dark:border-white/10 relative overflow-hidden active:scale-[0.99] transition-transform">
       {/* Status Bar */}
       <div className={`absolute top-0 left-0 right-0 h-1.5 ${order.status === OrderStatus.APPROVED_CEO ? 'bg-green-500' : order.status === OrderStatus.REJECTED ? 'bg-red-500' : 'bg-blue-500'}`}></div>
       
@@ -37,7 +37,7 @@ const MobileOrderCard: React.FC<Props> = ({ order, onView, onDelete, canDelete }
         </div>
       </div>
 
-      <div className="bg-gray-50 rounded-lg p-2 mb-3">
+      <div className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 rounded-lg p-2 mb-3">
         <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
           <span className="font-bold text-gray-800">بابت: </span>
           {order.description}

@@ -44,8 +44,8 @@ export const FiscalYearSwitcher: React.FC = () => {
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-gray-200 z-[9999] overflow-hidden animate-scale-in">
-                    <div className="p-2 bg-gray-50 border-b text-[10px] font-bold text-gray-400 uppercase">تغییر سال مالی</div>
+                <div className="absolute top-full right-0 mt-2 w-48 glass-panel rounded-xl shadow-2xl border border-gray-200/50 dark:border-white/10 z-[9999] overflow-hidden animate-scale-in">
+                    <div className="p-2 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border-b text-[10px] font-bold text-gray-400 uppercase">تغییر سال مالی</div>
                     <div className="max-h-60 overflow-y-auto">
                         {settings.fiscalYears.map(y => (
                             <button
@@ -192,7 +192,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
     return (
         <div className="space-y-8 animate-fade-in">
             {/* Create New Year Section */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Plus size={20}/> تعریف سال مالی جدید</h3>
                 <div className="flex gap-4 items-end">
                     <div className="flex-1">
@@ -207,7 +207,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
             <div className="space-y-3">
                 <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><ListOrdered size={20}/> لیست سال‌های مالی</h3>
                 {settings.fiscalYears?.map(y => (
-                    <div key={y.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 transition-all ${y.id === settings.activeFiscalYearId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-200'} ${editingYearId === y.id ? 'shadow-md border-indigo-300' : ''}`}>
+                    <div key={y.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 transition-all ${y.id === settings.activeFiscalYearId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'glass-panel border-gray-200'} ${editingYearId === y.id ? 'shadow-md border-indigo-300' : ''}`}>
                         <div className="flex items-center gap-3 w-full md:w-auto">
                             {y.isClosed ? <Lock size={18} className="text-gray-400"/> : <Unlock size={18} className="text-green-500"/>}
                             <div>
@@ -229,7 +229,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
                                     تنظیم به عنوان سال فعال
                                 </button>
                             )}
-                            <button onClick={() => loadCompanyConfig(y.id, settings)} className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editingYearId === y.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                            <button onClick={() => loadCompanyConfig(y.id, settings)} className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editingYearId === y.id ? 'bg-indigo-600 text-white border-indigo-600' : 'glass-panel text-gray-700 hover:bg-gray-50'}`}>
                                 تنظیم شماره شرکت‌ها
                             </button>
                             {!y.isClosed && (
@@ -256,8 +256,8 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
                         <button onClick={handleSaveCompanyConfig} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-sm"><Save size={16}/> ذخیره تغییرات</button>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-right bg-white rounded-xl border overflow-hidden">
-                            <thead className="bg-gray-100 text-gray-600">
+                        <table className="w-full text-sm text-right glass-panel rounded-xl border overflow-hidden">
+                            <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-600">
                                 <tr>
                                     <th className="p-3 border-b">نام شرکت</th>
                                     <th className="p-3 border-b w-40">شروع پرداخت</th>

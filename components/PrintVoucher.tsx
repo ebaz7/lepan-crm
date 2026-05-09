@@ -189,7 +189,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   const isRevoked = order.status === OrderStatus.REVOKED;
 
   const Stamp = ({ name, title }: { name: string; title: string }) => (
-    <div className={`border-[2px] border-blue-800 text-blue-800 rounded-lg ${isCompact ? 'py-0.5 px-2' : 'py-1 px-3'} rotate-[-5deg] opacity-90 mix-blend-multiply bg-white/80 print:bg-transparent shadow-sm inline-block`}>
+    <div className={`border-[2px] border-blue-800 text-blue-800 rounded-lg ${isCompact ? 'py-0.5 px-2' : 'py-1 px-3'} rotate-[-5deg] opacity-90 mix-blend-multiply glass-panel/80 print:bg-transparent shadow-sm inline-block`}>
       <div className={`${isCompact ? 'text-[8px]' : 'text-[9px]'} font-bold border-b border-blue-800 mb-0.5 text-center pb-0.5`}>{title}</div>
       <div className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} text-center font-bold whitespace-nowrap`}>{name}</div>
     </div>
@@ -396,7 +396,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   const receiptContent = (
       <div 
         id={printAreaId} 
-        className="printable-content bg-white relative text-gray-900 flex flex-col justify-between overflow-hidden" 
+        className="printable-content glass-panel relative text-gray-900 flex flex-col justify-between overflow-hidden" 
         style={{ 
             direction: 'rtl',
             width: '210mm', 
@@ -436,7 +436,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                             className="h-16 w-16 object-contain mix-blend-multiply" 
                         />
                     ) : (
-                        <div className="h-16 w-16 bg-gray-100 flex items-center justify-center rounded text-gray-400 text-xs text-center border border-dashed border-gray-300">
+                        <div className="h-16 w-16 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 flex items-center justify-center rounded text-gray-400 text-xs text-center border border-dashed border-gray-300">
                             بدون لوگو
                         </div>
                     )}
@@ -446,7 +446,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                     </div>
                 </div>
                 <div className="text-left flex flex-col items-end gap-1 w-1/3">
-                    <h2 className={`${isCompact ? 'text-sm px-2 py-0.5' : 'text-base px-3 py-1'} font-black bg-gray-100 border border-gray-200 text-gray-800 rounded-lg mb-1 whitespace-nowrap`}>رسید پرداخت وجه</h2>
+                    <h2 className={`${isCompact ? 'text-sm px-2 py-0.5' : 'text-base px-3 py-1'} font-black bg-gray-100 border border-gray-200/50 dark:border-white/10 text-gray-800 rounded-lg mb-1 whitespace-nowrap`}>رسید پرداخت وجه</h2>
                     <div className="flex items-center gap-2 text-[10px]"><span className="font-bold text-gray-500">شماره:</span><span className="font-mono font-bold text-base">{order.trackingNumber}</span></div>
                     <div className="flex items-center gap-2 text-[10px]"><span className="font-bold text-gray-500">تاریخ:</span><span className="font-bold text-gray-800">{formatDate(order.date)}</span></div>
                 </div>
@@ -454,7 +454,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
 
             <div className={`${isCompact ? 'space-y-1.5' : 'space-y-3'}`}>
                 <div className="grid grid-cols-2 gap-3">
-                    <div className={`bg-gray-50/50 border border-gray-300 ${isCompact ? 'p-1.5' : 'p-2'} rounded`}><span className="block text-gray-500 text-[9px] mb-0.5">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>{order.payee}</span></div>
+                    <div className={`bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200/50 border border-gray-300 ${isCompact ? 'p-1.5' : 'p-2'} rounded`}><span className="block text-gray-500 text-[9px] mb-0.5">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>{order.payee}</span></div>
                     <div className={`bg-gray-50/50 border border-gray-300 ${isCompact ? 'p-1.5' : 'p-2'} rounded`}><span className="block text-gray-500 text-[9px] mb-0.5">مبلغ کل پرداختی:</span><span className={`font-bold text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}>{formatCurrency(order.totalAmount)}</span></div>
                 </div>
                 <div className={`bg-gray-50/50 border border-gray-300 ${isCompact ? 'p-1.5 min-h-[30px]' : 'p-2 min-h-[45px]'} rounded`}><span className="block text-gray-500 text-[9px] mb-0.5">بابت (شرح پرداخت):</span><p className={`text-gray-800 text-justify font-medium leading-tight ${isCompact ? 'text-[10px]' : 'text-xs'}`}>{order.description}</p></div>
@@ -497,7 +497,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex flex-col items-center justify-start p-4 animate-fade-in safe-pb">
       <div className="w-full max-w-4xl mx-auto z-[210] no-print mb-4 shrink-0">
-         <div className="bg-white p-3 rounded-xl shadow-lg flex flex-col gap-3 w-full border border-gray-200">
+         <div className="glass-panel p-3 rounded-xl shadow-lg flex flex-col gap-3 w-full border border-gray-200">
              <div className="flex items-center justify-between border-b pb-2 mb-1">
                  <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
                      {isRevocationProcess ? <span className="text-red-600 flex items-center gap-1 animate-pulse"><AlertTriangle size={16}/> چرخه ابطال</span> : 'جزئیات و عملیات'}
@@ -520,13 +520,13 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
 
                  <div className="col-span-2 border-t mt-2 pt-2 flex flex-col gap-1">
                      <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
-                     <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
-                     <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
-                     <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
+                     <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'glass-panel border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
                  </div>
                  
                  {sharePlatform && (
-                     <div className="col-span-2 mt-2 bg-white rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
+                     <div className="col-span-2 mt-2 glass-panel rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
                          <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
                          <div className="p-2 border-b"><input className="w-full text-xs p-1 border rounded" placeholder="جستجو..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
                          <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => {
@@ -550,7 +550,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                                </div>
                              );
                          })}</div>
-                         <div className="p-2 bg-gray-50 border-t"><button onClick={()=>{const n=prompt("شماره یا شناسه دستی:"); if(n) handleShare(n);}} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:bg-white rounded border border-blue-100 transition-colors">ارسال به شماره دستی...</button></div>
+                         <div className="p-2 bg-gray-50 border-t"><button onClick={()=>{const n=prompt("شماره یا شناسه دستی:"); if(n) handleShare(n);}} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:glass-panel rounded border border-blue-100 transition-colors">ارسال به شماره دستی...</button></div>
                      </div>
                  )}
 
@@ -558,7 +558,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                  {canPrintBankForm && (
                      <button 
                         onClick={() => setPrintMode(printMode === 'receipt' ? 'bank_form' : 'receipt')} 
-                        className={`py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-colors border ${printMode === 'bank_form' ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-300'}`}
+                        className={`py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-colors border ${printMode === 'bank_form' ? 'bg-teal-100 text-teal-700 border-teal-200' : 'glass-panel text-gray-600 hover:bg-gray-50 border-gray-300'}`}
                      >
                         <LayoutTemplate size={14}/> {printMode === 'receipt' ? `قالب: ${dynamicTemplate?.name}` : 'رسید داخلی'}
                      </button>
@@ -569,7 +569,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                      <div className="col-span-2 md:col-span-4 flex flex-col gap-2 mt-2 bg-gray-50 p-2 rounded border animate-fade-in">
                          {/* Multi-Line Navigation */}
                          {paymentLines.length > 1 && (
-                             <div className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 mb-2">
+                             <div className="flex items-center justify-between glass-panel p-2 rounded border border-gray-200 mb-2">
                                  <button 
                                     onClick={() => setCurrentLineIndex(prev => Math.max(0, prev - 1))}
                                     disabled={currentLineIndex === 0}
@@ -610,7 +610,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                         
                          {/* DUAL PRINT TOGGLE BUTTONS */}
                          {isDualPrintEnabled && (
-                             <div className="flex gap-1 bg-white p-1 rounded border border-orange-200 mb-2">
+                             <div className="flex gap-1 glass-panel p-1 rounded border border-orange-200 mb-2">
                                  <button 
                                     onClick={() => setDualPrintMode('full')}
                                     className={`flex-1 text-[10px] font-bold py-1 rounded ${dualPrintMode === 'full' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
@@ -644,10 +644,10 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                          
                          {showCalibration && (
                              <div className="grid grid-cols-4 gap-1">
-                                 <button onClick={() => updateCalibration(0, -1)} className="bg-white border rounded p-1 hover:bg-gray-100">⬆️</button>
-                                 <button onClick={() => updateCalibration(0, 1)} className="bg-white border rounded p-1 hover:bg-gray-100">⬇️</button>
-                                 <button onClick={() => updateCalibration(-1, 0)} className="bg-white border rounded p-1 hover:bg-gray-100">⬅️</button>
-                                 <button onClick={() => updateCalibration(1, 0)} className="bg-white border rounded p-1 hover:bg-gray-100">➡️</button>
+                                 <button onClick={() => updateCalibration(0, -1)} className="glass-panel border rounded p-1 hover:bg-gray-100">⬆️</button>
+                                 <button onClick={() => updateCalibration(0, 1)} className="glass-panel border rounded p-1 hover:bg-gray-100">⬇️</button>
+                                 <button onClick={() => updateCalibration(-1, 0)} className="glass-panel border rounded p-1 hover:bg-gray-100">⬅️</button>
+                                 <button onClick={() => updateCalibration(1, 0)} className="glass-panel border rounded p-1 hover:bg-gray-100">➡️</button>
                              </div>
                          )}
                      </div>

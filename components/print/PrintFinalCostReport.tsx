@@ -83,7 +83,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
   const freightPerKgCurrency = totalWeight > 0 ? (record.freightCost || 0) / totalWeight : 0;
 
   const content = (
-      <div id="final-cost-print-area" className="printable-content bg-white p-8 shadow-2xl relative text-black" 
+      <div id="final-cost-print-area" className="printable-content glass-panel p-8 shadow-2xl relative text-black" 
         style={{ width: '210mm', minHeight: '297mm', direction: 'rtl', boxSizing: 'border-box' }}>
         
         {/* Header */}
@@ -99,7 +99,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
         </div>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-3 gap-y-2 gap-x-8 mb-6 bg-gray-50 p-4 rounded border border-gray-300 text-xs">
+        <div className="grid grid-cols-3 gap-y-2 gap-x-8 mb-6 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-4 rounded border border-gray-300 text-xs">
             <div><span className="font-bold text-gray-600">شرح کالا:</span> {record.goodsName}</div>
             <div><span className="font-bold text-gray-600">فروشنده:</span> {record.sellerName}</div>
             <div><span className="font-bold text-gray-600">ارز پایه:</span> {record.mainCurrency}</div>
@@ -126,7 +126,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
                         <td className="border border-black p-2 font-mono dir-ltr">{formatCurrency(exp.amount)}</td>
                     </tr>
                 ))}
-                <tr className="bg-gray-100 font-bold">
+                <tr className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 font-bold">
                     <td colSpan={2} className="border border-black p-2 text-left pl-4">جمع کل هزینه‌های ریالی پروژه</td>
                     <td className="border border-black p-2 font-mono dir-ltr">{formatCurrency(grandTotalRial)}</td>
                 </tr>
@@ -208,7 +208,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex flex-col items-center justify-start md:justify-center p-4 overflow-y-auto animate-fade-in safe-pb">
         <div className="relative md:absolute md:top-4 md:left-4 z-50 flex flex-col gap-2 no-print w-full md:w-auto mb-4 md:mb-0 order-1">
-            <div className="bg-white p-3 rounded-xl shadow-lg flex justify-between items-center gap-4">
+            <div className="glass-panel p-3 rounded-xl shadow-lg flex justify-between items-center gap-4">
                 <span className="font-bold text-sm">پیش‌نمایش چاپ</span>
                 <div className="flex gap-2">
                     <button onClick={handleDownloadPDF} disabled={processing} className="bg-red-600 text-white p-2 rounded text-xs flex items-center gap-1">{processing ? <Loader2 size={16} className="animate-spin"/> : 'PDF'}</button>

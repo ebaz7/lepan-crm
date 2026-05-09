@@ -57,7 +57,7 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Package size={24} /></div>
@@ -66,10 +66,10 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
           <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
-        <div className="p-4 md:p-6 overflow-y-auto bg-gray-50 flex-1 min-h-0">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto w-full max-w-full block" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="p-4 md:p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-1 min-h-0">
+          <div className="glass-panel rounded-xl border border-gray-200/50 dark:border-white/10 shadow-sm overflow-x-auto w-full max-w-full block" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full min-w-[700px] text-sm text-center">
-              <thead className="bg-gray-100 text-gray-700 font-bold whitespace-nowrap">
+              <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-700 font-bold whitespace-nowrap">
                 <tr><th className="p-3 w-10">#</th><th className="p-3 text-right">شرح کالا</th><th className="p-3 w-24 bg-blue-50 text-blue-800 border-l border-white">عدد/کارتن (درخواست)</th><th className="p-3 w-24 bg-green-50 text-green-800">کارتن خروجی</th><th className="p-3 w-24 bg-blue-50 text-blue-800 border-l border-white">وزن درخواستی</th><th className="p-3 w-24 bg-green-50 text-green-800">وزن خروجی</th><th className="p-3 w-10"></th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -78,9 +78,9 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
                     <td className="p-3 text-gray-500 font-mono">{idx + 1}</td>
                     <td className="p-3"><input className="w-full border rounded-lg p-2 text-sm font-bold" value={item.goodsName} onChange={e => handleUpdateItem(idx, 'goodsName', e.target.value)} placeholder="نام کالا"/></td>
                     <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.cartonCount}</td>
-                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none bg-white" value={item.deliveredCartonCount} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', Number(e.target.value))}/></td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredCartonCount} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', Number(e.target.value))}/></td>
                     <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.weight}</td>
-                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none bg-white" value={item.deliveredWeight} onChange={e => handleUpdateItem(idx, 'deliveredWeight', Number(e.target.value))}/></td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredWeight} onChange={e => handleUpdateItem(idx, 'deliveredWeight', Number(e.target.value))}/></td>
                     <td className="p-3 text-center"><button onClick={() => handleRemoveItem(idx)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={18}/></button></td>
                   </tr>
                 ))}
@@ -98,7 +98,7 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
             </table>
           </div>
         </div>
-        <div className="p-4 border-t bg-white flex justify-end gap-3">
+        <div className="p-4 border-t glass-panel flex justify-end gap-3">
           <button onClick={onClose} className="px-6 py-2 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50">انصراف</button>
           <button onClick={handleSave} className="px-6 py-2 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 shadow-lg flex items-center gap-2">
             <Save size={18} /> تایید نهایی و ارسال به انتظامات

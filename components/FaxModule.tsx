@@ -98,7 +98,7 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
         <div className="flex flex-col h-[calc(100vh-100px)] gap-6 p-6 animate-fade-in relative">
             
             {/* Input Form */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 max-w-4xl mx-auto w-full z-10">
+            <div className="glass-panel p-6 rounded-2xl shadow-sm border border-gray-200/50 dark:border-white/10 max-w-4xl mx-auto w-full z-10">
                 <div className="flex items-center gap-3 mb-6 pb-4 border-b">
                     <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600"><Printer size={24}/></div>
                     <div>
@@ -120,19 +120,19 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 flex items-center gap-2"><UserIcon size={16}/> نام گیرنده</label>
-                        <input className="w-full border rounded-xl p-3 bg-gray-50 focus:bg-white transition-colors" placeholder="مثال: جناب آقای..." value={recipientName} onChange={e => setRecipientName(e.target.value)}/>
+                        <input className="w-full border rounded-xl p-3 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:glass-panel transition-colors" placeholder="مثال: جناب آقای..." value={recipientName} onChange={e => setRecipientName(e.target.value)}/>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700 flex items-center gap-2"><Phone size={16}/> شماره فکس</label>
-                        <input className="w-full border rounded-xl p-3 bg-gray-50 focus:bg-white transition-colors dir-ltr text-left" placeholder="021-..." value={faxNumber} onChange={e => setFaxNumber(e.target.value)}/>
+                        <input className="w-full border rounded-xl p-3 bg-gray-50 focus:glass-panel transition-colors dir-ltr text-left" placeholder="021-..." value={faxNumber} onChange={e => setFaxNumber(e.target.value)}/>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-sm font-bold text-gray-700 flex items-center gap-2"><FileText size={16}/> موضوع نامه</label>
-                        <input className="w-full border rounded-xl p-3 bg-gray-50 focus:bg-white transition-colors" placeholder="موضوع..." value={subject} onChange={e => setSubject(e.target.value)}/>
+                        <input className="w-full border rounded-xl p-3 bg-gray-50 focus:glass-panel transition-colors" placeholder="موضوع..." value={subject} onChange={e => setSubject(e.target.value)}/>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-sm font-bold text-gray-700">متن نامه</label>
-                        <textarea className="w-full border rounded-xl p-3 bg-gray-50 focus:bg-white transition-colors h-48 resize-none" placeholder="متن درخواست خود را اینجا بنویسید..." value={body} onChange={e => setBody(e.target.value)}/>
+                        <textarea className="w-full border rounded-xl p-3 bg-gray-50 focus:glass-panel transition-colors h-48 resize-none" placeholder="متن درخواست خود را اینجا بنویسید..." value={body} onChange={e => setBody(e.target.value)}/>
                     </div>
                 </div>
 
@@ -146,7 +146,7 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
 
             {/* Hidden Fax Template for PDF Generation */}
             <div className="absolute top-0 left-0 -z-50 opacity-0 pointer-events-none">
-                <div id="fax-template" className="bg-white w-[210mm] min-h-[297mm] p-[20mm] text-black font-serif flex flex-col relative">
+                <div id="fax-template" className="glass-panel w-[210mm] min-h-[297mm] p-[20mm] text-black font-serif flex flex-col relative">
                     {/* Header */}
                     <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-8">
                         <div className="flex items-center gap-4">
@@ -164,7 +164,7 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
                     </div>
 
                     {/* Meta Data Box */}
-                    <div className="border border-black p-4 mb-8 grid grid-cols-2 gap-4 text-sm bg-gray-100">
+                    <div className="border border-black p-4 mb-8 grid grid-cols-2 gap-4 text-sm bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200">
                         <div><span className="font-bold">گیرنده:</span> {recipientName}</div>
                         <div><span className="font-bold">شماره فکس:</span> {faxNumber}</div>
                         <div className="col-span-2"><span className="font-bold">موضوع:</span> {subject}</div>

@@ -206,7 +206,7 @@ const BackupManager: React.FC = () => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden animate-fade-in mb-6">
+        <div className="glass-panel p-6 rounded-2xl border border-gray-200/50 dark:border-white/10 shadow-sm relative overflow-hidden animate-fade-in mb-6">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                 <Database size={100}/>
             </div>
@@ -230,13 +230,13 @@ const BackupManager: React.FC = () => {
                              </button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div className="bg-white p-2 rounded-lg border border-green-200">
+                            <div className="glass-panel p-2 rounded-lg border border-green-200">
                                 <label className="text-[10px] text-gray-500 block mb-1">بازه زمانی (ساعت)</label>
                                 <select value={backupInterval} onChange={e => setBackupInterval(Number(e.target.value))} className="w-full text-xs font-bold text-green-800 bg-transparent">
                                     {[1, 2, 3, 6, 12, 24, 48].map(h => <option key={h} value={h}>{h} ساعت</option>)}
                                 </select>
                             </div>
-                            <div className="bg-white p-2 rounded-lg border border-green-200">
+                            <div className="glass-panel p-2 rounded-lg border border-green-200">
                                 <label className="text-[10px] text-gray-500 block mb-1">نوع بکاپ</label>
                                 <select value={backupMode} onChange={e => setBackupMode(e.target.value as any)} className="w-full text-xs font-bold text-green-800 bg-transparent">
                                     <option value="full">کامل (دیتابیس + فایل‌ها)</option>
@@ -251,7 +251,7 @@ const BackupManager: React.FC = () => {
                 </div>
                 
                 {/* Auto Backup List */}
-                <div className="bg-white rounded-lg border border-green-100 overflow-hidden">
+                <div className="glass-panel rounded-lg border border-green-100 overflow-hidden">
                     <div className="p-2 bg-green-100 flex justify-between items-center">
                         <span className="text-xs font-bold text-green-800 flex items-center gap-1"><FolderOpen size={14}/> آرشیو بکاپ‌های خودکار</span>
                         <button onClick={fetchAutoBackups} className="text-green-700 hover:bg-green-200 p-1 rounded"><RefreshCw size={14} className={loadingBackups ? "animate-spin" : ""}/></button>
@@ -263,7 +263,7 @@ const BackupManager: React.FC = () => {
                             <div className="p-4 text-center text-xs text-gray-400">هیچ بکاپ خودکاری یافت نشد.</div>
                         ) : (
                             autoBackups.map((backup, idx) => (
-                                <div key={idx} className="flex justify-between items-center p-2 text-xs border-b last:border-0 hover:bg-gray-50">
+                                <div key={idx} className="flex justify-between items-center p-2 text-xs border-b last:border-0 hover:bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                                     <div className="flex flex-col">
                                         <span className="font-bold text-gray-700">{backup.name}</span>
                                         <span className="text-[10px] text-gray-400">{new Date(backup.date).toLocaleString('fa-IR')} - {(backup.size / 1024 / 1024).toFixed(2)} MB</span>
@@ -290,7 +290,7 @@ const BackupManager: React.FC = () => {
                             {downloading ? <Loader2 size={20} className="animate-spin"/> : <DownloadCloud size={20}/>} 
                             دانلود کامل (ZIP: دیتابیس + فایل‌ها)
                         </span>
-                        <span className="text-[10px] bg-white px-2 py-1 rounded border border-blue-100 text-blue-600 flex items-center gap-1">
+                        <span className="text-[10px] glass-panel px-2 py-1 rounded border border-blue-100 text-blue-600 flex items-center gap-1">
                             <FileArchive size={12}/>
                         </span>
                     </button>

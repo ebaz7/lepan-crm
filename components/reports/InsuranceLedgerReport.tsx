@@ -148,7 +148,7 @@ const InsuranceLedgerReport: React.FC<Props> = ({ records, settings }) => {
     };
 
     const content = (
-        <div id={elementId} className="printable-content bg-white p-8 shadow-2xl relative text-black" 
+        <div id={elementId} className="printable-content glass-panel p-8 shadow-2xl relative text-black" 
             style={{ 
                 width: '210mm', 
                 minHeight: '297mm', 
@@ -158,14 +158,14 @@ const InsuranceLedgerReport: React.FC<Props> = ({ records, settings }) => {
             }}>
             <div className="border border-black mb-4">
                 <div className="bg-gray-200 font-black py-3 border-b border-black text-center text-lg">صورتحساب شرکت بیمه: {selectedInsCompany}</div>
-                <div className="flex justify-between px-4 py-2 bg-gray-50 text-xs font-bold">
+                <div className="flex justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 text-xs font-bold">
                     <span>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</span>
                 </div>
             </div>
 
             <table className="w-full border-collapse text-center border border-black text-xs">
                 <thead>
-                    <tr className="bg-gray-100">
+                    <tr className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200">
                         <th className="border border-black p-2 w-24">تاریخ</th>
                         <th className="border border-black p-2">شرح عملیات</th>
                         <th className="border border-black p-2 w-32">بدهکار (پرداختی ما)</th>
@@ -201,8 +201,8 @@ const InsuranceLedgerReport: React.FC<Props> = ({ records, settings }) => {
     );
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border h-full flex flex-col">
-            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200 no-print flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="glass-panel p-4 rounded-lg shadow-sm border h-full flex flex-col">
+            <div className="bg-gray-100 p-3 rounded mb-4 border border-gray-200/50 dark:border-white/10 no-print flex flex-col md:flex-row gap-4 justify-between items-center">
                 <div className="flex gap-2 items-center w-full md:w-auto">
                     <label className="text-sm font-bold text-gray-700">شرکت بیمه:</label>
                     <select className="border rounded p-2 text-sm flex-1 md:w-64" value={selectedInsCompany} onChange={e => setSelectedInsCompany(e.target.value)}>

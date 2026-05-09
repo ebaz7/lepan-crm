@@ -133,7 +133,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
     };
 
     const content = (
-        <div id={elementId} className="printable-content bg-white p-8 shadow-lg text-black" 
+        <div id={elementId} className="printable-content glass-panel p-8 shadow-lg text-black" 
             style={{
                 width: '210mm', 
                 minHeight: '297mm', 
@@ -147,7 +147,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 <p className="text-sm text-gray-600">گزارش گردش انبار</p>
             </div>
 
-            <div className="meta bg-gray-100 p-2 rounded border border-gray-300 flex justify-between mb-2 text-xs font-bold">
+            <div className="meta bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-2 rounded border border-gray-300 flex justify-between mb-2 text-xs font-bold">
                 <div>شرکت: {selectedCompany}</div>
                 <div>کالا: {activeItemName}</div>
                 <div>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</div>
@@ -205,7 +205,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
     return (
         <div className="space-y-4 h-full flex flex-col">
             {/* Filter Bar (Same as before) */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-end no-print">
+            <div className="glass-panel p-4 rounded-xl border border-gray-200/50 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-4 items-end no-print">
                 <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                         <label className="text-xs font-bold text-gray-500 block mb-1">شرکت</label>
@@ -249,7 +249,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             </div>
 
             {/* Responsive Container for Scaling */}
-            <div className="flex-1 bg-gray-50 border rounded-xl overflow-hidden relative">
+            <div className="flex-1 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border rounded-xl overflow-hidden relative">
                 <div className="absolute inset-0 overflow-auto flex justify-center p-4" ref={containerWrapperRef}>
                      <div style={{ 
                         width: '210mm', 

@@ -25,7 +25,7 @@ const InsuranceTab: React.FC<InsuranceTabProps> = ({
 }) => {
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                 <h3 className="font-bold text-gray-800">بیمه باربری</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1">
@@ -73,12 +73,12 @@ const InsuranceTab: React.FC<InsuranceTabProps> = ({
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+            <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                 <h3 className="font-bold text-gray-800">الحاقیه‌های بیمه</h3>
-                <div className="bg-gray-50 p-4 rounded-lg flex flex-wrap gap-4 items-end">
+                <div className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-4 rounded-lg flex flex-wrap gap-4 items-end">
                     <div className="space-y-1">
                         <label className="text-xs font-bold text-gray-700">نوع الحاقیه</label>
-                        <div className="flex bg-white rounded border overflow-hidden">
+                        <div className="flex glass-panel rounded border overflow-hidden">
                             <button onClick={() => setEndorsementType('increase')} className={`px-3 py-1 text-xs font-bold ${endorsementType === 'increase' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}>افزایش حق بیمه</button>
                             <button onClick={() => setEndorsementType('refund')} className={`px-3 py-1 text-xs font-bold ${endorsementType === 'refund' ? 'bg-green-100 text-green-700' : 'text-gray-600'}`}>برگشت حق بیمه</button>
                         </div>

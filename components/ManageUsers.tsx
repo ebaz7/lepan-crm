@@ -78,8 +78,8 @@ const ManageUsers: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6"><div className="flex items-center gap-3"><div className={`p-2 rounded-lg ${editingId ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'}`}>{editingId ? <Pencil size={24} /> : <UserPlus size={24} />}</div><h2 className="text-xl font-bold text-gray-800">{editingId ? 'ویرایش اطلاعات کاربر' : 'تعریف کاربر جدید'}</h2></div><button onClick={handleBackup} className="flex items-center gap-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-colors"><Download size={16} />دانلود نسخه پشتیبان</button></div>
+      <div className="glass-panel rounded-2xl shadow-sm border border-gray-200/50 dark:border-white/10 p-6">
+        <div className="flex items-center justify-between mb-6"><div className="flex items-center gap-3"><div className={`p-2 rounded-lg ${editingId ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'}`}>{editingId ? <Pencil size={24} /> : <UserPlus size={24} />}</div><h2 className="text-xl font-bold text-gray-800">{editingId ? 'ویرایش اطلاعات کاربر' : 'تعریف کاربر جدید'}</h2></div><button onClick={handleBackup} className="flex items-center gap-2 text-sm bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-colors"><Download size={16} />دانلود نسخه پشتیبان</button></div>
         
         {/* Warning about Role Selection */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 flex items-start gap-2">
@@ -108,7 +108,7 @@ const ManageUsers: React.FC = () => {
           <div className="space-y-1 lg:col-span-3"><label className="text-sm text-gray-600">نام کاربری</label><input required type="text" value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm text-left dir-ltr" placeholder="username" /></div>
           <div className="space-y-1 lg:col-span-2"><label className="text-sm text-gray-600">رمز عبور</label><input required type="text" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm text-left dir-ltr" placeholder="password" /></div>
           <div className="space-y-1 lg:col-span-2"><label className="text-sm text-gray-600 font-bold">نقش کاربری (مهم)</label>
-            <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border-2 border-blue-100 rounded-lg px-3 py-2 text-sm bg-white focus:border-blue-500 transition-colors">
+            <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border-2 border-blue-100 rounded-lg px-3 py-2 text-sm glass-panel focus:border-blue-500 transition-colors">
                 <option disabled value="">انتخاب کنید...</option>
                 <optgroup label="✅ نقش‌های سیستمی (پیش‌فرض)">
                     <option value={UserRole.ADMIN}>مدیر سیستم (دسترسی کامل)</option>
@@ -137,7 +137,7 @@ const ManageUsers: React.FC = () => {
           <div className="space-y-1 lg:col-span-1"><label className="text-sm text-gray-600 flex items-center gap-1"><Send size={12}/> آیدی تلگرام</label><input type="text" value={formData.telegramChatId} onChange={(e) => setFormData({...formData, telegramChatId: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm text-left dir-ltr" placeholder="Chat ID" /></div>
           
           <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 px-2 py-1.5 rounded cursor-pointer border border-gray-200">
+              <label className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 px-2 py-1.5 rounded cursor-pointer border border-gray-200">
                   <input type="checkbox" checked={formData.canManageTrade} onChange={e => setFormData({...formData, canManageTrade: e.target.checked})} className="w-4 h-4 text-blue-600" />
                   <span>دسترسی اختصاصی بازرگانی</span>
               </label>
@@ -156,7 +156,7 @@ const ManageUsers: React.FC = () => {
           </div>
         </form>
       </div>
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="glass-panel rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">لیست کاربران سیستم</h2></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-right"><thead className="bg-gray-5 text-gray-600"><tr><th className="px-6 py-3">تصویر</th><th className="px-6 py-3">نام و نام خانوادگی</th><th className="px-6 py-3">نام کاربری</th><th className="px-6 py-3">شماره تماس</th><th className="px-6 py-3">نقش</th><th className="px-6 py-3">دسترسی‌ها</th><th className="px-6 py-3 text-center">عملیات</th></tr></thead>

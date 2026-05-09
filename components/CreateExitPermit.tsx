@@ -158,7 +158,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in relative max-w-4xl mx-auto my-6">
+        <div className="glass-panel rounded-2xl shadow-lg border border-gray-200/50 dark:border-white/10 overflow-hidden animate-fade-in relative max-w-4xl mx-auto my-6">
             
             {/* Hidden Print Element for Auto-Send */}
             {tempPermit && (
@@ -186,14 +186,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
                 
                 {/* 1. General Info */}
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
-                    <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
+                <div className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-5 rounded-2xl border border-gray-200 relative">
+                    <div className="absolute -top-3 right-4 glass-panel px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
                         <Hash size={16}/> اطلاعات پایه
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
                         <div>
                             <label className="block text-xs font-bold text-gray-700 mb-1.5">شرکت صادرکننده</label>
-                            <select className="w-full border rounded-xl p-3 text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none" value={selectedCompany} onChange={handleCompanyChange}>
+                            <select className="w-full border rounded-xl p-3 text-sm glass-panel focus:ring-2 focus:ring-teal-500 outline-none" value={selectedCompany} onChange={handleCompanyChange}>
                                 <option value="">-- انتخاب کنید --</option>
                                 {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
@@ -215,23 +215,23 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
                 {/* 2. Items */}
                 <div className="bg-teal-50/50 p-5 rounded-2xl border border-teal-100 relative">
-                     <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-teal-700 border border-teal-200 rounded-lg shadow-sm flex items-center gap-2">
+                     <div className="absolute -top-3 right-4 glass-panel px-3 py-1 text-sm font-bold text-teal-700 border border-teal-200 rounded-lg shadow-sm flex items-center gap-2">
                         <Package size={16}/> لیست اقلام و کالاها
                     </div>
                     <div className="mt-2 space-y-3">
                         {items.map((item, idx) => (
-                            <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                            <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end glass-panel p-3 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex-1 w-full">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1">نام کالا / محصول</label>
                                     <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="مثال: میلگرد 14..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
-                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:bg-white transition-colors outline-none" value={item.cartonCount} onChange={e => { const n = [...items]; n[idx].cartonCount = +e.target.value; setItems(n); }} />
+                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.cartonCount} onChange={e => { const n = [...items]; n[idx].cartonCount = +e.target.value; setItems(n); }} />
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">وزن تقریبی (KG)</label>
-                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:bg-white transition-colors outline-none" value={item.weight} onChange={e => { const n = [...items]; n[idx].weight = +e.target.value; setItems(n); }} />
+                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight} onChange={e => { const n = [...items]; n[idx].weight = +e.target.value; setItems(n); }} />
                                 </div>
                                 {items.length > 1 && (
                                     <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="bg-red-100 text-red-500 p-2.5 rounded-lg hover:bg-red-200 transition-colors">
@@ -249,24 +249,24 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 {/* 3. Destination & Driver */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
-                        <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
+                        <div className="absolute -top-3 right-4 glass-panel px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
                             <MapPin size={16}/> گیرنده و مقصد
                         </div>
                         <div className="space-y-3 mt-2">
-                            <div><label className="text-xs font-bold block mb-1">نام گیرنده</label><input className="w-full border rounded-xl p-2 text-sm bg-white" placeholder="شخص یا شرکت..." value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} /></div>
-                            <div><label className="text-xs font-bold block mb-1">شماره تماس</label><input className="w-full border rounded-xl p-2 text-sm bg-white dir-ltr text-right" placeholder="0912..." value={destinations[0].phone} onChange={e => { const d = [...destinations]; d[0].phone = e.target.value; setDestinations(d); }} /></div>
-                            <div><label className="text-xs font-bold block mb-1">آدرس تخلیه</label><textarea className="w-full border rounded-xl p-2 text-sm bg-white h-20 resize-none" placeholder="آدرس دقیق..." value={destinations[0].address} onChange={e => { const d = [...destinations]; d[0].address = e.target.value; setDestinations(d); }} /></div>
+                            <div><label className="text-xs font-bold block mb-1">نام گیرنده</label><input className="w-full border rounded-xl p-2 text-sm glass-panel" placeholder="شخص یا شرکت..." value={destinations[0].recipientName} onChange={e => { const d = [...destinations]; d[0].recipientName = e.target.value; setDestinations(d); }} /></div>
+                            <div><label className="text-xs font-bold block mb-1">شماره تماس</label><input className="w-full border rounded-xl p-2 text-sm glass-panel dir-ltr text-right" placeholder="0912..." value={destinations[0].phone} onChange={e => { const d = [...destinations]; d[0].phone = e.target.value; setDestinations(d); }} /></div>
+                            <div><label className="text-xs font-bold block mb-1">آدرس تخلیه</label><textarea className="w-full border rounded-xl p-2 text-sm glass-panel h-20 resize-none" placeholder="آدرس دقیق..." value={destinations[0].address} onChange={e => { const d = [...destinations]; d[0].address = e.target.value; setDestinations(d); }} /></div>
                         </div>
                     </div>
 
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
-                         <div className="absolute -top-3 right-4 bg-white px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
+                         <div className="absolute -top-3 right-4 glass-panel px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
                             <Truck size={16}/> حمل و نقل (اختیاری)
                         </div>
                         <div className="space-y-3 mt-2">
-                            <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-xl p-2 text-sm bg-white" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
-                            <div><label className="text-xs font-bold block mb-1">پلاک خودرو</label><input className="w-full border rounded-xl p-2 text-sm bg-white dir-ltr text-center font-mono font-bold tracking-widest" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
-                            <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm bg-white h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-xl p-2 text-sm glass-panel" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block mb-1">پلاک خودرو</label><input className="w-full border rounded-xl p-2 text-sm glass-panel dir-ltr text-center font-mono font-bold tracking-widest" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm glass-panel h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
                         </div>
                     </div>
                 </div>

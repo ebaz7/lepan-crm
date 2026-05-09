@@ -62,7 +62,7 @@ const PrintGuaranteeReport: React.FC<Props> = ({ data, totalAmount, onClose }) =
   };
 
   const content = (
-      <div id="guarantee-report-print-content" className="printable-content bg-white p-8 shadow-2xl relative text-black" 
+      <div id="guarantee-report-print-content" className="printable-content glass-panel p-8 shadow-2xl relative text-black" 
         style={{ 
             width: '290mm', 
             minHeight: '200mm', 
@@ -75,7 +75,7 @@ const PrintGuaranteeReport: React.FC<Props> = ({ data, totalAmount, onClose }) =
             {/* Header */}
             <div className="border border-black mb-4">
                 <div className="bg-gray-200 font-black py-3 border-b border-black text-center text-lg">گزارش جامع چک‌های تضمین و ضمانت‌نامه‌ها</div>
-                <div className="flex justify-between px-4 py-2 bg-white text-xs font-bold border-b border-black">
+                <div className="flex justify-between px-4 py-2 glass-panel text-xs font-bold border-b border-black">
                     <span>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</span>
                     <span>تعداد کل: {data.length} فقره</span>
                 </div>
@@ -141,12 +141,12 @@ const PrintGuaranteeReport: React.FC<Props> = ({ data, totalAmount, onClose }) =
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start md:justify-center p-4 overflow-y-auto animate-fade-in safe-pb">
       <div className="relative md:absolute md:top-4 md:left-4 z-50 flex flex-col gap-2 no-print w-full md:w-auto mb-4 md:mb-0 order-1">
-         <div className="bg-white p-3 rounded-xl shadow-lg flex justify-between items-center gap-4">
+         <div className="glass-panel p-3 rounded-xl shadow-lg flex justify-between items-center gap-4">
              <span className="font-bold text-sm">پیش‌نمایش چاپ / PDF</span>
              <div className="flex gap-2">
                 <button onClick={handleDownloadPDF} disabled={processing} className="bg-red-600 text-white p-2 rounded text-xs flex items-center gap-1 hover:bg-red-700 transition-colors shadow-sm">{processing ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>} دانلود PDF</button>
                 <button onClick={handlePrint} className="bg-blue-600 text-white p-2 rounded text-xs flex items-center gap-1 hover:bg-blue-700 transition-colors shadow-sm"><Printer size={16}/> چاپ</button>
-                <button onClick={onClose} className="bg-gray-100 text-gray-700 p-2 rounded hover:bg-gray-200 transition-colors"><X size={18}/></button>
+                <button onClick={onClose} className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-700 p-2 rounded hover:bg-gray-200 transition-colors"><X size={18}/></button>
              </div>
          </div>
       </div>
