@@ -328,7 +328,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   );
 
   return (
-    <div className="flex min-h-[100dvh] bg-transparent text-[var(--text-primary)] font-sans relative">
+    <div className="flex min-h-[100dvh] bg-transparent text-[var(--text-primary)] font-sans relative overflow-hidden">
+      {/* Background Blobs for fluid depth */}
+      <div className="bg-blobs">
+          <div className="blob blob-1"></div>
+          <div className="blob blob-2"></div>
+          <div className="blob blob-3"></div>
+      </div>
       
       {/* ... (Update Banner, iOS Prompt, Profile Modal code preserved) ... */}
       {isUpdateAvailable && (<div className="fixed top-0 left-0 right-0 bg-blue-600 text-white z-[9999] p-3 text-center shadow-lg animate-slide-down flex justify-center items-center gap-4"><div className="flex items-center gap-2"><RefreshCw size={20} className="animate-spin"/><span className="font-bold text-sm">نسخه جدید نرم‌افزار در دسترس است!</span></div><button onClick={handleReload} className="glass-panel text-blue-600 px-4 py-1 rounded-full text-xs font-bold hover:bg-blue-50 transition-colors shadow-sm">بروزرسانی (رفرش)</button></div>)}

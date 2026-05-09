@@ -438,13 +438,14 @@ function App() {
             <NotificationController currentUser={currentUser} />
 
             {toast && toast.show && (
-                <div className="fixed top-24 md:top-4 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel border border-white/40 dark:border-white/10 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[300px] max-w-[90vw] animate-slide-down backdrop-blur-3xl" onClick={closeToast}>
-                    <div className="bg-blue-500/20 p-2 rounded-xl text-blue-600 dark:text-blue-400"><Bell size={20} className="animate-pulse" /></div>
+                <div className="fixed top-24 md:top-8 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-start gap-4 min-w-[320px] max-w-[90vw] animate-slide-down backdrop-blur-3xl overflow-hidden" onClick={closeToast}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+                    <div className="bg-blue-500/10 p-2.5 rounded-2xl text-blue-600 dark:text-blue-400 border border-blue-500/20"><Bell size={20} className="animate-pulse" /></div>
                     <div className="flex-1">
-                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1">{toast.title}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
+                        <h4 className="font-black text-gray-900 dark:text-gray-100 text-sm mb-0.5 tracking-tight">{toast.title}</h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1"><X size={18} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><X size={18} /></button>
                 </div>
             )}
 
