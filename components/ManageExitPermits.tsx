@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
+import SecurityFinalizeModal from './SecurityFinalizeModal';
 import EditExitPermitModal from './EditExitPermitModal';
 import useIsMobile from '../hooks/useIsMobile';
 import html2canvas from 'html2canvas';
@@ -26,6 +27,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
+    const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [autoSendPermit, setAutoSendPermit] = useState<ExitPermit | null>(null);
 
@@ -129,14 +131,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             return; 
         }
         
-        let exitTimeStr = '';
         if (p.status === ExitPermitStatus.PENDING_SECURITY) {
-            const t = prompt('ساعت خروج را وارد کنید (مثال 14:30):', new Date().toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'}));
-            if (!t) return;
-            exitTimeStr = t;
-        } else {
-            if (!confirm(`آیا مطمئن هستید؟ (${getActionLabel(p.status)})`)) return;
+            setSecurityFinalize(p);
+            return;
         }
+
+        if (!confirm(`آیا مطمئن هستید؟ (${getActionLabel(p.status)})`)) return;
 
         setProcessingId(p.id);
         
@@ -144,22 +144,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             let nextStatus = ExitPermitStatus.PENDING_FACTORY;
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
-            else if (p.status === ExitPermitStatus.PENDING_WAREHOUSE) nextStatus = ExitPermitStatus.PENDING_SECURITY;
-            else if (p.status === ExitPermitStatus.PENDING_SECURITY) nextStatus = ExitPermitStatus.EXITED;
 
             const updatedPermit = { ...p, status: nextStatus };
             if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
-            else if (p.status === ExitPermitStatus.PENDING_SECURITY) {
-                updatedPermit.approverSecurity = currentUser.fullName;
-                updatedPermit.exitTime = exitTimeStr;
-            }
 
-            await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: exitTimeStr });
+            await updateExitPermitStatus(p.id, nextStatus, currentUser);
             setAutoSendPermit(updatedPermit);
             
             setTimeout(async () => {
-                await sendNotification(updatedPermit, p.status, exitTimeStr);
+                await sendNotification(updatedPermit, p.status);
                 setProcessingId(null);
                 setAutoSendPermit(null);
                 loadData();
@@ -171,14 +165,46 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    const handleWarehouseSubmit = async (finalItems: any[], extraData: { driverName?: string, driverPhone?: string, plateNumber?: string }) => {
+    const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string }) => {
+        if (!securityFinalize) return;
+        setProcessingId(securityFinalize.id);
+        try {
+            const nextStatus = ExitPermitStatus.EXITED;
+            const updatedPermit = { 
+                ...securityFinalize, 
+                status: nextStatus,
+                driverName: data.driverName,
+                driverPhone: data.driverPhone,
+                plateNumber: data.plateNumber,
+                exitTime: data.exitTime,
+                approverSecurity: currentUser.fullName,
+                updatedAt: Date.now()
+            };
+
+            await editExitPermit(updatedPermit); 
+            
+            setAutoSendPermit(updatedPermit);
+            
+            setTimeout(async () => {
+                await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY, data.exitTime);
+                setProcessingId(null);
+                setSecurityFinalize(null);
+                setAutoSendPermit(null);
+                loadData();
+            }, 2500);
+        } catch (e) {
+            alert('خطا در ثبت خروج نهایی');
+            setProcessingId(null);
+        }
+    };
+
+    const handleWarehouseSubmit = async (finalItems: any[]) => {
         if (!warehouseFinalize) return;
         setProcessingId(warehouseFinalize.id);
         try {
             const updated = { 
                 ...warehouseFinalize, 
                 items: finalItems, 
-                ...extraData,
                 approverWarehouse: currentUser.fullName, 
                 status: ExitPermitStatus.PENDING_SECURITY,
                 weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0),
@@ -537,6 +563,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     permit={warehouseFinalize} 
                     onClose={() => setWarehouseFinalize(null)} 
                     onConfirm={handleWarehouseSubmit} 
+                />
+            )}
+
+            {securityFinalize && (
+                <SecurityFinalizeModal
+                    permit={securityFinalize}
+                    onClose={() => setSecurityFinalize(null)}
+                    onConfirm={handleSecuritySubmit}
                 />
             )}
         </div>

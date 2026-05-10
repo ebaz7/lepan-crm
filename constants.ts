@@ -164,8 +164,9 @@ export const getShamsiDateFromIso = (isoDate: string) => {
       return { year: 1403, month: 1, day: 1 }; // Safe default
   }
   try {
-      const [yStr, mStr, dStr] = isoDate.split('-').map(Number);
-      if(!yStr || !mStr || !dStr) return { year: 1403, month: 1, day: 1 }; // Parsing failed
+      const datePart = isoDate.split('T')[0];
+      const [yStr, mStr, dStr] = datePart.split('-').map(Number);
+      if(isNaN(yStr) || isNaN(mStr) || isNaN(dStr)) return { year: 1403, month: 1, day: 1 }; // Parsing failed
 
       // Use noon to avoid timezone rollover issues shifting the day
       const date = new Date(yStr, mStr - 1, dStr, 12, 0, 0); 
