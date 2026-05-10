@@ -256,47 +256,42 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
   if (embed) return content;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-start md:justify-center p-4 overflow-y-auto animate-fade-in no-print safe-pb">
-        <div className="glass-panel p-4 rounded-2xl shadow-2xl z-[10000] flex flex-col gap-3 w-full max-w-[148mm] md:w-64 md:fixed md:top-8 md:left-8 mb-6 md:mb-0 relative order-1 sticky top-0 mt-2 md:mt-0 border border-white/20">
-            <div className="flex justify-between items-center border-b pb-2"><span className="font-bold text-sm text-gray-800">پنل عملیات چاپ</span><button onClick={onClose} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button></div>
-            {((tx.status as any) === 'DELETED' || tx.status === 'REJECTED') && (<div className="bg-red-50 p-2 rounded-lg border border-red-200 flex items-start gap-2 text-xs text-red-800"><AlertTriangle size={16} className="shrink-0 mt-0.5"/><div><span className="font-bold block">این بیجک {(tx.status as any) === 'DELETED' ? 'حذف' : 'رد'} شده است.</span>{tx.rejectionReason}</div></div>)}
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-start p-2 animate-fade-in no-print safe-pb">
+        <div className="bg-white p-2 rounded-xl shadow-2xl z-[10000] flex flex-wrap items-center justify-center gap-2 w-full max-w-[148mm] md:fixed md:top-4 md:left-4 mb-2 md:mb-0 relative order-1 sticky top-0 mt-1 md:mt-2 border border-gray-200">
+            <div className="flex items-center gap-2 border-l pl-2">
+                <button onClick={onClose} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"><X size={16}/></button>
+                <span className="font-bold text-[10px] text-gray-600 hidden md:inline">پنل عملیات</span>
+            </div>
+
             {(onApprove || onReject) && (
-                <div className="bg-white/10 backdrop-blur-sm p-1.5 rounded-xl flex items-center justify-center gap-2 mb-1 border border-white/20">
+                <div className="flex items-center gap-1.5 border-l px-2">
                     {onApprove && (
                         <button 
                             onClick={onApprove} 
-                            className="px-6 py-1.5 bg-green-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 shadow-lg shadow-green-600/20 hover:bg-green-700"
+                            className="px-3 py-1 bg-green-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-green-700"
                         >
-                            <CheckCircle size={14}/> تایید نهایی
+                            <CheckCircle size={12}/> تایید
                         </button>
                     )}
                     {onReject && (
                         <button 
                             onClick={onReject} 
-                            className="px-6 py-1.5 bg-red-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 shadow-lg shadow-red-600/20 hover:bg-red-700"
+                            className="px-3 py-1 bg-red-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-red-700"
                         >
-                            <XCircle size={14}/> رد بیجک
+                            <XCircle size={12}/> رد
                         </button>
                     )}
                 </div>
             )}
-            <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded"><input type="checkbox" checked={hidePrices} onChange={e => setHidePrices(e.target.checked)} id="hidePrice"/><label htmlFor="hidePrice" className="cursor-pointer">مخفی کردن قیمت‌ها</label></div>
-            <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
-                <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-800 text-white p-3 rounded-xl text-xs font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg">{processing ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={18}/>} دانلود PDF</button>
-                <button onClick={handlePrint} disabled={processing} className="bg-blue-600 text-white p-3 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20">{processing ? <Loader2 size={16} className="animate-spin"/> : <Printer size={18}/>} چاپ بیجک</button>
+
+            <div className="flex items-center gap-2">
+                <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-gray-200 flex items-center gap-1">{processing ? <Loader2 size={12} className="animate-spin"/> : <FileDown size={12}/>} PDF</button>
+                <button onClick={handlePrint} disabled={processing} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm">{processing ? <Loader2 size={12} className="animate-spin"/> : <Printer size={12}/>} چاپ</button>
             </div>
-            <div className="border-t pt-2 mt-1 space-y-2">
-                <button onClick={() => { if(warehouseTarget) generateAndSend(warehouseTarget, true, "📦 *حواله خروج (نسخه انبار)*"); else alert(`شماره گروه انبار برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="w-full bg-orange-100 text-orange-700 p-2.5 rounded-xl text-xs font-bold hover:bg-orange-200 flex items-center justify-center gap-2 border border-orange-200">{processing ? <Loader2 size={14} className="animate-spin"/> : 'ارسال به انبار (بدون فی)'}</button>
-                <button onClick={() => { if(managerTarget) generateAndSend(managerTarget, false, "📑 *حواله خروج (نسخه مدیریت)*"); else alert(`شماره مدیر فروش برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="w-full bg-green-100 text-green-700 p-2.5 rounded-xl text-xs font-bold hover:bg-green-200 flex items-center justify-center gap-2 border border-green-200">{processing ? <Loader2 size={14} className="animate-spin"/> : 'ارسال به مدیر (با فی)'}</button>
-                
-                <div className="border-t mt-2 pt-2 flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری در پلتفرم‌ها</span>
-                    <div className="grid grid-cols-3 gap-1">
-                        <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`border py-2 rounded-lg text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-200/50 dark:border-white/10 text-green-600 hover:bg-green-50'}`}><Smartphone size={14}/> واتساپ</button>
-                        <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`border py-2 rounded-lg text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-200 text-green-600 hover:bg-green-50'}`}><Smartphone size={14}/> بله</button>
-                        <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`border py-2 rounded-lg text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'glass-panel border-gray-200 text-blue-600 hover:bg-blue-50'}`}><Smartphone size={14}/> تلگرام</button>
-                    </div>
-                </div>
+            
+            <div className="flex items-center gap-2 ml-auto">
+                <button onClick={() => { if(warehouseTarget) generateAndSend(warehouseTarget, true, "📦 *حواله خروج (نسخه انبار)*"); else alert(`شماره گروه انبار برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="bg-orange-50 text-orange-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-orange-100 border border-orange-200">{processing ? <Loader2 size={10} className="animate-spin"/> : 'ارسال انبار'}</button>
+                <button onClick={() => { if(managerTarget) generateAndSend(managerTarget, false, "📑 *حواله خروج (نسخه مدیریت)*"); else alert(`شماره مدیر فروش برای شرکت ${tx.company} تنظیم نشده است.`); }} disabled={processing} className="bg-green-50 text-green-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-green-100 border border-green-200">{processing ? <Loader2 size={10} className="animate-spin"/> : 'ارسال مدیریت'}</button>
             </div>
         </div>
         {sharePlatform && (<div className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"><div className="glass-panel rounded-xl shadow-2xl w-full max-w-sm flex flex-col h-[70vh] animate-fade-in"><div className="p-3 border-b bg-gray-50 flex items-center justify-between"><span className="font-bold text-gray-800">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)} className="bg-red-100 text-red-600 rounded-lg p-1.5 hover:bg-red-200"><X size={18}/></button></div><div className="p-3 border-b"><div className="bg-gray-100 rounded-lg flex items-center px-3 py-2"><Search size={18} className="text-gray-400 ml-2"/><input className="bg-transparent w-full outline-none text-sm" placeholder="جستجو نام یا شماره..." autoFocus value={contactSearch} onChange={e => setContactSearch(e.target.value)}/></div></div><div className="flex-1 overflow-y-auto p-2 space-y-1">{contactsLoading ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2"><Loader2 size={32} className="animate-spin"/> <span>در حال دریافت لیست...</span></div>) : filteredContacts.length === 0 ? (<div className="text-center text-gray-400 mt-10">مخاطبی یافت نشد</div>) : (filteredContacts.map(c => {

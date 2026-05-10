@@ -530,7 +530,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 <PrintStockReport data={allWarehousesStock} onClose={() => setShowPrintStockReport(false)} />
             )}
 
-            <div className={`bg-gray-100 dark:bg-gray-800/60 p-2 flex gap-1.5 border-b overflow-x-auto no-print scrollbar-hide shrink-0 ${isMobile ? 'px-4 py-3' : 'p-2'}`}>
+            <div className={`bg-white dark:bg-gray-900 p-2 flex gap-1.5 border-b overflow-x-auto no-print scrollbar-hide shrink-0 sticky top-0 z-[35] backdrop-blur-md bg-opacity-90 ${isMobile ? 'px-4 py-3' : 'p-2'}`}>
                 {[
                     { id: 'dashboard', label: 'داشبورد', color: 'blue' },
                     { id: 'items', label: 'تعریف کالا', color: 'blue' },

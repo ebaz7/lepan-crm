@@ -330,19 +330,29 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   if (embed) return content;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start md:justify-center p-4 overflow-y-auto animate-fade-in safe-pb">
-        <div className="relative md:absolute md:top-4 md:left-4 z-50 flex flex-col gap-2 no-print w-full md:w-auto mb-4 md:mb-0 order-1">
-            <div className="glass-panel p-3 rounded-xl shadow-lg flex flex-col gap-2 w-full max-w-sm">
-                <div className="flex justify-between items-center border-b pb-2"><span className="font-bold text-sm">پنل عملیات</span><button onClick={onClose}><X size={20} className="text-gray-400 hover:text-red-500"/></button></div>
-                {(onApprove || onReject) && (<div className="flex gap-2 mb-1">{onApprove && <button onClick={onApprove} className="flex-1 bg-green-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-green-700 transition-colors shadow-sm">تایید</button>}{onReject && <button onClick={onReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm">رد</button>}</div>)}
-                {onEdit && <button onClick={onEdit} className="w-full bg-amber-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-600 flex items-center justify-center gap-1 mb-1"><Edit size={14}/> اصلاح مجوز</button>}
-                <div className="flex gap-2"><button onClick={handleDownloadPDF} disabled={processing} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دانلود PDF</button><button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 flex items-center justify-center gap-1"><Printer size={14}/> چاپ</button></div>
-                <div className="border-t mt-2 pt-2 flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> پیام‌رسان بله</button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'glass-panel border-gray-300 text-blue-600 hover:bg-blue-50'}`}><Share2 size={14}/> تلگرام</button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start p-2 overflow-y-auto animate-fade-in safe-pb">
+        <div className="bg-white p-2 rounded-xl shadow-lg flex flex-wrap items-center justify-center gap-2 w-full max-w-2xl no-print mb-2 md:sticky md:top-4 z-50 border border-gray-200">
+            <div className="flex items-center gap-2 border-l pl-2">
+                <button onClick={onClose} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"><X size={18}/></button>
+                <span className="font-bold text-[10px] text-gray-600 hidden md:inline">عملیات مجوز</span>
+            </div>
+
+            {(onApprove || onReject) && (
+                <div className="flex items-center gap-1.5 border-l px-2">
+                    {onApprove && <button onClick={onApprove} className="px-3 py-1 bg-green-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-green-700">تایید</button>}
+                    {onReject && <button onClick={onReject} className="px-3 py-1 bg-red-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-red-700">رد</button>}
                 </div>
+            )}
+
+            <div className="flex items-center gap-2">
+                <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-gray-200 flex items-center gap-1">{processing ? <Loader2 size={12} className="animate-spin"/> : <FileDown size={12}/>} PDF</button>
+                <button onClick={handlePrint} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm"><Printer size={12}/> چاپ</button>
+            </div>
+
+            <div className="flex items-center gap-1.5 ml-auto">
+                {onEdit && <button onClick={onEdit} className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-amber-100 flex items-center gap-1 border border-amber-200"><Edit size={12}/> اصلاح</button>}
+                <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-200 text-green-600 hover:bg-green-50'}`}><Share2 size={12}/> واتساپ</button>
+            </div>
                 {sharePlatform && (
                      <div className="mt-2 glass-panel rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
                          <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
@@ -357,8 +367,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                      </div>
                 )}
             </div>
-        </div>
-        
+
         {/* Responsive Wrapper */}
         <div className="order-2 w-full flex justify-center pb-10" ref={containerWrapperRef}>
             <div style={{ 

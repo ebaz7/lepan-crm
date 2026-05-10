@@ -379,8 +379,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Desktop Sidebar */}
-      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-40 bg-white/70 dark:bg-gray-900/80 backdrop-blur-2xl border-l border-gray-200/50 dark:border-white/5 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 dark:text-gray-100 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
-          <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between gap-3">
+      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-40 bg-white/70 dark:bg-gray-950/90 backdrop-blur-2xl border-l border-gray-200/50 dark:border-white/10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 dark:text-gray-100 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className="p-6 border-b border-gray-200/50 dark:border-white/10 flex items-center justify-between gap-3">
               <div className={`flex items-center gap-3 overflow-hidden ${!isSidebarOpen && 'hidden'}`}>
                   <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-600/20"><FileText className="w-5 h-5" /></div>
                   <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">سیستم مالی</h1><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">پنل کاربری</span></div>
@@ -410,7 +410,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     <button 
                         key={item.id} 
                         onClick={() => setActiveTab(item.id)} 
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} 
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'} ${!isSidebarOpen && 'justify-center'}`} 
                         title={item.label}
                     >
                         <div className="relative z-10 flex items-center gap-3">
@@ -609,7 +609,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             </div>
         </header>
         
-        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(110px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
+        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
                     <div className="hidden md:flex justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 sticky top-0 z-30 shadow-sm no-print items-center glass-header">
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (
