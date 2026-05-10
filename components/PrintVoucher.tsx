@@ -196,6 +196,33 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   );
 
   const handlePrint = () => { 
+      const style = document.getElementById('page-size-style');
+      if (style) {
+          const isBankForm = printMode === 'bank_form' && dynamicTemplate;
+          const w = isBankForm ? (dynamicTemplate?.width || 210) : 210;
+          const h = isBankForm ? (dynamicTemplate?.height || 297) : 148;
+          const size = isBankForm ? `${dynamicTemplate?.pageSize || 'A4'} ${dynamicTemplate?.orientation || 'portrait'}` : 'A5 landscape';
+          
+          style.innerHTML = `
+            @page { size: ${size}; margin: 0; }
+            @media print {
+                body * { visibility: hidden; }
+                .printable-content, .printable-content * { visibility: visible; }
+                .printable-content { 
+                    position: absolute; 
+                    left: 0; 
+                    top: 0; 
+                    width: ${w}mm !important; 
+                    height: ${h}mm !important;
+                    margin: 0 !important;
+                    padding: ${isBankForm ? '0' : '10mm'} !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .no-print { display: none !important; }
+            }
+          `;
+      }
       window.print(); 
   };
 
@@ -448,8 +475,8 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
 
             <div className={`${isCompact ? 'space-y-1.5' : 'space-y-3'}`}>
                 <div className="grid grid-cols-2 gap-3">
-                    <div className={`bg-gray-50 text-gray-800 py-2 border border-gray-400 print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '1px'}}><span className="block text-gray-500 print:text-gray-800 text-[9px] mb-0.5 font-bold">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{order.payee}</span></div>
-                    <div className={`bg-gray-50/50 border py-2 border-gray-400 print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '1px'}}><span className="block text-gray-500 print:text-gray-800 text-[9px] mb-0.5 font-bold">مبلغ کل پرداختی:</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{formatCurrency(order.totalAmount)}</span></div>
+                    <div className={`bg-gray-50/50 border border-gray-400 print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '1px'}}><span className="block text-gray-500 print:text-gray-800 text-[9px] mb-0.5 font-bold">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{order.payee}</span></div>
+                    <div className={`bg-gray-50/50 border border-gray-400 print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '1px'}}><span className="block text-gray-500 print:text-gray-800 text-[9px] mb-0.5 font-bold">مبلغ کل پرداختی:</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{formatCurrency(order.totalAmount)}</span></div>
                 </div>
                 <div className={`bg-gray-50/50 border py-2 border-gray-400 print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5 min-h-[30px]' : 'p-2 min-h-[45px]'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '1px'}}><span className="block text-gray-500 print:text-gray-800 text-[9px] mb-0.5 font-bold">بابت (شرح پرداخت):</span><p className={`text-gray-800 print:text-black text-justify font-medium leading-tight ${isCompact ? 'text-[10px]' : 'text-xs'}`}>{order.description}</p></div>
                 <div className="border border-gray-400 print:border-black print:!border-solid rounded print:rounded-none overflow-hidden" style={{borderStyle: 'solid', borderWidth: '1px'}}>
@@ -500,12 +527,43 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
              </div>
              
              {/* Approval Actions */}
-             {(onApprove || onReject || onEdit || onRevoke) && (<div className="flex flex-wrap gap-2 pb-3 border-b border-gray-100">
-                {onApprove && <button onClick={onApprove} className={`flex-1 ${isRevocationProcess ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white py-2 rounded-lg flex items-center justify-center gap-1.5 font-bold shadow-sm transition-transform active:scale-95`}>{isRevocationProcess ? <XCircle size={18}/> : <CheckCircle size={18} />} {isRevocationProcess ? 'تایید ابطال' : 'تایید'}</button>}
-                {onRevoke && !isRevocationProcess && !isRevoked && <button onClick={onRevoke} className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-lg flex items-center justify-center gap-1.5 font-bold shadow-sm transition-transform active:scale-95 border border-red-200"><RotateCcw size={18} /> درخواست ابطال</button>}
-                {onReject && <button onClick={onReject} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg flex items-center justify-center gap-1.5 font-bold shadow-sm transition-transform active:scale-95"><XCircle size={18} /> رد</button>}
-                {onEdit && !isRevocationProcess && <button onClick={onEdit} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded-lg flex items-center justify-center"><Pencil size={18} /></button>}
-             </div>)}
+             {(onApprove || onReject || onEdit || onRevoke) && (
+                <div className="bg-gray-50 p-2 rounded-xl flex items-center justify-center gap-2 mb-2 border border-gray-100">
+                    {onApprove && (
+                        <button 
+                            onClick={onApprove} 
+                            className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 shadow-sm ${isRevocationProcess ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                        >
+                            {isRevocationProcess ? <XCircle size={14}/> : <CheckCircle size={14} />} 
+                            {isRevocationProcess ? 'تایید ابطال' : 'تایید نهایی'}
+                        </button>
+                    )}
+                    {onReject && (
+                        <button 
+                            onClick={onReject} 
+                            className="px-4 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 hover:bg-red-50"
+                        >
+                            <XCircle size={14} /> رد درخواست
+                        </button>
+                    )}
+                    {onRevoke && !isRevocationProcess && !isRevoked && (
+                        <button 
+                            onClick={onRevoke} 
+                            className="px-4 py-1.5 bg-white border border-orange-200 text-orange-600 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 hover:bg-orange-50"
+                        >
+                            <RotateCcw size={14} /> ابطال
+                        </button>
+                    )}
+                    {onEdit && !isRevocationProcess && (
+                        <button 
+                            onClick={onEdit} 
+                            className="p-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95"
+                        >
+                            <Pencil size={14} />
+                        </button>
+                    )}
+                </div>
+             )}
              
              {/* Print Actions */}
              <div className="grid grid-cols-2 md:grid-cols-2 gap-2 relative">

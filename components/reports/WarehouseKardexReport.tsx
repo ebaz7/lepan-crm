@@ -114,6 +114,27 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
 
     const handlePrint = () => {
         setIsGenerating(true);
+        const style = document.getElementById('page-size-style');
+        if (style) {
+            style.innerHTML = `
+              @page { size: A4 portrait; margin: 0; }
+              @media print {
+                  body * { visibility: hidden; }
+                  #${elementId}, #${elementId} * { visibility: visible; }
+                  #${elementId} { 
+                      position: absolute; 
+                      left: 0; 
+                      top: 0; 
+                      width: 210mm !important; 
+                      margin: 0 !important;
+                      padding: 10mm !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                  }
+                  .no-print { display: none !important; }
+              }
+            `;
+        }
         setTimeout(() => {
             window.print();
             setIsGenerating(false);

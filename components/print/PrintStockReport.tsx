@@ -57,6 +57,27 @@ const PrintStockReport: React.FC<PrintStockReportProps> = ({ data, onClose }) =>
   };
 
   const handlePrint = () => {
+      const style = document.getElementById('page-size-style');
+      if (style) {
+          style.innerHTML = `
+            @page { size: A4 landscape; margin: 0; }
+            @media print {
+                body * { visibility: hidden; }
+                #stock-report-content, #stock-report-content * { visibility: visible; }
+                #stock-report-content { 
+                    position: absolute; 
+                    left: 0; 
+                    top: 0; 
+                    width: 290mm !important; 
+                    margin: 0 !important;
+                    padding: 5mm !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .no-print { display: none !important; }
+            }
+          `;
+      }
       window.print();
   };
 

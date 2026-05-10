@@ -73,6 +73,32 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
   const containerId = embed ? `print-permit-${permit.id}` : "print-area-exit";
 
+  const handlePrint = () => {
+      const style = document.getElementById('page-size-style');
+      if (style) {
+          style.innerHTML = `
+            @page { size: A4 portrait; margin: 0; }
+            @media print {
+                body * { visibility: hidden; }
+                .printable-content, .printable-content * { visibility: visible; }
+                .printable-content { 
+                    position: absolute; 
+                    left: 0; 
+                    top: 0; 
+                    width: 210mm !important; 
+                    height: 296mm !important;
+                    margin: 0 !important;
+                    padding: 10mm !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .no-print { display: none !important; }
+            }
+          `;
+      }
+      window.print();
+  };
+
   const handleDownloadPDF = async () => {
       setProcessing(true);
       await generatePdf({
@@ -310,7 +336,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 <div className="flex justify-between items-center border-b pb-2"><span className="font-bold text-sm">پنل عملیات</span><button onClick={onClose}><X size={20} className="text-gray-400 hover:text-red-500"/></button></div>
                 {(onApprove || onReject) && (<div className="flex gap-2 mb-1">{onApprove && <button onClick={onApprove} className="flex-1 bg-green-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-green-700 transition-colors shadow-sm">تایید</button>}{onReject && <button onClick={onReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm">رد</button>}</div>)}
                 {onEdit && <button onClick={onEdit} className="w-full bg-amber-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-600 flex items-center justify-center gap-1 mb-1"><Edit size={14}/> اصلاح مجوز</button>}
-                <div className="flex gap-2"><button onClick={handleDownloadPDF} disabled={processing} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دانلود PDF</button><button onClick={() => window.print()} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 flex items-center justify-center gap-1"><Printer size={14}/> چاپ</button></div>
+                <div className="flex gap-2"><button onClick={handleDownloadPDF} disabled={processing} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دانلود PDF</button><button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs hover:bg-blue-700 flex items-center justify-center gap-1"><Printer size={14}/> چاپ</button></div>
                 <div className="border-t mt-2 pt-2 flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-gray-400 mb-1">اشتراک گذاری</span>
                     <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`w-full border py-2 rounded-lg text-xs flex items-center justify-center gap-1 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'glass-panel border-gray-300 text-green-600 hover:bg-green-50'}`}><Share2 size={14}/> واتساپ</button>

@@ -117,7 +117,27 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
 
   const handlePrint = () => {
       const style = document.getElementById('page-size-style');
-      if (style) style.innerHTML = '@page { size: A5 portrait; margin: 0; }';
+      if (style) {
+          style.innerHTML = `
+            @page { size: A5 portrait; margin: 0; }
+            @media print {
+                body * { visibility: hidden; }
+                #${containerId}, #${containerId} * { visibility: visible; }
+                #${containerId} { 
+                    position: absolute; 
+                    left: 0; 
+                    top: 0; 
+                    width: 148mm !important; 
+                    height: 209mm !important;
+                    margin: 0 !important;
+                    padding: 8mm !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .no-print { display: none !important; }
+            }
+          `;
+      }
       window.print();
   };
 
@@ -240,7 +260,26 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
         <div className="glass-panel p-4 rounded-2xl shadow-2xl z-[10000] flex flex-col gap-3 w-full max-w-[148mm] md:w-64 md:fixed md:top-8 md:left-8 mb-6 md:mb-0 relative order-1 sticky top-0 mt-2 md:mt-0 border border-white/20">
             <div className="flex justify-between items-center border-b pb-2"><span className="font-bold text-sm text-gray-800">پنل عملیات چاپ</span><button onClick={onClose} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors"><X size={20}/></button></div>
             {((tx.status as any) === 'DELETED' || tx.status === 'REJECTED') && (<div className="bg-red-50 p-2 rounded-lg border border-red-200 flex items-start gap-2 text-xs text-red-800"><AlertTriangle size={16} className="shrink-0 mt-0.5"/><div><span className="font-bold block">این بیجک {(tx.status as any) === 'DELETED' ? 'حذف' : 'رد'} شده است.</span>{tx.rejectionReason}</div></div>)}
-            {(onApprove || onReject) && (<div className="flex gap-2 mb-1">{onApprove && (<button onClick={onApprove} className="flex-1 bg-green-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-green-700 transition-colors shadow-sm"><CheckCircle size={14}/> تایید</button>)}{onReject && (<button onClick={onReject} className="flex-1 bg-red-600 text-white py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm"><XCircle size={14}/> رد</button>)}</div>)}
+            {(onApprove || onReject) && (
+                <div className="bg-white/10 backdrop-blur-sm p-1.5 rounded-xl flex items-center justify-center gap-2 mb-1 border border-white/20">
+                    {onApprove && (
+                        <button 
+                            onClick={onApprove} 
+                            className="px-6 py-1.5 bg-green-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 shadow-lg shadow-green-600/20 hover:bg-green-700"
+                        >
+                            <CheckCircle size={14}/> تایید نهایی
+                        </button>
+                    )}
+                    {onReject && (
+                        <button 
+                            onClick={onReject} 
+                            className="px-6 py-1.5 bg-red-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 shadow-lg shadow-red-600/20 hover:bg-red-700"
+                        >
+                            <XCircle size={14}/> رد بیجک
+                        </button>
+                    )}
+                </div>
+            )}
             <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded"><input type="checkbox" checked={hidePrices} onChange={e => setHidePrices(e.target.checked)} id="hidePrice"/><label htmlFor="hidePrice" className="cursor-pointer">مخفی کردن قیمت‌ها</label></div>
             <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
                 <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-800 text-white p-3 rounded-xl text-xs font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg">{processing ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={18}/>} دانلود PDF</button>
