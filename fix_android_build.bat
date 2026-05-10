@@ -14,6 +14,10 @@ echo allprojects { repositories { google(); mavenCentral() } }>>android\build.gr
 echo task clean(type: Delete) { delete rootProject.buildDir }>>android\build.gradle
 
 echo include ':app'>android\settings.gradle
+echo include ':capacitor-android'>>android\settings.gradle
+echo project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')>>android\settings.gradle
+echo include ':capacitor-cordova-android-plugins'>>android\settings.gradle
+echo project(':capacitor-cordova-android-plugins').projectDir = new File('capacitor-cordova-android-plugins')>>android\settings.gradle
 
 echo ext {>android\variables.gradle
 echo     minSdkVersion = 22>>android\variables.gradle
