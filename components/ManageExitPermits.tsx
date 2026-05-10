@@ -171,13 +171,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    const handleWarehouseSubmit = async (finalItems: any[]) => {
+    const handleWarehouseSubmit = async (finalItems: any[], extraData: { driverName?: string, driverPhone?: string, plateNumber?: string }) => {
         if (!warehouseFinalize) return;
         setProcessingId(warehouseFinalize.id);
         try {
             const updated = { 
                 ...warehouseFinalize, 
                 items: finalItems, 
+                ...extraData,
                 approverWarehouse: currentUser.fullName, 
                 status: ExitPermitStatus.PENDING_SECURITY,
                 weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0),
@@ -259,10 +260,24 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 captionTitle = '👋 خروج نهایی از کارخانه';
             }
 
-            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n🔢 شماره: ${permit.permitNumber}\n👤 گیرنده: ${permit.recipientName}\n`;
+            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n`;
+            caption += `🔢 شماره: ${permit.permitNumber}\n`;
+            caption += `👤 گیرنده: ${permit.recipientName}\n`;
+            caption += `📦 کالا: ${permit.goodsName}\n`;
+            
+            if (permit.plateNumber) {
+                // Format: 11A11111 -> 11 A 111 11
+                const p = permit.plateNumber;
+                const formattedPlate = p.length >= 8 ? `${p.slice(0,2)} ${p.slice(2,3)} ${p.slice(3,6)} | ${p.slice(6,8)}` : p;
+                caption += `🆔 پلاک: ${formattedPlate}\n`;
+            }
+            if (permit.driverName) caption += `👨‍✈️ راننده: ${permit.driverName}\n`;
+            if (permit.driverPhone) caption += `📞 تماس: ${permit.driverPhone}\n`;
+            
             if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
-            if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `📦 وزن نهایی: ${permit.weight} KG\n`;
-            caption += `\nتایید کننده: ${currentUser.fullName}`;
+            if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `⚖️ وزن نهایی: ${permit.weight} KG\n`;
+            
+            caption += `\n👤 تایید کننده: ${currentUser.fullName}`;
 
             const allUsers = await getUsers();
             

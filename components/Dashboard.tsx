@@ -100,6 +100,18 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         });
     }, []);
 
+    const handleToggleAnnouncementCompletion = async (ann: SystemAnnouncement) => {
+        const updatedAnn = { 
+            ...ann, 
+            isCompleted: !ann.isCompleted, 
+            completedAt: !ann.isCompleted ? Date.now() : undefined,
+            completedBy: !ann.isCompleted ? currentUser.username : undefined
+        };
+        const mod = await import('../services/storageService');
+        await mod.updateSystemAnnouncement(updatedAnn);
+        setAnnouncements(prev => prev.map(a => a.id === ann.id ? updatedAnn : a));
+    };
+
     const visibleAnnouncements = useMemo(() => {
         return announcements.filter(a => {
             if (!a.targetUsers || a.targetUsers.length === 0) return true; // all
@@ -284,16 +296,18 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             {visibleAnnouncements.map((ann, i) => (
                                 <div key={ann.id || i} className="glass-panel p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
-                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1">
-                                        <BookOpen size={16} />
+                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1 cursor-pointer hover:bg-blue-200 transition-colors" onClick={() => handleToggleAnnouncementCompletion(ann)}>
+                                        {ann.isCompleted ? <CheckCircle size={16} className="text-green-600" /> : <BookOpen size={16} />}
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-xs font-black text-blue-800">{ann.createdBy}</span>
                                             <div className="flex items-center gap-2">
+                                                {ann.isCompleted && <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold">تکمیل شده</span>}
                                                 {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold border border-blue-200">پیام اختصاصی</span>}
                                                 {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
-                                                    <button onClick={async () => {
+                                                    <button onClick={async (e) => {
+                                                        e.stopPropagation();
                                                         const mod = await import('../services/storageService');
                                                         await mod.deleteSystemAnnouncement(ann.id);
                                                         setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
@@ -301,8 +315,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                                 )}
                                             </div>
                                         </div>
-                                        <p className="text-sm font-bold text-gray-700" style={{ whiteSpace: 'pre-wrap' }}>{ann.message}</p>
-                                        <div className="text-[10px] text-gray-400 mt-2 text-left">{(() => { const d = getShamsiDateFromIso(new Date(ann.createdAt).toISOString()); return `${d.year}/${d.month}/${d.day}`; })()} - {new Date(ann.createdAt).toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'})}</div>
+                                        <p className={`text-sm font-bold transition-all ${ann.isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`} style={{ whiteSpace: 'pre-wrap' }}>{ann.message}</p>
+                                        <div className="text-[10px] text-gray-400 mt-2 text-left">
+                                            {(() => { 
+                                                const d = getShamsiDateFromIso(new Date(ann.createdAt).toISOString()); 
+                                                const greg = new Date(ann.createdAt).toLocaleDateString('en-CA'); // YYYY-MM-DD
+                                                return `${d.year}/${d.month}/${d.day} | ${greg}`; 
+                                            })()} - {new Date(ann.createdAt).toLocaleTimeString('fa-IR', {hour: '2-digit', minute: '2-digit'})}
+                                        </div>
                                     </div>
                                 </div>
                             ))}

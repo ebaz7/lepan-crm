@@ -309,6 +309,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     workDescription: logForm.workDescription || existingOpenLog.workDescription,
                     permitProvider: logForm.permitProvider || existingOpenLog.permitProvider,
                     driverName: logForm.driverName || existingOpenLog.driverName,
+                    driverPhone: logForm.driverPhone || existingOpenLog.driverPhone,
                     plateNumber: logForm.plateNumber || existingOpenLog.plateNumber,
                 } as SecurityLog);
             } else {
@@ -322,6 +323,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     entryTime: logForm.entryTime || '',
                     exitTime: logForm.exitTime || '',
                     driverName: logForm.driverName || '',
+                    driverPhone: logForm.driverPhone || '',
                     plateNumber: logForm.plateNumber || '',
                     goodsName: logForm.goodsName || '',
                     quantity: logForm.quantity || '',
@@ -657,9 +659,12 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded p-2" value={logForm.driverName} onChange={e=>setLogForm({...logForm, driverName:e.target.value})}/></div>
-                                    <div><label className="text-xs font-bold block mb-1">شماره پلاک</label><input className="w-full border rounded p-2 dir-ltr" placeholder="12 A 345 67" value={logForm.plateNumber} onChange={e=>setLogForm({...logForm, plateNumber:e.target.value})}/></div>
+                                    <div><label className="text-xs font-bold block mb-1">شماره تماس راننده</label><input className="w-full border rounded p-2 font-mono" dir="ltr" value={logForm.driverPhone} onChange={e=>setLogForm({...logForm, driverPhone:e.target.value})} placeholder="09..."/></div>
                                 </div>
-                                <div><label className="text-xs font-bold block mb-1">مجوز دهنده</label><input className="w-full border rounded p-2" value={logForm.permitProvider} onChange={e=>setLogForm({...logForm, permitProvider:e.target.value})}/></div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs font-bold block mb-1">شماره پلاک</label><input className="w-full border rounded p-2 dir-ltr" placeholder="12 A 345 67" value={logForm.plateNumber} onChange={e=>setLogForm({...logForm, plateNumber:e.target.value})}/></div>
+                                    <div><label className="text-xs font-bold block mb-1">مجوز دهنده</label><input className="w-full border rounded p-2" value={logForm.permitProvider} onChange={e=>setLogForm({...logForm, permitProvider:e.target.value})}/></div>
+                                </div>
                                 <div className="grid grid-cols-3 gap-3">
                                     <div className="col-span-2"><label className="text-xs font-bold block mb-1">نام کالا</label><input className="w-full border rounded p-2" value={logForm.goodsName} onChange={e=>setLogForm({...logForm, goodsName:e.target.value})}/></div>
                                     <div><label className="text-xs font-bold block mb-1">تعداد</label><input className="w-full border rounded p-2" value={logForm.quantity} onChange={e=>setLogForm({...logForm, quantity:e.target.value})}/></div>
@@ -730,7 +735,11 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                             <td className="p-3 font-bold">{log.origin}</td>
                                             <td className="p-3 font-mono dir-ltr">{log.entryTime}</td>
                                             <td className="p-3 font-mono dir-ltr">{log.exitTime}</td>
-                                            <td className="p-3"><div>{log.driverName}</div><div className="font-mono text-gray-500">{log.plateNumber}</div></td>
+                                            <td className="p-3">
+                                                <div className="font-bold">{log.driverName}</div>
+                                                <div className="text-[10px] text-gray-500 font-mono">{log.driverPhone}</div>
+                                                <div className="font-mono text-blue-700 bg-blue-50 px-1 rounded inline-block mt-1">{log.plateNumber}</div>
+                                            </td>
                                             <td className="p-3"><div>{log.goodsName}</div><div className="text-gray-500">{log.quantity}</div></td>
                                             <td className="p-3"><div>{log.destination}</div><div className="text-gray-500">{log.receiver}</div></td>
                                             <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] ${log.status === SecurityStatus.ARCHIVED ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{log.status}</span></td>

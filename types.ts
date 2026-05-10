@@ -413,6 +413,7 @@ export interface ExitPermit {
   destinationAddress?: string;
   plateNumber?: string;
   driverName?: string;
+  driverPhone?: string;
   description?: string;
   status: ExitPermitStatus;
   createdAt: number;
@@ -483,6 +484,7 @@ export interface SecurityLog {
     entryTime: string;
     exitTime: string;
     driverName: string;
+    driverPhone?: string;
     plateNumber: string;
     goodsName: string;
     quantity: string;
@@ -580,6 +582,9 @@ export interface SystemAnnouncement {
     createdBy: string;
     createdAt: number;
     targetUsers?: string[]; // Empty means all users
+    isCompleted?: boolean;
+    completedAt?: number;
+    completedBy?: string;
 }
 
 export interface GroupTask {

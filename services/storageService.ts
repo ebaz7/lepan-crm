@@ -124,6 +124,7 @@ export const deleteTask = async (id: string): Promise<GroupTask[]> => { return a
 export const getSystemAnnouncements = async (): Promise<SystemAnnouncement[]> => { const res = await apiCall<SystemAnnouncement[]>('/announcements'); return safeArray(res); };
 export const createSystemAnnouncement = async (announcement: SystemAnnouncement): Promise<SystemAnnouncement[]> => { return await apiCall<SystemAnnouncement[]>('/announcements', 'POST', announcement); };
 export const deleteSystemAnnouncement = async (id: string): Promise<SystemAnnouncement[]> => { return await apiCall<SystemAnnouncement[]>(`/announcements/${id}`, 'DELETE'); };
+export const updateSystemAnnouncement = async (announcement: SystemAnnouncement): Promise<SystemAnnouncement[]> => { return await apiCall<SystemAnnouncement[]>(`/announcements/${announcement.id}`, 'PUT', announcement); };
 
 export const getTradeRecords = async (): Promise<TradeRecord[]> => { const res = await apiCall<TradeRecord[]>('/trade'); return safeArray(res); };
 export const saveTradeRecord = async (record: TradeRecord): Promise<TradeRecord[]> => { return await apiCall<TradeRecord[]>('/trade', 'POST', record); };
