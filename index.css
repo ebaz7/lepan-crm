@@ -201,8 +201,6 @@ body {
     min-height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
     overflow: visible !important;
   }
   .no-print, .hidden-print-export { 

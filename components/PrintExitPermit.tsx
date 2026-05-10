@@ -186,7 +186,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
                 <div className="flex flex-col"><h1 className="text-3xl font-black mb-1">مجوز خروج کالا از کارخانه</h1><p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                <div className="text-left space-y-2"><div className="text-xl font-black bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div><div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div></div>
+                <div className="text-left space-y-2"><div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div><div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div></div>
             </div>
             <div className="flex-1 space-y-6">
                 <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Package size={20}/> لیست اقلام و کالاها</h3>
@@ -199,7 +199,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                 <th className="border-2 border-black p-1" colSpan={showDeliveryColumns ? 2 : 1}>وزن (KG)</th>
                             </tr>
                             {showDeliveryColumns && (
-                                <tr className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 text-xs">
+                                <tr className="bg-gray-50 text-gray-800 text-xs">
                                     <th className="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th>
                                     <th className="border-2 border-black p-1 w-20 bg-green-50 text-green-800">خروجی</th>
                                     <th className="border-2 border-black p-1 text-gray-500 w-20">درخواستی</th>
@@ -250,7 +250,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><MapPin size={20}/> مشخصات گیرنده</h3>
                     <div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm space-y-2">
                         {displayDestinations.map((dest, idx) => (
-                            <div key={idx} className="border-b-2 border-gray-200/50 dark:border-white/10 pb-2 last:border-0 last:pb-0">
+                            <div key={idx} className="border-b-2 border-gray-200/50 pb-2 last:border-0 last:pb-0">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><span className="font-bold text-gray-500 ml-2">تحویل گیرنده:</span> <span className="font-bold text-lg">{dest.recipientName}</span></div>
                                     <div><span className="font-bold text-gray-500 ml-2">شماره تماس:</span> <span className="font-mono dir-ltr">{dest.phone || '-'}</span></div>
