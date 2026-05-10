@@ -174,42 +174,46 @@ setTimeout(performAutoBackup, 15000);
 
 // --- NOTIFICATION HELPER ---
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
-    const db = getDb();
-    const subs = db.subscriptions || [];
-    
-    console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
-
-    const payload = JSON.stringify({ title, body, url });
-
-    const sendPromises = subs.filter(sub => {
-        // 1. EXPLICIT EXCLUSION (e.g. Sender)
-        if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
-
-        // 2. ALWAYS NOTIFY ADMIN (Unless explicitly excluded above)
-        if (sub.role === 'admin') return true;
+    try {
+        const db = getDb();
+        const subs = db.subscriptions || [];
         
-        // 3. TARGET FILTERING
-        if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
-        if (targetRoles && !targetRoles.includes(sub.role)) return false;
-        
-        return true;
-    }).map(sub => {
-        if (sub.type === 'android') {
-            return Promise.resolve();
-        }
-        return webpush.sendNotification(sub, payload).catch(err => {
-            if (err.statusCode === 404 || err.statusCode === 410) {
-                console.log(`Removing expired subscription for ${sub.username}`);
-                const db = getDb();
-                db.subscriptions = db.subscriptions.filter(s => s.endpoint !== sub.endpoint);
-                saveDb(db);
-            } else {
-                console.error("Push error:", err);
+        console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
+
+        const payload = JSON.stringify({ title, body, url });
+
+        const sendPromises = subs.filter(sub => {
+            // 1. EXPLICIT EXCLUSION (e.g. Sender)
+            if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
+
+            // 2. ALWAYS NOTIFY ADMIN (Unless explicitly excluded above)
+            if (sub.role === 'admin') return true;
+            
+            // 3. TARGET FILTERING
+            if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
+            if (targetRoles && !targetRoles.includes(sub.role)) return false;
+            
+            return true;
+        }).map(sub => {
+            if (sub.type === 'android') {
+                return Promise.resolve();
             }
+            return webpush.sendNotification(sub, payload).catch(err => {
+                if (err.statusCode === 404 || err.statusCode === 410) {
+                    console.log(`Removing expired subscription for ${sub.username}`);
+                    const db = getDb();
+                    db.subscriptions = db.subscriptions.filter(s => s.endpoint !== sub.endpoint);
+                    saveDb(db);
+                } else {
+                    console.error("Push error:", err);
+                }
+            });
         });
-    });
 
-    await Promise.all(sendPromises);
+        await Promise.all(sendPromises);
+    } catch (e) {
+        console.error("Global Broadcast Error:", e);
+    }
 };
 
 // --- API ROUTES ---

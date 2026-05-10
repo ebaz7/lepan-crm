@@ -193,15 +193,25 @@ body {
     visibility: visible !important;
   }
   .printable-content {
-    position: absolute !important;
+    position: relative !important;
     left: 0 !important;
     top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100vh !important;
     margin: 0 !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    overflow: visible !important;
   }
   .no-print, .hidden-print-export { 
     display: none !important; 
+  }
+  #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content {
+      transform: none !important;
+      width: 100% !important;
+      height: auto !important;
   }
 }
 
