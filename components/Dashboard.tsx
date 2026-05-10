@@ -74,6 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [announceText, setAnnounceText] = useState('');
     const [announceTarget, setAnnounceTarget] = useState('');
+    const [announceType, setAnnounceType] = useState<'announcement' | 'task'>('announcement');
     
     // Add users fetching for target dropdown
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -91,14 +92,17 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             message: announceText,
             createdBy: currentUser.username,
             createdAt: Date.now(),
-            targetUsers
-        };
+            targetUsers,
+            type: announceType,
+            isCompleted: false
+        } as any; // Allow for custom typings temporarily
         const mod = await import('../services/storageService');
         await mod.createSystemAnnouncement(newAnn);
         setAnnouncements(prev => [newAnn, ...prev]);
         setShowAnnounceModal(false);
         setAnnounceText('');
         setAnnounceTarget('');
+        setAnnounceType('announcement');
     };
 
     useEffect(() => {
@@ -305,8 +309,12 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             {visibleAnnouncements.map((ann, i) => (
                                 <div key={ann.id || i} className="glass-panel p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
-                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1 cursor-pointer hover:bg-blue-200 transition-colors" onClick={() => handleToggleAnnouncementCompletion(ann)}>
-                                        {ann.isCompleted ? <CheckCircle size={16} className="text-green-600" /> : <BookOpen size={16} />}
+                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm" onClick={() => handleToggleAnnouncementCompletion(ann)}>
+                                        {ann.type === 'task' ? (
+                                            ann.isCompleted ? <CheckCircle size={16} className="text-green-600" /> : <div className="w-4 h-4 rounded-full border-2 border-orange-500 bg-orange-100/50"></div>
+                                        ) : (
+                                            <BookOpen size={16} className="text-blue-600" />
+                                        )}
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-center mb-1">
@@ -583,11 +591,15 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                     <div className="p-4 border-b flex justify-between items-center bg-blue-50/50">
                         <div className="flex items-center gap-2 text-blue-800">
                             <Activity size={20} />
-                            <h3 className="font-bold">ثبت اعلامیه جدید</h3>
+                            <h3 className="font-bold">ثبت {announceType === 'task' ? 'تسک' : 'اعلامیه'} جدید</h3>
                         </div>
                         <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><XCircle size={20}/></button>
                     </div>
                     <div className="p-4 flex flex-col gap-4">
+                        <div className="flex bg-gray-100 p-1 rounded-xl">
+                            <button onClick={() => setAnnounceType('announcement')} className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${announceType === 'announcement' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>اعلامیه</button>
+                            <button onClick={() => setAnnounceType('task')} className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${announceType === 'task' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>تسک فردی</button>
+                        </div>
                         <div>
                             <label className="text-xs font-bold text-gray-600 block mb-1">مخاطب (اختیاری - خالی برای همه)</label>
                             <select 

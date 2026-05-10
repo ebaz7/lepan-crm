@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
 import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
-import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar } from 'lucide-react';
+import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar, ShieldCheck, Users, Home, List, Navigation, Send, RefreshCw } from 'lucide-react';
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
@@ -530,40 +530,67 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 <PrintStockReport data={allWarehousesStock} onClose={() => setShowPrintStockReport(false)} />
             )}
 
-            <div className={`bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-2 flex gap-2 border-b overflow-x-auto no-print ${isMobile ? 'no-scrollbar' : ''}`}>
-                <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'dashboard' ? 'glass-panel text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>داشبورد</button>
-                <button onClick={() => setActiveTab('items')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'items' ? 'glass-panel text-blue-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تعریف کالا</button>
-                <button onClick={() => setActiveTab('entry')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry' ? 'glass-panel text-green-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>ورود کالا</button>
-                <button onClick={() => setActiveTab('entry_archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'entry_archive' ? 'glass-panel text-emerald-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>رسیدها</button>
-                <button onClick={() => setActiveTab('exit')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'exit' ? 'glass-panel text-red-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>خروج کالا</button>
-                <button onClick={() => setActiveTab('archive')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'archive' ? 'glass-panel text-gray-800 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>بیجک‌ها</button>
-                <button onClick={() => setActiveTab('approvals')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'approvals' ? 'glass-panel text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>تاییدیه</button>
-                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'reports' ? 'glass-panel text-purple-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>کاردکس</button>
-                <button onClick={() => setActiveTab('stock_report')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'stock_report' ? 'glass-panel text-orange-600 shadow' : 'text-gray-600 hover:bg-gray-200'}`}>موجودی</button>
+            <div className={`bg-gray-100 dark:bg-gray-800/60 p-2 flex gap-1.5 border-b overflow-x-auto no-print scrollbar-hide shrink-0 ${isMobile ? 'px-4 py-3' : 'p-2'}`}>
+                {[
+                    { id: 'dashboard', label: 'داشبورد', color: 'blue' },
+                    { id: 'items', label: 'تعریف کالا', color: 'blue' },
+                    { id: 'entry', label: 'ورود کالا', color: 'green' },
+                    { id: 'entry_archive', label: 'رسیدها', color: 'emerald' },
+                    { id: 'exit', label: 'خروج کالا', color: 'red' },
+                    { id: 'archive', label: 'بیجک‌ها', color: 'gray' },
+                    { id: 'approvals', label: 'تاییدیه', color: 'orange' },
+                    { id: 'reports', label: 'کاردکس', color: 'purple' },
+                    { id: 'stock_report', label: 'موجودی', color: 'orange' }
+                ].map(tab => (
+                    <button 
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)} 
+                        className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-200 ${
+                            activeTab === tab.id 
+                            ? `bg-${tab.color}-600 text-white shadow-lg shadow-${tab.color}-600/20 scale-105 active-tab-pulse` 
+                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-white/5'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
                 
                 {activeTab === 'approvals' && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex items-center justify-between no-print">
+                            <h3 className="font-black text-gray-800 dark:text-white flex items-center gap-2"><CheckCircle className="text-orange-600"/> لیست در انتظار تایید</h3>
+                            {isMobile && <div className="text-[10px] bg-orange-100 text-orange-700 font-bold px-2 py-1 rounded-full">{pendingBijaks.length} مورد</div>}
+                        </div>
                         {/* Mobile Optimized List for Approvals */}
                         {isMobile ? (
-                            <div className="space-y-3">
-                                {pendingBijaks.length === 0 ? <div className="text-center text-gray-400 py-10">موردی نیست</div> : pendingBijaks.map(tx => (
-                                    <div key={tx.id} className="glass-panel border rounded-xl p-4 shadow-sm">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="font-bold text-red-600">#{tx.number}</span>
-                                            <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
+                            <div className="grid grid-cols-1 gap-4">
+                                {pendingBijaks.length === 0 ? (
+                                    <div className="text-center text-gray-400 py-20 flex flex-col items-center gap-2">
+                                        <ShieldCheck size={48} className="opacity-10"/>
+                                        <p className="font-bold">هیچ درخواستی در لیست تایید نیست</p>
+                                    </div>
+                                ) : pendingBijaks.map(tx => (
+                                    <div key={tx.id} className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 w-1.5 h-full bg-orange-500"></div>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-orange-50 text-orange-700 font-black px-2 py-1 rounded-lg text-sm">#{tx.number}</span>
+                                                <span className="text-[10px] font-bold text-gray-500">{formatDate(tx.date)}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black text-gray-400">توسط: {tx.createdBy}</span>
                                         </div>
-                                        <div className="text-sm font-bold text-gray-800 mb-1">{tx.company}</div>
-                                        <div className="text-xs text-gray-600 mb-3">{tx.recipientName}</div>
+                                        <div className="text-base font-black text-gray-800 dark:text-white mb-1">{tx.company}</div>
+                                        <div className="text-xs font-bold text-gray-500 mb-4 flex items-center gap-1"><Users size={12}/> گیرنده: {tx.recipientName}</div>
                                         
                                         <div className="flex gap-2">
-                                            <button onClick={() => setViewBijak(tx)} className="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-bold">مشاهده</button>
+                                            <button onClick={() => setViewBijak(tx)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3 rounded-xl text-xs font-black shadow-sm border border-gray-200 dark:border-white/5 active:scale-95 transition-transform">مشاهده</button>
                                             {canApprove && (
                                                 <>
-                                                    <button onClick={() => handleApproveBijak(tx)} className="flex-1 bg-green-100 text-green-600 py-2 rounded-lg text-xs font-bold">تایید</button>
-                                                    <button onClick={() => handleRejectBijak(tx)} className="flex-1 bg-red-100 text-red-600 py-2 rounded-lg text-xs font-bold">رد</button>
+                                                    <button onClick={() => handleApproveBijak(tx)} className="flex-1 bg-green-600 text-white py-3 rounded-xl text-xs font-black shadow-lg shadow-green-600/20 active:scale-95 transition-transform">تایید</button>
+                                                    <button onClick={() => handleRejectBijak(tx)} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-xs font-black shadow-lg shadow-red-600/20 active:scale-95 transition-transform">رد</button>
                                                 </>
                                             )}
                                         </div>
@@ -601,49 +628,148 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 )}
 
                 {activeTab === 'dashboard' && (
-                    <div className="space-y-6">
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex flex-col gap-1 mb-2">
+                             <h2 className="text-xl font-black text-gray-800 dark:text-white">وضعیت انبار</h2>
+                             <p className="text-xs font-bold text-gray-400">خلاصه فعالیت‌ها و موجودی کالاها</p>
+                        </div>
                         {/* Cards - Auto Responsive Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div onClick={() => setActiveTab('items')} className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-all"><div><div className="text-3xl font-black text-blue-700">{items.length}</div><div className="text-sm text-blue-600 font-bold">تعداد کالاها</div></div><Package size={40} className="text-blue-300"/></div>
-                            <div onClick={() => setActiveTab('entry')} className="bg-green-50 p-6 rounded-2xl border border-green-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-all"><div><div className="text-3xl font-black text-green-700">{safeTransactions.filter(t=>t.type==='IN').length}</div><div className="text-sm text-green-600 font-bold">تعداد رسیدها</div></div><ArrowDownCircle size={40} className="text-green-300"/></div>
-                            <div onClick={() => setActiveTab('exit')} className="bg-red-50 p-6 rounded-2xl border border-red-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-all"><div><div className="text-3xl font-black text-red-700">{safeTransactions.filter(t=>t.type==='OUT').length}</div><div className="text-sm text-red-600 font-bold">تعداد حواله‌ها (بیجک)</div></div><ArrowUpCircle size={40} className="text-red-300"/></div>
+                            <div onClick={() => setActiveTab('items')} className="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 rounded-3xl text-white shadow-lg shadow-blue-500/30 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between h-40">
+                                <div className="flex justify-between items-start">
+                                    <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md"><Package size={24}/></div>
+                                    <div className="text-4xl font-black">{items.length}</div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black opacity-90">تنوع کالاها</div>
+                                    <div className="text-[10px] opacity-70 mt-0.5">لیست کالاهای تعریف شده در سیستم</div>
+                                </div>
+                            </div>
+                            
+                            <div onClick={() => setActiveTab('entry_archive')} className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-3xl text-white shadow-lg shadow-emerald-500/30 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between h-40">
+                                <div className="flex justify-between items-start">
+                                    <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md"><ArrowDownCircle size={24}/></div>
+                                    <div className="text-4xl font-black">{safeTransactions.filter(t=>t.type==='IN').length}</div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black opacity-90">کل ورودی‌ها</div>
+                                    <div className="text-[10px] opacity-70 mt-0.5">تعداد کل فاکتورها و پروفرماهای رسیده</div>
+                                </div>
+                            </div>
+
+                            <div onClick={() => setActiveTab('archive')} className="bg-gradient-to-br from-rose-500 to-orange-600 p-6 rounded-3xl text-white shadow-lg shadow-rose-500/30 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between h-40">
+                                <div className="flex justify-between items-start">
+                                    <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md"><ArrowUpCircle size={24}/></div>
+                                    <div className="text-4xl font-black">{safeTransactions.filter(t=>t.type==='OUT').length}</div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black opacity-90">کل خروجی‌ها (بیجک)</div>
+                                    <div className="text-[10px] opacity-70 mt-0.5">تعداد کل حواله‌های صادره از انبار</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recent Activity Mini-List */}
+                        <div className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-white/10 rounded-3xl p-5 shadow-sm">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-black text-gray-800 dark:text-white flex items-center gap-2"><RefreshCw size={18} className="text-blue-500"/> آخرین بیجک‌های خروجی</h4>
+                                <button onClick={() => setActiveTab('archive')} className="text-blue-600 text-[10px] font-black hover:underline px-3 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-full">مشاهده همه</button>
+                            </div>
+                            <div className="space-y-3">
+                                {recentBijaks.length === 0 ? (
+                                    <div className="text-center py-6 text-gray-400 text-xs">فعالیتی ثبت نشده است</div>
+                                ) : recentBijaks.map(tx => (
+                                    <div key={tx.id} onClick={() => setViewBijak(tx)} className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-white/5 last:border-0 hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl cursor-pointer transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center font-black shadow-sm">
+                                                {tx.number}
+                                            </div>
+                                            <div>
+                                                <div className="text-xs font-black text-gray-800 dark:text-gray-100">{tx.recipientName}</div>
+                                                <div className="text-[10px] font-bold text-gray-400">{tx.company}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-[10px] font-black text-gray-400 mb-1">{formatDate(tx.date)}</div>
+                                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-black ${tx.status === 'APPROVED' ? 'bg-green-100 text-green-700' : tx.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                {tx.status === 'APPROVED' ? 'تایید شده' : tx.status === 'REJECTED' ? 'رد شده' : 'در انتظار'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
                 
                 {/* ITEMS TAB - Mobile Card View */}
                 {activeTab === 'items' && (
-                    <div className="max-w-4xl mx-auto">
-                        <div className="bg-gray-50 p-4 rounded-xl border mb-6 flex flex-col md:flex-row items-end gap-3">
-                            <div className="flex-1 w-full space-y-1"><label className="text-xs font-bold text-gray-500">نام کالا</label><input className="w-full border rounded p-2" value={newItemName} onChange={e=>setNewItemName(e.target.value)}/></div>
-                            <div className="flex gap-2 w-full md:w-auto">
-                                <div className="flex-1 space-y-1"><label className="text-xs font-bold text-gray-500">کد کالا</label><input className="w-full border rounded p-2" value={newItemCode} onChange={e=>setNewItemCode(e.target.value)}/></div>
-                                <div className="flex-1 space-y-1"><label className="text-xs font-bold text-gray-500">واحد</label><select className="w-full border rounded p-2 glass-panel" value={newItemUnit} onChange={e=>setNewItemUnit(e.target.value)}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>دستگاه</option></select></div>
+                    <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-white dark:bg-gray-900/40 p-5 rounded-3xl border border-gray-200 dark:border-white/10 shadow-sm mb-6 flex flex-col md:flex-row items-end gap-4">
+                            <div className="flex-1 w-full space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><Package size={14} className="text-blue-500"/> نام کالا</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-gray-50 dark:bg-gray-800 focus:bg-white dark:focus:bg-gray-700 focus:border-blue-500 outline-none transition-all font-bold" placeholder="مثلا: میلگرد 12" value={newItemName} onChange={e=>setNewItemName(e.target.value)}/>
                             </div>
-                            <button onClick={handleAddItem} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 h-[42px] w-full md:w-12 flex items-center justify-center font-bold">
-                                {isMobile ? 'افزودن کالا' : <Plus/>}
+                            <div className="flex gap-4 w-full md:w-auto">
+                                <div className="flex-1 space-y-1.5 flex flex-col">
+                                    <label className="text-xs font-black text-gray-500 mr-2">کد کالا</label>
+                                    <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-gray-50 dark:bg-gray-800 focus:bg-white dark:focus:bg-gray-700 transition-all font-mono font-bold text-center" placeholder="1001" value={newItemCode} onChange={e=>setNewItemCode(e.target.value)}/>
+                                </div>
+                                <div className="flex-1 space-y-1.5 flex flex-col">
+                                    <label className="text-xs font-black text-gray-500 mr-2">واحد</label>
+                                    <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-gray-50 dark:bg-gray-800 font-bold" value={newItemUnit} onChange={e=>setNewItemUnit(e.target.value)}><option>عدد</option><option>کارتن</option><option>کیلوگرم</option><option>دستگاه</option><option>متر</option></select>
+                                </div>
+                            </div>
+                            <button onClick={handleAddItem} className="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-700 h-[58px] w-full md:w-16 flex items-center justify-center font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-transform">
+                                {isMobile ? <span className="flex items-center gap-2">افزودن کالا جدید <Plus/></span> : <Plus/>}
                             </button>
                         </div>
 
                         {isMobile ? (
-                            <div className="space-y-3">
-                                {items.map(i => (
-                                    <div key={i.id} className="glass-panel border rounded-xl p-4 shadow-sm relative">
-                                        <div className="absolute top-4 right-4 text-xs font-mono text-gray-400">{i.code}</div>
-                                        <div className="font-bold text-gray-800 text-lg mb-1">{i.name}</div>
-                                        <div className="text-xs text-gray-500 mb-3">واحد: {i.unit}</div>
-                                        <div className="flex gap-2 justify-end">
-                                            <button onClick={() => setEditingItem(i)} className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Edit size={18}/></button>
-                                            <button onClick={()=>handleDeleteItem(i.id)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 size={18}/></button>
+                            <div className="grid grid-cols-1 gap-4">
+                                {items.length === 0 ? (
+                                    <div className="text-center text-gray-400 py-20 flex flex-col items-center gap-4">
+                                        <Package size={64} className="opacity-10"/>
+                                        <p className="font-bold">هنوز کالایی تعریف نشده است</p>
+                                    </div>
+                                ) : items.map(i => (
+                                    <div key={i.id} className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm relative group overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500"></div>
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <div className="text-lg font-black text-gray-800 dark:text-gray-100 leading-tight">{i.name}</div>
+                                                <div className="text-[10px] font-mono text-gray-400 font-bold mt-1">کد کالای سیستمی: {i.code || '---'}</div>
+                                            </div>
+                                            <div className="bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl text-xs font-black border border-blue-100 dark:border-white/5">{i.unit}</div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingItem(i)} className="flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 py-3 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-transform"><Edit size={16}/> ویرایش</button>
+                                            {currentUser.role === UserRole.ADMIN && (
+                                                <button onClick={()=>handleDeleteItem(i.id)} className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1 active:scale-95 transition-transform"><Trash2 size={16}/> حذف</button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                             <div className="glass-panel border rounded-xl overflow-hidden">
+                             <div className="bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-sm">
                                  <table className="w-full text-sm text-right">
-                                     <thead className="bg-gray-100"><tr><th className="p-3">کد</th><th className="p-3">نام کالا</th><th className="p-3">واحد</th><th className="p-3 text-center">عملیات</th></tr></thead>
-                                     <tbody>{items.map(i => (<tr key={i.id} className="border-t hover:bg-gray-50"><td className="p-3 font-mono">{i.code}</td><td className="p-3 font-bold">{i.name}</td><td className="p-3">{i.unit}</td><td className="p-3 text-center"><div className="flex justify-center gap-2"><button onClick={() => setEditingItem(i)} className="text-amber-500 hover:text-amber-700"><Edit size={16}/></button><button onClick={()=>handleDeleteItem(i.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button></div></td></tr>))}</tbody>
+                                     <thead className="bg-gray-100 dark:bg-black/40 text-gray-600 dark:text-gray-400"><tr><th className="p-4 pr-8">کد</th><th className="p-4">نام کالا</th><th className="p-4">واحد سنجش</th><th className="p-4 text-center">عملیات مدیریت</th></tr></thead>
+                                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                                         {items.map(i => (
+                                            <tr key={i.id} className="border-t hover:bg-gray-50 dark:hover:bg-white/5 transition-all group">
+                                                <td className="p-4 pr-8 font-mono font-bold text-gray-400 group-hover:text-gray-600">{i.code || '-'}</td>
+                                                <td className="p-4 font-black text-gray-800 dark:text-gray-100">{i.name}</td>
+                                                <td className="p-4"><span className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-[10px] font-black text-gray-500">{i.unit}</span></td>
+                                                <td className="p-4 text-center">
+                                                    <div className="flex justify-center gap-2">
+                                                        <button onClick={() => setEditingItem(i)} className="p-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-all"><Edit size={20}/></button>
+                                                        <button onClick={()=>handleDeleteItem(i.id)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"><Trash2 size={20}/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                         ))}
+                                     </tbody>
                                  </table>
                              </div>
                         )}
@@ -652,108 +778,181 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
                 {/* ENTRY TAB - Mobile Optimized */}
                 {activeTab === 'entry' && (
-                    <div className="max-w-4xl mx-auto bg-green-50 p-4 md:p-6 rounded-2xl border border-green-200">
-                        <h3 className="font-bold text-green-800 mb-4 flex items-center gap-2"><ArrowDownCircle/> ثبت ورود کالا (رسید انبار)</h3>
+                    <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 pb-24">
+                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-3xl border border-emerald-200 dark:border-emerald-800 mb-6 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-100 dark:bg-emerald-800/30 rounded-full -translate-y-12 translate-x-12 blur-2xl"></div>
+                            <h3 className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-2 relative z-10"><ArrowDownCircle/> ثبت ورود کالا (رسید انبار)</h3>
+                            <p className="text-[10px] font-bold text-emerald-600/70 mr-8 relative z-10">ثبت اقلام وارد شده به انبار بر اساس پروفرما یا فاکتور</p>
+                        </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">شرکت مالک</label><select className="w-full border rounded p-2 glass-panel" value={selectedCompany} onChange={e=>setSelectedCompany(e.target.value)}><option value="">انتخاب...</option>{companyList.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                            <div><label className="block text-xs font-bold mb-1">شماره پروفرما / سند</label><input className="w-full border rounded p-2 glass-panel" value={proformaNumber} onChange={e=>setProformaNumber(e.target.value)}/></div>
-                            <div>
-                                <label className="block text-xs font-bold mb-1">تاریخ ورود</label>
-                                <div className="flex gap-1 dir-ltr">
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+                            <div className="space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><Home size={14}/> شرکت مالک</label>
+                                <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800/80 font-bold outline-none focus:border-emerald-500 transition-all shadow-sm" value={selectedCompany} onChange={e=>setSelectedCompany(e.target.value)}>
+                                    <option value="">انتخاب شرکت...</option>
+                                    {companyList.map(c=><option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><FileText size={14}/> شماره پروفرما / سند</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800/80 font-bold outline-none focus:border-emerald-500 transition-all shadow-sm" placeholder="مثلا: PI-1403-001" value={proformaNumber} onChange={e=>setProformaNumber(e.target.value)}/>
+                            </div>
+                            <div className="space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><Calendar size={14}/> تاریخ ورود</label>
+                                <div className="flex gap-1.5 dir-ltr">
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800 font-bold" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800 font-bold" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800 font-bold" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-4 glass-panel p-4 rounded-xl border">
-                            {txItems.map((row, idx) => (
-                                <div key={idx} className="flex flex-col md:flex-row gap-2 items-end border-b pb-4 md:border-b-0 md:pb-0 last:border-0">
-                                    <div className="flex-1 w-full"><label className="text-[10px] text-gray-500 mb-1 block">کالا</label><select className="w-full border rounded p-2 text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}><option value="">انتخاب کالا...</option>{items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></div>
-                                    <div className="flex gap-2 w-full md:w-auto">
-                                        <div className="flex-1 md:w-20"><label className="text-[10px] text-gray-500 mb-1 block text-center">تعداد</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr text-center" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/></div>
-                                        <div className="flex-1 md:w-20"><label className="text-[10px] text-gray-500 mb-1 block text-center">وزن</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr text-center" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/></div>
+                        <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-sm mb-10 overflow-hidden">
+                            <h4 className="text-xs font-black text-gray-400 mb-6 flex items-center gap-2"><List size={14}/> اقلام رسید</h4>
+                            <div className="space-y-6">
+                                {txItems.map((row, idx) => (
+                                    <div key={idx} className="flex flex-col md:flex-row gap-5 items-end bg-gray-50 dark:bg-gray-800/20 p-5 rounded-[2rem] border border-gray-100 dark:border-white/5 relative group transition-all hover:shadow-md">
+                                        <div className="flex-1 w-full space-y-1.5">
+                                            <label className="text-[10px] font-black text-gray-400 mr-2">نام کالا ({idx + 1})</label>
+                                            <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}>
+                                                <option value="">انتخاب نوع کالا...</option>
+                                                {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
+                                            <div className="space-y-1.5 flex flex-col">
+                                                <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/>
+                                            </div>
+                                            <div className="space-y-1.5 flex flex-col">
+                                                <label className="text-[10px] font-black text-gray-400 text-center">وزن (KG)</label>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/>
+                                            </div>
+                                        </div>
+                                        <div className="w-full md:w-44 space-y-1.5 flex flex-col">
+                                            <label className="text-[10px] font-black text-gray-400 mr-2">فی واحد (ریال)</label>
+                                            <input type="text" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-blue-600 text-center dir-ltr" value={formatNumberString(row.unitPrice)} onChange={e=>updateTxItem(idx, 'unitPrice', deformatNumberString(e.target.value))}/>
+                                        </div>
+                                        {idx > 0 && (
+                                            <button onClick={()=>handleRemoveTxItemRow(idx)} className="text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl w-full md:w-auto flex justify-center hover:bg-red-100 active:scale-90 transition-all">
+                                                <Trash2 size={24}/>
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className="w-full md:w-32"><label className="text-[10px] text-gray-500 mb-1 block">فی (ریال)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr font-bold text-blue-600" value={formatNumberString(row.unitPrice)} onChange={e=>updateTxItem(idx, 'unitPrice', deformatNumberString(e.target.value))}/></div>
-                                    {idx > 0 && <button onClick={()=>handleRemoveTxItemRow(idx)} className="text-red-500 p-2 bg-red-50 rounded w-full md:w-auto mt-2 md:mt-0 flex justify-center"><Trash2 size={16}/></button>}
-                                </div>
-                            ))}
-                            <button onClick={handleAddTxItemRow} className="text-xs text-blue-600 font-bold flex items-center gap-1 mt-2 w-full md:w-auto justify-center md:justify-start py-2 md:py-0 bg-blue-50 md:bg-transparent rounded md:rounded-none"><Plus size={14}/> افزودن ردیف کالا</button>
+                                ))}
+                                <button onClick={handleAddTxItemRow} className="w-full py-5 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-3xl text-blue-600 font-black text-xs flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all active:scale-[0.98] group">
+                                    <Plus className="group-hover:rotate-90 transition-transform"/> افزودن ردیف کالای جدید
+                                </button>
+                            </div>
                         </div>
                         
-                        <button onClick={()=>handleSubmitTx('IN')} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl mt-4 hover:bg-green-700 shadow-lg">ثبت رسید انبار</button>
+                        <div className={isMobile ? 'fixed bottom-4 left-4 right-4 z-50' : 'flex justify-center'}>
+                             <button onClick={()=>handleSubmitTx('IN')} className="w-full md:w-80 bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-emerald-600/30 active:scale-95 transition-all hover:bg-emerald-700 flex items-center justify-center gap-2 text-base">
+                                <Save size={20}/> ثبت و صدور رسید انبار
+                             </button>
+                        </div>
                     </div>
                 )}
                 
                 {/* EXIT TAB - Mobile Optimized */}
                 {activeTab === 'exit' && (
-                    <div className="max-w-4xl mx-auto bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200">
-                        <h3 className="font-bold text-red-800 mb-4 flex items-center gap-2"><ArrowUpCircle/> ثبت خروج کالا (صدور بیجک)</h3>
+                    <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 pb-32">
+                        <div className="bg-rose-50 dark:bg-rose-900/20 p-5 p-md:p-8 rounded-[2.5rem] border border-rose-200 dark:border-rose-800 mb-8 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-red-100 dark:bg-rose-800/30 rounded-full -translate-y-16 translate-x-16 blur-3xl opacity-50"></div>
+                             <div className="relative z-10 text-center md:text-right">
+                                <h3 className="font-black text-rose-800 dark:text-rose-300 text-xl flex items-center justify-center md:justify-start gap-2 mb-1"><ArrowUpCircle size={28}/> صدور بیجک خروجی</h3>
+                                <p className="text-xs font-bold text-rose-600/70 md:mr-9">ثبت حواله خروج کالا و اعلام بار راننده</p>
+                            </div>
+                            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-6 py-3 rounded-3xl shadow-xl border-2 border-white dark:border-white/5 text-center relative z-10 w-full md:w-auto min-w-[140px]">
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">شماره حواله سیستمی</div>
+                                <div className="text-3xl font-black text-rose-600 font-mono leading-none flex items-center justify-center gap-3">
+                                    {loadingBijakNum ? <Loader2 className="animate-spin" size={24}/> : (nextBijakNum > 0 ? nextBijakNum : '---')}
+                                    {!loadingBijakNum && !!selectedCompany && <button type="button" onClick={updateNextBijak} className="text-gray-300 hover:text-blue-500 transition-colors"><RefreshCw size={16}/></button>}
+                                </div>
+                            </div>
+                        </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label className="block text-xs font-bold mb-1">شرکت فرستنده</label>
-                                <select className="w-full border rounded p-2 glass-panel" value={selectedCompany} onChange={e => { setSelectedCompany(e.target.value); }}>
-                                    <option value="">انتخاب...</option>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                            <div className="space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><Home size={14}/> شرکت فرستنده بار</label>
+                                <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800/80 font-bold outline-none focus:border-rose-500 transition-all shadow-sm" value={selectedCompany} onChange={e => { setSelectedCompany(e.target.value); }}>
+                                    <option value="">انتخاب شرکت...</option>
                                     {companyList.map(c=><option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold mb-1">شماره بیجک</label>
-                                <div className="glass-panel p-2 rounded border font-mono text-center text-red-600 font-bold flex justify-center items-center gap-2 h-[42px]">
-                                    {loadingBijakNum ? <Loader2 className="animate-spin" size={16}/> : (nextBijakNum > 0 ? nextBijakNum : '---')}
-                                    <button type="button" onClick={updateNextBijak} disabled={!selectedCompany || loadingBijakNum} className="p-1 hover:bg-gray-100 rounded-full text-blue-500"><RefreshCcw size={14}/></button>
+                            <div className="space-y-1.5 flex flex-col">
+                                <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1"><Calendar size={14}/> تاریخ خروج کانتینر / تریلی</label>
+                                <div className="flex gap-1.5 dir-ltr font-bold">
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                                    <select className="border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 flex-1 bg-white dark:bg-gray-800" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                             <div>
-                                <label className="block text-xs font-bold mb-1">تاریخ خروج</label>
-                                <div className="flex gap-1 dir-ltr">
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.year} onChange={e=>setTxDate({...txDate, year:Number(e.target.value)})}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.month} onChange={e=>setTxDate({...txDate, month:Number(e.target.value)})}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                                    <select className="border rounded p-1 text-sm flex-1 glass-panel" value={txDate.day} onChange={e=>setTxDate({...txDate, day:Number(e.target.value)})}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
-                                </div>
+                        <div className="bg-white dark:bg-gray-900/60 p-6 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-xl mb-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="col-span-2 md:col-span-1 space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-wide">تحویل گیرنده نهایی</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 text-sm font-bold bg-gray-50 dark:bg-gray-800 focus:bg-white transition-all shadow-inner outline-none focus:border-rose-500" placeholder="نام خریدار یا انبار مقصد" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold mb-1 flex items-center gap-1">شماره بیجک {loadingBijakNum && <Loader2 size={12} className="animate-spin text-blue-500"/>}</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full border rounded p-2 bg-blue-50 font-bold text-red-600 text-center" 
-                                    value={nextBijakNum} 
-                                    onChange={e => setNextBijakNum(Number(e.target.value))}
-                                />
+                            <div className="col-span-1 space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-wide">نام راننده حامل</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 text-sm font-bold bg-gray-50 dark:bg-gray-800 focus:bg-white transition-all shadow-inner outline-none focus:border-rose-500" placeholder="..." value={driverName} onChange={e=>setDriverName(e.target.value)}/>
+                            </div>
+                            <div className="col-span-1 space-y-1.5 text-center">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wide">شماره پلاک</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 text-sm font-black bg-gray-50 dark:bg-gray-800 focus:bg-white transition-all shadow-inner outline-none focus:border-rose-500 dir-ltr text-center" placeholder="-- --- --" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/>
+                            </div>
+                            <div className="col-span-2 md:col-span-1 space-y-1.5 flex flex-col">
+                                <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-wide flex items-center gap-1"><Navigation size={10}/> مقصد بارگیری</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 text-sm font-bold bg-gray-50 dark:bg-gray-800 focus:bg-white transition-all shadow-inner outline-none focus:border-rose-500" placeholder="شهر یا بندر" value={destination} onChange={e=>setDestination(e.target.value)}/>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">تحویل گیرنده</label><input className="w-full border rounded p-2 glass-panel" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/></div>
-                            <div><label className="block text-xs font-bold mb-1">راننده</label><input className="w-full border rounded p-2 glass-panel" value={driverName} onChange={e=>setDriverName(e.target.value)}/></div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div><label className="block text-xs font-bold mb-1">پلاک</label><input className="w-full border rounded p-2 glass-panel dir-ltr text-center" value={plateNumber} onChange={e=>setPlateNumber(e.target.value)}/></div>
-                            <div><label className="block text-xs font-bold mb-1">مقصد</label><input className="w-full border rounded p-2 glass-panel" value={destination} onChange={e=>setDestination(e.target.value)}/></div>
-                        </div>
-
-                        <div className="space-y-4 glass-panel p-4 rounded-xl border">
-                             {txItems.map((row, idx) => (
-                                <div key={idx} className="flex flex-col md:flex-row gap-2 items-end border-b pb-4 md:border-b-0 md:pb-0 last:border-0">
-                                    <div className="flex-1 w-full"><label className="text-[10px] text-gray-500 mb-1 block">کالا</label><select className="w-full border rounded p-2 text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}><option value="">انتخاب کالا...</option>{items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></div>
-                                    <div className="flex gap-2 w-full md:w-auto">
-                                        <div className="flex-1 md:w-20"><label className="text-[10px] text-gray-500 mb-1 block text-center">تعداد</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr text-center" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/></div>
-                                        <div className="flex-1 md:w-20"><label className="text-[10px] text-gray-500 mb-1 block text-center">وزن</label><input type="number" className="w-full border rounded p-2 text-sm dir-ltr text-center" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/></div>
+                        <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-sm mb-12">
+                            <h4 className="text-[10px] font-black text-gray-400 mb-5 flex items-center gap-2 uppercase tracking-[0.2em] px-4"><List size={14} className="text-rose-500"/> جزییات اقلام خروج</h4>
+                            <div className="space-y-6">
+                                {txItems.map((row, idx) => (
+                                    <div key={idx} className="flex flex-col md:flex-row gap-5 items-end bg-gray-50 dark:bg-gray-800/20 p-5 rounded-[2rem] border border-gray-100 dark:border-white/5 group transition-all hover:shadow-lg">
+                                        <div className="flex-1 w-full space-y-1.5 flex flex-col">
+                                            <label className="text-[10px] font-black text-gray-400 mr-2">انتخاب کالا ({idx + 1})</label>
+                                            <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-sm" value={row.itemId} onChange={e=>updateTxItem(idx, 'itemId', e.target.value)}>
+                                                <option value="">جستجوی کالا...</option>
+                                                {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
+                                            <div className="space-y-1.5 flex flex-col">
+                                                <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/>
+                                            </div>
+                                            <div className="space-y-1.5 flex flex-col">
+                                                <label className="text-[10px] font-black text-gray-400 text-center">وزن (KG)</label>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/>
+                                            </div>
+                                        </div>
+                                        <div className="w-full md:w-44 space-y-1.5 flex flex-col">
+                                            <label className="text-[10px] font-black text-gray-400 mr-2 text-center">فی واحد (ریال)</label>
+                                            <input type="text" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-rose-600 text-center dir-ltr" value={formatNumberString(row.unitPrice)} onChange={e=>updateTxItem(idx, 'unitPrice', deformatNumberString(e.target.value))}/>
+                                        </div>
+                                        {idx > 0 && (
+                                            <button onClick={()=>handleRemoveTxItemRow(idx)} className="text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl w-full md:w-auto flex justify-center hover:bg-red-100 active:rotate-12 transition-all">
+                                                <Trash2 size={24}/>
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className="w-full md:w-32"><label className="text-[10px] text-gray-500 mb-1 block">فی (ریال)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr font-bold text-blue-600" value={formatNumberString(row.unitPrice)} onChange={e=>updateTxItem(idx, 'unitPrice', deformatNumberString(e.target.value))}/></div>
-                                    {idx > 0 && <button onClick={()=>handleRemoveTxItemRow(idx)} className="text-red-500 p-2 bg-red-50 rounded w-full md:w-auto mt-2 md:mt-0 flex justify-center"><Trash2 size={16}/></button>}
-                                </div>
-                            ))}
-                            <button onClick={handleAddTxItemRow} className="text-xs text-blue-600 font-bold flex items-center gap-1 mt-2 w-full md:w-auto justify-center md:justify-start py-2 md:py-0 bg-blue-50 md:bg-transparent rounded md:rounded-none"><Plus size={14}/> افزودن ردیف کالا</button>
+                                ))}
+                                <button onClick={handleAddTxItemRow} className="w-full py-5 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-[2rem] text-rose-600 font-black text-xs flex items-center justify-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-all active:scale-[0.98]">
+                                    <Plus size={18}/> افزودن ردیف کالای اضافه
+                                </button>
+                            </div>
                         </div>
-                        <button onClick={()=>handleSubmitTx('OUT')} className="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-4 hover:bg-red-700 shadow-lg">ثبت و ارسال جهت تایید</button>
+                        
+                        <div className={isMobile ? 'fixed bottom-4 left-4 right-4 z-50' : 'flex justify-center'}>
+                             <button onClick={()=>handleSubmitTx('OUT')} className="w-full md:w-96 bg-rose-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-rose-600/40 active:scale-95 transition-all hover:bg-rose-700 flex items-center justify-center gap-3 text-lg">
+                                <Send size={22} className="-rotate-12"/> ثبت نهایی و ارسال جهت تایید بیجک
+                             </button>
+                        </div>
                     </div>
                 )}
                 
@@ -871,33 +1070,48 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
                 {/* STOCK REPORT TAB */}
                 {activeTab === 'stock_report' && (
-                    <div className="space-y-4">
-                        <div className="glass-panel p-4 rounded-xl shadow-sm border flex justify-between items-center">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 size={20} className="text-orange-600"/> موجودی لحظه‌ای انبار</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handlePrintStock} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm hover:bg-blue-700">
-                                    <Printer size={16}/> چاپ گزارش موجودی
+                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 pb-20">
+                        <div className="glass-panel p-4 md:p-5 rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-orange-100 p-2 rounded-xl"><BarChart3 size={24} className="text-orange-600"/></div>
+                                <div>
+                                    <h3 className="font-black text-gray-800 dark:text-white">موجودی لحظه‌ای انبار</h3>
+                                    <p className="text-[10px] font-bold text-gray-400">آخرین برآورد کلی موجودی تمام انبارها</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <button onClick={handlePrintStock} className="flex-1 md:flex-none justify-center bg-blue-600 text-white px-5 py-3 rounded-xl flex items-center gap-2 text-xs font-black shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">
+                                    <Printer size={16}/> چاپ گزارش
                                 </button>
-                                <button onClick={handleExportExcel} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm hover:bg-green-700">
-                                    <FileSpreadsheet size={16}/> اکسل
+                                <button onClick={handleExportExcel} className="flex-1 md:flex-none justify-center bg-green-600 text-white px-5 py-3 rounded-xl flex items-center gap-2 text-xs font-black shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all">
+                                    <FileSpreadsheet size={16}/> خروجی اکسل
                                 </button>
                             </div>
                         </div>
                         
-                        {/* Render Stock Table (Desktop/Mobile) */}
-                        {/* Simplified View for Mobile */}
                         {isMobile ? (
-                            <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-6">
                                 {allWarehousesStock.map(group => (
-                                    <div key={group.company} className="glass-panel border rounded-xl p-4 shadow-sm">
-                                        <h4 className="font-bold text-center border-b pb-2 mb-2 bg-gray-50 -mx-4 -mt-4 p-3 rounded-t-xl">{group.company}</h4>
-                                        <div className="space-y-2">
+                                    <div key={group.company} className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-sm">
+                                        <div className="bg-gray-50 dark:bg-gray-800/50 p-4 border-b border-gray-200 dark:border-white/5 flex justify-between items-center">
+                                            <h4 className="font-black text-gray-800 dark:text-white">{group.company}</h4>
+                                            <div className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-full">{group.items.length} قلم کالا</div>
+                                        </div>
+                                        <div className="divide-y divide-gray-100 dark:divide-white/5">
                                             {group.items.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center text-sm border-b last:border-0 pb-2 last:pb-0">
-                                                    <span className="font-bold">{item.name}</span>
+                                                <div key={item.id} className="p-4 flex justify-between items-center bg-white dark:bg-transparent">
+                                                    <div className="space-y-1">
+                                                        <div className="text-sm font-black text-gray-800 dark:text-gray-100">{item.name}</div>
+                                                        <div className="text-[10px] text-gray-400 font-bold bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded-md inline-block">کد: {items.find(i=>i.id===item.id)?.code || '---'}</div>
+                                                    </div>
                                                     <div className="text-left">
-                                                        <div className="font-mono text-blue-600">{item.quantity} {items.find(i=>i.id===item.id)?.unit}</div>
-                                                        <div className="text-xs text-gray-400">{item.weight} KG</div>
+                                                        <div className="text-base font-black text-blue-600 font-mono">{formatNumberString(item.quantity)} <span className="text-[10px] font-bold text-gray-400">{items.find(i=>i.id===item.id)?.unit}</span></div>
+                                                        <div className="text-[11px] font-bold text-gray-500 font-mono">{formatNumberString(item.weight)} <span className="text-[9px] opacity-70">KG</span></div>
+                                                        {item.containerCount > 0 && (
+                                                            <div className="text-[10px] font-black text-orange-600 mt-1 py-0.5 px-1.5 bg-orange-50 dark:bg-orange-900/20 rounded inline-block">
+                                                                📦 {item.containerCount.toFixed(1)} کانتینر
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -906,30 +1120,32 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                 ))}
                             </div>
                         ) : (
-                            <div className="glass-panel border rounded-xl overflow-hidden">
-                                {/* Existing table logic logic is complex to reproduce exactly here without making it huge, 
-                                    but I will use a simplified robust table for stock 
-                                */}
+                            <div className="bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-sm">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-center">
-                                        <thead className="bg-gray-800 text-white">
+                                        <thead className="bg-gray-800 dark:bg-black/40 text-white">
                                             <tr>
-                                                <th className="p-3">شرکت / کالا</th>
-                                                <th className="p-3">موجودی تعدادی</th>
-                                                <th className="p-3">موجودی وزنی (KG)</th>
-                                                <th className="p-3">کانتینر (تخمینی)</th>
+                                                <th className="p-4 text-right pr-10">شرکت / نام کالا</th>
+                                                <th className="p-4">موجودی تعدادی</th>
+                                                <th className="p-4">موجودی وزنی (KG)</th>
+                                                <th className="p-4">تخمین کانتینر</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {allWarehousesStock.map((group, idx) => (
+                                            {allWarehousesStock.map((group) => (
                                                 <React.Fragment key={group.company}>
-                                                    <tr className="bg-gray-100 font-bold text-gray-700"><td colSpan={4} className="p-2 text-right pr-4 border-t">{group.company}</td></tr>
+                                                    <tr className="bg-blue-50 dark:bg-blue-900/10 font-black text-blue-900 dark:text-blue-300">
+                                                        <td colSpan={4} className="p-3 text-right pr-4 border-t border-blue-100 dark:border-white/5 flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                                                            {group.company}
+                                                        </td>
+                                                    </tr>
                                                     {group.items.map(item => (
-                                                        <tr key={item.id} className="border-b hover:bg-gray-50">
-                                                            <td className="p-2 text-right pr-8">{item.name}</td>
-                                                            <td className="p-2 font-mono font-bold text-blue-600">{item.quantity}</td>
-                                                            <td className="p-2 font-mono">{item.weight}</td>
-                                                            <td className="p-2 font-mono text-gray-500">{item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}</td>
+                                                        <tr key={item.id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                                            <td className="p-3 text-right pr-10 font-bold text-gray-700 dark:text-gray-300">{item.name}</td>
+                                                            <td className="p-3 font-mono font-black text-blue-600 text-lg">{formatNumberString(item.quantity)}</td>
+                                                            <td className="p-3 font-mono font-bold text-gray-600 dark:text-gray-400">{formatNumberString(item.weight)}</td>
+                                                            <td className="p-3 font-mono text-orange-600 font-black">{item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}</td>
                                                         </tr>
                                                     ))}
                                                 </React.Fragment>

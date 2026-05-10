@@ -379,25 +379,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Desktop Sidebar */}
-      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-40 bg-white/70 backdrop-blur-2xl border-l border-gray-200/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
-          <div className="p-6 border-b border-gray-200/50 flex items-center justify-between gap-3">
+      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-40 bg-white/70 dark:bg-gray-900/80 backdrop-blur-2xl border-l border-gray-200/50 dark:border-white/5 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 dark:text-gray-100 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between gap-3">
               <div className={`flex items-center gap-3 overflow-hidden ${!isSidebarOpen && 'hidden'}`}>
                   <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-600/20"><FileText className="w-5 h-5" /></div>
-                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">سیستم مالی</h1><span className="text-[10px] text-gray-500 font-bold">پنل کاربری</span></div>
+                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">سیستم مالی</h1><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">پنل کاربری</span></div>
               </div>
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 rounded-xl text-gray-600 transition-colors mx-auto">
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700/60 rounded-xl transition-colors mx-auto">
                  <Menu size={20}/>
               </button>
           </div>
           
-          <div className={`p-4 bg-white/50 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-gray-100/50 dark:border-white/5 relative group cursor-pointer hover:glass-panel hover:shadow-sm transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
+          <div className={`p-4 bg-white/50 dark:bg-gray-800/20 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-gray-100/50 dark:border-white/5 relative group cursor-pointer hover:glass-panel hover:shadow-sm transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden shrink-0 text-white shadow-md">
                  {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover"/> : <span className="font-bold">{currentUser.fullName.charAt(0)}</span>}
               </div>
               {isSidebarOpen && (
                  <div className="overflow-hidden flex-1">
-                     <p className="text-sm font-bold truncate text-gray-800">{currentUser.fullName}</p>
-                     <p className="text-[10px] text-gray-500 truncate font-bold bg-gray-100 inline-block px-1.5 py-0.5 rounded mt-0.5">نقش: {currentUser.role}</p>
+                     <p className="text-sm font-bold truncate text-gray-800 dark:text-gray-100">{currentUser.fullName}</p>
+                     <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate font-bold bg-gray-100 dark:bg-gray-700/50 inline-block px-1.5 py-0.5 rounded mt-0.5">نقش: {currentUser.role}</p>
                  </div>
               )}
           </div>
@@ -410,7 +410,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     <button 
                         key={item.id} 
                         onClick={() => setActiveTab(item.id)} 
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} 
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} 
                         title={item.label}
                     >
                         <div className="relative z-10 flex items-center gap-3">
@@ -428,8 +428,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                   ); 
               })}
               
-              <div className="pt-4 mt-2 border-t border-gray-200/50 relative" ref={notifRef}>
-                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 bg-blue-50 font-bold' : 'text-gray-600 hover:bg-gray-100'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
+              <div className="pt-4 mt-2 border-t border-gray-200/50 dark:border-white/5 relative" ref={notifRef}>
+                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
                       <div className="relative">
                           <Bell size={20} />
                           {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-bounce">{unreadCount}</span>)}
@@ -567,7 +567,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             <div className="flex items-center gap-3">
                 <div className="flex items-center gap-3" onClick={() => setShowProfileModal(true)}>
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xl border-2 border-white/50 rotate-3 transition-transform hover:rotate-0">
-                        {currentUser.fullName.charAt(0)}
+                        {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover rounded-2xl"/> : currentUser.fullName.charAt(0)}
                     </div>
                 </div>
                 <div>
@@ -579,11 +579,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     <select 
                         value={financialYear} 
                         onChange={(e) => setFinancialYear(e.target.value)}
-                        className="bg-white/50 backdrop-blur-md border border-gray-200/50 text-gray-700 font-bold rounded-xl text-xs px-2 py-2 mr-2 shadow-sm"
+                        className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs px-2 py-2 mr-2 shadow-sm"
                         dir="ltr"
                     >
                         {settings?.fiscalYears?.map(fy => (
-                            <option key={fy.id} value={fy.label}>{fy.label}</option>
+                            <option key={fy.id} value={fy.label} className="bg-white dark:bg-gray-800">{fy.label}</option>
                         )) || <>
                             <option value="1402">1402</option>
                             <option value="1403">1403</option>
@@ -595,13 +595,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 )}
                 <button 
                   onClick={toggleTheme}
-                  className="p-2.5 bg-white/50 backdrop-blur-md border border-gray-200/50 rounded-xl text-gray-700 dark:text-gray-300 shadow-sm"
+                  className="p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl text-gray-700 dark:text-gray-300 shadow-sm"
                 >
                     {theme === 'light' ? <Moon size={20} /> : <Sun size={20} className="text-yellow-400" />}
                 </button>
                 <div className="relative notification-trigger" ref={mobileNotifRef}>
-                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 backdrop-blur-md border border-gray-200/50 rounded-xl hover:glass-panel transition-colors shadow-sm">
-                        <Bell size={20} className="text-gray-700" />
+                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
+                        <Bell size={20} className="text-gray-700 dark:text-gray-200" />
                         {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
                     </button>
                     {showNotifDropdown && <NotificationDropdown />}
@@ -609,7 +609,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             </div>
         </header>
         
-        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
+        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(110px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
                     <div className="hidden md:flex justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 sticky top-0 z-30 shadow-sm no-print items-center glass-header">
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (

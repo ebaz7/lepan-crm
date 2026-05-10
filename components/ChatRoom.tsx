@@ -10,7 +10,7 @@ import {
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
-    Shield, UserMinus, UserPlus, BellOff, Camera
+    Shield, UserMinus, UserPlus, BellOff, Camera, Clock
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
 
@@ -138,7 +138,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     
     // --- File Progress & Management ---
     const [fileProgress, setFileProgress] = useState<{ [key: string]: number }>({});
-    const [showGroupInfo, setShowGroupInfo] = useState<ChatGroup | null>(null);
+    const [showGroupInfo, setShowGroupInfo] = useState<ChatGroup | (TaskGroup & {isTaskGroup?: boolean, admins?: string[], avatar?: string | null}) | null>(null);
     const [showContactInfo, setShowContactInfo] = useState<User | null>(null);
     const [isDownloading, setIsDownloading] = useState<{ [key: string]: boolean }>({});
     
@@ -209,7 +209,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const inputAreaRef = useRef<HTMLTextAreaElement>(null);
 
     // --- Modals ---
-    const [showGroupModal, setShowGroupModal] = useState(false);
+    const [showGroupModal, setShowGroupModal] = useState<string | false>(false);
     const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
@@ -468,7 +468,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 sender: replyingTo.sender,
                 message: replyingTo.message || (replyingTo.audioUrl ? 'پیام صوتی' : 'فایل')
             } : undefined,
-            readBy: []
+            readBy: [],
+            isPending: true
         };
 
         // Optimistic UI Update
@@ -478,7 +479,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setTimeout(scrollToBottom, 50);
 
         try {
-            await sendMessage(newMsg);
+            await sendMessage({ ...newMsg, isPending: undefined });
+            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, isPending: false } : m));
             onRefresh();
         } catch (e: any) { 
             console.error("Send Error:", e);
@@ -563,7 +565,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
                         audioUrl: tempUrl,
                         audioDuration: durationSec,
-                        readBy: []
+                        readBy: [],
+                        isPending: true,
+                        uploadProgress: 0
                     };
                     
                     setMessages(prev => [...prev, tempMsg]);
@@ -577,17 +581,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         if (finalMime.includes('mp4') || finalMime.includes('aac')) ext = 'm4a';
                         else if (finalMime.includes('ogg')) ext = 'ogg';
 
+                        // Simulate progress for UI
+                        setTimeout(() => setMessages(prev => prev.map(m => m.id === tempId ? { ...m, uploadProgress: 50 } : m)), 200);
+
                         const result = await uploadFile(`voice_${Date.now()}.${ext}`, base64);
                         
-                        // Update with real URL
-                        const realMsg = { ...tempMsg, id: generateUUID(), audioUrl: result.url };
+                        // Update with real URL and same ID
+                        const realMsg = { ...tempMsg, audioUrl: result.url, isPending: false, uploadProgress: undefined };
                         await sendMessage(realMsg);
                         
-                        // Remove temp, add real (or just refresh)
+                        setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m));
                         onRefresh();
                     } catch (e: any) { 
                         alert('خطا در ارسال ویس'); 
-                        // Revert optimistic update if needed
+                        setMessages(prev => prev.filter(m => m.id !== tempId));
                     }
                 };
             };
@@ -662,7 +669,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Size check: > 500MB (500 * 1024 * 1024 bytes)
         if (file.size > 500 * 1024 * 1024) {
             if (!confirm(`⚠️ حجم فایل ${Math.round(file.size / (1024 * 1024))} مگابایت است. آیا از ارسال این فایل حجیم اطمینان دارید؟`)) {
                 e.target.value = '';
@@ -670,46 +676,55 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             }
         }
 
-        setIsUploading(true);
+        const safeName = file.name || `unknown_${Date.now()}`;
+        const newMsgId = generateUUID();
+
+        const pendingMsg: ChatMessage = {
+            id: newMsgId,
+            sender: currentUser.fullName,
+            senderUsername: currentUser.username,
+            role: currentUser.role,
+            message: '',
+            timestamp: Date.now(),
+            recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
+            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+            attachment: { fileName: safeName, url: '' }, // empty URL while pending
+            readBy: [],
+            isPending: true,
+            uploadProgress: 0
+        };
+
+        setMessages(prev => [...prev, pendingMsg]);
+        setTimeout(scrollToBottom, 50);
+
         const reader = new FileReader();
         
-        // Tracking progress using a custom upload if storageService allowed it,
-        // but since we use base64 over custom storageService, we'll simulate the "progress"
-        // based on the reader loading for better UX.
         reader.onprogress = (event) => {
             if (event.lengthComputable) {
-                const percent = Math.round((event.loaded / event.total) * 100);
-                setFileProgress(prev => ({ ...prev, uploading: percent }));
+                const percent = Math.round((event.loaded / event.total) * 90);
+                setMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: percent } : m));
             }
         };
 
         reader.onload = async (ev) => {
             try {
-                setFileProgress(prev => ({ ...prev, uploading: 90 })); // Processing...
+                setMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: 95 } : m));
                 const base64 = reader.result as string;
-                const safeName = file.name || `unknown_${Date.now()}`;
                 const result = await uploadFile(safeName, base64);
                 
-                const newMsg: ChatMessage = {
-                    id: generateUUID(),
-                    sender: currentUser.fullName,
-                    senderUsername: currentUser.username,
-                    role: currentUser.role,
-                    message: '',
-                    timestamp: Date.now(),
-                    recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
-                    groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+                const finalMsg: ChatMessage = {
+                    ...pendingMsg,
                     attachment: { fileName: result.fileName, url: result.url },
-                    readBy: []
+                    isPending: false,
+                    uploadProgress: undefined
                 };
-                await sendMessage(newMsg);
+                
+                await sendMessage(finalMsg);
+                setMessages(prev => prev.map(m => m.id === newMsgId ? finalMsg : m));
                 onRefresh();
-                setTimeout(scrollToBottom, 150);
             } catch (error: any) { 
                 alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
-            } finally { 
-                setIsUploading(false); 
-                setFileProgress(prev => { const n = {...prev}; delete n.uploading; return n; });
+                setMessages(prev => prev.filter(m => m.id !== newMsgId));
             }
         };
         reader.readAsDataURL(file);
@@ -804,21 +819,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const handleCreateGroup = async () => {
         if (!newGroupName.trim()) return;
         try {
-            const newGroup: ChatGroup = {
-                id: generateUUID(),
-                name: newGroupName.trim(),
-                members: [...selectedGroupMembers, currentUser.username],
-                admins: [currentUser.username],
-                createdBy: currentUser.username,
-                createdAt: Date.now(),
-                avatar: null
-            };
-            await createGroup(newGroup);
-            setGroups(prev => [...prev, newGroup]);
+            if (showGroupModal === 'task_group') {
+                const newTaskGroup: TaskGroup = {
+                    id: generateUUID(),
+                    name: newGroupName.trim(),
+                    members: [...selectedGroupMembers, currentUser.username],
+                    createdBy: currentUser.username,
+                    createdAt: Date.now()
+                };
+                await createTaskGroup(newTaskGroup);
+                setTaskGroups(prev => [...prev, newTaskGroup]);
+                setActiveChannel({ type: 'task_group', id: newTaskGroup.id });
+            } else {
+                const newGroup: ChatGroup = {
+                    id: generateUUID(),
+                    name: newGroupName.trim(),
+                    members: [...selectedGroupMembers, currentUser.username],
+                    admins: [currentUser.username],
+                    createdBy: currentUser.username,
+                    createdAt: Date.now(),
+                    avatar: null
+                };
+                await createGroup(newGroup);
+                setGroups(prev => [...prev, newGroup]);
+                setActiveChannel({ type: 'group', id: newGroup.id });
+            }
             setShowGroupModal(false);
             setNewGroupName('');
             setSelectedGroupMembers([]);
-            setActiveChannel({ type: 'group', id: newGroup.id });
         } catch (e) {
             alert('خطا در ساخت گروه');
         }
@@ -826,13 +854,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const handleUpdateGroup = async (groupId: string, updates: Partial<ChatGroup>) => {
         try {
-            const group = groups.find(g => g.id === groupId);
-            if (!group) return;
-            const updatedGroup = { ...group, ...updates };
-            await updateGroup(updatedGroup);
-            setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
-            if (showGroupInfo && showGroupInfo.id === groupId) {
-                setShowGroupInfo(updatedGroup);
+            if (showGroupInfo?.isTaskGroup) {
+                const group = taskGroups.find(g => g.id === groupId);
+                if (!group) return;
+                const updatedGroup = { ...group, ...updates };
+                await updateTaskGroup(updatedGroup);
+                setTaskGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
+                if (showGroupInfo && showGroupInfo.id === groupId) {
+                    setShowGroupInfo({...updatedGroup, isTaskGroup: true});
+                }
+            } else {
+                const group = groups.find(g => g.id === groupId);
+                if (!group) return;
+                const updatedGroup = { ...group, ...updates };
+                await updateGroup(updatedGroup);
+                setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
+                if (showGroupInfo && showGroupInfo.id === groupId) {
+                    setShowGroupInfo(updatedGroup);
+                }
             }
         } catch (e) {
             alert('خطا در بروزرسانی گروه');
@@ -840,12 +879,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const handleAddMemberToGroup = async (groupId: string) => {
-        const group = groups.find(g => g.id === groupId);
+        const group = showGroupInfo?.isTaskGroup ? taskGroups.find(g => g.id === groupId) : groups.find(g => g.id === groupId);
         if (!group) return;
         
         const availableUsers = users.filter(u => !group.members.includes(u.username));
-        // Simple UI for member selection - in a real app this should be a modal
-        const username = prompt('نام کاربری کاربر جدید را وارد کنید:');
+        if (availableUsers.length === 0) {
+            alert('همه کاربران در این گروه عضو هستند.');
+            return;
+        }
+        
+        const userListStr = availableUsers.map(u => `${u.fullName} (${u.username})`).join('\n');
+        const username = prompt(`نام کاربری کاربر جدید را جهت افزودن وارد کنید:\n\n${userListStr}`);
         if (username && users.find(u => u.username === username)) {
             const newMembers = [...group.members, username];
             await handleUpdateGroup(groupId, { members: newMembers });
@@ -855,7 +899,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const handleRemoveMemberFromGroup = async (groupId: string, memberUsername: string) => {
-        const group = groups.find(g => g.id === groupId);
+        const group = showGroupInfo?.isTaskGroup ? taskGroups.find(g => g.id === groupId) : groups.find(g => g.id === groupId);
         if (!group || group.createdBy === memberUsername) {
             alert('نمی‌توان سازنده گروه را حذف کرد');
             return;
@@ -863,12 +907,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         
         if (confirm(`آیا از حذف ${memberUsername} اطمینان دارید؟`)) {
             const newMembers = group.members.filter(m => m !== memberUsername);
-            const newAdmins = (group.admins || []).filter(a => a !== memberUsername);
+            const newAdmins = showGroupInfo?.isTaskGroup ? undefined : ((group as ChatGroup).admins || []).filter(a => a !== memberUsername);
             await handleUpdateGroup(groupId, { members: newMembers, admins: newAdmins });
         }
     };
 
     const handleToggleAdminStatus = async (groupId: string, memberUsername: string) => {
+        if (showGroupInfo?.isTaskGroup) return; // Task groups don't have admins 
+        
         const group = groups.find(g => g.id === groupId);
         if (!group) return;
         
@@ -916,21 +962,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
                         </div>
                         {(activeTab === 'GROUPS' || activeTab === 'TASKS') && <button onClick={() => {
-                            if (activeTab === 'TASKS') {
-                                const name = prompt('نام گروه تسک جدید:');
-                                if (name) {
-                                    const newTaskGroup: TaskGroup = {
-                                        id: generateUUID(),
-                                        name,
-                                        members: [currentUser.username],
-                                        createdBy: currentUser.username,
-                                        createdAt: Date.now()
-                                    };
-                                    createTaskGroup(newTaskGroup).then(() => setTaskGroups(prev => [...prev, newTaskGroup]));
-                                }
-                            } else {
-                                setShowGroupModal(true)
-                            }
+                            setShowGroupModal(activeTab === 'TASKS' ? 'task_group' : 'group');
                         }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
                     </div>
                     <div className="relative">
@@ -981,6 +1013,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <div className="flex flex-col cursor-pointer" onClick={() => {
                                     if(activeChannel.type === 'private') setShowContactInfo(users.find(u=>u.username===activeChannel.id) || null);
                                     else if(activeChannel.type === 'group') setShowGroupInfo(groups.find(g=>g.id===activeChannel.id) || null);
+                                    else if(activeChannel.type === 'task_group') {
+                                        const tg = taskGroups.find(g=>g.id===activeChannel.id);
+                                        if (tg) setShowGroupInfo({...tg, isTaskGroup: true});
+                                    }
                                 }}>
                                     <h3 className="font-bold text-gray-800 text-sm">
                                         {activeChannel.type === 'private' ? users.find(u=>u.username===activeChannel.id)?.fullName : 
@@ -1197,9 +1233,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                                             {/* Footer */}
                                             <div className="flex justify-end items-center gap-1 mt-1 opacity-60 select-none">
+                                                {msg.uploadProgress !== undefined && (
+                                                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded font-mono">{msg.uploadProgress}%</span>
+                                                )}
                                                 {msg.isEdited && <span className="text-[9px]">ویرایش شده</span>}
                                                 <span className="text-[10px]">{new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>
-                                                {isMe && <CheckCheck size={14} className={msg.readBy && msg.readBy.length > 0 ? "text-green-500" : "text-gray-500"}/>}
+                                                {isMe && (
+                                                    msg.isPending ? <Clock size={12} className="text-gray-400"/> :
+                                                    (msg.readBy && msg.readBy.length > 0) ? <CheckCheck size={14} className="text-green-500" /> :
+                                                    <Check size={14} className="text-gray-500" />
+                                                )}
                                             </div>
                                         </div>
 
@@ -1518,13 +1561,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 
                                                 {canManage && !isCreator && !isMe && (
                                                     <div className="flex gap-1 ml-2">
-                                                        <button 
-                                                            onClick={() => handleToggleAdminStatus(showGroupInfo.id, username)}
-                                                            className={`p-1.5 rounded-lg hover:glass-panel shadow-sm transition-all ${isAdmin ? 'text-blue-500' : 'text-gray-400'}`}
-                                                            title={isAdmin ? 'سلب مدیریت' : 'ارتقا به مدیر'}
-                                                        >
-                                                            <Shield size={14}/>
-                                                        </button>
+                                                        {!showGroupInfo.isTaskGroup && (
+                                                            <button 
+                                                                onClick={() => handleToggleAdminStatus(showGroupInfo.id, username)}
+                                                                className={`p-1.5 rounded-lg hover:glass-panel shadow-sm transition-all ${isAdmin ? 'text-blue-500' : 'text-gray-400'}`}
+                                                                title={isAdmin ? 'سلب مدیریت' : 'ارتقا به مدیر'}
+                                                            >
+                                                                <Shield size={14}/>
+                                                            </button>
+                                                        )}
                                                         <button 
                                                             onClick={() => handleRemoveMemberFromGroup(showGroupInfo.id, username)}
                                                             className="p-1.5 text-red-400 hover:text-red-600 hover:glass-panel shadow-sm rounded-lg transition-all"
@@ -1540,7 +1585,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 })}
                             </div>
 
-                            {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
+                            {((showGroupInfo.admins || []).includes(currentUser.username) || showGroupInfo.createdBy === currentUser.username || currentUser.role === UserRole.ADMIN) && (
                                 <div className="pt-4 border-t space-y-2">
                                     <button 
                                         onClick={() => handleAddMemberToGroup(showGroupInfo.id)}
@@ -1548,7 +1593,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     >
                                         <UserPlus size={18}/> افزودن عضو جدید
                                     </button>
-                                    <button onClick={() => { if(confirm('گروه حذف شود؟')) { deleteGroup(showGroupInfo.id); setShowGroupInfo(null); setActiveChannel(null); onRefresh(); } }} className="w-full bg-red-50 text-red-600 p-3 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
+                                    <button onClick={() => { 
+                                        if(confirm('گروه حذف شود؟')) { 
+                                            if (showGroupInfo.isTaskGroup) {
+                                                deleteTaskGroup(showGroupInfo.id);
+                                            } else {
+                                                deleteGroup(showGroupInfo.id); 
+                                            }
+                                            setShowGroupInfo(null); 
+                                            setActiveChannel(null); 
+                                            onRefresh(); 
+                                        } 
+                                    }} className="w-full bg-red-50 text-red-600 p-3 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
                                         <Trash2 size={18}/> حذف و انحلال گروه
                                     </button>
                                 </div>

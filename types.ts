@@ -555,6 +555,8 @@ export interface ChatMessage {
     forwardFrom?: string;
     readBy?: string[]; // Array of usernames who read it
     isDeleted?: boolean; // Logical delete
+    isPending?: boolean;
+    uploadProgress?: number;
 }
 
 export interface ChatGroup {
@@ -566,6 +568,7 @@ export interface ChatGroup {
     avatar?: string | null;
     description?: string;
     createdAt?: number;
+    isTaskGroup?: boolean;
 }
 
 export interface TaskGroup {
@@ -574,6 +577,7 @@ export interface TaskGroup {
     members: string[];
     createdBy: string;
     createdAt: number;
+    isTaskGroup?: boolean;
 }
 
 export interface SystemAnnouncement {
@@ -585,6 +589,7 @@ export interface SystemAnnouncement {
     isCompleted?: boolean;
     completedAt?: number;
     completedBy?: string;
+    type?: 'task' | 'general';
 }
 
 export interface GroupTask {
