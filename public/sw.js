@@ -1,15 +1,35 @@
-
-const CACHE_NAME = 'payment-sys-v7-robust';
-const urlsToCache = [
+const CACHE_NAME = 'finance-app-v2';
+const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/assets/index.css',
+  '/assets/index.js'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then((cache) => {
+      // We try to cache available assets but don't fail if some are missing during dev
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => console.log("Some assets not found for caching yet"));
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  // Navigation request strategy: Network First, falling back to Cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
   );
 });
 
@@ -17,84 +37,12 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
+        cacheNames.map((name) => {
+          if (name !== CACHE_NAME) {
+            return caches.delete(name);
           }
         })
       );
-    })
-  );
-  return self.clients.claim();
-});
-
-// *** CORE PUSH NOTIFICATION LOGIC ***
-self.addEventListener('push', (event) => {
-  console.log('[SW] Push Received:', event.data ? event.data.text() : 'No Data');
-  
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
-    const title = data.title || 'پیام سیستم';
-    const body = data.body || 'شما یک پیام جدید دارید';
-    
-    const options = {
-      body: body,
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      dir: 'rtl',
-      lang: 'fa',
-      vibrate: [200, 100, 200, 100, 200], // Stronger vibration pattern
-      data: {
-        url: data.url || '/',
-        timestamp: Date.now()
-      },
-      tag: 'payment-sys-notification', 
-      renotify: true, 
-      requireInteraction: true,
-      actions: [
-        { action: 'open', title: 'مشاهده' },
-        { action: 'close', title: 'بستن' }
-      ]
-    };
-
-    event.waitUntil(
-      self.registration.showNotification(title, options)
-    );
-  } catch (err) {
-    console.error('[SW] Push Error:', err);
-    // Fallback if JSON parse fails
-    event.waitUntil(
-        self.registration.showNotification('پیام جدید', { body: 'پیام دریافت شد', icon: '/pwa-192x192.png' })
-    );
-  }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification Clicked');
-  event.notification.close();
-
-  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 1. Check if app is already open (Prioritize Standalone Mode)
-      for (const client of clientList) {
-        const url = new URL(client.url);
-        if (url.pathname === targetUrl || (targetUrl === '/' && url.pathname === '/')) {
-             return client.focus();
-        }
-        // If just the app is open but on a different page, navigate and focus
-        if (client.url.includes(self.registration.scope) && 'focus' in client) {
-             if (targetUrl !== '/') client.navigate(targetUrl);
-             return client.focus();
-        }
-      }
-      // 2. If not open, open a new window
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
     })
   );
 });

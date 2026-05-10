@@ -352,6 +352,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             <div className="flex items-center gap-1.5 ml-auto">
                 {onEdit && <button onClick={onEdit} className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-amber-100 flex items-center gap-1 border border-amber-200"><Edit size={12}/> اصلاح</button>}
                 <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-200 text-green-600 hover:bg-green-50'}`}><Share2 size={12}/> واتساپ</button>
+                <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-200 text-green-600 hover:bg-green-50'}`}><Share2 size={12}/> بله</button>
+                <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200 text-blue-600 hover:bg-blue-50'}`}><Share2 size={12}/> تلگرام</button>
             </div>
                 {sharePlatform && (
                      <div className="mt-2 glass-panel rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">

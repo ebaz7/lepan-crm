@@ -457,36 +457,37 @@ function App() {
                 </div>
             )}
 
-            {loading && orders.length === 0 ? ( 
-                <div className="flex h-[50vh] items-center justify-center text-blue-600 flex-col gap-3">
-                    <Loader2 size={48} className="animate-spin" />
-                    <span className="text-sm font-bold animate-pulse">در حال دریافت اطلاعات...</span>
-                </div> 
-            ) : (
-                <>
-                    {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} financialYear={financialYear} />}
-                    {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
-                    {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
-                    {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                    {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} />}
-                    {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
-                    {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
-                    {activeTab === 'sales' && <SalesCRMModule />}
-                    {activeTab === 'products' && <ProductsModule />}
-                    {activeTab === 'tickets' && <Tickets />}
-                    {activeTab === 'users' && <ManageUsers />}
-                    {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
-                    {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
-                    {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
-                    {activeTab === 'chat' && (
-                        <ChatRoom 
-                            currentUser={currentUser} 
-                            preloadedMessages={chatMessages}
-                            onRefresh={() => loadData(true)} 
-                        />
-                    )} 
-                </>
-            )}
+            {/* Remove the blanket loader and handle loading inside components or via a small indicator */}
+            <div className="relative">
+                {loading && (
+                    <div className="fixed top-20 right-4 z-[999] bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 shadow-lg flex items-center gap-2 animate-fade-in">
+                        <Loader2 size={16} className="animate-spin text-blue-600" />
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">در حال بروزرسانی دیتابیس...</span>
+                    </div>
+                )}
+
+                {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} financialYear={financialYear} />}
+                {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
+                {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
+                {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
+                {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} />}
+                {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
+                {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
+                {activeTab === 'sales' && <SalesCRMModule />}
+                {activeTab === 'products' && <ProductsModule />}
+                {activeTab === 'tickets' && <Tickets />}
+                {activeTab === 'users' && <ManageUsers />}
+                {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
+                {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
+                {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
+                {activeTab === 'chat' && (
+                    <ChatRoom 
+                        currentUser={currentUser} 
+                        preloadedMessages={chatMessages}
+                        onRefresh={() => loadData(true)} 
+                    />
+                )} 
+            </div>
             </Layout>
         )}
     </>
