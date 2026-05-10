@@ -463,8 +463,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
     }
     if (!isGroup) {
         // Handle guest states
-        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-        const session = sessions[chatId];
         
         // --- GUEST REGISTRATION STATES ---
         if (session.state === 'GUEST_REG_NAME') {
@@ -722,9 +720,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         if (isGroup) return;
         return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
     }
-
-    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-    const session = sessions[chatId];
 
     if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
         session.state = 'IDLE';
@@ -1253,6 +1248,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                   (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
                   (userId && userId.toString() !== chatId.toString());
 
+    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+    const session = sessions[userId];
+    
     // --- GROUP SILENCE POLICY ---
     if (isGroup && !data.startsWith('APP_') && !data.startsWith('REJ_') && !data.startsWith('GEN_PDF_') && data !== 'CHECK_JOIN') {
         return; 
@@ -1343,9 +1341,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // Allow Guest callbacks even for registered users (Admin access to customer menus)
     if (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB')) {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        const session = sessions[userId];
-
         if (data === 'GUEST_MAIN') {
             session.state = 'IDLE';
             const guestMenu = [
@@ -1562,9 +1557,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (isGroup) return; // Silent in groups
         return sendFn(userId, `⛔ امکان انجام این عملیات وجود ندارد. شناسه شما (\`${userId}\`) ثبت نشده است.`);
     }
-
-    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-    const session = sessions[userId];
 
     // --- NAVIGATION ---
     if (data.startsWith('MENU_')) {
