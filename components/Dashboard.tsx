@@ -51,15 +51,24 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
   const dailyQuote = useMemo(() => getRandomQuote(), []);
     const shamsiDate = useMemo(() => {
-        const parts = new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).split(' ');
-        return { 
-            weekday: parts[0], 
-            day: parts[1], 
-            month: parts[2], 
-            year: new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(new Date()),
-            full: new Intl.DateTimeFormat('fa-IR', { dateStyle: 'full' }).format(new Date())
-        };
-    }, []);
+        try {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const parts = formatter.formatToParts(now);
+            
+            const findPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+            
+            return {
+                weekday: findPart('weekday'),
+                day: findPart('day'),
+                month: findPart('month'),
+                year: findPart('year'),
+                full: formatter.format(now)
+            };
+        } catch (e) {
+            return { weekday: 'امروز', day: '-', month: '-', year: '-', full: '' };
+        }
+    }, [rawOrders]);
 
     const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
@@ -86,7 +95,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         };
         const mod = await import('../services/storageService');
         await mod.createSystemAnnouncement(newAnn);
-        setAnnouncements(prev => [...prev, newAnn]);
+        setAnnouncements(prev => [newAnn, ...prev]);
         setShowAnnounceModal(false);
         setAnnounceText('');
         setAnnounceTarget('');
@@ -95,7 +104,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
     useEffect(() => {
         import('../services/storageService').then(mod => {
             mod.getSystemAnnouncements().then(anns => {
-                setAnnouncements(anns || []);
+                setAnnouncements(anns ? anns.sort((a,b)=>b.createdAt - a.createdAt) : []);
             }).catch(console.error);
         });
     }, []);

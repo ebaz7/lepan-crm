@@ -205,7 +205,8 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
         await sendFn(chatId, `⚠️ ... و ${results.length - 10} مورد دیگر. لطفا جستجو را محدودتر کنید.`);
     }
     
-    await sendFn(chatId, "✅ پایان لیست.", { reply_markup: KEYBOARDS.MAIN });
+    const endMenu = (platform === 'telegram' || platform === 'bale') && (chatId.toString().startsWith('-') || chatId.toString().length > 10) ? undefined : KEYBOARDS.MAIN;
+    await sendFn(chatId, "✅ پایان لیست.", { reply_markup: endMenu });
 };
 
 // --- PRODUCT HELPERS ---
@@ -229,47 +230,51 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                   (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
                   (senderId && senderId.toString() !== chatId.toString());
 
+    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
+    const session = sessions[chatId];
+
     // --- GROUP BEHAVIOR ---
-    // In groups, we don't enforce channel membership checks. Commands like DAILY should just work.
-    
-    if (text === '/id' || text === 'آیدی') {
-        return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
-    }
-
-    if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
-        const args = text.split(' ');
-        let dateStr = toShamsiFull(new Date().toISOString()).split(' ')[0]; // Default to today in Shamsi
-
-        if (args.length > 1) {
-            // Check if user provided a Shamsi date like 1403/02/05
-            dateStr = args[1];
+    if (isGroup) {
+        if (text === '/id' || text === 'آیدی') {
+            return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
         }
-        
-        // Helper to check if a permit date matches the given Shamsi date
-        const matchesDate = (dateVal) => {
-            if (!dateVal) return false;
-            const shamsiOfRecord = toShamsiFull(dateVal).split(' ')[0];
-            return shamsiOfRecord === dateStr;
-        };
 
-        const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
-        
-        if (finalExits.length === 0) {
-            return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
+        if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
+            const args = text.split(' ');
+            let dateStr = toShamsiFull(new Date().toISOString()).split(' ')[0]; // Default to today in Shamsi
+
+            if (args.length > 1) {
+                // Check if user provided a Shamsi date like 1403/02/05
+                dateStr = args[1];
+            }
+            
+            // Helper to check if a permit date matches the given Shamsi date
+            const matchesDate = (dateVal) => {
+                if (!dateVal) return false;
+                const shamsiOfRecord = toShamsiFull(dateVal).split(' ')[0];
+                return shamsiOfRecord === dateStr;
+            };
+
+            const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+            
+            if (finalExits.length === 0) {
+                return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
+            }
+            
+            let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
+            finalExits.forEach((p, idx) => {
+                const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+                reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+            });
+            
+            return sendFn(chatId, reportMsg);
         }
-        
-        let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
-        finalExits.forEach((p, idx) => {
-            const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
-        });
-        
-        return sendFn(chatId, reportMsg);
+
+        // Silent for all other group messages as per user request
+        return;
     }
 
     if (text.startsWith('/start') || text === 'شروع' || text === 'منو') {
-        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-        const session = sessions[chatId];
         session.state = 'IDLE';
         session.data = {};
 
@@ -406,7 +411,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
 
         // --- ONBOARDING FOR GUESTS ---
-        if (!user && !isGroup) {
+        if (!user && !isGroup && session.state === 'IDLE') {
             const sub = db.botSubscribers.find(s => (platform === 'telegram' && s.telegramChatId == chatId) || (platform === 'bale' && s.baleChatId == chatId));
             
             // If sub exists but lacks info, and we haven't asked yet or user just started
@@ -423,7 +428,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             }
         }
 
-        if (!user && !isGroup) {
+        if (!user && !isGroup && session.state === 'IDLE') {
             const guestMenu = [
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
@@ -447,16 +452,17 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             });
         }
         
-        if (isGroup && !user) {
-            return sendFn(chatId, "⚠️ برای دسترسی به پنل مدیریت در گروه، باید ابتدا بصورت کاربر در سیستم ثبت شده باشید.\nاما سایر دستورات عمومی (مانند DAILY) فعال هستند.");
+        if (isGroup) {
+            if (!user) {
+                return sendFn(chatId, "⚠️ برای دسترسی به پنل مدیریت در گروه، باید ابتدا بصورت کاربر در سیستم ثبت شده باشید.\nاما سایر دستورات عمومی (مانند DAILY) فعال هستند.");
+            }
+            return sendFn(chatId, `👋 سلام ${user.fullName}\nبرای استفاده از منوی مدیریت، لطفاً در چت خصوصی با ربات در ارتباط باشید.`);
         }
 
         return sendFn(chatId, `👋 سلام ${user.fullName}\nبه سیستم مدیریت یکپارچه خوش آمدید.\nلطفاً یک گزینه را انتخاب کنید:`, { reply_markup: KEYBOARDS.MAIN });
     }
-    if (!user && !isGroup) {
+    if (!isGroup) {
         // Handle guest states
-        if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-        const session = sessions[chatId];
         
         // --- GUEST REGISTRATION STATES ---
         if (session.state === 'GUEST_REG_NAME') {
@@ -715,9 +721,6 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
     }
 
-    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-    const session = sessions[chatId];
-
     if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
         session.state = 'IDLE';
         // Broadcast
@@ -953,8 +956,13 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, `✅ بیجک خروج #${nextSeq} ثبت شد.`);
     }
 
-    // --- GUEST REGISTRATION STATES ---
-    return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { reply_markup: KEYBOARDS.MAIN });
+    if (isGroup) return; // Silent for groups on unrecognized messages
+    
+    return sendFn(chatId, "دستور نامفهوم. از منو استفاده کنید.", { 
+        reply_markup: user ? KEYBOARDS.MAIN : {
+            inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]]
+        }
+    });
 };
 
 export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db, stepName, eventType = 'STEP') => {
@@ -1071,8 +1079,10 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
         const settings = db.settings || {};
         const mode = settings.botPaymentNotificationMode || 'step_by_step';
         
-        // Mode filtering
-        if (mode === 'after_submit' && stepName !== 'ثبت اولیه' && eventType === 'STEP') return;
+        // Mode filtering - If mode is after_submit, only send the initial registration
+        if (mode === 'after_submit' && stepName !== 'ثبت اولیه') return;
+        
+        // If mode is after_final, only send if it's the final approval
         if (mode === 'after_final' && !isFinal && eventType === 'STEP') return;
 
         const tgGroupId = settings.botAccountingGroupIdTele || settings.botAccountingGroupId || '';
@@ -1237,6 +1247,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     const isGroup = chatId.toString().startsWith('-') || 
                   (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
                   (userId && userId.toString() !== chatId.toString());
+
+    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+    const session = sessions[userId];
+
+    // --- GROUP SILENCE POLICY ---
+    if (isGroup && !data.startsWith('APP_') && !data.startsWith('REJ_') && !data.startsWith('GEN_PDF_') && data !== 'CHECK_JOIN') {
+        return; 
+    }
     
     // GUEST HANDLERS / PRE-AUTH HANDLERS
     if (data === 'CHECK_JOIN') {
@@ -1323,9 +1341,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // Allow Guest callbacks even for registered users (Admin access to customer menus)
     if (data.startsWith('GUEST_') || data.startsWith('SALES_GROUP_') || data.startsWith('SALES_SUB')) {
-        if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-        const session = sessions[userId];
-
         if (data === 'GUEST_MAIN') {
             session.state = 'IDLE';
             const guestMenu = [
@@ -1539,20 +1554,22 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     if (!user) {
+        if (isGroup) return; // Silent in groups
         return sendFn(userId, `⛔ امکان انجام این عملیات وجود ندارد. شناسه شما (\`${userId}\`) ثبت نشده است.`);
     }
 
-    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
-    const session = sessions[userId];
-
     // --- NAVIGATION ---
-    if (data === 'MENU_MAIN') { session.state = 'IDLE'; return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN }); }
-    if (data === 'MENU_PAY') return sendFn(chatId, "💰 مدیریت پرداخت:", { reply_markup: KEYBOARDS.PAYMENT });
-    if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
-    if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
-    if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
-    if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
-    if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+    if (data.startsWith('MENU_')) {
+        if (isGroup) return; // Silent in groups
+        session.state = 'IDLE';
+        if (data === 'MENU_MAIN') return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN });
+        if (data === 'MENU_PAY') return sendFn(chatId, "💰 مدیریت پرداخت:", { reply_markup: KEYBOARDS.PAYMENT });
+        if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
+        if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
+        if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
+        if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
+        if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+    }
 
     // Knowledge Base logic
     if (data === 'ACT_KNOWLEDGE') {

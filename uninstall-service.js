@@ -1,20 +1,17 @@
-
 import { Service } from 'node-windows';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const svc = new Service({
-  name: 'PaymentSystem',
+  name: 'Payment Order System',
   script: path.join(__dirname, 'server.js')
 });
 
-svc.on('uninstall', function() {
+svc.on('uninstall', () => {
   console.log('Uninstall complete.');
   console.log('The service exists: ', svc.exists);
 });
 
-console.log('Uninstalling Service...');
 svc.uninstall();
