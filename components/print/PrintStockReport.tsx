@@ -57,11 +57,7 @@ const PrintStockReport: React.FC<PrintStockReportProps> = ({ data, onClose }) =>
   };
 
   const handlePrint = () => {
-      setProcessing(true);
-      setTimeout(() => {
-          window.print();
-          setProcessing(false);
-      }, 500);
+      window.print();
   };
 
   const content = (

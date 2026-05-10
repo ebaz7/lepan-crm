@@ -196,11 +196,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   );
 
   const handlePrint = () => { 
-      setProcessing(true);
-      setTimeout(() => {
-          window.print(); 
-          setProcessing(false);
-      }, 500);
+      window.print(); 
   };
 
   const handleDownloadPDF = async () => {

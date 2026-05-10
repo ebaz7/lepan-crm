@@ -116,14 +116,9 @@ const PrintBijak: React.FC<PrintBijakProps> = ({ tx, onClose, settings, embed, f
   const managerTarget = companyConfig?.salesManager || settings?.defaultSalesManager;
 
   const handlePrint = () => {
-      setProcessing(true);
       const style = document.getElementById('page-size-style');
       if (style) style.innerHTML = '@page { size: A5 portrait; margin: 0; }';
-
-      setTimeout(() => {
-          window.print();
-          setProcessing(false);
-      }, 1000);
+      window.print();
   };
 
   const handleDownloadPDF = async () => {
