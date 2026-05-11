@@ -562,14 +562,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative min-w-0">
-        {/* Mobile Header */}
+      {/* Mobile Header */}
         <header className="glass-header p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-40 safe-pt py-3 sticky top-0 shadow-lg rounded-b-[2rem]">
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-3" onClick={() => setShowProfileModal(true)}>
+                <button 
+                    onClick={() => setActiveTab('dashboard')} 
+                    className="flex items-center gap-3 transition-all active:scale-95"
+                >
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xl border-2 border-white/50 rotate-3 transition-transform hover:rotate-0">
                         {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover rounded-2xl"/> : currentUser.fullName.charAt(0)}
                     </div>
-                </div>
+                </button>
                 <div>
                    <h1 className="font-black text-gray-800 dark:text-gray-100 text-sm tracking-tight">{navItems.find(i => i.id === activeTab)?.label || 'داشبورد'}</h1>
                 </div>
@@ -609,7 +612,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             </div>
         </header>
         
-        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''}`}>
+        <div className={`flex-1 overflow-y-auto bg-transparent pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''} will-change-scroll custom-scrollbar`}>
                     <div className="hidden md:flex justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 sticky top-0 z-30 shadow-sm no-print items-center glass-header">
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (

@@ -108,6 +108,7 @@ body {
   -moz-osx-osx-font-smoothing: grayscale;
   /* Disable text selection highlight for app-like feel */
   -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
   transition: background 0.3s ease, color 0.3s ease;
   min-height: 100vh;
 }
@@ -139,6 +140,26 @@ body {
 }
 .dark .text-blue-600, .dark .text-indigo-600, .dark .text-blue-800 {
   color: #60a5fa !important;
+}
+
+@layer utilities {
+  .will-change-scroll {
+    will-change: transform;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Optimize blur for mobile performance */
+@media (max-width: 768px) {
+  .glass-panel, .glass-header, .backdrop-blur-2xl, .backdrop-blur-3xl {
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+  }
+  
+  .bg-white, .bg-gray-50, .bg-white\/80, .bg-white\/50, .bg-white\/40, .bg-white\/60 {
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+  }
 }
 
 @layer utilities {

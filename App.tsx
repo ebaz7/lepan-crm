@@ -34,6 +34,14 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
+  const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
+
+  const changeTab = (tab: string, addToHistory = true) => {
+      setActiveTabState(tab);
+      if (addToHistory && tab !== tabHistory[tabHistory.length - 1]) {
+          setTabHistory(prev => [...prev.slice(-9), tab]); // Keep last 10 steps
+      }
+  };
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
@@ -90,10 +98,35 @@ function App() {
       try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
   };
   
-  const setActiveTab = (tab: string, addToHistory = true) => { setActiveTabState(tab); if (addToHistory) safePushState({ tab }, '', `#${tab}`); };
+  const setActiveTab = (tab: string, addToHistory = true) => { 
+      setActiveTabState(tab); 
+      if (addToHistory) {
+          safePushState({ tab }, '', `#${tab}`); 
+          if (tab !== tabHistory[tabHistory.length - 1]) {
+              setTabHistory(prev => [...prev.slice(-9), tab]);
+          }
+      }
+  };
 
   useEffect(() => {
     if (isNative) {
+        let backListener: any;
+        try {
+            CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+                if (tabHistory.length > 1) {
+                    const newHistory = [...tabHistory];
+                    newHistory.pop(); // remove current
+                    const prevTab = newHistory[newHistory.length - 1];
+                    setTabHistory(newHistory);
+                    setActiveTab(prevTab, false);
+                } else if (activeTab !== 'dashboard') {
+                    setActiveTab('dashboard');
+                } else if (!canGoBack) {
+                    CapacitorApp.exitApp();
+                }
+            }).then(l => { backListener = l; });
+        } catch(e) { console.error("Back button listener error", e); }
+        
         try {
             PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                 const data = notification.notification.data;
@@ -371,11 +404,30 @@ function App() {
           }
       };
       let listener: any;
+      let backListener: any;
+      
       if (Capacitor.isNativePlatform()) {
           CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; });
+          
+          CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+            if (tabHistory.length > 1) {
+                const newHistory = [...tabHistory];
+                newHistory.pop(); // remove current
+                const prevTab = newHistory[newHistory.length - 1];
+                setTabHistory(newHistory);
+                changeTab(prevTab, false);
+            } else if (activeTab !== 'dashboard') {
+                changeTab('dashboard');
+            } else if (!canGoBack) {
+                CapacitorApp.exitApp();
+            }
+          }).then(l => { backListener = l; });
       }
-      return () => { if (listener) listener.remove(); };
-  }, [currentUser]);
+      return () => { 
+        if (listener) listener.remove(); 
+        if (backListener) backListener.remove();
+      };
+  }, [currentUser, activeTab]);
 
   useEffect(() => { 
       if (currentUser) { 

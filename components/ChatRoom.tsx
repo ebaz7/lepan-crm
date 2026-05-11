@@ -124,6 +124,15 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(preloadedMessages || []);
+    const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
+    
+    // Merge remote and local pending messages
+    const displayMessages = useMemo(() => {
+        const remoteIds = new Set(messages.map(m => m.id));
+        const filteredPending = pendingMessages.filter(pm => !remoteIds.has(pm.id));
+        return [...messages, ...filteredPending].sort((a, b) => a.timestamp - b.timestamp);
+    }, [messages, pendingMessages]);
+
     const [users, setUsers] = useState<User[]>([]);
     const [groups, setGroups] = useState<ChatGroup[]>([]);
     const [tasks, setTasks] = useState<GroupTask[]>([]);
@@ -215,7 +224,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
 
     // --- Effects ---
-    useEffect(() => { if (preloadedMessages) setMessages(preloadedMessages); }, [preloadedMessages]);
+    useEffect(() => { 
+        if (preloadedMessages) {
+            setMessages(preloadedMessages);
+            // Clean up pending messages that are now on server
+            const remoteIds = new Set(preloadedMessages.map(m => m.id));
+            setPendingMessages(prev => prev.filter(pm => !remoteIds.has(pm.id)));
+        } 
+    }, [preloadedMessages]);
 
     useEffect(() => { 
         loadMeta();
@@ -442,7 +458,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if ((!inputText.trim()) || isUploading) return;
 
         if (editingMessageId) {
-            const msgToUpdate = messages.find(m => m.id === editingMessageId);
+            const msgToUpdate = displayMessages.find(m => m.id === editingMessageId);
             if (msgToUpdate) {
                 try {
                     await updateMessage({ ...msgToUpdate, message: inputText, isEdited: true });
@@ -454,8 +470,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return;
         }
 
+        const newMsgId = generateUUID();
         const newMsg: ChatMessage = {
-            id: generateUUID(),
+            id: newMsgId,
             sender: currentUser.fullName,
             senderUsername: currentUser.username,
             role: currentUser.role,
@@ -472,19 +489,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             isPending: true
         };
 
-        // Optimistic UI Update
-        setMessages(prev => [...prev, newMsg]);
+        // Optimistic UI Update using pendingMessages
+        setPendingMessages(prev => [...prev, newMsg]);
         setInputText('');
         setReplyingTo(null);
         setTimeout(scrollToBottom, 50);
 
         try {
             await sendMessage({ ...newMsg, isPending: undefined });
-            setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, isPending: false } : m));
+            // Keep in pending but mark as not pending if we want, 
+            // but merging logic handles it once it appears in 'messages' prop
             onRefresh();
         } catch (e: any) { 
             console.error("Send Error:", e);
-            // Optionally remove message or show error state here
+            setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
             alert("خطا در ارسال پیام");
         }
     };
@@ -665,7 +683,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | null, value: string } }) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -694,7 +712,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             uploadProgress: 0
         };
 
-        setMessages(prev => [...prev, pendingMsg]);
+        setPendingMessages(prev => [...prev, pendingMsg]);
         setTimeout(scrollToBottom, 50);
 
         const reader = new FileReader();
@@ -702,13 +720,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         reader.onprogress = (event) => {
             if (event.lengthComputable) {
                 const percent = Math.round((event.loaded / event.total) * 90);
-                setMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: percent } : m));
+                setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: percent } : m));
             }
         };
 
         reader.onload = async (ev) => {
             try {
-                setMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: 95 } : m));
+                setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: 95 } : m));
                 const base64 = reader.result as string;
                 const result = await uploadFile(safeName, base64);
                 
@@ -720,15 +738,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 };
                 
                 await sendMessage(finalMsg);
-                setMessages(prev => prev.map(m => m.id === newMsgId ? finalMsg : m));
                 onRefresh();
             } catch (error: any) { 
                 alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
-                setMessages(prev => prev.filter(m => m.id !== newMsgId));
+                setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
             }
         };
         reader.readAsDataURL(file);
         e.target.value = '';
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleFileUpload({ target: { files, value: '' } });
+        }
     };
 
     const handleDelete = async (forEveryone: boolean) => {
@@ -934,7 +965,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Render Logic ---
     if (!currentUser) return null;
 
-    const displayMessages = messages.filter(msg => {
+    const filteredMessages = displayMessages.filter(msg => {
         if (!activeChannel) return false;
         let match = false;
         if (activeChannel.type === 'public') match = !msg.recipient && !msg.groupId;
@@ -1118,8 +1149,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 )}
 
                                 {/* Messages List */}
-                                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-white dark:bg-black">
-                            {displayMessages.map((msg: ChatMessage) => {
+                                <div 
+                                    className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-white dark:bg-black"
+                                    onDragOver={handleDragOver}
+                                    onDrop={handleDrop}
+                                >
+                            {filteredMessages.map((msg: ChatMessage) => {
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
                                 
