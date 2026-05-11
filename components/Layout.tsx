@@ -532,32 +532,44 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 z-50 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl">
-        {bottomNavItems.map((item) => { 
-            const Icon = item.icon; 
-            const isActive = activeTab === item.id;
-            return (
+      <div className={`md:hidden fixed z-50 transition-all duration-300 ease-in-out ${activeTab === 'dashboard' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-6 left-1/2 -translate-x-1/2 pointer-events-auto'}`}>
+         {activeTab === 'dashboard' ? (
+             <>
+                {bottomNavItems.map((item) => { 
+                    const Icon = item.icon; 
+                    const isActive = activeTab === item.id;
+                    return (
+                        <button 
+                            key={item.id} 
+                            onClick={() => setActiveTab(item.id)} 
+                            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${isActive ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                            <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold mt-0.5">{item.label}</span>
+                        </button>
+                    ); 
+                })}
+                
+                {/* Menu Button */}
+                {showMoreButton && (
                 <button 
-                    key={item.id} 
-                    onClick={() => setActiveTab(item.id)} 
-                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${isActive ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    onClick={() => setShowMobileMenu(true)} 
+                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                 >
-                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                    <span className="text-[9px] font-bold mt-0.5">{item.label}</span>
+                    <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
+                    <span className="text-[9px] font-bold mt-0.5">موارد بیشتر</span>
                 </button>
-            ); 
-        })}
-        
-        {/* Menu Button */}
-        {showMoreButton && (
-        <button 
-            onClick={() => setShowMobileMenu(true)} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-        >
-            <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
-            <span className="text-[9px] font-bold mt-0.5">موارد بیشتر</span>
-        </button>
-        )}
+                )}
+             </>
+         ) : (
+            <button
+                onClick={() => setActiveTab('dashboard')}
+                className="bg-blue-600 text-white rounded-full px-6 py-3 shadow-[0_10px_20px_rgba(37,99,235,0.3)] font-black text-sm flex items-center gap-2 active:scale-95 transition-transform"
+            >
+                <Home size={18} />
+                بازگشت به داشبورد
+            </button>
+         )}
       </div>
 
       {/* Main Content Area */}
