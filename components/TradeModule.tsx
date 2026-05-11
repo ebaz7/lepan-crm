@@ -456,7 +456,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
     if (viewMode === 'reports') {
         return (
-            <div className="flex flex-col h-[calc(100vh-100px)] bg-gray-50 rounded-2xl overflow-hidden border">
+            <div className="flex flex-1 flex-col h-full min-h-0 bg-gray-50 md:rounded-2xl overflow-hidden md:border">
                 
                 {/* --- RESPONSIVE HEADER NAV FOR MOBILE --- */}
                 <div className="md:hidden glass-panel border-b p-3 flex gap-2 overflow-x-auto whitespace-nowrap shadow-sm z-20">
@@ -544,7 +544,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         const costPerKg = totalWeight > 0 ? grandTotalRialProject / totalWeight : 0;
 
         return (
-            <div className="flex flex-col h-[calc(100vh-100px)] animate-fade-in relative">
+            <div className="flex flex-1 flex-col h-full min-h-0 animate-fade-in relative">
                 
                 {/* Final Cost Report Print Overlay */}
                 {showFinalReportPrint && (

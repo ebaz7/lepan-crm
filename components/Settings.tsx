@@ -432,7 +432,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
             </nav>
         </div>
 
-        <div className="flex-1 p-6 md:p-8 overflow-y-auto max-h-[calc(100vh-100px)]">
+        <div className="flex-1 p-6 md:p-8 overflow-y-auto h-full min-h-0">
             {activeCategory === 'fiscal' ? (
                 <FiscalYearManager settings={settings} />
             ) : (

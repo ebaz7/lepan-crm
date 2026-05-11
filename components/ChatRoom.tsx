@@ -975,7 +975,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-[calc(100vh-80px)] md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
+        <div className="flex flex-1 h-full min-h-0 md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
             <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
@@ -1028,8 +1028,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            {/* Using fixed positioning on mobile to ensure it covers everything and header stays on top */}
-            <div className={`fixed inset-0 h-[100dvh] md:h-auto md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+            {/* Using absolute positioning on mobile to ensure it covers only the chat view space and respects layout header */}
+            <div className={`absolute inset-0 h-full md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}

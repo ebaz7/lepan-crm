@@ -95,7 +95,7 @@ const FaxModule: React.FC<Props> = ({ currentUser, settings }) => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-100px)] gap-6 p-6 animate-fade-in relative">
+        <div className="flex flex-col flex-1 h-full min-h-0 gap-6 p-6 animate-fade-in relative">
             
             {/* Input Form */}
             <div className="glass-panel p-6 rounded-2xl shadow-sm border border-gray-200/50 dark:border-white/10 max-w-4xl mx-auto w-full z-10">
