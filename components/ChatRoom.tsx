@@ -223,6 +223,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
 
+    useEffect(() => {
+        if (!inputText && inputAreaRef.current) {
+            inputAreaRef.current.style.height = 'auto';
+        }
+    }, [inputText]);
+
     // --- Effects ---
     useEffect(() => { 
         if (preloadedMessages) {
@@ -1317,12 +1323,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <textarea 
                                     ref={inputAreaRef}
                                     value={inputText}
-                                    onChange={e => setInputText(e.target.value)}
+                                    onChange={e => {
+                                        setInputText(e.target.value);
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = `${e.target.scrollHeight}px`;
+                                    }}
                                     onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                                     placeholder="پیام..."
-                                    className="bg-transparent border-none outline-none w-full text-sm resize-none max-h-32"
+                                    className="bg-transparent border-none outline-none w-full text-sm resize-none custom-scrollbar"
                                     rows={1}
-                                    style={{ height: 'auto', minHeight: '24px' }}
+                                    style={{ height: 'auto', minHeight: '24px', maxHeight: '40vh' }}
                                 />
                             </div>
 
