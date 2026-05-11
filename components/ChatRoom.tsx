@@ -687,11 +687,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 500 * 1024 * 1024) {
-            if (!confirm(`⚠️ حجم فایل ${Math.round(file.size / (1024 * 1024))} مگابایت است. آیا از ارسال این فایل حجیم اطمینان دارید؟`)) {
-                e.target.value = '';
-                return;
-            }
+        // 5GB size validation - adjust or warn without hard block
+        if (file.size > 5 * 1024 * 1024 * 1024) {
+            alert(`⚠️ حجم فایل بسیار زیاد است.`);
+            e.target.value = '';
+            return;
         }
 
         const safeName = file.name || `unknown_${Date.now()}`;
@@ -1034,7 +1034,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* --- CHAT AREA --- */}
             {/* Using fixed positioning on mobile to ensure it covers everything and header stays on top */}
-            <div className={`fixed inset-0 md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+            <div className={`fixed inset-0 h-[100dvh] md:h-auto md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
@@ -1297,7 +1297,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         {/* Input Area */}
-                        <div className="glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-safe">
+                        <div className="glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-[calc(12px+env(safe-area-inset-bottom))] md:pb-2">
                             {/* Reply/Edit Preview */}
                             {(replyingTo || editingMessageId) && (
                                 <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
