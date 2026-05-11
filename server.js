@@ -1170,6 +1170,56 @@ app.post('/api/upload', (req, res) => {
     });
 });
 
+const chunkTempDir = path.join(ROOT_DIR, 'chunk-temp');
+if (!fs.existsSync(chunkTempDir)) fs.mkdirSync(chunkTempDir, { recursive: true });
+
+app.post('/api/upload-chunk', (req, res) => {
+    const { uploadId, chunkIndex, chunkData } = req.body;
+    if (!uploadId || chunkIndex === undefined || !chunkData) return res.status(400).send('Missing chunk data');
+    const base64Data = chunkData.replace(/^data:.*;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const filePath = path.join(chunkTempDir, `${uploadId}_${chunkIndex}`);
+    fs.writeFileSync(filePath, buffer);
+    res.json({ success: true });
+});
+
+app.post('/api/upload-finish', async (req, res) => {
+    const { uploadId, fileName, totalChunks } = req.body;
+    if (!uploadId || !fileName || !totalChunks) return res.status(400).send('Missing finish data');
+    const uniqueName = `${Date.now()}_${fileName}`;
+    const finalPath = path.join(UPLOADS_DIR, uniqueName);
+    const writeStream = fs.createWriteStream(finalPath);
+    
+    // Append all chunks sequentially, using async/await to avoid blocking event loop
+    try {
+        for(let i = 0; i < totalChunks; i++) {
+            const chunkPath = path.join(chunkTempDir, `${uploadId}_${i}`);
+            if(fs.existsSync(chunkPath)) {
+                await new Promise((resolve, reject) => {
+                    const readStream = fs.createReadStream(chunkPath);
+                    readStream.pipe(writeStream, { end: false });
+                    readStream.on('end', () => {
+                        try { fs.unlinkSync(chunkPath); } catch(e) {}
+                        resolve();
+                    });
+                    readStream.on('error', reject);
+                });
+            }
+        }
+        writeStream.end();
+        
+        writeStream.on('finish', () => {
+            res.json({ fileName, url: `/uploads/${uniqueName}` });
+        });
+        writeStream.on('error', (err) => {
+            res.status(500).send('Finalize failed');
+        });
+    } catch (err) {
+        console.error('Error combining chunks:', err);
+        res.status(500).send('Server Error');
+    }
+});
+
 // 10. BOTS (Telegram/Bale/WhatsApp)
 app.post('/api/restart-bot', async (req, res) => {
     const { type } = req.body;

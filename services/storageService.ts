@@ -138,7 +138,48 @@ export const saveNote = async (note: Note): Promise<Note[]> => { return await ap
 export const updateNote = async (note: Note): Promise<Note[]> => { return await apiCall<Note[]>(`/notes/${note.id}`, 'PUT', note); };
 export const deleteNote = async (id: string): Promise<Note[]> => { return await apiCall<Note[]>(`/notes/${id}`, 'DELETE'); };
 
-export const uploadFile = async (fileName: string, fileData: string): Promise<{ fileName: string, url: string }> => { return await apiCall<{ fileName: string, url: string }>('/upload', 'POST', { fileName, fileData }); };
+export const uploadFile = async (fileName: string, fileData: string): Promise<{ fileName: string, url: string }> => { 
+    // Wait, the client will change to pass 'File' directly instead of base64 from reader.
+    // So the signature of uploadFile might change, or we just implement uploadFileRaw
+    return await apiCall<{ fileName: string, url: string }>('/upload', 'POST', { fileName, fileData }); 
+};
+
+export const uploadFileChunked = async (file: File, onProgress: (p: number) => void): Promise<{ fileName: string, url: string }> => {
+    const uploadId = Date.now().toString() + '_' + Math.floor(Math.random() * 1000);
+    const chunkSize = 500 * 1024; // 500KB chunks to be perfectly safe under Nginx's strictly default 1MB limits
+    const totalChunks = Math.ceil(file.size / chunkSize);
+    
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, file.size);
+        const chunk = file.slice(start, end);
+        
+        // Convert chunk to base64
+        const chunkBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(chunk);
+        });
+        
+        await apiCall('/upload-chunk', 'POST', {
+            uploadId,
+            chunkIndex: i,
+            chunkData: chunkBase64
+        });
+        
+        onProgress(Math.round(((i + 1) / totalChunks) * 90)); // 90% is for uploading chunks
+    }
+    
+    // Finish upload
+    const response = await apiCall<{ fileName: string, url: string }>('/upload-finish', 'POST', {
+        uploadId,
+        fileName: file.name,
+        totalChunks
+    });
+    
+    onProgress(100);
+    return response;
+};
 export const getWarehouseItems = async (): Promise<WarehouseItem[]> => { const res = await apiCall<WarehouseItem[]>('/warehouse/items'); return safeArray(res); };
 export const saveWarehouseItem = async (item: WarehouseItem): Promise<WarehouseItem[]> => { return await apiCall<WarehouseItem[]>('/warehouse/items', 'POST', item); };
 export const updateWarehouseItem = async (item: WarehouseItem): Promise<WarehouseItem[]> => { return await apiCall<WarehouseItem[]>(`/warehouse/items/${item.id}`, 'PUT', item); };

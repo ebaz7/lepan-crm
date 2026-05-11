@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, ChatMessage, ChatGroup, GroupTask, UserRole } from '../types';
-import { sendMessage, deleteMessage, getGroups, createGroup, updateGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, updateMessage, getTaskGroups, createTaskGroup, updateTaskGroup, deleteTaskGroup } from '../services/storageService';
+import { sendMessage, deleteMessage, getGroups, createGroup, updateGroup, deleteGroup, getTasks, createTask, updateTask, deleteTask, uploadFile, uploadFileChunked, updateMessage, getTaskGroups, createTaskGroup, updateTaskGroup, deleteTaskGroup } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { generateUUID, formatDate } from '../constants';
 import { TaskGroup } from '../types';
@@ -715,36 +715,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setPendingMessages(prev => [...prev, pendingMsg]);
         setTimeout(scrollToBottom, 50);
 
-        const reader = new FileReader();
-        
-        reader.onprogress = (event) => {
-            if (event.lengthComputable) {
-                const percent = Math.round((event.loaded / event.total) * 90);
-                setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: percent } : m));
-            }
-        };
+        try {
+            const result = await uploadFileChunked(file, (progress) => {
+                setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: progress } : m));
+            });
+            
+            const finalMsg: ChatMessage = {
+                ...pendingMsg,
+                attachment: { fileName: result.fileName, url: result.url },
+                isPending: false,
+                uploadProgress: undefined
+            };
+            
+            await sendMessage(finalMsg);
+            onRefresh();
+        } catch (error: any) { 
+            alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
+            setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
+        }
 
-        reader.onload = async (ev) => {
-            try {
-                setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: 95 } : m));
-                const base64 = reader.result as string;
-                const result = await uploadFile(safeName, base64);
-                
-                const finalMsg: ChatMessage = {
-                    ...pendingMsg,
-                    attachment: { fileName: result.fileName, url: result.url },
-                    isPending: false,
-                    uploadProgress: undefined
-                };
-                
-                await sendMessage(finalMsg);
-                onRefresh();
-            } catch (error: any) { 
-                alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
-                setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
-            }
-        };
-        reader.readAsDataURL(file);
         e.target.value = '';
     };
 

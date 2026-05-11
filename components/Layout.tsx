@@ -532,8 +532,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Mobile Bottom Navigation */}
-      <div className={`md:hidden fixed z-50 transition-all duration-300 ease-in-out ${activeTab === 'dashboard' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-6 left-1/2 -translate-x-1/2 pointer-events-auto'}`}>
-         {activeTab === 'dashboard' ? (
+      <div className={`md:hidden fixed z-50 transition-all duration-300 ease-in-out ${activeTab === 'dashboard' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
+         {activeTab === 'dashboard' && (
              <>
                 {bottomNavItems.map((item) => { 
                     const Icon = item.icon; 
@@ -561,14 +561,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 </button>
                 )}
              </>
-         ) : (
-            <button
-                onClick={() => setActiveTab('dashboard')}
-                className="bg-blue-600 text-white rounded-full px-6 py-3 shadow-[0_10px_20px_rgba(37,99,235,0.3)] font-black text-sm flex items-center gap-2 active:scale-95 transition-transform"
-            >
-                <Home size={18} />
-                بازگشت به داشبورد
-            </button>
          )}
       </div>
 
@@ -577,6 +569,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Mobile Header */}
         <header className="glass-header p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-40 safe-pt py-3 sticky top-0 shadow-lg rounded-b-[2rem]">
             <div className="flex items-center gap-3">
+                {activeTab === 'dashboard' ? (
                 <button 
                     onClick={() => setActiveTab('dashboard')} 
                     className="flex items-center gap-3 transition-all active:scale-95"
@@ -585,6 +578,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover rounded-2xl"/> : currentUser.fullName.charAt(0)}
                     </div>
                 </button>
+                ) : (
+                <button 
+                    onClick={() => {
+                        // Native or Browser Back
+                        if (window.history.length > 2) {
+                            window.history.back();
+                        } else {
+                            setActiveTab('dashboard');
+                        }
+                    }} 
+                    className="flex items-center justify-center w-10 h-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 active:scale-95 transition-all"
+                >
+                    <ChevronRight size={24} />
+                </button>
+                )}
                 <div>
                    <h1 className="font-black text-gray-800 dark:text-gray-100 text-sm tracking-tight">{navItems.find(i => i.id === activeTab)?.label || 'داشبورد'}</h1>
                 </div>
