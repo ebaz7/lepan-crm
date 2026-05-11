@@ -500,7 +500,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const canApprove = currentUser.role === UserRole.CEO || currentUser.role === UserRole.ADMIN;
 
     return (
-        <div className="glass-panel rounded-2xl shadow-sm border flex-1 h-full min-h-0 flex flex-col overflow-hidden animate-fade-in relative">
+        <div className="glass-panel md:rounded-2xl shadow-sm md:border h-[calc(100dvh-140px)] md:h-[calc(100vh-100px)] flex flex-col overflow-hidden animate-fade-in relative">
             
             {/* Hidden Print Elements for Auto-Send */}
             {createdTxForAutoSend && (

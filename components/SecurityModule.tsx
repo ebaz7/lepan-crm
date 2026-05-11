@@ -543,7 +543,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const isLandscapeMode = (printTarget && (printTarget.type === 'daily_log')) || (viewCartableItem && (viewCartableItem.category === 'log' || viewCartableItem.type === 'log'));
 
     return (
-        <div className="p-4 md:p-6 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-1 h-full min-h-0 overflow-y-auto animate-fade-in relative">
+        <div className="p-4 md:p-6 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 h-[calc(100dvh-140px)] md:h-[calc(100vh-100px)] overflow-y-auto animate-fade-in relative">
             
             {/* Shift Meta Modal */}
             {showShiftModal && (
