@@ -235,7 +235,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => { 
         if (Array.isArray(preloadedMessages)) {
             setMessages(prev => {
-                if (JSON.stringify(prev) === JSON.stringify(preloadedMessages)) return prev;
+                // If the messages are identical (check last message and length), avoid unnecessary update
+                if (prev.length === preloadedMessages.length && prev.length > 0) {
+                    const lastPrev = prev[prev.length - 1];
+                    const lastNew = preloadedMessages[preloadedMessages.length - 1];
+                    // Also check for edits if possible, but for simplicity we rely on timestamp/id
+                    if (lastPrev.id === lastNew.id && lastPrev.timestamp === lastNew.timestamp) {
+                        // Check if counts or some other property changed in existing messages
+                        return preloadedMessages; 
+                    }
+                }
                 return preloadedMessages;
             });
             // Clean up pending messages that are now on server
@@ -243,10 +252,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             setPendingMessages(prev => {
                 if (!Array.isArray(prev) || prev.length === 0) return [];
                 const filtered = prev.filter(pm => !remoteIds.has(pm.id));
-                if (filtered.length === prev.length) return prev;
                 return filtered;
             });
-        } 
+        }
     }, [preloadedMessages]);
 
     useEffect(() => { 
@@ -334,7 +342,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             const tskList = await getTasks();
             console.log("ChatRoom: Tasks loaded", tskList);
             setTasks(tskList);
-        } catch (e) { console.error("Chat load error", e); alert("خطا در بارگذاری اطلاعات چت: " + e); }
+        } catch (e) { 
+            console.error("Chat load error", e); 
+            // Removed intrusive alert
+        }
     };
 
     const formatLastSeen = (timestamp: number | undefined) => {
@@ -428,6 +439,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getSortedChannels = (): ChannelItem[] => {
         const list: ChannelItem[] = [];
+        const term = searchTerm.toLowerCase().trim();
 
         if (activeTab === 'CHATS') {
             const lastPub = getLastMessage('public', 'public');
@@ -437,15 +449,46 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 lastMsg: lastPub, unread: getUnreadCount('public', 'public')
             });
 
+            // Include ALL groups that I am a member of or created
+            groups.forEach(g => {
+                const last = getLastMessage(g.id, 'group');
+                const isMember = g.members.includes(currentUser.username) || g.createdBy === currentUser.username;
+                if (isMember || last || term) {
+                    list.push({
+                        type: 'group', id: g.id, name: g.name,
+                        avatar: null, isOnline: false,
+                        lastMsg: last, unread: getUnreadCount(g.id, 'group')
+                    });
+                }
+            });
+
+            // Include users with messages OR all users if looking at CHATS tab and no filters
             users.forEach(u => {
                 const last = getLastMessage(u.username, 'private');
                 const isOnline = u.lastSeen ? (Date.now() - u.lastSeen) < 5 * 60 * 1000 : false;
-                list.push({
-                    type: 'private', id: u.username, name: u.fullName,
-                    avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
-                    lastMsg: last, unread: getUnreadCount(u.username, 'private')
-                });
+                
+                // Show users if they have a message OR if searching
+                if (last || term) {
+                    list.push({
+                        type: 'private', id: u.username, name: u.fullName,
+                        avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
+                        lastMsg: last, unread: getUnreadCount(u.username, 'private')
+                    });
+                }
             });
+
+            // If list is still very empty (just Public), add some frequent users or just all users for accessibility
+            if (list.length <= 1 && !term) {
+                 users.slice(0, 10).forEach(u => {
+                     if (!list.find(i => i.id === u.username)) {
+                         list.push({
+                            type: 'private', id: u.username, name: u.fullName,
+                            avatar: u.avatar || null, isOnline: false,
+                            lastMsg: null, unread: 0
+                         });
+                     }
+                 });
+            }
         } else if (activeTab === 'GROUPS') {
             groups.forEach(g => {
                 const last = getLastMessage(g.id, 'group');
@@ -465,8 +508,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             });
         }
 
-        return list.filter(item => item.name.includes(searchTerm)).sort((a, b) => {
-            // Task groups might not have timestamps right now, just fallback to alphabetical if no timestamp
+        return list.filter(item => item.name.toLowerCase().includes(term)).sort((a, b) => {
             if (activeTab === 'TASKS') return a.name.localeCompare(b.name);
             const timeA = a.lastMsg?.timestamp || 0;
             const timeB = b.lastMsg?.timestamp || 0;
@@ -980,7 +1022,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         let match = false;
         if (activeChannel.type === 'public') match = !msg.recipient && !msg.groupId;
         else if (activeChannel.type === 'private') match = (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id);
-        else if (activeChannel.type === 'group') match = msg.groupId === activeChannel.id;
+        else if (activeChannel.type === 'group' || activeChannel.type === 'task_group') match = msg.groupId === activeChannel.id;
         
         if (!match) return false;
         if (innerSearchTerm) {
@@ -1043,8 +1085,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            {/* Using fixed positioning on mobile to ensure it covers only the chat view space and respects layout header */}
-            <div className={`fixed md:absolute inset-0 h-full md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0 md:flex' : 'translate-x-full md:translate-x-0 md:flex'}`}>
+            <div className={`fixed md:relative inset-0 h-full md:flex-1 bg-[#8e98a3] z-[100] md:z-10 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'} md:flex`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}

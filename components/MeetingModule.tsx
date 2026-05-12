@@ -18,14 +18,14 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'draft' | 'archive'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'draft' | 'archive' | 'kartable'>('all');
     
     const [showModal, setShowModal] = useState(false);
     const [editingMeeting, setEditingMeeting] = useState<MeetingMinutes | null>(null);
     const [viewMeeting, setViewMeeting] = useState<MeetingMinutes | null>(null);
     const [showPrintModal, setShowPrintModal] = useState<MeetingMinutes | null>(null);
+    const [activeAttendeeIndex, setActiveAttendeeIndex] = useState<number | null>(null);
     
-    // Form State
     const [meetingForm, setMeetingForm] = useState<Partial<MeetingMinutes>>({
         date: '',
         time: '',
@@ -85,19 +85,13 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         setShowModal(true);
     };
 
-    const handleDownloadPDF = async (meetingId: string, meetingNumber: string) => {
+    const handleSendToGroup = async (meetingId: string) => {
         try {
-            const response = await fetch(`/api/meetings/${meetingId}/pdf`);
-            if (!response.ok) throw new Error('PDF conversion failed');
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Meeting_${meetingNumber}.pdf`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        } catch (e) {
-            alert('خطا در دریافت فایل PDF');
+            await sendMeetingMinutes(meetingId);
+            alert('صورتجلسه با موفقیت به گروه ارسال شد');
+            loadData();
+        } catch (error) {
+            alert('خطا در ارسال به گروه');
         }
     };
 
@@ -181,9 +175,52 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         try {
             const updated = { ...meeting, status: newStatus, updatedAt: Date.now() };
             await updateMeeting(updated);
+            
+            // If it became approved, automatically send to group if configured (or just call it)
+            if (newStatus === MeetingStatus.APPROVED) {
+                await sendMeetingMinutes(meeting.id);
+            }
+            
             loadData();
         } catch (error) {
             alert('خطا در تغییر وضعیت');
+        }
+    };
+
+    const handleSignMeeting = async (meeting: MeetingMinutes) => {
+        if (!window.confirm('آیا با مفاد این صورتجلسه موافق هستید و مایل به امضای آن می‌باشید؟')) return;
+        
+        try {
+            const approvals = { ...(meeting.approvals || {}) };
+            approvals[currentUser.username] = {
+                approved: true,
+                date: Date.now()
+            };
+            
+            let newStatus = meeting.status;
+            
+            // Required signers are attendees who are PRESENT and have a USERNAME in the system
+            const requiredSigners = meeting.attendees.filter(a => a.isPresent && a.username);
+            const allSigned = requiredSigners.every(a => approvals[a.username!]?.approved);
+            
+            if (allSigned && requiredSigners.length > 0) {
+                newStatus = MeetingStatus.APPROVED;
+            }
+            
+            const updated = { ...meeting, approvals, status: newStatus, updatedAt: Date.now() };
+            await updateMeeting(updated);
+            
+            if (newStatus === MeetingStatus.APPROVED) {
+                await sendMeetingMinutes(meeting.id);
+                alert('تمامی امضاها تکمیل شد و صورتجلسه نهایی و به گروه تلگرام/سازمانی ارسال شد.');
+            } else {
+                alert('امضای شما با موفقیت ثبت شد. در انتظار امضای سایر اعضا...');
+            }
+            
+            loadData();
+        } catch (error) {
+            console.error("Signature error", error);
+            alert('خطا در ثبت امضا');
         }
     };
 
@@ -209,17 +246,34 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         }
     };
 
-    const filteredMeetings = meetings.filter(m => {
+    const pendingMySignatureCount = meetings.filter(m => 
+        m.status === MeetingStatus.PENDING_APPROVAL && 
+        m.attendees.some(a => a.fullName === currentUser.fullName) && 
+        !m.approvals?.[currentUser.username]?.approved
+    ).length;
+
+    const filteredMeetings = meetings.filter(meeting => {
+        const searchText = searchTerm.toLowerCase();
         const matchesSearch = 
-            m.meetingNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            m.chairman.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            m.date.includes(searchTerm) ||
-            m.items.some(item => item.description.toLowerCase().includes(searchTerm.toLowerCase()));
+            (meeting.meetingNumber || '').toLowerCase().includes(searchText) || 
+            (meeting.chairman || '').toLowerCase().includes(searchText) ||
+            (meeting.date || '').includes(searchTerm) ||
+            meeting.items.some(item => 
+                (item.description || '').toLowerCase().includes(searchText) || 
+                (item.responsiblePerson || '').toLowerCase().includes(searchText)
+            );
         
         if (activeTab === 'all') return matchesSearch;
-        if (activeTab === 'pending') return matchesSearch && m.status === MeetingStatus.PENDING_APPROVAL;
-        if (activeTab === 'draft') return matchesSearch && m.status === MeetingStatus.DRAFT;
-        if (activeTab === 'archive') return matchesSearch && m.status === MeetingStatus.APPROVED;
+        if (activeTab === 'pending') {
+            return matchesSearch && meeting.status === MeetingStatus.PENDING_APPROVAL;
+        }
+        if (activeTab === 'kartable') {
+            return matchesSearch && meeting.status === MeetingStatus.PENDING_APPROVAL && 
+                   meeting.attendees.some(a => a.username === currentUser.username) &&
+                   (!meeting.approvals || !meeting.approvals[currentUser.username]?.approved);
+        }
+        if (activeTab === 'draft') return matchesSearch && meeting.status === MeetingStatus.DRAFT;
+        if (activeTab === 'archive') return matchesSearch && meeting.status === MeetingStatus.APPROVED;
         return matchesSearch;
     }).sort((a, b) => b.createdAt - a.createdAt);
 
@@ -283,6 +337,14 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             <div className="bg-white/50 dark:bg-gray-900/30 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-2xl overflow-hidden p-6">
                 <div className="flex items-center gap-2 mb-6 bg-gray-100/50 dark:bg-black/20 p-1.5 rounded-2xl w-fit">
                     <button onClick={() => setActiveTab('all')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'all' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>همه جلسات</button>
+                    <button onClick={() => setActiveTab('kartable')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'kartable' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+                        <span>کارتابل امضا</span>
+                        {pendingMySignatureCount > 0 && (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] text-white animate-pulse">
+                                {pendingMySignatureCount}
+                            </span>
+                        )}
+                    </button>
                     <button onClick={() => setActiveTab('pending')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'pending' ? 'bg-white dark:bg-gray-800 text-amber-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>در انتظار تایید</button>
                     <button onClick={() => setActiveTab('draft')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'draft' ? 'bg-white dark:bg-gray-800 text-gray-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>پیش‌نویس</button>
                     <button onClick={() => setActiveTab('archive')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'archive' ? 'bg-white dark:bg-gray-800 text-emerald-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>بایگانی</button>
@@ -336,36 +398,50 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 </div>
                              </div>
 
-                             <div className="mt-5 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => setViewMeeting(meeting)} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 rounded-xl transition-colors" title="مشاهده">
-                                        <Eye size={18} />
-                                    </button>
-                                    <button onClick={() => handleDownloadPDF(meeting.id, meeting.meetingNumber || 'Unknown')} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 rounded-xl transition-colors" title="دریافت PDF">
-                                        <Printer size={18} />
-                                    </button>
-                                    {canCreate && (
-                                        <>
-                                            <button onClick={() => handleEditMeeting(meeting)} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 rounded-xl transition-colors" title="اصلاح">
+                             <div className="mt-5 pt-4 border-t border-gray-100 dark:border-white/5 flex flex-col gap-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => setViewMeeting(meeting)} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 rounded-xl transition-colors" title="مشاهده">
+                                            <Eye size={18} />
+                                        </button>
+                                        <button onClick={() => setShowPrintModal(meeting)} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 rounded-xl transition-colors" title="دریافت PDF">
+                                            <Printer size={18} />
+                                        </button>
+                                        {canCreate && meeting.status === MeetingStatus.DRAFT && (
+                                            <button onClick={() => handleEditMeeting(meeting)} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 rounded-xl transition-colors" title="ویرایش">
                                                 <Edit size={18} />
                                             </button>
+                                        )}
+                                        {canManage && (
                                             <button onClick={() => handleDeleteMeeting(meeting.id)} className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 rounded-xl transition-colors" title="حذف">
                                                 <Trash2 size={18} />
                                             </button>
-                                        </>
-                                    )}
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        {meeting.status === MeetingStatus.PENDING_APPROVAL && 
+                                         meeting.attendees.some(a => a.fullName === currentUser.fullName || a.username === currentUser.username) && 
+                                         !meeting.approvals?.[currentUser.username]?.approved && (
+                                            <button onClick={() => handleSignMeeting(meeting)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5 animate-pulse">
+                                                <UserCheck size={14} />
+                                                امضای صورتجلسه
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+
+                                <div className="flex gap-2 w-full">
                                     {canManage && meeting.status === MeetingStatus.DRAFT && (
-                                        <button onClick={() => handleSendAnnouncement(meeting)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5">
+                                        <button onClick={() => handleStatusChange(meeting, MeetingStatus.PENDING_APPROVAL)} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5">
                                             <Send size={14} />
-                                            ارسال اعلان
+                                            ارسال جهت تایید
                                         </button>
                                     )}
                                     {canManage && meeting.status === MeetingStatus.APPROVED && (
-                                        <button onClick={() => handleSendMinutes(meeting)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5">
+                                        <button onClick={() => handleSendToGroup(meeting.id)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5">
                                             <MessageSquare size={14} />
-                                            ارسال صورتجلسه
+                                            ارسال به گروه
                                         </button>
                                     )}
                                 </div>
@@ -473,9 +549,9 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         <Plus size={14} /> افزودن عضو
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative pb-20">
                                     {meetingForm.attendees?.map((attendee, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 dark:bg-black/20 p-2 rounded-2xl border border-gray-100 dark:border-white/5 group shadow-sm relative">
+                                        <div key={idx} className={`flex items-center gap-2 bg-gray-50 dark:bg-black/20 p-2 rounded-2xl border border-gray-100 dark:border-white/5 group shadow-sm relative ${activeAttendeeIndex === idx ? 'z-[100]' : 'z-auto'}`}>
                                             <div className="flex-1 relative">
                                                 <input
                                                     type="text"
@@ -490,14 +566,14 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                         
                                                         // Show search results if typing
                                                         if (newVal.length > 1) {
-                                                            (window as any)._activeAttendeeIndex = idx;
+                                                            setActiveAttendeeIndex(idx);
                                                         }
                                                     }}
-                                                    onFocus={() => { (window as any)._activeAttendeeIndex = idx; }}
-                                                    onBlur={() => { setTimeout(() => { if((window as any)._activeAttendeeIndex === idx) (window as any)._activeAttendeeIndex = null; }, 200); }}
+                                                    onFocus={() => setActiveAttendeeIndex(idx)}
+                                                    onBlur={() => { setTimeout(() => setActiveAttendeeIndex(null), 200); }}
                                                 />
-                                                {attendee.fullName && (window as any)._activeAttendeeIndex === idx && (
-                                                    <div className="absolute top-full left-0 right-0 z-[110] bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto overflow-x-hidden animate-scale-in flex flex-col">
+                                                {attendee.fullName && activeAttendeeIndex === idx && (
+                                                    <div className="absolute top-full left-0 right-0 z-[1000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto overflow-x-hidden animate-scale-in flex flex-col">
                                                         {users.filter(u => u.fullName.includes(attendee.fullName) || u.username.includes(attendee.fullName)).map(u => (
                                                             <button
                                                                 key={u.id}
@@ -511,7 +587,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                                         username: u.username 
                                                                     };
                                                                     setMeetingForm({...meetingForm, attendees: newAttendees});
-                                                                    (window as any)._activeAttendeeIndex = null;
+                                                                    setActiveAttendeeIndex(null);
                                                                 }}
                                                             >
                                                                 <div className="flex items-center gap-2">
@@ -761,7 +837,8 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                     <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 font-black text-sm mb-6 uppercase tracking-wider">تایید نهایی و امضاء الکترونیک اعضا</div>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                         {viewMeeting.attendees.filter(a => a.isPresent).map((a, i) => {
-                                            const isApproved = viewMeeting.approvals?.[a.fullName]?.approved;
+                                            const approvalKey = a.username || a.fullName;
+                                            const isApproved = viewMeeting.approvals?.[approvalKey]?.approved;
                                             return (
                                                 <div key={i} className="flex flex-col items-center gap-3 p-4 border border-dashed border-gray-200 dark:border-white/10 rounded-2xl bg-gray-50/30 dark:bg-black/5 relative overflow-hidden group">
                                                     <span className="font-black text-[9px] text-gray-400 group-hover:text-gray-600 transition-colors uppercase tracking-tight">{a.role}</span>
@@ -783,24 +860,27 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     <span className="font-black text-xs z-10 text-center">{a.fullName}</span>
                                                     
                                                     {/* Approval Overlay for current user if they are the attendee */}
-                                                    {a.fullName.includes(currentUser.fullName.split(' ')[0]) && !isApproved && canApprove && (
+                                                    {(a.username === currentUser.username || a.fullName === currentUser.fullName) && !isApproved && canApprove && (
                                                         <button 
                                                             onClick={async () => {
                                                                 const updated = {
                                                                     ...viewMeeting,
                                                                     approvals: {
                                                                         ...(viewMeeting.approvals || {}),
-                                                                        [a.fullName]: { approved: true, date: Date.now() }
+                                                                        [approvalKey]: { approved: true, date: Date.now() }
                                                                     }
                                                                 };
                                                                 // If all attendees have approved, set status to APPROVED
-                                                                const attendeesToApprove = viewMeeting.attendees.filter(at => at.isPresent).length;
+                                                                const attendeesToApprove = viewMeeting.attendees.filter(at => at.isPresent && (at.username || at.fullName)).length;
                                                                 const currentApprovalsCount = Object.keys(updated.approvals || {}).length;
-                                                                if (currentApprovalsCount === attendeesToApprove) {
+                                                                
+                                                                if (currentApprovalsCount >= attendeesToApprove) {
                                                                     updated.status = MeetingStatus.APPROVED;
+                                                                    await sendMeetingMinutes(updated.id);
                                                                 } else {
                                                                     updated.status = MeetingStatus.PENDING_APPROVAL;
                                                                 }
+                                                                
                                                                 try {
                                                                     await updateMeeting(updated);
                                                                     setViewMeeting(updated);
