@@ -512,7 +512,7 @@ function App() {
             )}
 
             {/* Remove the blanket loader and handle loading inside components or via a small indicator */}
-            <div className="relative h-full">
+            <div className={`relative ${activeTab === 'chat' ? 'flex-1 flex flex-col w-full' : 'h-full'}`}>
                 {loading && (
                     <div className="fixed top-20 right-4 z-[999] bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 shadow-lg flex items-center gap-2 animate-fade-in">
                         <Loader2 size={16} className="animate-spin text-blue-600" />
