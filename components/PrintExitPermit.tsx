@@ -330,8 +330,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   if (embed) return content;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start p-2 overflow-y-auto animate-fade-in safe-pb">
-        <div className="bg-white p-3 rounded-2xl shadow-2xl flex flex-wrap items-center justify-between gap-3 w-full max-w-4xl no-print mb-4 md:sticky md:top-4 z-50 border border-gray-100 backdrop-blur-xl bg-white/90">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center justify-start p-2 overflow-y-auto animate-fade-in safe-pb">
+        <div className="bg-white p-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-wrap items-center justify-between gap-3 w-full max-w-5xl no-print mb-6 sticky top-0 z-[10000] border-2 border-blue-100 backdrop-blur-xl bg-white/95">
             <div className="flex items-center gap-3">
                 <button onClick={onClose} className="p-2 hover:bg-red-50 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95"><X size={20}/></button>
                 <div className="h-6 w-px bg-gray-200 mx-1"></div>
@@ -344,15 +344,15 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             <div className="flex items-center gap-2 flex-wrap justify-center">
                 {(onApprove || onReject) && (
                     <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200/50">
-                        {onApprove && <button onClick={onApprove} className="px-5 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2 text-[11px] font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 hover:bg-emerald-700 hover:shadow-lg"><CheckCircle size={14}/> تایید و صدور</button>}
-                        {onReject && <button onClick={onReject} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-lg flex items-center gap-2 text-[11px] font-black transition-all active:scale-95 hover:bg-rose-100"><XCircle size={14}/> رد درخواست</button>}
+                        {onApprove && <button onClick={onApprove} className="px-5 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2 text-[12px] font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 hover:bg-emerald-700 hover:shadow-lg"><CheckCircle size={14}/> تایید و صدور</button>}
+                        {onReject && <button onClick={onReject} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-lg flex items-center gap-2 text-[12px] font-black transition-all active:scale-95 hover:bg-rose-100"><XCircle size={14}/> رد درخواست</button>}
                     </div>
                 )}
                 
                 <div className="flex items-center gap-2">
-                    <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-[11px] font-black hover:bg-gray-200 flex items-center gap-2 transition-all active:scale-95">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دریافت PDF</button>
-                    <button onClick={handlePrint} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-[11px] font-black hover:bg-blue-700 flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all active:scale-95"><Printer size={14}/> چاپ</button>
-                    {onEdit && <button onClick={onEdit} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-lg text-[11px] font-black hover:bg-amber-100 flex items-center gap-2 border border-amber-200 transition-all active:scale-95"><Edit size={14}/> اصلاح</button>}
+                    <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-[12px] font-black hover:bg-gray-200 flex items-center gap-2 transition-all active:scale-95">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دریافت PDF</button>
+                    <button onClick={handlePrint} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-[12px] font-black hover:bg-blue-700 flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all active:scale-95"><Printer size={14}/> چاپ</button>
+                    {onEdit && <button onClick={onEdit} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-lg text-[12px] font-black hover:bg-amber-100 flex items-center gap-2 border border-amber-200 transition-all active:scale-95"><Edit size={14}/> اصلاح</button>}
                 </div>
             </div>
 

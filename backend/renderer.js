@@ -650,3 +650,94 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         throw e;
     }
 };
+
+export const generateMeetingMinutesPDF = async (meeting) => {
+    try {
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+        
+        const attendeesHtml = meeting.attendees.map(a => `
+            <tr>
+                <td>${a.fullName}</td>
+                <td>${a.role}</td>
+                <td>${a.isPresent ? '✅ حاضر' : (a.isAbsenceAuthorized ? '⏳ غایب موجه' : '❌ غایب غیرموجه')}</td>
+            </tr>
+        `).join('');
+
+        const itemsHtml = meeting.items.map((it, idx) => `
+            <tr>
+                <td>${idx + 1}</td>
+                <td style="text-align: right; padding-right: 15px;">${it.description}</td>
+                <td>${it.responsiblePerson}</td>
+                <td>${it.duration || '-'}</td>
+            </tr>
+        `).join('');
+
+        const approvals = meeting.approvals || {};
+        const approvalIds = Object.keys(approvals);
+        const approvalsHtml = approvalIds.map(uid => {
+            const app = approvals[uid];
+            return `
+                <div style="border: 1px solid #16a34a; color: #16a34a; padding: 5px; border-radius: 5px; font-size: 10px; margin: 5px; text-align: center;">
+                    <b>تایید شده توسط:</b><br/>
+                    ${uid}<br/>
+                    <small>${new Date(app.date).toLocaleDateString('fa-IR')}</small>
+                </div>
+            `;
+        }).join('');
+
+        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+            <style>
+                ${BASE_STYLE}
+                .meeting-header { border: 2px solid #333; padding: 15px; margin-bottom: 20px; }
+                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+                .sub-title { font-size: 18px; font-weight: bold; border-right: 4px solid #1e3a8a; padding-right: 10px; margin: 20px 0 10px 0; }
+                .approvals-grid { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 30px; border-top: 2px solid #ccc; padding-top: 15px; }
+            </style>
+        </head><body>
+            <div class="header">
+                <div class="title">صورتجلسه (${meeting.status})</div>
+                <div class="meta"><span>شماره: ${meeting.meetingNumber}</span><span>تاریخ: ${meeting.date}</span></div>
+            </div>
+            
+            <div class="meeting-header">
+                <div class="grid-2">
+                    <div><b>زمان برگزاری:</b> ${meeting.time}</div>
+                    <div><b>مکان:</b> ${meeting.location}</div>
+                    <div><b>رئیس جلسه:</b> ${meeting.chairman}</div>
+                    <div><b>دبیر جلسه:</b> ${meeting.secretary}</div>
+                </div>
+            </div>
+
+            <div class="sub-title">حاضرین در جلسه</div>
+            <table>
+                <thead>
+                    <tr><th>نام و نام خانوادگی</th><th>سمت</th><th>وضعیت</th></tr>
+                </thead>
+                <tbody>${attendeesHtml}</tbody>
+            </table>
+
+            <div class="sub-title">مصوبات و تصمیمات</div>
+            <table>
+                <thead>
+                    <tr><th style="width: 40px;">#</th><th>شرح مصوبه</th><th style="width: 150px;">مسئول اجرا</th><th style="width: 100px;">زمان/مهلت</th></tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+
+            <div class="approvals-grid">
+                ${approvalsHtml}
+            </div>
+
+            <div class="footer">این سند به صورت سیستمی تولید شده و پس از تایید نهایی در کارتابل حاضرین، سندیت قانونی دارد.</div>
+        </body></html>`;
+
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({ format: 'A4', printBackground: true });
+        await page.close();
+        return pdf;
+    } catch (e) {
+        console.error("Generate Meeting PDF Error:", e.message);
+        throw e;
+    }
+};

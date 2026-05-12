@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SystemSettings, UserRole, RolePermissions, CustomRole } from '../../types';
-import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info } from 'lucide-react';
+import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList } from 'lucide-react';
 
 interface Props {
     settings: SystemSettings;
@@ -60,6 +60,18 @@ const PERMISSION_GROUPS = [
             { id: 'canApproveSecuritySupervisor', label: 'تایید گزارشات (سرپرست)' }
         ] 
     }, 
+    { 
+        id: 'meeting', 
+        title: 'ماژول جلسات تولید', 
+        icon: ClipboardList, 
+        color: 'indigo', 
+        items: [
+            { id: 'canViewMeetings', label: 'مشاهده جلسات تولید' },
+            { id: 'canCreateMeeting', label: 'ثبت و ویرایش صورتجلسه' },
+            { id: 'canApproveMeeting', label: 'تایید صورتجلسه (امضاء)' },
+            { id: 'canManageMeetings', label: 'مدیریت و ارسال نهایی (Admin)' }
+        ] 
+    },
     { 
         id: 'general', 
         title: 'عمومی و مدیریتی', 

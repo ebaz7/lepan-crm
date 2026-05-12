@@ -123,14 +123,16 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
-    const [messages, setMessages] = useState<ChatMessage[]>(preloadedMessages || []);
+    const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
     
     // Merge remote and local pending messages
     const displayMessages = useMemo(() => {
-        const remoteIds = new Set(messages.map(m => m.id));
-        const filteredPending = pendingMessages.filter(pm => !remoteIds.has(pm.id));
-        return [...messages, ...filteredPending].sort((a, b) => a.timestamp - b.timestamp);
+        const safeMessages = Array.isArray(messages) ? messages : [];
+        const safePending = Array.isArray(pendingMessages) ? pendingMessages : [];
+        const remoteIds = new Set(safeMessages.map(m => m.id));
+        const filteredPending = safePending.filter(pm => !remoteIds.has(pm.id));
+        return [...safeMessages, ...filteredPending].sort((a, b) => a.timestamp - b.timestamp);
     }, [messages, pendingMessages]);
 
     const [users, setUsers] = useState<User[]>([]);
@@ -231,11 +233,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Effects ---
     useEffect(() => { 
-        if (preloadedMessages) {
-            setMessages(preloadedMessages);
+        if (Array.isArray(preloadedMessages)) {
+            setMessages(prev => {
+                if (JSON.stringify(prev) === JSON.stringify(preloadedMessages)) return prev;
+                return preloadedMessages;
+            });
             // Clean up pending messages that are now on server
             const remoteIds = new Set(preloadedMessages.map(m => m.id));
-            setPendingMessages(prev => prev.filter(pm => !remoteIds.has(pm.id)));
+            setPendingMessages(prev => {
+                if (!Array.isArray(prev) || prev.length === 0) return [];
+                const filtered = prev.filter(pm => !remoteIds.has(pm.id));
+                if (filtered.length === prev.length) return prev;
+                return filtered;
+            });
         } 
     }, [preloadedMessages]);
 
@@ -975,7 +985,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-[calc(100dvh-140px)] md:h-[calc(100vh-80px)] md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
+        <div className="flex h-full md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
             <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>

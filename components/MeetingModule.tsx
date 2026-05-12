@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings } from '../types';
+import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
 import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
 import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare } from 'lucide-react';
@@ -37,6 +37,11 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     
     const [searchTerm, setSearchTerm] = useState('');
 
+    const canView = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canViewMeetings);
+    const canCreate = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canCreateMeeting);
+    const canApprove = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canApproveMeeting);
+    const canManage = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canManageMeetings);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -60,7 +65,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         const shamsi = getCurrentShamsiDate();
         setMeetingForm({
             meetingNumber: nextNum,
-            date: `${shamsi.year}/${String(shamsi.month).padStart(2, '0')}/${String(shamsi.day).padStart(2, '0')}`,
+            date: `${shamsi.year}-${String(shamsi.month).padStart(2, '0')}-${String(shamsi.day).padStart(2, '0')}`,
             time: '12:00',
             location: 'محل دائمی جلسات کارخانه',
             chairman: 'سیّد علی احمدی (مدیر کارخانه)',
@@ -76,6 +81,22 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         });
         setEditingMeeting(null);
         setShowModal(true);
+    };
+
+    const handleDownloadPDF = async (meetingId: string, meetingNumber: string) => {
+        try {
+            const response = await fetch(`/api/meetings/${meetingId}/pdf`);
+            if (!response.ok) throw new Error('PDF conversion failed');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Meeting_${meetingNumber}.pdf`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('خطا در دریافت فایل PDF');
+        }
     };
 
     const handleEditMeeting = (meeting: MeetingMinutes) => {
@@ -207,6 +228,16 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         );
     }
 
+    if (!canView) {
+        return (
+            <div className="flex flex-col items-center justify-center p-20 bg-white/50 dark:bg-gray-900/30 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-2xl">
+                <Lock size={48} className="text-rose-500 mb-4" />
+                <h2 className="text-xl font-black text-gray-900 dark:text-gray-100">عدم دسترسی</h2>
+                <p className="text-gray-500 font-bold mt-2 text-center text-sm">شما دسترسی لازم برای مشاهده ماژول جلسات تولید را ندارید. <br/> لطفا با مدیر سیستم تماس بگیرید.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header Area */}
@@ -232,13 +263,15 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button
-                        onClick={handleOpenCreateModal}
-                        className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl flex items-center gap-2 font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-700"
-                    >
-                        <Plus size={20} />
-                        ثبت جلسه جدید
-                    </button>
+                    {canCreate && (
+                        <button
+                            onClick={handleOpenCreateModal}
+                            className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl flex items-center gap-2 font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-700"
+                        >
+                            <Plus size={20} />
+                            ثبت جلسه جدید
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -303,21 +336,28 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                     <button onClick={() => setViewMeeting(meeting)} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 rounded-xl transition-colors" title="مشاهده">
                                         <Eye size={18} />
                                     </button>
-                                    <button onClick={() => handleEditMeeting(meeting)} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 rounded-xl transition-colors" title="اصلاح">
-                                        <Edit size={18} />
+                                    <button onClick={() => handleDownloadPDF(meeting.id, meeting.meetingNumber || 'Unknown')} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 rounded-xl transition-colors" title="دریافت PDF">
+                                        <Printer size={18} />
                                     </button>
-                                    <button onClick={() => handleDeleteMeeting(meeting.id)} className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 rounded-xl transition-colors" title="حذف">
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {canCreate && (
+                                        <>
+                                            <button onClick={() => handleEditMeeting(meeting)} className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 rounded-xl transition-colors" title="اصلاح">
+                                                <Edit size={18} />
+                                            </button>
+                                            <button onClick={() => handleDeleteMeeting(meeting.id)} className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 rounded-xl transition-colors" title="حذف">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {meeting.status === MeetingStatus.DRAFT && (
+                                    {canManage && meeting.status === MeetingStatus.DRAFT && (
                                         <button onClick={() => handleSendAnnouncement(meeting)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5">
                                             <Send size={14} />
                                             ارسال اعلان
                                         </button>
                                     )}
-                                    {meeting.status === MeetingStatus.APPROVED && (
+                                    {canManage && meeting.status === MeetingStatus.APPROVED && (
                                         <button onClick={() => handleSendMinutes(meeting)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5">
                                             <MessageSquare size={14} />
                                             ارسال صورتجلسه
@@ -373,8 +413,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 <div className="space-y-1.5 focus-within:scale-[1.02] transition-transform">
                                     <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1.5"><Calendar size={14} className="text-blue-500" /> تاریخ برگزاری</label>
                                     <input
-                                        type="text"
-                                        placeholder="۱۴۰X/XX/XX"
+                                        type="date"
                                         className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 text-center dir-ltr"
                                         value={meetingForm.date}
                                         onChange={e => setMeetingForm({...meetingForm, date: e.target.value})}
@@ -383,8 +422,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 <div className="space-y-1.5 focus-within:scale-[1.02] transition-transform">
                                     <label className="text-xs font-black text-gray-500 mr-2 flex items-center gap-1.5"><Clock size={14} className="text-blue-500" /> ساعت برگزاری</label>
                                     <input
-                                        type="text"
-                                        placeholder="۱۲:۰۰"
+                                        type="time"
                                         className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 text-center dir-ltr"
                                         value={meetingForm.time}
                                         onChange={e => setMeetingForm({...meetingForm, time: e.target.value})}
@@ -432,18 +470,59 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {meetingForm.attendees?.map((attendee, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 dark:bg-black/20 p-2 rounded-2xl border border-gray-100 dark:border-white/5 group shadow-sm">
-                                            <input
-                                                type="text"
-                                                placeholder="نام و نام خانوادگی"
-                                                className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-xs font-bold outline-none"
-                                                value={attendee.fullName}
-                                                onChange={e => {
-                                                    const newAttendees = [...(meetingForm.attendees || [])];
-                                                    newAttendees[idx].fullName = e.target.value;
-                                                    setMeetingForm({...meetingForm, attendees: newAttendees});
-                                                }}
-                                            />
+                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 dark:bg-black/20 p-2 rounded-2xl border border-gray-100 dark:border-white/5 group shadow-sm relative">
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="text"
+                                                    placeholder="نام و نام خانوادگی (جستجو...)"
+                                                    className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-xs font-bold outline-none"
+                                                    value={attendee.fullName}
+                                                    onChange={e => {
+                                                        const newVal = e.target.value;
+                                                        const newAttendees = [...(meetingForm.attendees || [])];
+                                                        newAttendees[idx].fullName = newVal;
+                                                        setMeetingForm({...meetingForm, attendees: newAttendees});
+                                                        
+                                                        // Show search results if typing
+                                                        if (newVal.length > 1) {
+                                                            (window as any)._activeAttendeeIndex = idx;
+                                                        }
+                                                    }}
+                                                    onFocus={() => { (window as any)._activeAttendeeIndex = idx; }}
+                                                    onBlur={() => { setTimeout(() => { if((window as any)._activeAttendeeIndex === idx) (window as any)._activeAttendeeIndex = null; }, 200); }}
+                                                />
+                                                {attendee.fullName && (window as any)._activeAttendeeIndex === idx && (
+                                                    <div className="absolute top-full left-0 right-0 z-[110] bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto overflow-x-hidden animate-scale-in flex flex-col">
+                                                        {users.filter(u => u.fullName.includes(attendee.fullName) || u.username.includes(attendee.fullName)).map(u => (
+                                                            <button
+                                                                key={u.id}
+                                                                className="w-full p-2 text-right hover:bg-blue-50 dark:hover:bg-blue-900/20 text-[10px] font-bold border-b border-gray-50 dark:border-white/5 last:border-0 truncate"
+                                                                onClick={() => {
+                                                                    const newAttendees = [...(meetingForm.attendees || [])];
+                                                                    newAttendees[idx] = { 
+                                                                        fullName: u.fullName, 
+                                                                        role: u.role || 'کاربر سیستم', 
+                                                                        isPresent: true,
+                                                                        username: u.username 
+                                                                    };
+                                                                    setMeetingForm({...meetingForm, attendees: newAttendees});
+                                                                    (window as any)._activeAttendeeIndex = null;
+                                                                }}
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] text-blue-600 shrink-0">
+                                                                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover rounded-full"/> : u.fullName.charAt(0)}
+                                                                    </div>
+                                                                    <div className="flex flex-col text-right truncate">
+                                                                        <span className="truncate">{u.fullName}</span>
+                                                                        <span className="text-[8px] text-gray-400 font-normal truncate">@{u.username}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                             <input
                                                 type="text"
                                                 placeholder="سمت"
@@ -699,7 +778,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     <span className="font-black text-xs z-10 text-center">{a.fullName}</span>
                                                     
                                                     {/* Approval Overlay for current user if they are the attendee */}
-                                                    {a.fullName.includes(currentUser.fullName.split(' ')[0]) && !isApproved && (
+                                                    {a.fullName.includes(currentUser.fullName.split(' ')[0]) && !isApproved && canApprove && (
                                                         <button 
                                                             onClick={async () => {
                                                                 const updated = {

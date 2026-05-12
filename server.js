@@ -14,6 +14,7 @@ import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
 import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes } from './backend/bot-core.js';
+import * as Renderer from './backend/renderer.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -797,6 +798,21 @@ app.get('/api/next-meeting-number', (req, res) => {
 });
 
 // BOT SENDING ENDPOINTS
+app.get('/api/meetings/:id/pdf', async (req, res) => {
+    const db = getDb();
+    const meeting = (db.meetings || []).find(m => m.id === req.params.id);
+    if (!meeting) return res.status(404).send('Meeting not found');
+    try {
+        const pdf = await Renderer.generateMeetingMinutesPDF(meeting);
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', `attachment; filename="Meeting_${meeting.meetingNumber}.pdf"`);
+        res.send(pdf);
+    } catch(e) {
+        console.error("PDF Generation Error:", e);
+        res.status(500).send('Error generating PDF');
+    }
+});
+
 app.post('/api/meetings/:id/announce', async (req, res) => {
     const db = getDb();
     const meeting = db.meetings.find(m => m.id === req.params.id);

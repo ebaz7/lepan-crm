@@ -656,7 +656,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     </select>
                 )}
             </div>
-            <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-full min-w-0">
+            <div className={`${activeTab === 'chat' ? 'p-0 h-full max-w-none' : 'p-4 md:p-8 max-w-7xl'} mx-auto min-h-full min-w-0`}>
                 {children}
             </div>
         </div>

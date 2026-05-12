@@ -936,6 +936,7 @@ export enum MeetingStatus {
 
 export interface MeetingAttendee {
     userId?: string;
+    username?: string;
     fullName: string;
     role: string;
     isPresent: boolean;

@@ -1081,12 +1081,23 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
         // DEFAULTING TO 'after_submit' based on repeated user request for accounting group behavior
         const mode = settings.botPaymentNotificationMode || 'after_submit';
         
-        // CRITICAL: Mode filtering - If mode is after_submit, ONLY send the initial registration
-        // We trim the stepName to avoid whitespace issues
+        // CRITICAL: Mode filtering for ACCOUNTING GROUP
+        // Based on user request: If mode is 'after_submit', ONLY send the initial registration message to the group.
+        // We trim the stepName to avoid whitespace issues.
         const normalizedStep = (stepName || '').trim();
-        if (mode === 'after_submit' && normalizedStep !== 'ثبت اولیه') return;
         
-        // If mode is after_final, only send if it's the final approval (or if it was explicitly marked as final)
+        if (mode === 'after_submit') {
+            // When in 'after_submit' mode, block everything EXCEPT the initial creation
+            if (normalizedStep !== 'ثبت اولیه') {
+                // If it's a step change (not create/edit/delete), we block it for the group
+                if (eventType === 'STEP') return;
+                // If it's an EDIT or DELETE, we might want to send it, but let's be strict as per user request
+                // The user says "only on initial registration mode", so we block others too if needed
+                if (eventType === 'EDIT') return; // User doesn't want updates to flood the group
+            }
+        }
+        
+        // If mode is after_final, only send if it's the final approval
         if (mode === 'after_final' && !isFinal && eventType === 'STEP') return;
 
         const tgGroupId = settings.botAccountingGroupIdTele || settings.botAccountingGroupId || '';
@@ -2307,7 +2318,7 @@ export const notifyMeetingAnnouncement = async (meeting, db) => {
     const s = db.settings;
     if (!s) return;
 
-    const message = `✨️ *اعلان برگزاری جلسه*؛ \n\n⚜️ *با عرض سلام و احترام*، \n\nجلسه تولید روز *${meeting.date}* راس ساعت *${meeting.time}* در *${meeting.location}*، برگزار خواهد شد.\n\n*رئیس جلسه*؛ \n${meeting.chairman || '-'}\n*دبیر جلسه*؛\n${meeting.secretary || '-'}\n\n🔆 *اعضای اصلی*؛\n${meeting.attendees.map(a => `${a.fullName} (${a.role})`).join('\n')}`;
+    const message = `✨️ اعلان برگزاری جلسه؛ \n\n⚜️ با عرض سلام و احترام، \n\nجلسه تولید روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در محل دائمی جلسات کارخانه، برگزار خواهد شد.\n\nرئیس جلسه؛ \n${meeting.chairman || 'سیّد علی احمدی (مدیر کارخانه)'} \nدبیر جلسه\n${meeting.secretary || 'پریسا مرادی(نت)'}\n\n 🔆 اعضای اصلی ؛\n${meeting.attendees.map(a => `${a.fullName} (${a.role})`).join('\n')}`;
 
     // Send to Telegram
     const teleId = s.botMeetingAnnouncementTelegramId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdTele;
@@ -2334,19 +2345,37 @@ export const notifyMeetingMinutes = async (meeting, db) => {
 
     const message = `📄 *صورتجلسه تایید شده*؛ \n\nشماره جلسه: *${meeting.meetingNumber}*\nتاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید نهایی تمامی حاضرین رسیده است.\n\n*موضوعات و مصوبات*:\n${meeting.items.map((item, idx) => `${idx + 1}. ${item.description} (مسئول: ${item.responsiblePerson})`).join('\n')}\n\nجهت مشاهده جزئیات کامل به سامانه مراجعه کنید.`;
 
-    // Send to Production Group (Tele/Bale/WA)
-    const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
-    if (teleId) {
-        import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
-    }
+    try {
+        const pdfBuffer = await Renderer.generateMeetingMinutesPDF(meeting);
+        const fileName = `Meeting_${meeting.meetingNumber}_Minutes.pdf`;
 
-    const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
-    if (baleId) {
-        import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
-    }
+        // Send to Production Group (Tele/Bale/WA)
+        const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
+        if (teleId) {
+            import('./telegram.js').then(m => m.sendBotDocument(teleId, pdfBuffer, fileName, message)).catch(e => {});
+        }
 
-    const waId = s.botMeetingMinutesGroupId;
-    if (waId) {
-        import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
+        const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
+        if (baleId) {
+            import('./bale.js').then(m => m.sendBotDocument(baleId, pdfBuffer, fileName, message)).catch(e => {});
+        }
+
+        const waId = s.botMeetingMinutesGroupId;
+        if (waId) {
+            import('./whatsapp.js').then(m => m.sendMessage(waId, message, {
+                data: pdfBuffer.toString('base64'),
+                mimeType: 'application/pdf',
+                filename: fileName
+            })).catch(e => {});
+        }
+    } catch (err) {
+        console.error("Meeting PDF Generation/Sending Error:", err);
+        // Fallback to text message if PDF fails
+        const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
+        if (teleId) import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
+        const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
+        if (baleId) import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
+        const waId = s.botMeetingMinutesGroupId;
+        if (waId) import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
     }
 };

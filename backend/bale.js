@@ -168,6 +168,14 @@ export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     return callApi('sendPhoto', form, true);
 };
 
+export const sendBotDocument = (chatId, buffer, name, caption) => {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    form.append('document', buffer, { filename: name || 'document.pdf' });
+    form.append('caption', caption || '');
+    return callApi('sendDocument', form, true);
+};
+
 export const deleteBotMessage = (chatId, messageId) => {
     return callApi('deleteMessage', { chat_id: chatId, message_id: messageId }).catch(e => console.error("Bale delete error:", e.message));
 };
