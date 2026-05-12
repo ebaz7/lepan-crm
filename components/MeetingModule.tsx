@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PrintMeeting from './print/PrintMeeting';
 import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
-import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes } from '../services/storageService';
+import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes, sendMessage } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
 import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare } from 'lucide-react';
 import { apiCall } from '../services/apiService';
@@ -72,12 +72,23 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             location: 'محل دائمی جلسات کارخانه',
             chairman: 'سیّد علی احمدی (مدیر کارخانه)',
             secretary: 'پریسا مرادی(نت)',
-            attendees: [
-                { fullName: 'سیّد احمدر ضا احمدی', role: 'مدیر تولید', isPresent: true },
-                { fullName: 'زینب محمدیان', role: 'سرپرست کاورینگ و کنترل فرآیند', isPresent: true },
-                { fullName: 'رامین شرفی', role: 'سرپرست برق و الکترونیک', isPresent: true },
-                { fullName: 'مهسا کیانی', role: 'کنترل کیفی', isPresent: true }
-            ],
+            attendees: settings?.defaultMeetingAttendees?.length 
+                ? settings.defaultMeetingAttendees.map(u => {
+                    const user = users.find(x => x.username === u);
+                    return {
+                        username: u,
+                        fullName: user?.fullName || u,
+                        role: user?.roles?.includes('manager') ? 'سرپرست' : 'کارمند',
+                        isPresent: true
+                    };
+                })
+                : [
+                    { fullName: 'سیّد احمدر ضا احمدی', role: 'مدیر تولید', isPresent: true },
+                    { fullName: 'زینب محمدیان', role: 'سرپرست کاورینگ و کنترل فرآیند', isPresent: true },
+                    { fullName: 'رامین شرفی', role: 'سرپرست برق و الکترونیک', isPresent: true },
+                    { fullName: 'مهسا کیانی', role: 'کنترل کیفی', isPresent: true }
+                ],
+            guestAttendees: [],
             items: [],
             status: MeetingStatus.DRAFT
         });
@@ -171,14 +182,46 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         }));
     };
 
+    const sendPvNotificationsOnApproval = async (m: MeetingMinutes) => {
+        const notifiedUsernames = new Set<string>();
+        users.forEach(user => {
+            const isMentioned = m.items.some(item => 
+                (item.responsiblePerson || '').includes(user.fullName) || 
+                (item.description || '').includes(user.fullName) ||
+                (item.responsiblePerson || '').includes(user.username) ||
+                (item.description || '').includes(user.username)
+            );
+            if (isMentioned) notifiedUsernames.add(user.username);
+        });
+
+        for (const username of Array.from(notifiedUsernames)) {
+            try {
+                await sendMessage({ id: generateUUID(), sender: 'system', senderUsername: 'system', role: 'system', message: `📢 صورتجلسه شماره ${m.meetingNumber} نهایی شد.\nشما به عنوان مسئول اجرا تعیین شده‌اید یا نام شما در مصوبات ذکر شده است.\nجهت مشاهده به بخش صورتجلسات/بایگانی مراجعه کنید.`, recipient: username, timestamp: Date.now() });
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    const sendApprovalRequests = async (m: MeetingMinutes) => {
+        const requiredSigners = m.attendees.filter(a => a.isPresent && a.username);
+        for (const signer of requiredSigners) {
+            if (!signer.username) continue;
+            try {
+                await sendMessage({ id: generateUUID(), sender: 'system', senderUsername: 'system', role: 'system', message: `✍️ یک صورتجلسه در انتظار تایید شماست.\nشماره جلسه: ${m.meetingNumber}\nلطفا جهت بررسی و امضا به کارتابل و بخش صورتجلسات مراجعه فرمایید.`, recipient: signer.username, timestamp: Date.now() });
+            } catch (e) { console.error(e); }
+        }
+    };
+
     const handleStatusChange = async (meeting: MeetingMinutes, newStatus: MeetingStatus) => {
         try {
             const updated = { ...meeting, status: newStatus, updatedAt: Date.now() };
             await updateMeeting(updated);
             
-            // If it became approved, automatically send to group if configured (or just call it)
+            if (newStatus === MeetingStatus.PENDING_APPROVAL) {
+                await sendApprovalRequests(updated);
+            }
             if (newStatus === MeetingStatus.APPROVED) {
                 await sendMeetingMinutes(meeting.id);
+                await sendPvNotificationsOnApproval(updated);
             }
             
             loadData();
@@ -199,7 +242,6 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             
             let newStatus = meeting.status;
             
-            // Required signers are attendees who are PRESENT and have a USERNAME in the system
             const requiredSigners = meeting.attendees.filter(a => a.isPresent && a.username);
             const allSigned = requiredSigners.every(a => approvals[a.username!]?.approved);
             
@@ -212,6 +254,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             
             if (newStatus === MeetingStatus.APPROVED) {
                 await sendMeetingMinutes(meeting.id);
+                await sendPvNotificationsOnApproval(updated);
                 alert('تمامی امضاها تکمیل شد و صورتجلسه نهایی و به گروه تلگرام/سازمانی ارسال شد.');
             } else {
                 alert('امضای شما با موفقیت ثبت شد. در انتظار امضای سایر اعضا...');
@@ -263,7 +306,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                 (item.responsiblePerson || '').toLowerCase().includes(searchText)
             );
         
-        if (activeTab === 'all') return matchesSearch;
+        if (activeTab === 'all') return matchesSearch && meeting.status !== MeetingStatus.APPROVED;
         if (activeTab === 'pending') {
             return matchesSearch && meeting.status === MeetingStatus.PENDING_APPROVAL;
         }
@@ -630,6 +673,26 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 </div>
                             </div>
 
+                            {/* Guest Attendees */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b dark:border-white/10 pb-2">
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2"><UserCheck size={18} className="text-gray-500" /> مدعوین (بدون نیاز به کاربری)</h3>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="نام مدعوین را بنویسید (با ویرگول جدا کنید)"
+                                        className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3 rounded-2xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-gray-800 transition-all focus:ring-2 ring-gray-200"
+                                        value={(meetingForm.guestAttendees || []).join('، ')}
+                                        onChange={e => {
+                                            const vals = e.target.value.split(/[،,]/).map(v => v.trim()).filter(v => v !== '');
+                                            setMeetingForm({...meetingForm, guestAttendees: vals});
+                                        }}
+                                    />
+                                    <span className="text-[10px] text-gray-500 font-bold pr-2">این افراد در رای‌گیری شرکت نمی‌کنند و فقط نامشان در صورتجلسه درج می‌شود.</span>
+                                </div>
+                            </div>
+
                             {/* Meeting Items / Resolutions */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -798,6 +861,12 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                             </div>
                                         ))}
                                     </div>
+                                    {viewMeeting.guestAttendees && viewMeeting.guestAttendees.length > 0 && (
+                                        <div className="mt-4">
+                                            <span className="text-[11px] font-bold text-gray-600 dark:text-gray-400">مدعوین: </span>
+                                            <span className="text-[11px] font-black">{viewMeeting.guestAttendees.join('، ')}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Items Table */}

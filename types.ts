@@ -292,6 +292,7 @@ export interface SystemSettings {
   
   salesNotificationUsers?: { username: string; platforms: string[]; name?: string }[]; // Usernames and their active platforms (telegram, bale)
   salesContactMessage?: string;
+  defaultMeetingAttendees?: string[];
   
   // CRM / SALES
   salesContacts?: SalesContact[];
@@ -959,6 +960,7 @@ export interface MeetingMinutes {
     chairman: string;
     secretary: string;
     attendees: MeetingAttendee[];
+    guestAttendees?: string[];
     absentees: string[];
     items: MeetingItem[];
     status: MeetingStatus;

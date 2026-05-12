@@ -1081,6 +1081,44 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         <div className="space-y-6 animate-fade-in">
                             <h3 className="font-bold text-gray-800 border-b pb-3 flex items-center gap-2"><ClipboardList size={22} className="text-indigo-600"/> تنظیمات اطلاع‌رسانی جلسات</h3>
                             
+                            <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 mb-6">
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b pb-2 mb-4">لیست افراد ثابت در صورتجلسات</h4>
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <select className="border rounded-xl p-2.5 text-xs bg-white focus:ring-2 flex-1 outline-none" id="newDefaultAttendee">
+                                            <option value="">-- انتخاب کاربر --</option>
+                                            {systemUsers.filter(u => !(settings.defaultMeetingAttendees || []).includes(u.username)).map(u => (
+                                                <option key={u.username} value={u.username}>{u.fullName}</option>
+                                            ))}
+                                        </select>
+                                        <button onClick={() => {
+                                            const sel = document.getElementById('newDefaultAttendee') as HTMLSelectElement;
+                                            if (sel && sel.value) {
+                                                const att = settings.defaultMeetingAttendees || [];
+                                                if (!att.includes(sel.value)) {
+                                                    setSettings({...settings, defaultMeetingAttendees: [...att, sel.value]});
+                                                    sel.value = '';
+                                                }
+                                            }
+                                        }} className="bg-blue-600 text-white px-4 rounded-xl text-xs font-bold hover:bg-blue-700">افزودن</button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {settings.defaultMeetingAttendees?.length === 0 && <span className="text-xs text-gray-400">هیچ کاربری انتخاب نشده است</span>}
+                                        {(settings.defaultMeetingAttendees || []).map(username => {
+                                            const user = systemUsers.find(u => u.username === username);
+                                            return (
+                                                <div key={username} className="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                                                    <span>{user?.fullName || username}</span>
+                                                    <button onClick={() => {
+                                                        setSettings({...settings, defaultMeetingAttendees: (settings.defaultMeetingAttendees || []).filter(u => u !== username)});
+                                                    }} className="text-blue-400 hover:text-red-500"><X size={14} /></button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-sm text-gray-700 border-r-4 border-blue-500 pr-2">اعلامیه‌ی برگزاری (Announcements)</h4>

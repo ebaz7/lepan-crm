@@ -72,6 +72,9 @@ const PrintMeeting: React.FC<PrintMeetingProps> = ({ meeting, onClose }) => {
                     {meeting.attendees.filter(a => a.isPresent).map((a, i) => (
                         <div key={i} className="text-sm">• {a.fullName} - {a.role}</div>
                     ))}
+                    {meeting.guestAttendees && meeting.guestAttendees.map((g, i) => (
+                        <div key={`guest-${i}`} className="text-sm text-gray-700">• {g} - مدعو</div>
+                    ))}
                 </div>
             </div>
 
