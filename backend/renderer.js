@@ -651,6 +651,50 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
     }
 };
 
+export const generateMeetingAnnouncementImage = async (meeting) => {
+    try {
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+        
+        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                ${fontFaceRule}
+                body { background: #f9fafb; padding: 20px !important; font-family: 'Vazirmatn', sans-serif !important; }
+                .card { background: white; border-radius: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 2px solid #e5e7eb; overflow: hidden; width: 600px; }
+                .header { background: #1e3a8a; color: white; padding: 30px; text-align: center; }
+                .content { padding: 30px; }
+                .item { padding: 10px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+            </style>
+        </head><body>
+            <div class="card">
+                <div class="header">
+                    <h1 style="font-size: 28px; font-weight: 900; margin: 0;">اعلان برگزاری جلسه تولید</h1>
+                    <div style="font-size: 16px; margin-top: 10px;">شماره: ${meeting.meetingNumber}</div>
+                </div>
+                <div class="content">
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 20px;">
+                        جلسه در تاریخ ${meeting.date} ساعت ${meeting.time} در ${meeting.location} برگزار خواهد شد.
+                    </div>
+                    <div style="font-size: 14px; color: #4b5563;">
+                        <p>رئیس: ${meeting.chairman}</p>
+                        <p>دبیر: ${meeting.secretary}</p>
+                    </div>
+                </div>
+            </div></body></html>`;
+
+        await page.setViewport({ width: 640, height: 800, deviceScaleFactor: 2 });
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        const card = await page.$('.card');
+        const buffer = await card.screenshot({ type: 'png' });
+        await page.close();
+        return buffer;
+    } catch (e) {
+        console.error("Generate Announcement Image Error:", e.message);
+        throw e;
+    }
+};
+
 export const generateMeetingMinutesPDF = async (meeting) => {
     try {
         const browser = await getBrowser();

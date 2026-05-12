@@ -2320,16 +2320,29 @@ export const notifyMeetingAnnouncement = async (meeting, db) => {
 
     const message = `✨️ اعلان برگزاری جلسه؛ \n\n⚜️ با عرض سلام و احترام، \n\nجلسه تولید روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در محل دائمی جلسات کارخانه، برگزار خواهد شد.\n\nرئیس جلسه؛ \n${meeting.chairman || 'سیّد علی احمدی (مدیر کارخانه)'} \nدبیر جلسه\n${meeting.secretary || 'پریسا مرادی(نت)'}\n\n 🔆 اعضای اصلی ؛\n${meeting.attendees.map(a => `${a.fullName} (${a.role})`).join('\n')}`;
 
+    let announcementImg = null;
+    try {
+        announcementImg = await Renderer.generateMeetingAnnouncementImage(meeting);
+    } catch(e) { console.error("Error generating meeting image", e); }
+
     // Send to Telegram
     const teleId = s.botMeetingAnnouncementTelegramId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdTele;
     if (teleId) {
-        import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
+        if (announcementImg) {
+            import('./telegram.js').then(m => m.sendBotPhoto(teleId, announcementImg, message).catch(e => {})).catch(e => {});
+        } else {
+            import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
+        }
     }
 
     // Send to Bale
     const baleId = s.botMeetingAnnouncementBaleId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdBale;
     if (baleId) {
-        import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
+        if (announcementImg) {
+             import('./bale.js').then(m => m.sendBotPhoto(baleId, announcementImg, message).catch(e => {})).catch(e => {});
+        } else {
+             import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
+        }
     }
 
     // Send to WhatsApp (if available)

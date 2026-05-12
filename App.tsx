@@ -326,8 +326,9 @@ function App() {
 
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
         
-        setOrders(safeOrders);
-        setChatMessages(safeMessages); 
+        // --- OPTIMIZATION: ONLY SET IF CHANGED ---
+        setOrders(prev => JSON.stringify(prev) !== JSON.stringify(safeOrders) ? safeOrders : prev);
+        setChatMessages(prev => JSON.stringify(prev) !== JSON.stringify(safeMessages) ? safeMessages : prev); 
         
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
         checkForNotifications(safeOrders, currentUser, lastCheck);

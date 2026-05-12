@@ -227,7 +227,7 @@ body {
   .no-print, .hidden-print-export { 
     display: none !important; 
   }
-  #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content {
+  #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content, #meeting-print-area {
       transform: none !important;
       width: 100% !important;
       height: auto !important;

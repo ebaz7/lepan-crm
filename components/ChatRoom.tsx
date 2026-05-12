@@ -315,21 +315,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const loadMeta = async () => {
         try {
+            console.log("ChatRoom: Starting loadMeta");
             const usrList = await getUsers();
+            console.log("ChatRoom: Users loaded", usrList);
             setUsers(usrList.filter(u => u.username !== currentUser.username));
             
             const grpList = await getGroups();
+            console.log("ChatRoom: Groups loaded", grpList);
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setGroups(visibleGroups);
 
             const taskGps = await getTaskGroups();
+            console.log("ChatRoom: TaskGroups loaded", taskGps);
             const visibleTaskGps = taskGps.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setTaskGroups(visibleTaskGps);
             
             const tskList = await getTasks();
+            console.log("ChatRoom: Tasks loaded", tskList);
             setTasks(tskList);
-        } catch (e) { console.error("Chat load error", e); }
+        } catch (e) { console.error("Chat load error", e); alert("خطا در بارگذاری اطلاعات چت: " + e); }
     };
 
     const formatLastSeen = (timestamp: number | undefined) => {

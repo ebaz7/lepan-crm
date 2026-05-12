@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import PrintMeeting from './print/PrintMeeting';
 import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
 import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
@@ -22,6 +23,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingMeeting, setEditingMeeting] = useState<MeetingMinutes | null>(null);
     const [viewMeeting, setViewMeeting] = useState<MeetingMinutes | null>(null);
+    const [showPrintModal, setShowPrintModal] = useState<MeetingMinutes | null>(null);
     
     // Form State
     const [meetingForm, setMeetingForm] = useState<Partial<MeetingMinutes>>({
@@ -659,7 +661,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 <h3 className="font-black text-gray-900 dark:text-gray-100 italic tracking-tight uppercase text-sm md:text-base">صورتجلسه شماره {viewMeeting.meetingNumber}</h3>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={() => window.print()} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors text-blue-600">
+                                <button onClick={() => { setShowPrintModal(viewMeeting); setViewMeeting(null); }} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors text-blue-600">
                                     <Printer size={20} />
                                 </button>
                                 <button onClick={() => setViewMeeting(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors">
@@ -836,6 +838,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                     </div>
                 </div>
             )}
+            {showPrintModal && <PrintMeeting meeting={showPrintModal} onClose={() => setShowPrintModal(null)} />}
         </div>
     );
 };
