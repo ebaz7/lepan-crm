@@ -1036,10 +1036,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-full md:bg-gray-100 dark:bg-gray-800/40 bg-white text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
-            
-            {/* --- LIST SIDEBAR --- */}
-            <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full bg-white dark:bg-[#1c1c1e] ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
+        <div className="flex h-full bg-white dark:bg-[#1c1c1e] md:bg-gray-100/30 text-gray-800 dark:text-gray-200 md:p-2 lg:p-4 font-sans no-print min-h-0 relative">
+            <div className="flex-1 flex bg-white dark:bg-[#1c1c1e] md:rounded-2xl overflow-hidden md:shadow-xl md:border border-gray-200/50 dark:border-white/5 relative h-full">
+                
+                {/* --- LIST SIDEBAR --- */}
+                <div className={`w-full md:w-85 lg:w-96 border-l border-gray-100 dark:border-white/5 flex flex-col transition-all z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-3 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <div className="flex justify-between items-center mb-3">
@@ -1059,7 +1060,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 </div>
 
                 {/* List Items */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#1c1c1e]">
+                    {getSortedChannels().length === 0 && !searchTerm && (
+                        <div className="flex flex-col items-center justify-center h-40 text-gray-400 p-10 text-center">
+                            <MessageCircle size={32} className="mb-2 opacity-20" />
+                            <p className="text-xs">پیامی یافت نشد</p>
+                        </div>
+                    )}
                     {getSortedChannels().map((item: ChannelItem) => (
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-white/5 relative group ${activeChannel?.id === item.id ? 'bg-blue-50/50 dark:bg-blue-500/10' : ''}`}>
                             <div className="relative">
@@ -1089,7 +1096,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`fixed md:relative inset-0 h-full md:flex-1 bg-[#8e98a3] dark:bg-[#0b141a] z-[100] md:z-10 transition-transform duration-300 ease-out flex flex-col ${activeChannel ? 'translate-x-0' : (document.documentElement.dir === 'rtl' ? '-translate-x-full md:translate-x-0' : 'translate-x-full md:translate-x-0')} md:flex`}>
+            <div className={`absolute md:relative inset-0 h-full md:flex-1 bg-[#f0f2f5] dark:bg-[#0b141a] z-[100] md:z-10 transition-transform duration-300 ease-out flex flex-col ${activeChannel ? 'translate-x-0' : (document.documentElement.dir === 'rtl' ? '-translate-x-full md:translate-x-0' : 'translate-x-full md:translate-x-0')} md:flex`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
@@ -1769,6 +1776,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 </div>
             )}
         </div>
+    </div>
     );
 };
 
