@@ -2365,7 +2365,18 @@ export const notifyMeetingMinutes = async (meeting, db) => {
     const s = db.settings;
     if (!s) return;
 
-    const message = `📄 *صورتجلسه تایید شده*؛ \n\nشماره جلسه: *${meeting.meetingNumber}*\nتاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید نهایی تمامی حاضرین رسیده است.\n\n*موضوعات و مصوبات*:\n${meeting.items.map((item, idx) => `${idx + 1}. ${item.description} (مسئول: ${item.responsiblePerson})`).join('\n')}\n\nجهت مشاهده جزئیات کامل به سامانه مراجعه کنید.`;
+    let resolutionsText = (meeting.items || []).map((item, idx) => {
+        let text = `${idx + 1}. ${item.description}`;
+        if (item.responsiblePerson) text += ` (👤 مسئول: ${item.responsiblePerson})`;
+        if (item.duration) text += ` [⏳ مهلت: ${item.duration}]`;
+        return text;
+    }).join('\n');
+
+    if (resolutionsText.length > 700) {
+        resolutionsText = resolutionsText.substring(0, 700) + '... (ادامه در فایل پیوست)';
+    }
+
+    const message = `🏁 *صورتجلسه نهایی و مصوبات تایید شده* 🏁\n\n📄 شماره: *${meeting.meetingNumber}*\n📅 تاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید الکترونیکی تمامی حاضرین رسیده است.\n\n📝 *لیست مصوبات و تصمیمات*:\n${resolutionsText}\n\n📎 فایل PDF پیوست جهت بایگانی ارسال شد.`;
 
     try {
         const pdfBuffer = await Renderer.generateMeetingMinutesPDF(meeting);

@@ -279,19 +279,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (activeChannel) {
             // Push a state so "Back" button closes chat instead of exiting app
-            const state = { chatOpen: true };
-            window.history.pushState(state, '', window.location.pathname + '#chat');
-            
-            const handlePopState = (event: PopStateEvent) => {
-                if (!event.state?.chatOpen) {
-                    setActiveChannel(null);
-                }
-            };
-
-            window.addEventListener('popstate', handlePopState);
-            return () => {
-                window.removeEventListener('popstate', handlePopState);
-            };
+            try {
+                const state = { chatOpen: true };
+                window.history.pushState(state, '', window.location.pathname + (window.location.hash.includes('#chat') ? '' : '#chat'));
+                
+                const handlePopState = (event: PopStateEvent) => {
+                    if (!event.state?.chatOpen) {
+                        setActiveChannel(null);
+                    }
+                };
+    
+                window.addEventListener('popstate', handlePopState);
+                return () => {
+                    window.removeEventListener('popstate', handlePopState);
+                };
+            } catch (e) {
+                console.warn("History push failed", e);
+            }
         }
     }, [activeChannel]);
 
@@ -1032,14 +1036,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-full md:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
+        <div className="flex h-full md:bg-gray-100 dark:bg-gray-800/40 bg-white text-gray-800 dark:text-gray-200 md:rounded-xl overflow-hidden md:shadow-lg md:border border-gray-200/50 dark:border-white/10 relative font-sans">
             
             {/* --- LIST SIDEBAR --- */}
-            <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-80 glass-panel border-l border-gray-200 flex flex-col transition-all absolute md:relative z-20 h-full bg-white dark:bg-[#1c1c1e] ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-3 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <div className="flex justify-between items-center mb-3">
-                        <div className="flex gap-2 bg-gray-200 p-1 rounded-lg text-xs font-bold w-full">
+                        <div className="flex gap-2 bg-gray-200 dark:bg-white/10 p-1 rounded-lg text-xs font-bold w-full">
                             <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'CHATS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گفتگوها</button>
                             <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
                             <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
@@ -1049,7 +1053,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
                     </div>
                     <div className="relative">
-                        <input className="w-full glass-panel border rounded-xl pl-8 pr-3 py-2 text-sm" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <input className="w-full glass-panel border rounded-xl pl-8 pr-3 py-2 text-sm bg-white dark:bg-white/5" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         <Search size={16} className="absolute left-2.5 top-2.5 text-gray-400"/>
                     </div>
                 </div>
@@ -1057,26 +1061,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {getSortedChannels().map((item: ChannelItem) => (
-                        <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 relative group">
+                        <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-white/5 relative group ${activeChannel?.id === item.id ? 'bg-blue-50/50 dark:bg-blue-500/10' : ''}`}>
                             <div className="relative">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : item.type === 'task_group' ? 'bg-gradient-to-br from-purple-400 to-purple-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : item.type === 'task_group' ? 'bg-gradient-to-br from-purple-400 to-purple-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
                                     {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
                                 </div>
-                                {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>}
+                                {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
                                     <div className="flex items-center gap-1 overflow-hidden">
-                                        <span className="font-bold text-gray-800 text-sm truncate">{item.name}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-100 text-sm truncate">{item.name}</span>
                                         {mutedChannels.has(item.id) && <BellOff size={10} className="text-gray-400 opacity-60"/>}
                                     </div>
-                                    {item.lastMsg && <span className="text-[10px] text-gray-400">{new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>}
+                                    {item.lastMsg && <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>}
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <p className="text-xs text-gray-500 truncate max-w-[150px]">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
                                         {item.type === 'task_group' ? 'لیست تسک‌ها...' : item.lastMsg ? (item.lastMsg.audioUrl ? '🎤 پیام صوتی' : item.lastMsg.attachment ? '📎 فایل' : item.lastMsg.message) : 'پیامی نیست'}
                                     </p>
-                                    {item.unread > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold shadow-sm">{item.unread}</span>}
+                                    {item.unread > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold shadow-sm animate-pulse">{item.unread}</span>}
                                 </div>
                             </div>
                         </div>
@@ -1085,7 +1089,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`fixed md:relative inset-0 h-full md:flex-1 bg-[#8e98a3] z-[100] md:z-10 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0'} md:flex`}>
+            <div className={`fixed md:relative inset-0 h-full md:flex-1 bg-[#8e98a3] dark:bg-[#0b141a] z-[100] md:z-10 transition-transform duration-300 ease-out flex flex-col ${activeChannel ? 'translate-x-0' : (document.documentElement.dir === 'rtl' ? '-translate-x-full md:translate-x-0' : 'translate-x-full md:translate-x-0')} md:flex`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
