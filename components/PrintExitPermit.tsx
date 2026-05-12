@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole } from '../types';
 import { formatDate, formatCurrency } from '../constants';
-import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
+import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator'; 
@@ -331,43 +331,86 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start p-2 overflow-y-auto animate-fade-in safe-pb">
-        <div className="bg-white p-2 rounded-xl shadow-lg flex flex-wrap items-center justify-center gap-2 w-full max-w-2xl no-print mb-2 md:sticky md:top-4 z-50 border border-gray-200">
-            <div className="flex items-center gap-2 border-l pl-2">
-                <button onClick={onClose} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"><X size={18}/></button>
-                <span className="font-bold text-[10px] text-gray-600 hidden md:inline">عملیات مجوز</span>
+        <div className="bg-white p-3 rounded-2xl shadow-2xl flex flex-wrap items-center justify-between gap-3 w-full max-w-4xl no-print mb-4 md:sticky md:top-4 z-50 border border-gray-100 backdrop-blur-xl bg-white/90">
+            <div className="flex items-center gap-3">
+                <button onClick={onClose} className="p-2 hover:bg-red-50 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95"><X size={20}/></button>
+                <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                <div className="flex flex-col">
+                    <span className="font-black text-[12px] text-gray-900 tracking-tight">مشاهده مجوز خروج</span>
+                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{permit.permitNumber}</span>
+                </div>
             </div>
 
-            {(onApprove || onReject) && (
-                <div className="flex items-center gap-1.5 border-l px-2">
-                    {onApprove && <button onClick={onApprove} className="px-3 py-1 bg-green-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-green-700">تایید</button>}
-                    {onReject && <button onClick={onReject} className="px-3 py-1 bg-red-600 text-white rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-red-700">رد</button>}
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+                {(onApprove || onReject) && (
+                    <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200/50">
+                        {onApprove && <button onClick={onApprove} className="px-5 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2 text-[11px] font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 hover:bg-emerald-700 hover:shadow-lg"><CheckCircle size={14}/> تایید و صدور</button>}
+                        {onReject && <button onClick={onReject} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-lg flex items-center gap-2 text-[11px] font-black transition-all active:scale-95 hover:bg-rose-100"><XCircle size={14}/> رد درخواست</button>}
+                    </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                    <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-[11px] font-black hover:bg-gray-200 flex items-center gap-2 transition-all active:scale-95">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دریافت PDF</button>
+                    <button onClick={handlePrint} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-[11px] font-black hover:bg-blue-700 flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all active:scale-95"><Printer size={14}/> چاپ</button>
+                    {onEdit && <button onClick={onEdit} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-lg text-[11px] font-black hover:bg-amber-100 flex items-center gap-2 border border-amber-200 transition-all active:scale-95"><Edit size={14}/> اصلاح</button>}
                 </div>
-            )}
+            </div>
 
             <div className="flex items-center gap-2">
-                <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-gray-200 flex items-center gap-1">{processing ? <Loader2 size={12} className="animate-spin"/> : <FileDown size={12}/>} PDF</button>
-                <button onClick={handlePrint} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm"><Printer size={12}/> چاپ</button>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden lg:block"></div>
+                <div className="flex items-center gap-1.5">
+                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600 shadow-lg shadow-green-500/30' : 'bg-white border-gray-100 text-green-600 hover:bg-green-50'}`} title="واتساپ"><Share2 size={18}/></button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'bale' ? 'bg-green-600 text-white border-green-700 shadow-lg shadow-green-600/30' : 'bg-white border-gray-100 text-green-700 hover:bg-green-50'}`} title="بله"><Share2 size={18}/></button>
+                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/30' : 'bg-white border-gray-100 text-blue-600 hover:bg-blue-50'}`} title="تلگرام"><Share2 size={18}/></button>
+                </div>
             </div>
 
-            <div className="flex items-center gap-1.5 ml-auto">
-                {onEdit && <button onClick={onEdit} className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-amber-100 flex items-center gap-1 border border-amber-200"><Edit size={12}/> اصلاح</button>}
-                <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-200 text-green-600 hover:bg-green-50'}`}><Share2 size={12}/> واتساپ</button>
-                <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'bale' ? 'bg-green-500 text-white border-green-600' : 'bg-white border-gray-200 text-green-600 hover:bg-green-50'}`}><Share2 size={12}/> بله</button>
-                <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200 text-blue-600 hover:bg-blue-50'}`}><Share2 size={12}/> تلگرام</button>
-            </div>
-                {sharePlatform && (
-                     <div className="mt-2 glass-panel rounded-xl shadow-inner border border-gray-200 z-[60] overflow-hidden animate-scale-in">
-                         <div className="p-2 border-b bg-gray-50 flex justify-between items-center"><span className="text-xs font-bold text-gray-600">انتخاب مخاطب {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span><button onClick={() => setSharePlatform(null)}><X size={14}/></button></div>
-                         <div className="p-2 border-b"><input className="w-full text-xs p-1.5 border rounded outline-none" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/></div>
-                         <div className="max-h-40 overflow-y-auto">{filteredContacts.map(c => {
-                             let targetId = c.number;
-                             if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
-                             if (sharePlatform === 'bale') targetId = c.baleId || c.number;
-                             return (<button key={c.id} onClick={() => { if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="w-full text-right p-2 hover:bg-blue-50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0"><span className="truncate max-w-[120px] font-bold">{c.name}</span><button onClick={(e) => { e.stopPropagation(); if(!targetId){alert("آیدی تنظیم نشده");return;} handleShare(targetId); }} className="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-bold hover:bg-green-700 shadow-sm whitespace-nowrap">ارسال</button></button>);
-                         })}</div>
-                         <div className="p-2 border-t bg-gray-50"><button onClick={() => { const n = prompt('شناسه یا شماره:'); if(n) handleShare(n); }} className="w-full text-center py-2 text-[10px] text-blue-600 font-black hover:glass-panel rounded border border-blue-100 transition-colors">شماره/شناسه دستی</button></div>
+            {sharePlatform && (
+                 <div className="w-full mt-3 p-1 animate-scale-in origin-top">
+                     <div className="glass-panel rounded-2xl shadow-xl border border-blue-100 overflow-hidden bg-white/70 backdrop-blur-3xl">
+                         <div className="px-4 py-3 border-b bg-blue-50/50 flex justify-between items-center">
+                             <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${sharePlatform === 'telegram' ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`}></div>
+                                <span className="text-xs font-black text-gray-700">ارسال به {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span>
+                             </div>
+                             <button onClick={() => setSharePlatform(null)} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
+                         </div>
+                         <div className="p-3 border-b bg-white/50">
+                            <div className="relative">
+                                <Search className="absolute right-3 top-2.5 text-gray-400" size={14}/>
+                                <input className="w-full text-xs py-2 pr-9 pl-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition-all font-bold" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/>
+                            </div>
+                         </div>
+                         <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                            {filteredContacts.length > 0 ? filteredContacts.map(c => {
+                                let targetId = c.number;
+                                if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
+                                if (sharePlatform === 'bale') targetId = c.baleId || c.number;
+                                return (
+                                    <button 
+                                        key={c.id} 
+                                        onClick={() => { if(!targetId){alert("شناسه تنظیم نشده است");return;} handleShare(targetId); }} 
+                                        className="w-full text-right px-4 py-3 hover:bg-blue-50/50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
+                                    >
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-gray-800">{c.name}</span>
+                                            <span className="text-[9px] text-gray-400 font-mono mt-0.5">{targetId}</span>
+                                        </div>
+                                        <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
+                                            <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1">ارسال <Share2 size={10}/></div>
+                                        </div>
+                                    </button>
+                                );
+                            }) : (
+                                <div className="p-8 text-center text-gray-400 text-[11px] font-bold">مخاطبی یافت نشد.</div>
+                            )}
+                         </div>
+                         <div className="p-3 bg-gray-50/50 border-t">
+                            <button onClick={() => { const n = prompt('شناسه یا شماره مقصد:'); if(n) handleShare(n); }} className="w-full text-center py-2.5 text-[10px] text-blue-600 font-black hover:bg-blue-100/50 rounded-xl border border-blue-200 border-dashed transition-all active:scale-[0.98]">ارسال به شماره یا شناسه‌ی دستی</button>
+                         </div>
                      </div>
-                )}
+                 </div>
+            )}
             </div>
 
         {/* Responsive Wrapper */}

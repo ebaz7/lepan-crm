@@ -1356,9 +1356,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-[#f0f2f5]">
-                        <div className="bg-gray-200 p-4 rounded-full mb-4"><MessageSquare size={48}/></div>
-                        <p>برای شروع گفتگو یک مخاطب را انتخاب کنید</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-gray-50 dark:bg-[#0b141a]/10 relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none flex flex-wrap gap-8 p-10 rotate-[-12deg]">
+                            {Array.from({length: 30}).map((_, i) => (
+                                <MessageSquare key={i} size={40} className={i % 4 === 0 ? 'text-blue-600' : ''} />
+                            ))}
+                        </div>
+                        <div className="relative flex flex-col items-center animate-scale-in">
+                            <div className="w-24 h-24 bg-gradient-to-tr from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                                <MessageSquare size={48} className="text-blue-500/30" />
+                            </div>
+                            <h2 className="text-lg font-black text-gray-700 dark:text-gray-300 mb-2">گفتگوی سازمانی</h2>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold">برای شروع گفتگو، یک مخاطب یا گروه را انتخاب کنید</p>
+                        </div>
                     </div>
                 )}
             </div>

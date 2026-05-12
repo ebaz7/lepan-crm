@@ -13,7 +13,8 @@ import CreateExitPermit from './components/CreateExitPermit';
 import ManageExitPermits from './components/ManageExitPermits'; 
 import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
-import PrintVoucher from './components/PrintVoucher'; 
+import MeetingModule from './components/MeetingModule';
+import PrintVoucher from './components/PrintVoucher';
 import NotificationController from './components/NotificationController'; 
 import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
@@ -532,6 +533,7 @@ function App() {
                 {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
                 {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
                 {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
+                {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
                 {activeTab === 'chat' && (
                     <ChatRoom 
                         currentUser={currentUser} 

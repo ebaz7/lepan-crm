@@ -133,6 +133,10 @@ export interface RolePermissions {
   canApproveSecuritySupervisor?: boolean;
   canViewKnowledgeBase?: boolean;
   canManageKnowledgeBase?: boolean;
+  canViewMeetings?: boolean;
+  canCreateMeeting?: boolean;
+  canApproveMeeting?: boolean;
+  canManageMeetings?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -274,6 +278,13 @@ export interface SystemSettings {
   botBijakGroupId?: string;
   botBijakGroupIdBale?: string;
   botBijakGroupIdWhatsApp?: string;
+  botMeetingAnnouncementGroupId?: string;
+  botMeetingAnnouncementTelegramId?: string;
+  botMeetingAnnouncementBaleId?: string;
+  botMeetingMinutesGroupId?: string;
+  botMeetingMinutesTelegramId?: string;
+  botMeetingMinutesBaleId?: string;
+  botMeetingMinutesNotificationMode?: 'after_approval' | 'immediately';
   botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' | 'all' }[];
   botForceJoinEnabled?: boolean;
@@ -914,4 +925,46 @@ export interface TradeRecord {
     agentData?: AgentData;
     isCommitmentFulfilled?: boolean;
     exchangeRate?: number;
+}
+
+export enum MeetingStatus {
+    DRAFT = 'پیش‌نویس',
+    PENDING_APPROVAL = 'در انتظار تایید',
+    APPROVED = 'تایید شده',
+    REJECTED = 'رد شده'
+}
+
+export interface MeetingAttendee {
+    userId?: string;
+    fullName: string;
+    role: string;
+    isPresent: boolean;
+    isAbsenceAuthorized?: boolean;
+}
+
+export interface MeetingItem {
+    id: string;
+    description: string;
+    responsiblePerson: string;
+    duration: string;
+}
+
+export interface MeetingMinutes {
+    id: string;
+    meetingNumber: string;
+    date: string;
+    time: string;
+    location: string;
+    chairman: string;
+    secretary: string;
+    attendees: MeetingAttendee[];
+    absentees: string[];
+    items: MeetingItem[];
+    status: MeetingStatus;
+    createdAt: number;
+    updatedAt: number;
+    createdBy: string;
+    announcementSent?: boolean;
+    minutesSent?: boolean;
+    approvals?: Record<string, { approved: boolean, date: number, comment?: string }>;
 }

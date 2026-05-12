@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
@@ -46,7 +46,7 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
-  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot'>('system');
+  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
       currentTrackingNumber: 1000, 
       currentExitPermitNumber: 1000, 
@@ -428,6 +428,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                 <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'glass-panel shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
                 <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'glass-panel shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
                 <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
+                <button onClick={() => setActiveCategory('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'meetings' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> صورتجلسات</button>
                 <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
             </nav>
         </div>
@@ -1073,6 +1074,61 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                             </div>
                             
                             <BotManager />
+                        </div>
+                    )}
+
+                    {activeCategory === 'meetings' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <h3 className="font-bold text-gray-800 border-b pb-3 flex items-center gap-2"><ClipboardList size={22} className="text-indigo-600"/> تنظیمات اطلاع‌رسانی جلسات</h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <h4 className="font-bold text-sm text-gray-700 border-r-4 border-blue-500 pr-2">اعلامیه‌ی برگزاری (Announcements)</h4>
+                                    <p className="text-xs text-gray-500 pr-2 leading-relaxed">گروه‌هایی که اعلان برگزاری جلسه به آن‌ها ارسال می‌شود.</p>
+                                    <div className="space-y-4 glass-panel p-5 rounded-2xl border bg-white/50">
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1.5 flex items-center gap-2">
+                                                <Send size={14} /> شناسه تلگرام
+                                            </label>
+                                            <input className="w-full border rounded-xl p-2.5 text-xs dir-ltr font-mono bg-white focus:ring-2 ring-blue-500" value={settings.botMeetingAnnouncementTelegramId || ''} onChange={e => setSettings({...settings, botMeetingAnnouncementTelegramId: e.target.value})} placeholder="-100..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1.5 flex items-center gap-2">
+                                                <MessageCircle size={14} /> شناسه بله
+                                            </label>
+                                            <input className="w-full border rounded-xl p-2.5 text-xs dir-ltr font-mono bg-white focus:ring-2 ring-blue-500" value={settings.botMeetingAnnouncementBaleId || ''} onChange={e => setSettings({...settings, botMeetingAnnouncementBaleId: e.target.value})} placeholder="ID..." />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h4 className="font-bold text-sm text-gray-700 border-r-4 border-emerald-500 pr-2">ارسال فایل صورتجلسه (Final Minutes)</h4>
+                                    <p className="text-xs text-gray-500 pr-2 leading-relaxed">گروه‌هایی که فایل نهایی پس از تایید به آن‌ها ارسال می‌شود (گروه تولید).</p>
+                                    <div className="space-y-4 glass-panel p-5 rounded-2xl border bg-white/50">
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1.5 flex items-center gap-2">
+                                                <Send size={14} /> شناسه تلگرام
+                                            </label>
+                                            <input className="w-full border rounded-xl p-2.5 text-xs dir-ltr font-mono bg-white focus:ring-2 ring-emerald-500" value={settings.botMeetingMinutesTelegramId || ''} onChange={e => setSettings({...settings, botMeetingMinutesTelegramId: e.target.value})} placeholder="-100..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1.5 flex items-center gap-2">
+                                                <MessageCircle size={14} /> شناسه بله
+                                            </label>
+                                            <input className="w-full border rounded-xl p-2.5 text-xs dir-ltr font-mono bg-white focus:ring-2 ring-emerald-500" value={settings.botMeetingMinutesBaleId || ''} onChange={e => setSettings({...settings, botMeetingMinutesBaleId: e.target.value})} placeholder="ID..." />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 md:p-6 mb-6">
+                                <h4 className="font-black text-amber-900 text-sm mb-2">یادآوری مهم:</h4>
+                                <ul className="text-xs text-amber-800 space-y-2 leading-relaxed list-disc pr-4 font-bold">
+                                    <li>شناسه گروه‌های تلگرام معمولاً با <code className="bg-amber-100 px-1 rounded">-100</code> شروع می‌شوند.</li>
+                                    <li>از ربات‌های کمکی می‌توانید برای دریافت شناسه (Chat ID) گروه‌ها استفاده کنید.</li>
+                                    <li>برای ارسال به واتساپ، فعلاً ارسال گروهی بر اساس شناسه گروه واتساپ (JID) انجام می‌شود.</li>
+                                </ul>
+                            </div>
                         </div>
                     )}
 

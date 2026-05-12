@@ -1,5 +1,5 @@
 
-import { PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement } from '../types';
+import { MeetingMinutes, PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement } from '../types';
 import { apiCall } from './apiService';
 
 // Safely return array
@@ -188,6 +188,7 @@ export const getWarehouseTransactions = async (): Promise<WarehouseTransaction[]
 export const saveWarehouseTransaction = async (tx: WarehouseTransaction): Promise<WarehouseTransaction[]> => { return await apiCall<WarehouseTransaction[]>('/warehouse/transactions', 'POST', tx); };
 export const updateWarehouseTransaction = async (tx: WarehouseTransaction): Promise<WarehouseTransaction[]> => { return await apiCall<WarehouseTransaction[]>(`/warehouse/transactions/${tx.id}`, 'PUT', tx); };
 export const deleteWarehouseTransaction = async (id: string): Promise<WarehouseTransaction[]> => { return await apiCall<WarehouseTransaction[]>(`/warehouse/transactions/${id}`, 'DELETE'); };
+
 export const getNextBijakNumber = async (company?: string): Promise<number> => { 
     try { 
         const url = company 
@@ -198,4 +199,39 @@ export const getNextBijakNumber = async (company?: string): Promise<number> => {
     } catch (e) { 
         return 1001; 
     } 
+};
+
+// --- MEETINGS ---
+export const getMeetings = async (): Promise<MeetingMinutes[]> => {
+    const res = await apiCall<MeetingMinutes[]>('/meetings');
+    return safeArray(res);
+};
+
+export const saveMeeting = async (meeting: MeetingMinutes): Promise<MeetingMinutes[]> => {
+    return await apiCall<MeetingMinutes[]>('/meetings', 'POST', meeting);
+};
+
+export const updateMeeting = async (meeting: MeetingMinutes): Promise<MeetingMinutes[]> => {
+    return await apiCall<MeetingMinutes[]>(`/meetings/${meeting.id}`, 'PUT', meeting);
+};
+
+export const deleteMeeting = async (id: string): Promise<MeetingMinutes[]> => {
+    return await apiCall<MeetingMinutes[]>(`/meetings/${id}`, 'DELETE');
+};
+
+export const getNextMeetingNumber = async (): Promise<string> => {
+    try {
+        const response = await apiCall<{ nextNumber: string }>(`/next-meeting-number?t=${Date.now()}`);
+        return response.nextNumber;
+    } catch (e) {
+        return 'M-' + Date.now();
+    }
+};
+
+export const sendMeetingAnnouncement = async (meetingId: string): Promise<{ success: boolean }> => {
+    return await apiCall<{ success: boolean }>(`/meetings/${meetingId}/announce`, 'POST');
+};
+
+export const sendMeetingMinutes = async (meetingId: string): Promise<{ success: boolean }> => {
+    return await apiCall<{ success: boolean }>(`/meetings/${meetingId}/send-minutes`, 'POST');
 };

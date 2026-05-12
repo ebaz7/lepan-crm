@@ -533,14 +533,21 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         permit={viewPermit} 
                         onClose={() => setViewPermit(null)} 
                         settings={settings}
-                        onApprove={isMyTurn(viewPermit) ? () => handleApprove(viewPermit) : undefined}
-                        onReject={isMyTurn(viewPermit) ? async () => {
-                            const reason = prompt('دلیل رد:'); 
-                            if(reason) { 
-                                await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
-                                loadData(); setViewPermit(null); 
-                            } 
-                        } : undefined}
+                        onApprove={
+                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+                            ? () => handleApprove(viewPermit) 
+                            : undefined
+                        }
+                        onReject={
+                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+                            ? async () => {
+                                const reason = prompt('دلیل رد:'); 
+                                if(reason) { 
+                                    await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
+                                    loadData(); setViewPermit(null); 
+                                } 
+                            } : undefined
+                        }
                         onEdit={
                             (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
                             ? () => { setEditPermit(viewPermit); setViewPermit(null); } 

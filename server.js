@@ -13,7 +13,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes } from './backend/bot-core.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -757,6 +757,66 @@ app.delete('/api/security/incidents/:id', (req, res) => {
     db.securityIncidents = db.securityIncidents.filter(i => i.id !== req.params.id); 
     saveDb(db); 
     res.json(db.securityIncidents); 
+});
+
+// 6.5 MEETINGS
+app.get('/api/meetings', (req, res) => {
+    res.json(getDb().meetings || []);
+});
+app.post('/api/meetings', (req, res) => {
+    const db = getDb();
+    if (!db.meetings) db.meetings = [];
+    db.meetings.push(req.body);
+    saveDb(db);
+    res.json(db.meetings);
+});
+app.put('/api/meetings/:id', (req, res) => {
+    const db = getDb();
+    const idx = db.meetings.findIndex(m => m.id === req.params.id);
+    if (idx > -1) {
+        db.meetings[idx] = { ...db.meetings[idx], ...req.body };
+        saveDb(db);
+        res.json(db.meetings);
+    } else res.status(404).send('Not Found');
+});
+app.delete('/api/meetings/:id', (req, res) => {
+    const db = getDb();
+    db.meetings = db.meetings.filter(m => m.id !== req.params.id);
+    saveDb(db);
+    res.json(db.meetings);
+});
+app.get('/api/next-meeting-number', (req, res) => {
+    const db = getDb();
+    const lastNum = db.meetings && db.meetings.length > 0 
+        ? Math.max(...db.meetings.map(m => {
+            const match = m.meetingNumber.match(/\d+/);
+            return match ? parseInt(match[0]) : 0;
+        }))
+        : 100;
+    res.json({ nextNumber: `M-${lastNum + 1}` });
+});
+
+// BOT SENDING ENDPOINTS
+app.post('/api/meetings/:id/announce', async (req, res) => {
+    const db = getDb();
+    const meeting = db.meetings.find(m => m.id === req.params.id);
+    if (meeting) {
+        notifyMeetingAnnouncement(meeting, db).catch(e => console.error("Bot Meeting Announce Error:", e));
+        meeting.announcementSent = true;
+        saveDb(db);
+        res.json({ success: true });
+    } else res.status(404).send('Not Found');
+});
+
+app.post('/api/meetings/:id/send-minutes', async (req, res) => {
+    const db = getDb();
+    const meeting = db.meetings.find(m => m.id === req.params.id);
+    if (meeting) {
+        notifyMeetingMinutes(meeting, db).catch(e => console.error("Bot Meeting Minutes Error:", e));
+        meeting.minutesSent = true;
+        saveDb(db);
+        res.json({ success: true });
+    } else res.status(404).send('Not Found');
 });
 
 // 7. SYSTEM (Settings, Users, Login)
