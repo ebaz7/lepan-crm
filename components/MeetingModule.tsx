@@ -65,29 +65,38 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const handleOpenCreateModal = async () => {
         const nextNum = await getNextMeetingNumber();
         const shamsi = getCurrentShamsiDate();
+        
+        let initialChairman = '';
+        let initialSecretary = '';
+        
+        const initialAttendees = settings?.defaultMeetingAttendeesData?.length 
+            ? settings.defaultMeetingAttendeesData.map(datt => {
+                const user = users.find(x => x.username === datt.username);
+                if (datt.role === 'رئیس جلسه') initialChairman = user?.fullName || datt.username;
+                if (datt.role === 'دبیر جلسه') initialSecretary = user?.fullName || datt.username;
+                
+                return {
+                    username: datt.username,
+                    fullName: user?.fullName || datt.username,
+                    role: datt.role,
+                    isPresent: true
+                };
+            })
+            : [
+                { fullName: 'سیّد احمدر ضا احمدی', role: 'مدیر تولید', isPresent: true },
+                { fullName: 'زینب محمدیان', role: 'سرپرست کاورینگ و کنترل فرآیند', isPresent: true },
+                { fullName: 'رامین شرفی', role: 'سرپرست برق و الکترونیک', isPresent: true },
+                { fullName: 'مهسا کیانی', role: 'کنترل کیفی', isPresent: true }
+            ];
+
         setMeetingForm({
             meetingNumber: nextNum,
             date: `${shamsi.year}-${String(shamsi.month).padStart(2, '0')}-${String(shamsi.day).padStart(2, '0')}`,
             time: '12:00',
             location: 'محل دائمی جلسات کارخانه',
-            chairman: 'سیّد علی احمدی (مدیر کارخانه)',
-            secretary: 'پریسا مرادی(نت)',
-            attendees: settings?.defaultMeetingAttendees?.length 
-                ? settings.defaultMeetingAttendees.map(u => {
-                    const user = users.find(x => x.username === u);
-                    return {
-                        username: u,
-                        fullName: user?.fullName || u,
-                        role: user?.roles?.includes('manager') ? 'سرپرست' : 'کارمند',
-                        isPresent: true
-                    };
-                })
-                : [
-                    { fullName: 'سیّد احمدر ضا احمدی', role: 'مدیر تولید', isPresent: true },
-                    { fullName: 'زینب محمدیان', role: 'سرپرست کاورینگ و کنترل فرآیند', isPresent: true },
-                    { fullName: 'رامین شرفی', role: 'سرپرست برق و الکترونیک', isPresent: true },
-                    { fullName: 'مهسا کیانی', role: 'کنترل کیفی', isPresent: true }
-                ],
+            chairman: initialChairman || 'سیّد علی احمدی (مدیر کارخانه)',
+            secretary: initialSecretary || 'پریسا مرادی(نت)',
+            attendees: initialAttendees,
             guestAttendees: [],
             items: [],
             status: MeetingStatus.DRAFT
@@ -183,20 +192,39 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     };
 
     const sendPvNotificationsOnApproval = async (m: MeetingMinutes) => {
-        const notifiedUsernames = new Set<string>();
+        const notifiedUsernames = new Map<string, string[]>(); // username -> list of mentioned items
+        
         users.forEach(user => {
-            const isMentioned = m.items.some(item => 
-                (item.responsiblePerson || '').includes(user.fullName) || 
-                (item.description || '').includes(user.fullName) ||
-                (item.responsiblePerson || '').includes(user.username) ||
-                (item.description || '').includes(user.username)
-            );
-            if (isMentioned) notifiedUsernames.add(user.username);
+            const mentions: string[] = [];
+            m.items.forEach((item, idx) => {
+                const isMentioned = 
+                    (item.responsiblePerson || '').includes(user.fullName) || 
+                    (item.description || '').includes(user.fullName) ||
+                    (item.responsiblePerson || '').includes(user.username) ||
+                    (item.description || '').includes(user.username);
+                
+                if (isMentioned) {
+                    mentions.push(`بند ${idx + 1}: ${item.description.substring(0, 50)}...`);
+                }
+            });
+            
+            if (mentions.length > 0) {
+                notifiedUsernames.set(user.username, mentions);
+            }
         });
-
-        for (const username of Array.from(notifiedUsernames)) {
+        
+        for (const [username, mentions] of Array.from(notifiedUsernames)) {
             try {
-                await sendMessage({ id: generateUUID(), sender: 'system', senderUsername: 'system', role: 'system', message: `📢 صورتجلسه شماره ${m.meetingNumber} نهایی شد.\nشما به عنوان مسئول اجرا تعیین شده‌اید یا نام شما در مصوبات ذکر شده است.\nجهت مشاهده به بخش صورتجلسات/بایگانی مراجعه کنید.`, recipient: username, timestamp: Date.now() });
+                const mentionText = mentions.join('\n');
+                await sendMessage({ 
+                    id: generateUUID(), 
+                    sender: 'system', 
+                    senderUsername: 'system', 
+                    role: 'system', 
+                    message: `📌 تگ در صورتجلسه شماره ${m.meetingNumber}\n\nباسلام، شما در موارد زیر از صورتجلسه نهایی شده تگ شده‌اید:\n\n${mentionText}\n\nجهت مشاهده جزئیات کامل به سامانه مراجعه کنید.`, 
+                    recipient: username, 
+                    timestamp: Date.now() 
+                });
             } catch (e) { console.error(e); }
         }
     };
@@ -206,7 +234,15 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         for (const signer of requiredSigners) {
             if (!signer.username) continue;
             try {
-                await sendMessage({ id: generateUUID(), sender: 'system', senderUsername: 'system', role: 'system', message: `✍️ یک صورتجلسه در انتظار تایید شماست.\nشماره جلسه: ${m.meetingNumber}\nلطفا جهت بررسی و امضا به کارتابل و بخش صورتجلسات مراجعه فرمایید.`, recipient: signer.username, timestamp: Date.now() });
+                await sendMessage({ 
+                    id: generateUUID(), 
+                    sender: 'system', 
+                    senderUsername: 'system', 
+                    role: 'system', 
+                    message: `✍️ درخواست تایید صورتجلسه\n\nباسلام، صورتجلسه شماره ${m.meetingNumber} در انتظار بررسی و امضای شماست.\n\n📅 تاریخ: ${m.date}\n📍 محل: ${m.location}\n\nلطفا جهت بررسی به کارتابل خود مراجعه فرمایید.`, 
+                    recipient: signer.username, 
+                    timestamp: Date.now() 
+                });
             } catch (e) { console.error(e); }
         }
     };
@@ -623,19 +659,27 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                                 className="w-full p-2 text-right hover:bg-blue-50 dark:hover:bg-blue-900/20 text-[10px] font-bold border-b border-gray-50 dark:border-white/5 last:border-0 truncate"
                                                                 onClick={() => {
                                                                     const newAttendees = [...(meetingForm.attendees || [])];
+                                                                    const userRole = settings?.defaultMeetingAttendeesData?.find(d => d.username === u.username)?.role || u.role || 'عضو حاضر';
+                                                                    
                                                                     newAttendees[idx] = { 
                                                                         fullName: u.fullName, 
-                                                                        role: u.role || 'کاربر سیستم', 
+                                                                        role: userRole, 
                                                                         isPresent: true,
                                                                         username: u.username 
                                                                     };
-                                                                    setMeetingForm({...meetingForm, attendees: newAttendees});
+                                                                    
+                                                                    // Update chairman/secretary if applicable
+                                                                    const updates: Partial<MeetingMinutes> = { attendees: newAttendees };
+                                                                    if (userRole === 'رئیس جلسه') updates.chairman = u.fullName;
+                                                                    if (userRole === 'دبیر جلسه') updates.secretary = u.fullName;
+                                                                    
+                                                                    setMeetingForm(prev => ({...prev, ...updates}));
                                                                     setActiveAttendeeIndex(null);
                                                                 }}
                                                             >
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] text-blue-600 shrink-0">
-                                                                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover rounded-full"/> : u.fullName.charAt(0)}
+                                                                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover rounded-full" alt={u.fullName}/> : u.fullName.charAt(0)}
                                                                     </div>
                                                                     <div className="flex flex-col text-right truncate">
                                                                         <span className="truncate">{u.fullName}</span>
@@ -647,17 +691,39 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     </div>
                                                 )}
                                             </div>
-                                            <input
-                                                type="text"
-                                                placeholder="سمت"
-                                                className="w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-xs font-bold outline-none"
-                                                value={attendee.role}
-                                                onChange={e => {
-                                                    const newAttendees = [...(meetingForm.attendees || [])];
-                                                    newAttendees[idx].role = e.target.value;
-                                                    setMeetingForm({...meetingForm, attendees: newAttendees});
-                                                }}
-                                            />
+                                            
+                                            {settings?.meetingRoles && settings.meetingRoles.length > 0 ? (
+                                                <select
+                                                    className="w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-[10px] font-bold outline-none"
+                                                    value={attendee.role}
+                                                    onChange={e => {
+                                                        const newVal = e.target.value;
+                                                        const newAttendees = [...(meetingForm.attendees || [])];
+                                                        newAttendees[idx].role = newVal;
+                                                        
+                                                        const updates: Partial<MeetingMinutes> = { attendees: newAttendees };
+                                                        if (newVal === 'رئیس جلسه') updates.chairman = attendee.fullName;
+                                                        if (newVal === 'دبیر جلسه') updates.secretary = attendee.fullName;
+                                                        
+                                                        setMeetingForm(prev => ({...prev, ...updates}));
+                                                    }}
+                                                >
+                                                    <option value="">-- سمت --</option>
+                                                    {settings.meetingRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    placeholder="سمت"
+                                                    className="w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-xs font-bold outline-none"
+                                                    value={attendee.role}
+                                                    onChange={e => {
+                                                        const newAttendees = [...(meetingForm.attendees || [])];
+                                                        newAttendees[idx].role = e.target.value;
+                                                        setMeetingForm({...meetingForm, attendees: newAttendees});
+                                                    }}
+                                                />
+                                            )}
                                             <button onClick={() => {
                                                 const newAttendees = [...(meetingForm.attendees || [])];
                                                 newAttendees[idx].isPresent = !newAttendees[idx].isPresent;

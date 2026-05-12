@@ -1079,43 +1079,139 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
 
                     {activeCategory === 'meetings' && (
                         <div className="space-y-6 animate-fade-in">
-                            <h3 className="font-bold text-gray-800 border-b pb-3 flex items-center gap-2"><ClipboardList size={22} className="text-indigo-600"/> تنظیمات اطلاع‌رسانی جلسات</h3>
+                            <h3 className="font-bold text-gray-800 border-b pb-3 flex items-center gap-2"><ClipboardList size={22} className="text-indigo-600"/> تنظیمات صورتجلسات تولید</h3>
                             
+                            {/* Meeting Roles Management */}
                             <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 mb-6">
-                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b pb-2 mb-4">لیست افراد ثابت در صورتجلسات</h4>
-                                <div className="space-y-3">
-                                    <div className="flex gap-2">
-                                        <select className="border rounded-xl p-2.5 text-xs bg-white focus:ring-2 flex-1 outline-none" id="newDefaultAttendee">
-                                            <option value="">-- انتخاب کاربر --</option>
-                                            {systemUsers.filter(u => !(settings.defaultMeetingAttendees || []).includes(u.username)).map(u => (
-                                                <option key={u.username} value={u.username}>{u.fullName}</option>
-                                            ))}
-                                        </select>
-                                        <button onClick={() => {
-                                            const sel = document.getElementById('newDefaultAttendee') as HTMLSelectElement;
-                                            if (sel && sel.value) {
-                                                const att = settings.defaultMeetingAttendees || [];
-                                                if (!att.includes(sel.value)) {
-                                                    setSettings({...settings, defaultMeetingAttendees: [...att, sel.value]});
-                                                    sel.value = '';
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b pb-2 mb-4 flex items-center gap-2"><Users size={18} className="text-blue-500"/> مدیریت سمت‌های جلسات</h4>
+                                <div className="flex gap-2 mb-4">
+                                    <input 
+                                        type="text" 
+                                        id="newMeetingRole"
+                                        placeholder="مثلاً: رئیس جلسه، دبیر جلسه، مدیر تولید..."
+                                        className="flex-1 border rounded-xl p-2.5 text-xs bg-white focus:ring-2 outline-none"
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const input = e.currentTarget;
+                                                const role = input.value.trim();
+                                                if (role && !(settings.meetingRoles || []).includes(role)) {
+                                                    setSettings({...settings, meetingRoles: [...(settings.meetingRoles || []), role]});
+                                                    input.value = '';
                                                 }
                                             }
-                                        }} className="bg-blue-600 text-white px-4 rounded-xl text-xs font-bold hover:bg-blue-700">افزودن</button>
+                                        }}
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            const input = document.getElementById('newMeetingRole') as HTMLInputElement;
+                                            const role = input?.value.trim();
+                                            if (role && !(settings.meetingRoles || []).includes(role)) {
+                                                setSettings({...settings, meetingRoles: [...(settings.meetingRoles || []), role]});
+                                                input.value = '';
+                                            }
+                                        }}
+                                        className="bg-indigo-600 text-white px-4 rounded-xl text-xs font-bold hover:bg-indigo-700"
+                                    >افزودن سمت</button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {(settings.meetingRoles || ['رئیس جلسه', 'دبیر جلسه', 'عضو حاضر']).map(role => (
+                                        <div key={role} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                                            <span>{role}</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    setSettings({...settings, meetingRoles: (settings.meetingRoles || []).filter(r => r !== role)});
+                                                }} 
+                                                className="text-gray-400 hover:text-red-500"
+                                            ><X size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-2">💡 سمت "رئیس جلسه" به طور خودکار به عنوان رئیس در سربرگ قرار می‌گیرد.</p>
+                            </div>
+
+                            <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 mb-6">
+                                <h4 className="font-bold text-sm text-gray-700 dark:text-gray-200 border-b pb-2 mb-4">لیست افراد ثابت و سمت پیش‌فرض</h4>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">انتخاب کاربر</label>
+                                            <select className="w-full border rounded-xl p-2.5 text-xs bg-white focus:ring-2 outline-none" id="newDefaultAttendee">
+                                                <option value="">-- انتخاب --</option>
+                                                {systemUsers.map(u => (
+                                                    <option key={u.username} value={u.username}>{u.fullName}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">انتخاب سمت پیش‌فرض</label>
+                                            <select className="w-full border rounded-xl p-2.5 text-xs bg-white focus:ring-2 outline-none" id="newDefaultAttendeeRole">
+                                                <option value="">-- سمت --</option>
+                                                {(settings.meetingRoles || ['رئیس جلسه', 'دبیر جلسه', 'عضو حاضر']).map(role => (
+                                                    <option key={role} value={role}>{role}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-end">
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    const selUser = document.getElementById('newDefaultAttendee') as HTMLSelectElement;
+                                                    const selRole = document.getElementById('newDefaultAttendeeRole') as HTMLSelectElement;
+                                                    if (selUser.value && selRole.value) {
+                                                        const current = settings.defaultMeetingAttendeesData || [];
+                                                        // Update if exists, else add
+                                                        const exists = current.find(a => a.username === selUser.value);
+                                                        let updated;
+                                                        if (exists) {
+                                                            updated = current.map(a => a.username === selUser.value ? { ...a, role: selRole.value } : a);
+                                                        } else {
+                                                            updated = [...current, { username: selUser.value, role: selRole.value }];
+                                                        }
+                                                        setSettings({...settings, defaultMeetingAttendeesData: updated});
+                                                        selUser.value = '';
+                                                        selRole.value = '';
+                                                    } else {
+                                                        alert("لطفاً هم کاربر و هم سمت را انتخاب کنید.");
+                                                    }
+                                                }} 
+                                                className="bg-blue-600 text-white px-6 h-10 rounded-xl text-xs font-bold hover:bg-blue-700 w-full"
+                                            >افزودن به لیست ثابت</button>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {settings.defaultMeetingAttendees?.length === 0 && <span className="text-xs text-gray-400">هیچ کاربری انتخاب نشده است</span>}
-                                        {(settings.defaultMeetingAttendees || []).map(username => {
-                                            const user = systemUsers.find(u => u.username === username);
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {settings.defaultMeetingAttendeesData?.map(att => {
+                                            const user = systemUsers.find(u => u.username === att.username);
                                             return (
-                                                <div key={username} className="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                                                    <span>{user?.fullName || username}</span>
-                                                    <button onClick={() => {
-                                                        setSettings({...settings, defaultMeetingAttendees: (settings.defaultMeetingAttendees || []).filter(u => u !== username)});
-                                                    }} className="text-blue-400 hover:text-red-500"><X size={14} /></button>
+                                                <div key={att.username} className="flex items-center justify-between p-3 glass-panel border rounded-xl shadow-sm hover:border-blue-300 transition-all group">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                                                            {user?.fullName.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-800">{user?.fullName || att.username}</div>
+                                                            <div className="text-[10px] text-blue-600 font-bold">{att.role}</div>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSettings({...settings, defaultMeetingAttendeesData: settings.defaultMeetingAttendeesData?.filter(a => a.username !== att.username)});
+                                                        }} 
+                                                        className="p-1 px-2 text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
                                                 </div>
                                             );
                                         })}
                                     </div>
+                                    {(!settings.defaultMeetingAttendeesData || settings.defaultMeetingAttendeesData.length === 0) && (
+                                        <div className="text-center py-6 text-gray-400 text-xs italic">لیست افراد ثابت خالی است.</div>
+                                    )}
                                 </div>
                             </div>
                             
