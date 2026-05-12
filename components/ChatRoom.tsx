@@ -1036,11 +1036,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
 
     return (
-        <div className="flex h-full bg-white dark:bg-[#1c1c1e] md:bg-gray-100/30 text-gray-800 dark:text-gray-200 md:p-2 lg:p-4 font-sans no-print min-h-0 relative">
-            <div className="flex-1 flex bg-white dark:bg-[#1c1c1e] md:rounded-2xl overflow-hidden md:shadow-xl md:border border-gray-200/50 dark:border-white/5 relative h-full">
+        <div className="flex h-full w-full bg-white dark:bg-[#1c1c1e] md:bg-gray-100/30 text-gray-800 dark:text-gray-200 md:p-2 lg:p-4 font-sans no-print min-h-0 relative overflow-hidden">
+            <div className="flex-1 flex bg-white dark:bg-[#1c1c1e] md:rounded-2xl overflow-hidden md:shadow-xl md:border border-gray-200/50 dark:border-white/5 relative h-full w-full">
                 
                 {/* --- LIST SIDEBAR --- */}
-                <div className={`w-full md:w-85 lg:w-96 border-l border-gray-100 dark:border-white/5 flex flex-col transition-all z-20 h-full ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full md:w-80 lg:w-96 border-l border-gray-100 dark:border-white/5 flex flex-col transition-all z-20 h-full bg-white dark:bg-[#1c1c1e] ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-3 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <div className="flex justify-between items-center mb-3">
@@ -1096,7 +1096,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             </div>
 
             {/* --- CHAT AREA --- */}
-            <div className={`absolute md:relative inset-0 h-full md:flex-1 bg-[#f0f2f5] dark:bg-[#0b141a] z-[100] md:z-10 transition-transform duration-300 ease-out flex flex-col ${activeChannel ? 'translate-x-0' : (document.documentElement.dir === 'rtl' ? '-translate-x-full md:translate-x-0' : 'translate-x-full md:translate-x-0')} md:flex`}>
+            <div className={`absolute md:relative inset-0 h-full md:flex-1 bg-white dark:bg-[#0b141a] md:bg-[#f0f2f5] z-50 md:z-10 transition-transform duration-300 ease-in-out flex flex-col ${activeChannel ? 'translate-x-0' : (document.documentElement.dir === 'rtl' ? '-translate-x-full md:translate-x-0 invisible md:visible' : 'translate-x-full md:translate-x-0 invisible md:visible')} md:flex`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
