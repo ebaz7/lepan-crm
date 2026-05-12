@@ -2318,7 +2318,16 @@ export const notifyMeetingAnnouncement = async (meeting, db) => {
     const s = db.settings;
     if (!s) return;
 
-    const message = `✨️ اعلان برگزاری جلسه؛ \n\n⚜️ با عرض سلام و احترام، \n\nجلسه تولید روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در محل دائمی جلسات کارخانه، برگزار خواهد شد.\n\nرئیس جلسه؛ \n${meeting.chairman || 'سیّد علی احمدی (مدیر کارخانه)'} \nدبیر جلسه\n${meeting.secretary || 'پریسا مرادی(نت)'}\n\n 🔆 اعضای اصلی ؛\n${meeting.attendees.map(a => `${a.fullName} (${a.role})`).join('\n')}`;
+    const users = db.users || [];
+    const getAttendeeEntry = (attendee) => {
+        const user = users.find(u => u.fullName === attendee.fullName);
+        if (user) {
+            return `[${attendee.fullName}](uid:${user.id})`;
+        }
+        return `${attendee.fullName} (${attendee.role})`;
+    };
+
+    const message = `✨️ اعلان برگزاری جلسه؛ \n\n⚜️ با عرض سلام و احترام، \n\nجلسه تولید روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در ${meeting.location || 'محل دائمی جلسات کارخانه'}، برگزار خواهد شد.\n\nرئیس جلسه؛ \n${meeting.chairman || 'سیّد علی احمدی (مدیر کارخانه)'} \nدبیر جلسه\n${meeting.secretary || 'پریسا مرادی(نت)'}\n\n 🔆 اعضای اصلی ؛\n${meeting.attendees.map(a => getAttendeeEntry(a)).join('\n')}`;
 
     let announcementImg = null;
     try {

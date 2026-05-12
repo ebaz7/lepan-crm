@@ -18,7 +18,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'draft'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'draft' | 'archive'>('all');
     
     const [showModal, setShowModal] = useState(false);
     const [editingMeeting, setEditingMeeting] = useState<MeetingMinutes | null>(null);
@@ -213,11 +213,13 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         const matchesSearch = 
             m.meetingNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
             m.chairman.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            m.date.includes(searchTerm);
+            m.date.includes(searchTerm) ||
+            m.items.some(item => item.description.toLowerCase().includes(searchTerm.toLowerCase()));
         
         if (activeTab === 'all') return matchesSearch;
         if (activeTab === 'pending') return matchesSearch && m.status === MeetingStatus.PENDING_APPROVAL;
         if (activeTab === 'draft') return matchesSearch && m.status === MeetingStatus.DRAFT;
+        if (activeTab === 'archive') return matchesSearch && m.status === MeetingStatus.APPROVED;
         return matchesSearch;
     }).sort((a, b) => b.createdAt - a.createdAt);
 
@@ -283,6 +285,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                     <button onClick={() => setActiveTab('all')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'all' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>همه جلسات</button>
                     <button onClick={() => setActiveTab('pending')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'pending' ? 'bg-white dark:bg-gray-800 text-amber-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>در انتظار تایید</button>
                     <button onClick={() => setActiveTab('draft')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'draft' ? 'bg-white dark:bg-gray-800 text-gray-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>پیش‌نویس</button>
+                    <button onClick={() => setActiveTab('archive')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'archive' ? 'bg-white dark:bg-gray-800 text-emerald-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>بایگانی</button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
