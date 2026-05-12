@@ -79,9 +79,9 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
                     <td className="p-3 text-gray-500 font-mono">{idx + 1}</td>
                     <td className="p-3"><input className="w-full border rounded-lg p-2 text-sm font-bold" value={item.goodsName} onChange={e => handleUpdateItem(idx, 'goodsName', e.target.value)} placeholder="نام کالا"/></td>
                     <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.cartonCount}</td>
-                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredCartonCount} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', Number(e.target.value))}/></td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredCartonCount || ''} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', e.target.value === '' ? 0 : Number(e.target.value))}/></td>
                     <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.weight}</td>
-                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredWeight} onChange={e => handleUpdateItem(idx, 'deliveredWeight', Number(e.target.value))}/></td>
+                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredWeight || ''} onChange={e => handleUpdateItem(idx, 'deliveredWeight', e.target.value === '' ? 0 : Number(e.target.value))}/></td>
                     <td className="p-3 text-center"><button onClick={() => handleRemoveItem(idx)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={18}/></button></td>
                   </tr>
                 ))}

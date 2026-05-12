@@ -78,8 +78,8 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
                                         {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                                     </select>
                                     <div className="flex gap-2 w-full md:w-auto">
-                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="تعداد" type="number" value={item.quantity} onChange={e => handleItemChange(idx, 'quantity', Number(e.target.value))} />
-                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="وزن" type="number" value={item.weight} onChange={e => handleItemChange(idx, 'weight', Number(e.target.value))} />
+                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="تعداد" type="number" value={item.quantity || ''} onChange={e => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))} />
+                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="وزن" type="number" value={item.weight || ''} onChange={e => handleItemChange(idx, 'weight', e.target.value === '' ? 0 : Number(e.target.value))} />
                                         <button onClick={() => removeItem(idx)} className="text-red-500 p-2 bg-red-50 rounded"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
@@ -822,11 +822,11 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                         <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
-                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity || ''} onChange={e=>updateTxItem(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}/>
                                             </div>
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">وزن (KG)</label>
-                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight || ''} onChange={e=>updateTxItem(idx, 'weight', e.target.value === '' ? 0 : Number(e.target.value))}/>
                                             </div>
                                         </div>
                                         <div className="w-full md:w-44 space-y-1.5 flex flex-col">
@@ -924,11 +924,11 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                         <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
-                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity} onChange={e=>updateTxItem(idx, 'quantity', e.target.value)}/>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity || ''} onChange={e=>updateTxItem(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}/>
                                             </div>
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">وزن (KG)</label>
-                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight} onChange={e=>updateTxItem(idx, 'weight', e.target.value)}/>
+                                                <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.weight || ''} onChange={e=>updateTxItem(idx, 'weight', e.target.value === '' ? 0 : Number(e.target.value))}/>
                                             </div>
                                         </div>
                                         <div className="w-full md:w-44 space-y-1.5 flex flex-col">

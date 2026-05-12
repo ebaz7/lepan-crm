@@ -227,11 +227,11 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
-                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.cartonCount} onChange={e => { const n = [...items]; n[idx].cartonCount = +e.target.value; setItems(n); }} />
+                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.cartonCount || ''} onChange={e => { const n = [...items]; n[idx].cartonCount = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
                                 <div className="w-full md:w-32">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">وزن تقریبی (KG)</label>
-                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight} onChange={e => { const n = [...items]; n[idx].weight = +e.target.value; setItems(n); }} />
+                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight || ''} onChange={e => { const n = [...items]; n[idx].weight = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
                                 {items.length > 1 && (
                                     <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="bg-red-100 text-red-500 p-2.5 rounded-lg hover:bg-red-200 transition-colors">
