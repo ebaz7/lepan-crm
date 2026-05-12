@@ -1044,7 +1044,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* --- CHAT AREA --- */}
             {/* Using fixed positioning on mobile to ensure it covers only the chat view space and respects layout header */}
-            <div className={`fixed md:absolute inset-0 h-full md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:flex'}`}>
+            <div className={`fixed md:absolute inset-0 h-full md:static md:flex-1 bg-[#8e98a3] z-[100] md:z-30 transition-transform duration-300 flex flex-col ${activeChannel ? 'translate-x-0 md:flex' : 'translate-x-full md:translate-x-0 md:flex'}`}>
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}

@@ -635,7 +635,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         </header>
         
         <div className={`flex-1 overflow-y-auto bg-transparent ${activeTab === 'dashboard' ? 'pb-[calc(140px+env(safe-area-inset-bottom))]' : 'pb-[env(safe-area-inset-bottom)]'} md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''} custom-scrollbar`} id="main-scroll-container">
-                    <div className="hidden md:flex justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 z-10 shadow-sm no-print items-center glass-header">
+                    <div className="hidden md:flex justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 z-40 shadow-sm no-print items-center glass-header">
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (
                     <select 

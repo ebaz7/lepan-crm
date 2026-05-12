@@ -775,8 +775,16 @@ app.put('/api/meetings/:id', (req, res) => {
     const db = getDb();
     const idx = db.meetings.findIndex(m => m.id === req.params.id);
     if (idx > -1) {
-        db.meetings[idx] = { ...db.meetings[idx], ...req.body };
+        const oldMeeting = db.meetings[idx];
+        db.meetings[idx] = { ...oldMeeting, ...req.body };
         saveDb(db);
+        
+        // AUTO-NOTIFICATION: If status becomes 'تایید شده' for the first time
+        if (oldMeeting.status !== 'تایید شده' && db.meetings[idx].status === 'تایید شده' && !db.meetings[idx].minutesSent) {
+            notifyMeetingMinutes(db.meetings[idx], db).catch(e => console.error("Bot Meeting Auto-Minutes Error:", e));
+            db.meetings[idx].minutesSent = true;
+            saveDb(db);
+        }
         res.json(db.meetings);
     } else res.status(404).send('Not Found');
 });
