@@ -137,7 +137,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             return;
         }
 
-        if (!confirm(`آیا مطمئن هستید؟ (${getActionLabel(p.status)})`)) return;
+        const actionLabel = getActionLabel(p.status);
+        if (!confirm(`آیا از ${actionLabel} اطمینان دارید؟`)) return;
 
         setProcessingId(p.id);
         
@@ -146,16 +147,22 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) nextStatus = ExitPermitStatus.EXITED;
+            else nextStatus = p.status; // Fallback
 
             const updatedPermit = { ...p, status: nextStatus };
+            let extraUpdateData: any = {};
+
             if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) {
                 updatedPermit.approverFactoryFinal = currentUser.fullName;
                 updatedPermit.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                extraUpdateData.exitTime = updatedPermit.exitTime;
             }
 
-            await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: updatedPermit.exitTime });
+            await updateExitPermitStatus(p.id, nextStatus, currentUser, extraUpdateData);
+            
+            // Notification queue
             setActiveAutoSends(prev => [...prev, updatedPermit]);
             
             setTimeout(async () => {
@@ -271,7 +278,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
             }
 
-            // Add Group 2 if Factory Approved, Warehouse Approved, or Factory Final Approved
+            // Add Group 2 if Factory Approved, Warehouse Approved, FACTORY FINAL APPROVED
             if (isFactoryApproved || isWarehouseApproved || isFactoryFinalApproved) {
                 if (g2WA) targets.push({ group: g2WA });
                 if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
@@ -289,9 +296,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
                 targets.push({ role: UserRole.SECURITY_HEAD });
             } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
-                captionTitle = '🚨 ثبت اطلاعات خودرو در انتظامات - در انتظار تایید نهایی خروج';
+                captionTitle = '🚨 ثبت اطلاعات خودرو - در انتظار تایید نهایی خروج';
+                targets.push({ role: UserRole.FACTORY_MANAGER }); // Factory manager needs to see this
             } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL) {
-                captionTitle = '👋 خروج نهایی از کارخانه (تایید مدیر کارخانه)';
+                captionTitle = '👋 خروج نهایی بار از کارخانه';
             }
 
             let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n`;
@@ -299,9 +307,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             caption += `👤 گیرنده: ${permit.recipientName}\n`;
             caption += `📦 کالا: ${permit.goodsName}\n`;
             
-            // Price info: Only for managers and ONLY for CEO/Factory approvals, not shared in generic bot message for groups ?
-            // User requested: "اون تو بات و گروه ها ارسال نشه و فقط مدیران بتونن ببین مدیر فروش و مدیر عامل بتونن ببینن"
-            // So we skip price in group captions.
+            // NOTE: price is omitted here as per user request to hide it in bot/groups.
             
             if (permit.plateNumber) {
                 // Format: 11A11111 -> 11 A 111 11
@@ -482,7 +488,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
              {activeAutoSends.map(p => (
                 <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-autosend-${p.id}`}>
-                        <PrintExitPermit permit={p} onClose={()=>{}} embed />
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} />
                     </div>
                 </div>
             ))}
@@ -545,6 +551,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         permit={viewPermit} 
                         onClose={() => setViewPermit(null)} 
                         settings={settings}
+                        showPrice={currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === UserRole.ADMIN}
                         onApprove={
                             (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
                             ? () => handleApprove(viewPermit) 

@@ -147,10 +147,101 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [showPrintStockReport, setShowPrintStockReport] = useState(false); 
 
     // Auto Send on Approval/Edit/Delete
+    const [activeAutoSends, setActiveAutoSends] = useState<{tx: WarehouseTransaction, type: 'CREATED' | 'APPROVED' | 'EDITED' | 'DELETED'}[]>([]);
     const [createdTxForAutoSend, setCreatedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [approvedTxForAutoSend, setApprovedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [editedBijakForAutoSend, setEditedBijakForAutoSend] = useState<WarehouseTransaction | null>(null);
     const [deletedTxForAutoSend, setDeletedTxForAutoSend] = useState<WarehouseTransaction | null>(null);
+
+    // Effect to process the queue
+    useEffect(() => {
+        const processQueue = async () => {
+            if (activeAutoSends.length === 0) return;
+            
+            const next = activeAutoSends[0];
+            const { tx, type } = next;
+
+            // Set the appropriate state for the hidden printer to render
+            if (type === 'CREATED') setCreatedTxForAutoSend(tx);
+            if (type === 'APPROVED') setApprovedTxForAutoSend(tx);
+            if (type === 'EDITED') setEditedBijakForAutoSend(tx);
+            if (type === 'DELETED') setDeletedTxForAutoSend(tx);
+
+            // Wait for DOM to render the hidden printer
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            try {
+                const users = await getUsers();
+                const companyConfig = settings?.companyNotifications?.[tx.company];
+                
+                if (type === 'CREATED') {
+                    const element = document.getElementById(`print-bijak-created-${tx.id}-price`);
+                    if (element) {
+                        const ceos = users.filter((u: any) => u.role === UserRole.CEO && (u.phoneNumber || u.telegramId));
+                        if (ceos.length > 0) {
+                            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
+                            const base64 = canvas.toDataURL('image/png').split(',')[1];
+                            const mediaData = { data: base64, mimeType: 'image/png', filename: `Bijak_Pending_${tx.number}.png` };
+                            
+                            let caption = `🔔 *درخواست بیجک جدید (در انتظار تایید)*\n`;
+                            caption += `شماره: ${tx.number}\n`;
+                            caption += `شرکت: ${tx.company}\n`;
+                            caption += `گیرنده: ${tx.recipientName}\n`;
+                            caption += `توسط: ${tx.createdBy}\n\n`;
+                            caption += `لطفا جهت تایید بررسی نمایید.`;
+
+                            for (const ceo of ceos) {
+                                if (ceo.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData });
+                                const chatId = (ceo as any).telegramId || (ceo as any).telegramChatId;
+                                if (chatId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId, caption, mediaData });
+                            }
+                        }
+                    }
+                } else if (type === 'APPROVED') {
+                    const managerElement = document.getElementById(`print-bijak-${tx.id}-price`);
+                    const warehouseElement = document.getElementById(`print-bijak-${tx.id}-noprice`);
+                    
+                    const managerNumber = companyConfig?.salesManager;
+                    const groupNumber = companyConfig?.warehouseGroup;
+
+                    let caption = `✅ *بیجک تایید شد*\n`;
+                    caption += `🔢 شماره: ${tx.number}\n`;
+                    caption += `👤 گیرنده: ${tx.recipientName}\n`;
+                    caption += `📑 شرکت: ${tx.company}\n`;
+                    caption += `🚛 راننده: ${tx.driverName || '---'}\n`;
+                    caption += `🏁 مقصد: ${tx.destination || '---'}\n`;
+                    caption += `👤 تایید توسط: ${tx.approvedBy}\n`;
+
+                    if (managerNumber && managerElement) {
+                        const canvas = await html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
+                        const base64 = canvas.toDataURL('image/png').split(',')[1];
+                        await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${tx.number}.png` } });
+                    }
+
+                    if (warehouseElement) {
+                        const canvas = await html2canvas(warehouseElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
+                        const base64 = canvas.toDataURL('image/png').split(',')[1];
+                        const mediaData = { data: base64, filename: `Bijak_${tx.number}.png` };
+                        
+                        if (groupNumber) await apiCall('/send-whatsapp', 'POST', { number: groupNumber, message: caption, mediaData: { ...mediaData, mimeType: 'image/png' } });
+                        if (companyConfig?.telegramChannelId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: companyConfig.telegramChannelId, caption, mediaData });
+                        if (companyConfig?.baleChannelId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: companyConfig.baleChannelId, caption, mediaData });
+                    }
+                }
+            } catch (e) {
+                console.error("AutoSend Error:", e);
+            }
+
+            // Cleanup and move to next
+            setCreatedTxForAutoSend(null);
+            setApprovedTxForAutoSend(null);
+            setEditedBijakForAutoSend(null);
+            setDeletedTxForAutoSend(null);
+            setActiveAutoSends(prev => prev.slice(1));
+        };
+
+        processQueue();
+    }, [activeAutoSends, settings]);
 
     useEffect(() => { loadData(); }, [financialYear]);
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
@@ -269,6 +360,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             await loadData();
             if(type === 'OUT') {
                 updateNextBijak();
+                setActiveAutoSends(prev => [...prev, { tx, type: 'CREATED' }]);
                 alert('بیجک ثبت شد و جهت تایید به مدیریت ارسال گردید.');
                 setRecipientName(''); setDriverName(''); setPlateNumber(''); setDestination('');
             } else {
@@ -287,8 +379,12 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             const updatedTx = { ...tx, status: 'APPROVED' as const, approvedBy: currentUser.fullName };
             await updateWarehouseTransaction(updatedTx);
             loadData();
+            
+            // Add to notification queue
+            setActiveAutoSends(prev => [...prev, { tx: updatedTx, type: 'APPROVED' }]);
+            
             setViewBijak(null);
-            alert("تایید و ارسال شد.");
+            alert("تایید و در صف ارسال قرار گرفت.");
         } catch (e) { alert("خطا در عملیات تایید"); }
     };
 
