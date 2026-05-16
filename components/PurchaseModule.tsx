@@ -155,7 +155,8 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                     <PartsTab 
                         parts={parts} 
                         currentUser={currentUser} 
-                        onPartUpdate={loadParts} 
+                        onPartUpdate={loadParts}
+                        settings={settings}
                     />
                 )}
                 {activeTab === 'KARDEX' && (
@@ -722,7 +723,7 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
 };
 
 // --- PARTS TAB ---
-const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
+const PartsTab = ({ parts, currentUser, onPartUpdate, settings }: any) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [showDataSheet, setShowDataSheet] = useState<PartMasterData | null>(null);
@@ -730,6 +731,12 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
+    };
 
     const filtered = parts.filter((p: PartMasterData) => 
         p.name.includes(searchTerm) || 
@@ -788,7 +795,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                     <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی کالا، گروه یا زیرگروه..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setSelectedCategory(null); setSelectedSubCategory(null); }} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
-                {(currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) && (
+                {hasPurchasePerm('canManageWarehouse') && (
                     <div className="flex gap-2 w-full md:w-auto">
                         <label className="bg-green-600 text-white p-3 rounded-xl shadow-lg shadow-green-100 flex justify-center items-center gap-2 font-bold text-sm cursor-pointer hover:bg-green-700 transition">
                             <UploadCloud size={20}/> اکسل
@@ -798,8 +805,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                             <Plus size={20}/> تعریف جدید
                         </button>
                     </div>
-                )}
-            </div>
+                )}            </div>
 
             {!searchTerm && selectedCategory && (
                  <div className="flex items-center gap-2 text-sm font-bold text-gray-600 bg-gray-100 p-3 rounded-xl shadow-inner">
@@ -907,8 +913,12 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                             {p.pdfAttachment && (
                                                 <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
                                             )}
-                                            <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
-                                            <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                            {hasPurchasePerm('canManageWarehouse') && (
+                                                <>
+                                                    <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                                    <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -945,8 +955,12 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                         {p.pdfAttachment && (
                                             <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
                                         )}
-                                        <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
-                                        <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                        {hasPurchasePerm('canManageWarehouse') && (
+                                            <>
+                                                <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                                <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
