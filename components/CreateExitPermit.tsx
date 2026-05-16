@@ -21,6 +21,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [items, setItems] = useState<ExitPermitItem[]>([{ id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }]);
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
+    const [price, setPrice] = useState(0);
     
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
@@ -109,6 +110,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
+                price: price,
                 status: ExitPermitStatus.PENDING_CEO,
                 createdAt: Date.now()
             };
@@ -261,9 +263,15 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative">
                          <div className="absolute -top-3 right-4 glass-panel px-3 py-1 text-sm font-bold text-gray-500 border rounded-lg shadow-sm flex items-center gap-2">
-                            <Truck size={16}/> حمل و نقل (اختیاری)
+                            <Truck size={16}/> حمل و نقل و مالی (بخش مدیریت)
                         </div>
                         <div className="space-y-3 mt-2">
+                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                                <div>
+                                    <label className="text-xs font-bold block mb-1">فی / قیمت (جهت اطلاع مدیران)</label>
+                                    <input type="number" className="w-full border rounded-xl p-2 text-sm glass-panel font-bold text-blue-600" placeholder="مبلغ واحد..." value={price || ''} onChange={e => setPrice(+e.target.value)} />
+                                </div>
+                            )}
                             <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-xl p-2 text-sm glass-panel" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
                             <div><label className="text-xs font-bold block mb-1">پلاک خودرو</label><input className="w-full border rounded-xl p-2 text-sm glass-panel dir-ltr text-center font-mono font-bold tracking-widest" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
                             <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm glass-panel h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>

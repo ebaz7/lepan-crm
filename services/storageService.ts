@@ -235,3 +235,55 @@ export const sendMeetingAnnouncement = async (meetingId: string): Promise<{ succ
 export const sendMeetingMinutes = async (meetingId: string): Promise<{ success: boolean }> => {
     return await apiCall<{ success: boolean }>(`/meetings/${meetingId}/send-minutes`, 'POST');
 };
+
+// --- PURCHASE REQUESTS ---
+import { PurchaseRequest, PurchaseRequestStatus, PartMasterData, PartKardex } from '../types';
+
+export const getPurchaseRequests = async (): Promise<PurchaseRequest[]> => {
+    const res = await apiCall<PurchaseRequest[]>('/purchase-requests');
+    return safeArray(res);
+};
+
+export const savePurchaseRequest = async (req: PurchaseRequest): Promise<PurchaseRequest[]> => {
+    return await apiCall<PurchaseRequest[]>('/purchase-requests', 'POST', req);
+};
+
+export const updatePurchaseRequest = async (req: PurchaseRequest): Promise<PurchaseRequest[]> => {
+    return await apiCall<PurchaseRequest[]>(`/purchase-requests/${req.id}`, 'PUT', req);
+};
+
+export const deletePurchaseRequest = async (id: string): Promise<PurchaseRequest[]> => {
+    return await apiCall<PurchaseRequest[]>(`/purchase-requests/${id}`, 'DELETE');
+};
+
+export const getNextPurchaseRequestNumber = async (): Promise<string> => {
+    try {
+        const response = await apiCall<{ nextNumber: string }>('/next-purchase-request-number');
+        return response.nextNumber;
+    } catch (e) {
+        return 'PR-' + Date.now();
+    }
+};
+
+// --- PART MASTER DATA & KARDEX ---
+export const getPartMasterData = async (): Promise<PartMasterData[]> => {
+    const res = await apiCall<PartMasterData[]>('/part-master-data');
+    return safeArray(res);
+};
+
+export const savePartMasterData = async (part: PartMasterData): Promise<PartMasterData[]> => {
+    return await apiCall<PartMasterData[]>('/part-master-data', 'POST', part);
+};
+
+export const updatePartMasterData = async (part: PartMasterData): Promise<PartMasterData[]> => {
+    return await apiCall<PartMasterData[]>(`/part-master-data/${part.id}`, 'PUT', part);
+};
+
+export const deletePartMasterData = async (id: string): Promise<PartMasterData[]> => {
+    return await apiCall<PartMasterData[]>(`/part-master-data/${id}`, 'DELETE');
+};
+
+export const getPartKardex = async (partId: string): Promise<PartKardex[]> => {
+    const res = await apiCall<PartKardex[]>(`/part-kardex/${partId}`);
+    return safeArray(res);
+};

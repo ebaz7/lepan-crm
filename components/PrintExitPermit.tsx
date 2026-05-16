@@ -17,6 +17,7 @@ interface Props {
   settings?: SystemSettings;
   embed?: boolean; 
   watermark?: 'DELETED' | 'EDITED' | null; 
+  showPrice?: boolean;
 }
 
 export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark }: Props) {
@@ -212,7 +213,13 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
                 <div className="flex flex-col"><h1 className="text-3xl font-black mb-1">مجوز خروج کالا از کارخانه</h1><p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                <div className="text-left space-y-2"><div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div><div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div></div>
+                <div className="text-left space-y-2">
+                    <div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div>
+                    <div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div>
+                    {showPrice && permit.price ? (
+                        <div className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">فی: {formatCurrency(permit.price)} ریال</div>
+                    ) : null}
+                </div>
             </div>
             <div className="flex-1 space-y-6">
                 <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Package size={20}/> لیست اقلام و کالاها</h3>

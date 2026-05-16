@@ -29,7 +29,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const [autoSendPermit, setAutoSendPermit] = useState<ExitPermit | null>(null);
+    const [activeAutoSends, setActiveAutoSends] = useState<ExitPermit[]>([]);
 
     useEffect(() => { loadData(); }, [financialYear]);
     
@@ -61,7 +61,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
         switch (currentUser.role) {
             case UserRole.CEO: return p.status === ExitPermitStatus.PENDING_CEO;
-            case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY;
+            case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL;
             case UserRole.WAREHOUSE_KEEPER: return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
             case UserRole.SECURITY_HEAD:
             case UserRole.SECURITY_GUARD: return p.status === ExitPermitStatus.PENDING_SECURITY;
@@ -75,7 +75,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             case ExitPermitStatus.PENDING_CEO: return 'تایید مدیرعامل';
             case ExitPermitStatus.PENDING_FACTORY: return 'تایید مدیر کارخانه';
             case ExitPermitStatus.PENDING_WAREHOUSE: return 'توزین و تحویل انبار';
-            case ExitPermitStatus.PENDING_SECURITY: return 'تایید و ثبت خروج';
+            case ExitPermitStatus.PENDING_SECURITY: return 'ثبت مشخصات راننده';
+            case ExitPermitStatus.PENDING_FACTORY_FINAL: return 'تایید نهایی خروج و ارسال گروه';
             default: return '';
         }
     };
@@ -144,18 +145,23 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             let nextStatus = ExitPermitStatus.PENDING_FACTORY;
             if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
+            else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) nextStatus = ExitPermitStatus.EXITED;
 
             const updatedPermit = { ...p, status: nextStatus };
             if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
             else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
+            else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) {
+                updatedPermit.approverFactoryFinal = currentUser.fullName;
+                updatedPermit.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+            }
 
-            await updateExitPermitStatus(p.id, nextStatus, currentUser);
-            setAutoSendPermit(updatedPermit);
+            await updateExitPermitStatus(p.id, nextStatus, currentUser, { exitTime: updatedPermit.exitTime });
+            setActiveAutoSends(prev => [...prev, updatedPermit]);
             
             setTimeout(async () => {
                 await sendNotification(updatedPermit, p.status);
                 setProcessingId(null);
-                setAutoSendPermit(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
                 loadData();
             }, 2500);
 
@@ -169,31 +175,30 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         if (!securityFinalize) return;
         setProcessingId(securityFinalize.id);
         try {
-            const nextStatus = ExitPermitStatus.EXITED;
+            const nextStatus = ExitPermitStatus.PENDING_FACTORY_FINAL;
             const updatedPermit = { 
                 ...securityFinalize, 
                 status: nextStatus,
                 driverName: data.driverName,
                 driverPhone: data.driverPhone,
                 plateNumber: data.plateNumber,
-                exitTime: data.exitTime,
                 approverSecurity: currentUser.fullName,
                 updatedAt: Date.now()
             };
 
             await editExitPermit(updatedPermit); 
             
-            setAutoSendPermit(updatedPermit);
+            setActiveAutoSends(prev => [...prev, updatedPermit]);
             
             setTimeout(async () => {
-                await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY, data.exitTime);
+                await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY);
                 setProcessingId(null);
                 setSecurityFinalize(null);
-                setAutoSendPermit(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
                 loadData();
             }, 2500);
         } catch (e) {
-            alert('خطا در ثبت خروج نهایی');
+            alert('خطا در ثبت مشخصات انتظامات');
             setProcessingId(null);
         }
     };
@@ -213,12 +218,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             
             await editExitPermit(updated); 
             
-            setAutoSendPermit(updated);
+            setActiveAutoSends(prev => [...prev, updated]);
             setTimeout(async () => {
                 await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
                 setProcessingId(null);
                 setWarehouseFinalize(null);
-                setAutoSendPermit(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
                 loadData();
             }, 2500);
         } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
@@ -256,17 +261,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const isCEOApproved = prevStatus === ExitPermitStatus.PENDING_CEO;
             const isFactoryApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY;
             const isWarehouseApproved = prevStatus === ExitPermitStatus.PENDING_WAREHOUSE;
-            const isSecurityApproved = prevStatus === ExitPermitStatus.PENDING_SECURITY;
+            const isSecurityProcessed = prevStatus === ExitPermitStatus.PENDING_SECURITY;
+            const isFactoryFinalApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL;
 
-            // Add Group 1 if CEO Approved or Security Approved
-            if (isCEOApproved || isSecurityApproved) {
+            // Add Group 1 if CEO Approved or Factory Final Approved
+            if (isCEOApproved || isFactoryFinalApproved) {
                 if (g1WA) targets.push({ group: g1WA });
                 if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
                 if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
             }
 
-            // Add Group 2 if Factory Approved, Warehouse Approved, or Security Approved
-            if (isFactoryApproved || isWarehouseApproved || isSecurityApproved) {
+            // Add Group 2 if Factory Approved, Warehouse Approved, or Factory Final Approved
+            if (isFactoryApproved || isWarehouseApproved || isFactoryFinalApproved) {
                 if (g2WA) targets.push({ group: g2WA });
                 if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
                 if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
@@ -283,13 +289,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
                 targets.push({ role: UserRole.SECURITY_HEAD });
             } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
-                captionTitle = '👋 خروج نهایی از کارخانه';
+                captionTitle = '🚨 ثبت اطلاعات خودرو در انتظامات - در انتظار تایید نهایی خروج';
+            } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL) {
+                captionTitle = '👋 خروج نهایی از کارخانه (تایید مدیر کارخانه)';
             }
 
             let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n`;
             caption += `🔢 شماره: ${permit.permitNumber}\n`;
             caption += `👤 گیرنده: ${permit.recipientName}\n`;
             caption += `📦 کالا: ${permit.goodsName}\n`;
+            
+            // Price info: Only for managers and ONLY for CEO/Factory approvals, not shared in generic bot message for groups ?
+            // User requested: "اون تو بات و گروه ها ارسال نشه و فقط مدیران بتونن ببین مدیر فروش و مدیر عامل بتونن ببینن"
+            // So we skip price in group captions.
             
             if (permit.plateNumber) {
                 // Format: 11A11111 -> 11 A 111 11
@@ -467,13 +479,13 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     return (
         <div className="space-y-6 pb-20 animate-fade-in">
              {/* Hidden Render */}
-             {autoSendPermit && (
-                <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-permit-autosend-${autoSendPermit.id}`}>
-                        <PrintExitPermit permit={autoSendPermit} onClose={()=>{}} embed />
+             {activeAutoSends.map(p => (
+                <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+                    <div id={`print-permit-autosend-${p.id}`}>
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed />
                     </div>
                 </div>
-            )}
+            ))}
 
             {/* Header / Tabs */}
             <div className="flex flex-col gap-4">

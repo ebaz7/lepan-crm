@@ -33,7 +33,7 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
       driverName,
       driverPhone,
       plateNumber: finalPlate,
-      exitTime
+      exitTime: '' // Handled in next stage
     });
   };
 
@@ -116,14 +116,6 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
                     </div>
                 </div>
             </div>
-          </div>
-
-          <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between border border-blue-100">
-              <div className="flex items-center gap-2">
-                 <ShieldCheck className="text-blue-600" size={20} />
-                 <span className="text-sm font-bold text-blue-800">ساعت خروج فعلی:</span>
-              </div>
-              <input type="text" className="bg-white border-2 border-blue-200 rounded-xl px-4 py-2 text-lg font-black text-blue-700 text-center w-32 shadow-inner" value={exitTime} onChange={e => setExitTime(e.target.value)} />
           </div>
         </div>
 

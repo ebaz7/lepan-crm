@@ -14,6 +14,7 @@ import ManageExitPermits from './components/ManageExitPermits';
 import WarehouseModule from './components/WarehouseModule';
 import SecurityModule from './components/SecurityModule'; 
 import MeetingModule from './components/MeetingModule';
+import PurchaseModule from './components/PurchaseModule';
 import PrintVoucher from './components/PrintVoucher';
 import NotificationController from './components/NotificationController'; 
 import SalesCRMModule from './components/SalesCRMModule';
@@ -197,7 +198,7 @@ function App() {
   useEffect(() => {
     if (isNative) return; 
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security'].includes(hash)) {
+    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security', 'purchase'].includes(hash)) {
         setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
     } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
     const handlePopState = (event: PopStateEvent) => { if (event.state && event.state.tab) setActiveTabState(event.state.tab); else setActiveTabState('dashboard'); };
@@ -535,6 +536,7 @@ function App() {
                 {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
                 {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                 {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
+                {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} />}
                 {activeTab === 'chat' && (
                     <ChatRoom 
                         currentUser={currentUser} 

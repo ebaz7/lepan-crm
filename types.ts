@@ -137,6 +137,7 @@ export interface RolePermissions {
   canCreateMeeting?: boolean;
   canApproveMeeting?: boolean;
   canManageMeetings?: boolean;
+  canManagePurchase?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -391,7 +392,8 @@ export enum ExitPermitStatus {
   PENDING_CEO = 'در انتظار تایید مدیرعامل',
   PENDING_FACTORY = 'در انتظار مدیر کارخانه',
   PENDING_WAREHOUSE = 'در انتظار تایید انبار',
-  PENDING_SECURITY = 'در انتظار خروج',
+  PENDING_SECURITY = 'در انتظار خروج (انتظامات)',
+  PENDING_FACTORY_FINAL = 'در انتظار تایید نهایی مدیر کارخانه',
   EXITED = 'خارج شده (بایگانی)',
   REJECTED = 'رد شده'
 }
@@ -440,6 +442,7 @@ export interface ExitPermit {
   rejectionReason?: string;
   rejectedBy?: string;
   isEdit?: boolean;
+  price?: number;
 }
 
 export interface WarehouseItem {
@@ -972,4 +975,87 @@ export interface MeetingMinutes {
     announcementSent?: boolean;
     minutesSent?: boolean;
     approvals?: Record<string, { approved: boolean, date: number, comment?: string }>;
+}
+
+export enum PurchaseRequestStatus {
+    PENDING_FACTORY = 'در انتظار مدیر کارخانه',
+    PENDING_CEO = 'در انتظار مدیرعامل',
+    PENDING_COMMERCIAL_PROFORMA = 'در انتظار ثبت پیش‌فاکتور',
+    PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور',
+    PENDING_SECURITY_ENTRY = 'در انتظار ورود (انتظامات)',
+    PENDING_QC = 'در انتظار کنترل کیفی',
+    PENDING_FACTORY_FINAL = 'در انتظار تایید نهایی مدیر کارخانه',
+    PENDING_WAREHOUSE_FINAL = 'در انتظار رسید انبار',
+    PENDING_COMMERCIAL_FINAL = 'در انتظار تایید بازرگانی',
+    COMPLETED = 'تکمیل شده',
+    REJECTED = 'رد شده'
+}
+
+export interface PurchaseProforma {
+    id: string;
+    vendorName: string;
+    number: string;
+    date: string;
+    totalAmount: number;
+    attachments: { fileName: string, url: string }[];
+    isChosen?: boolean;
+}
+
+export interface PurchaseRequest {
+    id: string;
+    requestNumber: string;
+    date: string;
+    requester: string;
+    itemName: string;
+    category?: string;
+    subCategory?: string;
+    dimensions?: string;
+    specifications?: string;
+    image?: string;
+    quantity: number;
+    unit: string;
+    status: PurchaseRequestStatus;
+    proformas: PurchaseProforma[];
+    
+    // Approval trails
+    approverFactory?: string;
+    approverCeo?: string;
+    approverCommercial?: string;
+    approverQc?: string;
+    approverWarehouse?: string;
+    approverCommercialFinal?: string;
+    approverFactoryFinal?: string;
+    
+    // Entry data from security
+    entryQuantity?: number;
+    entryWeight?: number;
+    entryDate?: string;
+    entryTime?: string;
+    
+    rejectionReason?: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface PartMasterData {
+    id: string;
+    name: string;
+    category: string;
+    subCategory?: string;
+    dimensions?: string;
+    unit: string;
+    image?: string;
+    minStock?: number;
+    currentStock: number;
+}
+
+export interface PartKardex {
+    id: string;
+    partId: string;
+    date: string;
+    referenceNumber: string;
+    type: 'IN' | 'OUT';
+    quantity: number;
+    balance: number;
+    description?: string;
 }

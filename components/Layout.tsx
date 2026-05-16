@@ -257,6 +257,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canSeeSecurity = currentUser.role === UserRole.ADMIN || perms.canViewSecurity === true;
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
+  const canSeePurchase = currentUser.role === UserRole.ADMIN || perms.canManagePurchase === true;
 
   const navItems = [
     { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
@@ -268,6 +269,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canManageWarehouse) navItems.push({ id: 'warehouse', label: 'مدیریت انبار', icon: Package });
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   if (canSeeMeetings) navItems.push({ id: 'meetings', label: 'جلسات تولید', icon: ClipboardList });
+  if (canSeePurchase) navItems.push({ id: 'purchase', label: 'درخواست خرید', icon: ShoppingBag });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
   if (canSeeKnowledgeBase) navItems.push({ id: 'knowledge', label: 'اطلاعات و یادداشت ها', icon: BookOpen });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });

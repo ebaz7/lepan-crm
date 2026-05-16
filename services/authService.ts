@@ -50,7 +50,7 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             canViewAll: true, canCreatePaymentOrder: true, canViewPaymentOrders: true, canApproveFinancial: true, canApproveManager: true, canApproveCeo: true, canEditOwn: true, canEditAll: true, canDeleteOwn: true, canDeleteAll: true, canManageTrade: true, canManageSettings: true,
             canCreateExitPermit: true, canViewExitPermits: true, canApproveExitCeo: true, canApproveExitFactory: true, canApproveExitWarehouse: true, canApproveExitSecurity: true, canViewExitArchive: true, canEditExitArchive: true,
             canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
-            canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true
+            canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true
         };
     }
 
@@ -78,12 +78,14 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canManageTrade = true;
             perms.canApproveBijak = true;
             perms.canViewSecurity = true;
+            perms.canManagePurchase = true;
             break;
 
         case UserRole.FINANCIAL:
             perms.canCreatePaymentOrder = true;
             perms.canViewPaymentOrders = true;
             perms.canApproveFinancial = true;
+            perms.canManagePurchase = true;
             break;
 
         case UserRole.MANAGER:
@@ -91,6 +93,7 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canViewPaymentOrders = true;
             perms.canApproveManager = true;
             perms.canViewExitPermits = true; 
+            perms.canManagePurchase = true;
             break;
 
         case UserRole.SALES_MANAGER:
@@ -103,12 +106,14 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canViewExitPermits = true;
             perms.canApproveExitFactory = true; // CRITICAL DEFAULT
             perms.canViewSecurity = true;
+            perms.canManagePurchase = true;
             break;
 
         case UserRole.WAREHOUSE_KEEPER:
             perms.canViewExitPermits = true;
             perms.canApproveExitWarehouse = true; // CRITICAL DEFAULT
             perms.canManageWarehouse = true;
+            perms.canManagePurchase = true;
             break;
 
         case UserRole.SECURITY_HEAD:
