@@ -830,6 +830,18 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.baleBotToken || ''} onChange={e => setSettings({...settings, baleBotToken: e.target.value})} placeholder="Token..." type="password"/>
                                         </div>
                                         <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">شناسه عددی گروه خرید (تلگرام)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.purchaseTelegramGroup || ''} onChange={e => setSettings({...settings, purchaseTelegramGroup: e.target.value})} placeholder="-100..."/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">شناسه عددی گروه خرید (بله)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.purchaseBaleGroup || ''} onChange={e => setSettings({...settings, purchaseBaleGroup: e.target.value})} placeholder="Chat ID..."/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">شماره گروه خرید (واتس‌اپ)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.purchaseWhatsappGroup || ''} onChange={e => setSettings({...settings, purchaseWhatsappGroup: e.target.value})} placeholder="GroupId@..."/>
+                                        </div>
+                                        <div className="border-t pt-3">
                                             <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (هوش مصنوعی)</label>
                                             <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
                                         </div>

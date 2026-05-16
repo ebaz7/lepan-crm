@@ -4,7 +4,7 @@ import PrintMeeting from './print/PrintMeeting';
 import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
 import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes, sendMessage } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
-import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare } from 'lucide-react';
+import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare, Lock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 

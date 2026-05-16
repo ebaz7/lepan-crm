@@ -13,7 +13,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep } from './backend/bot-core.js';
 import * as Renderer from './backend/renderer.js';
 
 const getDb = dbManager.getDb;
@@ -555,6 +555,58 @@ app.delete('/api/exit-permits/:id', (req, res) => {
     db.exitPermits = db.exitPermits.filter(p => p.id !== req.params.id); 
     saveDb(db); 
     res.json(db.exitPermits); 
+});
+
+// 3.5 PURCHASE & PART MASTER DATA
+app.get('/api/part-master-data', (req, res) => res.json(getDb().partMasterData || []));
+app.post('/api/part-master-data', (req, res) => { const db = getDb(); if(!db.partMasterData) db.partMasterData=[]; db.partMasterData.push(req.body); saveDb(db); res.json(db.partMasterData); });
+app.put('/api/part-master-data/:id', (req, res) => { const db = getDb(); const idx = (db.partMasterData||[]).findIndex(p => p.id === req.params.id); if(idx > -1) { db.partMasterData[idx] = { ...db.partMasterData[idx], ...req.body }; saveDb(db); res.json(db.partMasterData); } else res.status(404).send('Not Found'); });
+app.delete('/api/part-master-data/:id', (req, res) => { const db = getDb(); db.partMasterData = (db.partMasterData||[]).filter(p => p.id !== req.params.id); saveDb(db); res.json(db.partMasterData); });
+
+app.get('/api/part-kardex/:partId', (req, res) => {
+    const db = getDb();
+    const kardex = (db.partKardex || []).filter(k => k.partId === req.params.partId);
+    res.json(kardex);
+});
+
+app.get('/api/purchase-requests', (req, res) => res.json(getDb().purchaseRequests || []));
+app.post('/api/purchase-requests', (req, res) => { 
+    const db = getDb(); 
+    if(!db.purchaseRequests) db.purchaseRequests=[]; 
+    db.purchaseRequests.unshift(req.body); 
+    saveDb(db); 
+    notifyPurchaseRequestStep(req.body, null, null, null, db, 'ثبت درخواست خرید').catch(e => console.error("Purchase Notification POST:", e));
+    res.json(db.purchaseRequests); 
+});
+app.put('/api/purchase-requests/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = (db.purchaseRequests||[]).findIndex(r => r.id === req.params.id); 
+    if(idx > -1) { 
+        const oldReq = db.purchaseRequests[idx];
+        db.purchaseRequests[idx] = { ...db.purchaseRequests[idx], ...req.body }; 
+        saveDb(db); 
+        if (req.body.status !== oldReq.status) {
+            notifyPurchaseRequestStep(db.purchaseRequests[idx], null, null, null, db, req.body.status + ' (تغییر وضعیت)').catch(e => console.error("Purchase Notification PUT:", e));
+        }
+        res.json(db.purchaseRequests); 
+    } else res.status(404).send('Not Found'); 
+});
+app.delete('/api/purchase-requests/:id', (req, res) => { 
+    const db = getDb(); 
+    db.purchaseRequests = (db.purchaseRequests||[]).filter(r => r.id !== req.params.id); 
+    saveDb(db); 
+    res.json(db.purchaseRequests); 
+});
+
+app.get('/api/next-purchase-request-number', (req, res) => {
+    const db = getDb();
+    const lastNum = db.purchaseRequests && db.purchaseRequests.length > 0 
+        ? Math.max(...db.purchaseRequests.map(r => {
+            const match = r.requestNumber.match(/\d+/);
+            return match ? parseInt(match[0]) : 0;
+        }))
+        : 1000;
+    res.json({ nextNumber: `PR-${lastNum + 1}` });
 });
 
 // 4. WAREHOUSE (Items & Transactions)

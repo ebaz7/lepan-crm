@@ -2412,3 +2412,36 @@ export const notifyMeetingMinutes = async (meeting, db) => {
         if (waId) import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
     }
 };
+
+export const notifyPurchaseRequestStep = async (p, platform, chatId, sendPhotoFn, db, stepName, eventType = 'STEP') => {
+    try {
+        const isEdit = eventType === 'EDIT';
+        const isDelete = eventType === 'DELETE';
+        
+        let header = isDelete ? `❌ *حذف شد: درخواست خرید*` : (isEdit ? `✏️ *ویرایش شد: درخواست خرید*` : `🛒 *درخواست خرید*`);
+        const caption = `${header}\n🔢 شماره: ${p.requestNumber || '-'}\n📅 تاریخ: ${p.date || '-'}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📦 کالا: ${p.itemName || '-'}\n📂 گروه: ${p.category || '-'} - ${p.subCategory || '-'}\n🔢 مقدار: ${p.quantity} ${p.unit}\n📝 توضیحات: ${p.specifications || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این پیام ویرایشی است*' : ''}`;
+        
+        if (chatId && sendPhotoFn) {
+            sendPhotoFn(platform, chatId, 'https://placehold.co/800x400/4f46e5/ffffff?text=Purchase+Request', caption).catch(e => {});
+        }
+
+        const settings = db.settings || {};
+        const telGroupId = sanitizeGroupId(settings.purchaseTelegramGroup);
+        const baleGroupId = sanitizeGroupId(settings.purchaseBaleGroup);
+        const waGroupId = settings.purchaseWhatsappGroup ? String(settings.purchaseWhatsappGroup).trim() : null;
+
+        import('./telegram.js').then(m => {
+            if (telGroupId && m.sendMessage) m.sendMessage(telGroupId, caption).catch(e=>{});
+        }).catch(err => {});
+
+        import('./bale.js').then(m => {
+            if (baleGroupId && m.sendMessage) m.sendMessage(baleGroupId, caption).catch(e=>{});
+        }).catch(err => {});
+
+        import('./whatsapp.js').then(m => {
+            if (waGroupId && m.sendMessage) m.sendMessage(waGroupId, caption).catch(e=>{});
+        }).catch(err => {});
+    } catch (e) {
+        console.error('Error in notifyPurchase:', e);
+    }
+};

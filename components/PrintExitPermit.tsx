@@ -20,7 +20,7 @@ interface Props {
   showPrice?: boolean;
 }
 
-export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark }: Props) {
+export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice }: Props) {
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');

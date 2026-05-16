@@ -10,7 +10,7 @@ import {
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
-    Shield, UserMinus, UserPlus, BellOff, Camera, Clock
+    Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
 

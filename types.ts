@@ -235,6 +235,7 @@ export interface SystemSettings {
   bankNames?: string[];
   operatingBankNames?: string[];
   commodityGroups: string[];
+  itemCategories?: { name: string; subCategories: string[] }[]; // NEW
   rolePermissions?: Record<string, RolePermissions>;
   customRoles?: CustomRole[];
   savedContacts?: Contact[];
@@ -246,7 +247,10 @@ export interface SystemSettings {
   companyBank?: string;
   telegramBotToken?: string;
   telegramAdminId?: string;
+  purchaseTelegramGroup?: string;
   baleBotToken?: string;
+  purchaseBaleGroup?: string;
+  purchaseWhatsappGroup?: string;
   smsApiKey?: string;
   smsSenderNumber?: string;
   googleCalendarId?: string;
@@ -438,6 +442,7 @@ export interface ExitPermit {
   approverFactory?: string;
   approverWarehouse?: string;
   approverSecurity?: string;
+  approverFactoryFinal?: string;
   exitTime?: string;
   rejectionReason?: string;
   rejectedBy?: string;
@@ -978,6 +983,7 @@ export interface MeetingMinutes {
 }
 
 export enum PurchaseRequestStatus {
+    PENDING_TECHNICAL = 'در انتظار فنی کارخانه',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
     PENDING_CEO = 'در انتظار مدیرعامل',
     PENDING_COMMERCIAL_PROFORMA = 'در انتظار ثبت پیش‌فاکتور',
@@ -1012,12 +1018,14 @@ export interface PurchaseRequest {
     dimensions?: string;
     specifications?: string;
     image?: string;
+    pdfAttachment?: string; // NEW
     quantity: number;
     unit: string;
     status: PurchaseRequestStatus;
     proformas: PurchaseProforma[];
     
     // Approval trails
+    approverTechnical?: string; // NEW
     approverFactory?: string;
     approverCeo?: string;
     approverCommercial?: string;
@@ -1039,12 +1047,14 @@ export interface PurchaseRequest {
 
 export interface PartMasterData {
     id: string;
-    name: string;
+    name: string; // Used for item name
+    type?: string; // e.g. 'قطعه', 'مواد اولیه', 'ملزومات'
     category: string;
     subCategory?: string;
     dimensions?: string;
     unit: string;
     image?: string;
+    pdfAttachment?: string; // NEW
     minStock?: number;
     currentStock: number;
 }

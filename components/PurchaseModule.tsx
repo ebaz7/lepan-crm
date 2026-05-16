@@ -15,10 +15,11 @@ import {
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
-    Ruler, Layers, Tag, Upload, Info
+    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
+import * as XLSX from 'xlsx';
 
 const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }> = ({ currentUser, settings }) => {
     const isMobile = useIsMobile();
@@ -75,7 +76,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }>
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center glass-panel p-4 rounded-2xl shadow-sm border border-gray-200">
                     <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                        <ShoppingCart className="text-indigo-600"/> مدیریت خرید و قطعات
+                        <ShoppingCart className="text-indigo-600"/> مدیریت خرید و کالا
                     </h1>
                 </div>
                 
@@ -90,7 +91,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }>
                         onClick={() => setActiveTab('PARTS')} 
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PARTS' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
                     >
-                        معرفی قطعات
+                        مدیریت کالا
                     </button>
                     <button 
                         onClick={() => setActiveTab('KARDEX')} 
@@ -225,7 +226,7 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedPartId) return alert('قطعه را انتخاب کنید');
+        if (!selectedPartId) return alert('کالا را انتخاب کنید');
         const part = parts.find((p: any) => p.id === selectedPartId);
         if (!part) return;
 
@@ -243,9 +244,10 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
                 dimensions: part.dimensions,
                 specifications: description,
                 image: part.image,
+                pdfAttachment: part.pdfAttachment,
                 quantity: quantity,
                 unit: part.unit,
-                status: PurchaseRequestStatus.PENDING_FACTORY,
+                status: PurchaseRequestStatus.PENDING_TECHNICAL,
                 proformas: [],
                 createdAt: Date.now(),
                 updatedAt: Date.now()
@@ -266,7 +268,7 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">انتخاب قطعه از لیست</label>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">انتخاب کالا از لیست</label>
                         <select className="w-full border rounded-xl p-3 text-sm" value={selectedPartId} onChange={e => setSelectedPartId(e.target.value)}>
                             <option value="">-- انتخاب کنید --</option>
                             {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
@@ -277,8 +279,8 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
                         <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold" value={quantity} onChange={e => setQuantity(+e.target.value)} />
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">توضیحات و مشخصات خاص</label>
-                        <textarea className="w-full border rounded-xl p-3 text-sm h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="ابعاد، متریال، برند خاص و ..."/>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">توضیحات، مشخصات خاص یا اظهارنامه</label>
+                        <textarea className="w-full border rounded-xl p-3 text-sm h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="کشور سازنده، شماره کوتاژ (در صورت وجود)، ویژگی‌های فنی..."/>
                     </div>
                     <button disabled={loading} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 transition-all active:scale-95">
                         {loading ? <Loader2 className="animate-spin"/> : <ClipboardCheck/>} ثبت درخواست خرید
@@ -298,6 +300,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
         setActionLoading(true);
         try {
             const updated = { ...request, status: nextStatus, updatedAt: Date.now(), ...extra };
+            if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY) updated.approverTechnical = currentUser.fullName;
             if (nextStatus === PurchaseRequestStatus.PENDING_CEO) updated.approverFactory = currentUser.fullName;
             if (nextStatus === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) updated.approverCeo = currentUser.fullName;
             if (nextStatus === PurchaseRequestStatus.PENDING_QC) updated.entryDate = new Date().toISOString().split('T')[0];
@@ -312,11 +315,12 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
     const isCurrentStep = (step: PurchaseRequestStatus) => request.status === step;
 
     // Permissions check
-    const canApproveFactory = currentUser.role === UserRole.FACTORY_MANAGER;
-    const canApproveCEO = currentUser.role === UserRole.CEO;
-    const canAddProforma = currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.SALES_MANAGER;
-    const canSecurityEntry = currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.SECURITY_GUARD;
-    const canQC = currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.MANAGER; // QC often involves warehouse or specific QC role
+    const canApproveTechnical = currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === 'technical' || currentUser.role === 'admin';
+    const canApproveFactory = currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === 'admin';
+    const canApproveCEO = currentUser.role === UserRole.CEO || currentUser.role === 'admin';
+    const canAddProforma = currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === 'admin';
+    const canSecurityEntry = currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.SECURITY_GUARD || currentUser.role === 'admin';
+    const canQC = currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.MANAGER || currentUser.role === 'admin';
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
@@ -336,8 +340,9 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                     {/* Progress Bar */}
                     <div className="flex justify-between items-center gap-2 no-scrollbar overflow-x-auto pb-4">
                         {[
-                            { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'تایید فنی' },
-                            { s: PurchaseRequestStatus.PENDING_CEO, label: 'تایید مدیرعامل' },
+                            { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'تایید فنی' },
+                            { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
+                            { s: PurchaseRequestStatus.PENDING_CEO, label: 'مدیرعامل' },
                             { s: PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, label: 'پیش‌فاکتور' },
                             { s: PurchaseRequestStatus.PENDING_CEO_SELECTION, label: 'انتخاب خرید' },
                             { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود کالا' },
@@ -360,11 +365,11 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                              <div className="glass-panel p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
-                                <h3 className="text-xs font-black text-gray-400 uppercase mb-3 flex items-center gap-2"><Package size={14}/> اطلاعات قطعه</h3>
+                                <h3 className="text-xs font-black text-gray-400 uppercase mb-3 flex items-center gap-2"><Package size={14}/> اطلاعات کالا و درخواست</h3>
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">نام قطعه:</span> <span className="text-sm font-black">{request.itemName}</span></div>
-                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">گروه:</span> <span className="text-sm font-bold">{request.category}</span></div>
-                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">ابعاد:</span> <span className="text-sm font-mono">{request.dimensions || '-'}</span></div>
+                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">نام کالا/قطعه:</span> <span className="text-sm font-black">{request.itemName}</span></div>
+                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">مربوط به:</span> <span className="text-sm font-bold">{request.category} / {request.subCategory}</span></div>
+                                    <div className="flex justify-between flex-col items-start border-b border-gray-50 pb-2"><span className="text-xs text-gray-500 mb-1">توضیحات و مشخصات (اظهارنامه):</span> <span className="text-xs font-mono text-gray-700">{request.specifications || '-'}</span></div>
                                     <div className="flex justify-between items-center"><span className="text-xs text-gray-500">تعداد درخواستی:</span> <span className="text-lg font-black text-indigo-600">{request.quantity} {request.unit}</span></div>
                                 </div>
                              </div>
@@ -375,6 +380,12 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                                 </div>
                              )}
+                             
+                             {request.pdfAttachment && (
+                                <a href={request.pdfAttachment} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-indigo-600 bg-indigo-50 p-4 rounded-xl border border-indigo-100 font-bold hover:bg-indigo-100 transition-colors">
+                                    <FileText size={20} /> <span className="text-sm">مشاهده فایل ضمیمه (PDF)</span>
+                                </a>
+                             )}
                         </div>
 
                         <div className="space-y-6">
@@ -382,10 +393,12 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                                 <h3 className="text-xs font-black text-gray-400 uppercase mb-3 flex items-center gap-2"><ClipboardCheck size={14}/> تاریخچه تاییدات</h3>
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">ثبت اولیه</p><p className="text-[10px] text-gray-400">{request.requester}</p></div></div>
-                                    {request.approverFactory && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید مدیر فنی</p><p className="text-[10px] text-gray-400">{request.approverFactory}</p></div></div>}
+                                    {request.approverTechnical && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید فنی کارخانه</p><p className="text-[10px] text-gray-400">{request.approverTechnical}</p></div></div>}
+                                    {request.approverFactory && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید مدیر کارخانه</p><p className="text-[10px] text-gray-400">{request.approverFactory}</p></div></div>}
                                     {request.approverCeo && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید مدیرعامل</p><p className="text-[10px] text-gray-400">{request.approverCeo}</p></div></div>}
                                 </div>
                             </div>
+
 
                             {/* Proformas Section */}
                             {(request.status !== PurchaseRequestStatus.PENDING_FACTORY && request.status !== PurchaseRequestStatus.PENDING_CEO) && (
@@ -432,10 +445,16 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
 
                 <div className="p-6 border-t glass-panel flex flex-wrap justify-between items-center gap-3 bg-gray-100/50">
                     <div className="flex gap-2">
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && canApproveTechnical && (
+                            <>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2"><CheckCircle size={20}/> تایید فنی (ارسال به مدیر کارخانه)</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2"><XCircle size={18}/> رد فنی</button>
+                            </>
+                        )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && canApproveFactory && (
                             <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2"><CheckCircle size={20}/> تایید درخواست</button>
-                                <button className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2"><XCircle size={18}/> رد درخواست</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2"><CheckCircle size={20}/> تایید مدیر کارخانه</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2"><XCircle size={18}/> رد درخواست</button>
                             </>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_CEO) && canApproveCEO && (
@@ -539,19 +558,65 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
     const [showModal, setShowModal] = useState(false);
     const [editingPart, setEditingPart] = useState<PartMasterData | null>(null);
 
-    const filtered = parts.filter((p: PartMasterData) => p.name.includes(searchTerm) || p.category.includes(searchTerm));
+    const filtered = parts.filter((p: PartMasterData) => p.name.includes(searchTerm) || p.category.includes(searchTerm) || (p.subCategory && p.subCategory.includes(searchTerm)));
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws);
+                
+                let successCount = 0;
+                for (const row of data as any[]) {
+                    if (!row['نام کالا']) continue;
+                    const newPart: PartMasterData = {
+                        id: generateUUID(),
+                        name: row['نام کالا'] || '',
+                        type: row['نوع'] || 'قطعات',
+                        category: row['گروه'] || 'عمومی',
+                        subCategory: row['زیرگروه'] || '',
+                        dimensions: row['ابعاد یا مشخصات'] || '',
+                        unit: row['واحد'] || 'عدد',
+                        minStock: parseInt(row['حداقل موجودی']) || 0,
+                        currentStock: parseInt(row['موجودی اولیه']) || 0
+                    };
+                    await savePartMasterData(newPart);
+                    successCount++;
+                }
+                alert(`${successCount} کالا با موفقیت از اکسل وارد شد.`);
+                onPartUpdate();
+            } catch (err) {
+                alert('خطا در خواندن فایل اکسل');
+                console.error(err);
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
 
     return (
         <div className="space-y-4">
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی کالا/قطعه..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <div className="flex flex-col md:flex-row gap-2 items-center">
+                <div className="relative flex-1 w-full">
+                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی کالا، گروه یا زیرگروه..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
                 {(currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) && (
-                    <button onClick={() => { setEditingPart(null); setShowModal(true); }} className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-bold text-sm">
-                        <Plus size={20}/> تعریف جدید
-                    </button>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <label className="bg-green-600 text-white p-3 rounded-xl shadow-lg shadow-green-100 flex justify-center items-center gap-2 font-bold text-sm cursor-pointer hover:bg-green-700 transition">
+                            <UploadCloud size={20}/> اکسل
+                            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
+                        </label>
+                        <button onClick={() => { setEditingPart(null); setShowModal(true); }} className="flex-1 md:flex-none justify-center bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-bold text-sm transition hover:bg-indigo-700">
+                            <Plus size={20}/> تعریف جدید
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -567,11 +632,11 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                     <span className="text-[10px] font-bold uppercase mt-2">No Image</span>
                                 </div>
                             )}
-                            <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.category}</div>
+                            <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.type || 'کالا'} | {p.category}</div>
                         </div>
                         <div className="p-4">
                             <h3 className="font-black text-gray-800 text-sm mb-1">{p.name}</h3>
-                            <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.dimensions || 'فاقد مشخصات ابعادی'}</p>
+                            <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.subCategory ? `زیرگروه: ${p.subCategory}` : 'فاقد زیرگروه'} | {p.dimensions || 'فاقد مشخصات ابعادی'}</p>
                             
                             <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                                 <div className="flex flex-col">
@@ -581,8 +646,11 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                     </span>
                                 </div>
                                 <div className="flex gap-1">
-                                    <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-indigo-600 rounded-lg hover:bg-indigo-50"><Edit size={16}/></button>
-                                    <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Trash2 size={16}/></button>
+                                    {p.pdfAttachment && (
+                                        <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
+                                    )}
+                                    <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                    <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
                                 </div>
                             </div>
                         </div>
@@ -590,23 +658,28 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                 ))}
             </div>
 
-            {showModal && <PartModal onClose={() => setShowModal(false)} onSuccess={onPartUpdate} initialData={editingPart} />}
+            {showModal && <PartModal onClose={() => setShowModal(false)} onSuccess={onPartUpdate} initialData={editingPart} parts={parts} />}
         </div>
     );
 };
 
-const PartModal = ({ onClose, onSuccess, initialData }: any) => {
+const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<Partial<PartMasterData>>(initialData || {
         name: '',
+        type: 'قطعات',
         category: '',
         subCategory: '',
         dimensions: '',
         unit: 'عدد',
         minStock: 0,
         currentStock: 0,
-        image: ''
+        image: '',
+        pdfAttachment: ''
     });
+
+    const categories = Array.from(new Set(parts.map((p: any) => p.category).filter(Boolean)));
+    const subCategories = Array.from(new Set(parts.filter((p: any) => p.category === formData.category).map((p: any) => p.subCategory).filter(Boolean)));
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -628,20 +701,41 @@ const PartModal = ({ onClose, onSuccess, initialData }: any) => {
         }
     };
 
+    const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            uploadFileChunked(file, () => {}).then(res => setFormData({ ...formData, pdfAttachment: res.url }));
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in max-h-[90vh] overflow-y-auto no-scrollbar">
                 <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><Layers className="text-indigo-600"/> {initialData ? 'ویرایش کالا / قطعه' : 'معرفی کالا / قطعه جدید'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><XCircle size={28} className="text-gray-400"/></button>
+                    <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><Layers className="text-indigo-600"/> {initialData ? 'ویرایش کالا / قطعه' : 'معرفی کالا جدید'}</h2>
+                    <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><XCircle size={28} className="text-gray-400"/></button>
                 </div>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 px-1">اطلاعات پایه</label>
                             <div className="space-y-3">
-                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="نام دقیق قطعه..." value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /><Tag className="absolute right-3 top-3.5 text-gray-300" size={18}/></div>
-                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="گروه قطعه (برقی، مکانیکی و ...)" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} /><Layers className="absolute right-3 top-3.5 text-gray-300" size={18}/></div>
-                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="زیر مجموعه..." value={formData.subCategory} onChange={e=>setFormData({...formData, subCategory: e.target.value})} /><Layers className="absolute right-3 top-3.5 text-gray-300" size={14}/></div>
+                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="نام دقیق کالا..." value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /><Tag className="absolute right-3 top-3.5 text-gray-300" size={18}/></div>
+                                
+                                <div className="relative">
+                                    <select className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none appearance-none" value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})}>
+                                        <option value="قطعات">قطعات</option>
+                                        <option value="مواد اولیه">مواد اولیه</option>
+                                        <option value="ملزومات">ملزومات</option>
+                                    </select>
+                                    <Package className="absolute right-3 top-3.5 text-gray-300" size={18}/>
+                                </div>
+
+                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="گروه (برقی، روانکار، و ...)" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} list="category-list" /><Layers className="absolute right-3 top-3.5 text-gray-300" size={18}/></div>
+                                <datalist id="category-list">{categories.map((c: any) => <option key={c} value={c} />)}</datalist>
+
+                                <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="زیر مجموعه..." value={formData.subCategory} onChange={e=>setFormData({...formData, subCategory: e.target.value})} list="subcategory-list" /><Layers className="absolute right-3 top-3.5 text-gray-300" size={14}/></div>
+                                <datalist id="subcategory-list">{subCategories.map((c: any) => <option key={c} value={c} />)}</datalist>
+
                                 <div className="relative"><input className="w-full border-2 border-gray-100 rounded-2xl p-3 pr-10 text-sm focus:border-indigo-400 outline-none" placeholder="ابعاد و مشخصات ابعادی..." value={formData.dimensions} onChange={e=>setFormData({...formData, dimensions: e.target.value})} /><Ruler className="absolute right-3 top-3.5 text-gray-300" size={18}/></div>
                             </div>
                         </div>
@@ -653,7 +747,7 @@ const PartModal = ({ onClose, onSuccess, initialData }: any) => {
                                     <div className="flex-1"><label className="text-[10px] font-bold text-gray-400 mb-1 block">واحد</label><input className="w-full border-2 border-gray-100 rounded-2xl p-3 text-sm" value={formData.unit} onChange={e=>setFormData({...formData, unit: e.target.value})} /></div>
                                     <div className="flex-1"><label className="text-[10px] font-bold text-gray-400 mb-1 block">حداقل موجودی</label><input type="number" className="w-full border-2 border-gray-100 rounded-2xl p-3 text-sm font-bold text-red-500" value={formData.minStock} onChange={e=>setFormData({...formData, minStock: +e.target.value})} /></div>
                                 </div>
-                                <div className="relative group h-40 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-100 transition-all">
+                                <div className="relative group h-32 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-100 transition-all">
                                     {formData.image ? (
                                         <img src={formData.image} className="w-full h-full object-cover" alt="preview" />
                                     ) : (
@@ -662,19 +756,26 @@ const PartModal = ({ onClose, onSuccess, initialData }: any) => {
                                             <p className="text-[10px] font-black text-gray-400 mt-2">کلیک جهت بارگذاری تصویر</p>
                                         </>
                                     )}
-                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageUpload} accept="image/*" />
-                                    {formData.image && (
-                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="text-white text-[10px] font-black underline">تغییر تصویر</span>
-                                        </div>
-                                    )}
+                                    <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageUpload} />
+                                </div>
+
+                                <div className="relative group p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-gray-100 transition-all">
+                                    <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
+                                        <FileUp size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold text-gray-700">{formData.pdfAttachment ? 'فایل ضمیمه بارگذاری شد' : 'بارگذاری کاتالوگ / PDF'}</p>
+                                        <p className="text-[10px] text-gray-400">{formData.pdfAttachment ? 'جهت جایگزینی کلیک کنید' : 'فقط فایل‌های PDF مجاز است'}</p>
+                                    </div>
+                                    {formData.pdfAttachment && <CheckCircle size={16} className="text-green-500"/>}
+                                    <input type="file" accept="application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handlePdfUpload} />
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div className="md:col-span-2 pt-4">
                         <button disabled={loading} className="w-full bg-gradient-to-r from-indigo-600 to-indigo-800 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70">
-                            {loading ? <Loader2 className="animate-spin"/> : <ClipboardCheck size={20}/>} {initialData ? 'ثبت تغییرات' : 'معرفی نهایی قطعه'}
+                            {loading ? <Loader2 className="animate-spin"/> : <ClipboardCheck size={20}/>} {initialData ? 'ثبت تغییرات' : 'معرفی نهایی کالا'}
                         </button>
                     </div>
                 </form>
