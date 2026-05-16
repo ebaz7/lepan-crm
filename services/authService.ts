@@ -132,14 +132,28 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
     // 3. APPLY DATABASE SETTINGS (MERGE)
     if (settings) {
         if (settings.rolePermissions && settings.rolePermissions[userRole]) {
-            console.log(`Applying settings for ${userRole}:`, settings.rolePermissions[userRole]);
+            console.log(`DEBUG: Applying settings for role ${userRole}:`, settings.rolePermissions[userRole]);
             perms = { ...perms, ...settings.rolePermissions[userRole] };
         }
         if (settings.purchaseRolePermissions && settings.purchaseRolePermissions[userRole]) {
+            console.log(`DEBUG: Applying purchase settings for role ${userRole}:`, settings.purchaseRolePermissions[userRole]);
             perms = { ...perms, ...settings.purchaseRolePermissions[userRole] };
         }
     }
-    console.log(`Final permissions for ${userRole}:`, perms);
+
+    // --- FIX FOR CUSTOM ROLES: ENSURE NO LEAKAGE ---
+    // If not a system role, force warehouse permissions off UNLESS explicitly enabled
+    const systemRoleIds = Object.values(UserRole);
+    if (!systemRoleIds.includes(userRole as any)) {
+        if (!settings?.rolePermissions?.[userRole]?.canManageWarehouse) {
+            perms.canManageWarehouse = false;
+        }
+    } else if (userRole === UserRole.WAREHOUSE_KEEPER) {
+        // Specifically force off for Warehouse Keeper system role if it was accidentally enabled in settings
+        perms.canManageWarehouse = false;
+    }
+
+    console.log(`DEBUG: Final permissions for ${userRole}:`, perms);
 
     // 4. FORCE SYSTEM DEFAULTS AGAIN (SAFETY NET)
     // Ensure critical approvals for system roles aren't accidentally disabled by empty settings

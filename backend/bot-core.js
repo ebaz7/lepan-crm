@@ -984,7 +984,15 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         
         let header = isDelete ? `❌ *حذف شد: مجوز خروج کالا*` : (isEdit ? `✏️ *ویرایش شد: مجوز خروج کالا*` : `🚛 *مجوز خروج کالا*`);
         
-        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
+        let approvers = [];
+        if (p.approverCeo) approvers.push(`مدیرعامل: ${p.approverCeo}`);
+        if (p.approverFactory) approvers.push(`مدیرکارخانه: ${p.approverFactory}`);
+        if (p.approverWarehouse) approvers.push(`تحویل انبار: ${p.approverWarehouse}`);
+        if (p.approverSecurity) approvers.push(`انتظامات: ${p.approverSecurity}`);
+        if (p.approverFactoryFinal) approvers.push(`تایید نهایی: ${p.approverFactoryFinal}`);
+        const approversLine = approvers.length > 0 ? `\n✅ *تاییدها:* \n${approvers.join('\n')}` : '';
+
+        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}${approversLine}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
