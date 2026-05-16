@@ -108,6 +108,7 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
         case UserRole.WAREHOUSE_KEEPER:
             perms.canViewExitPermits = true;
             perms.canApproveExitWarehouse = true; // CRITICAL DEFAULT
+            perms.canManageWarehouse = false;
             perms.canManagePurchase = true;
             break;
 

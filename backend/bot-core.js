@@ -1983,6 +1983,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 p.status = 'خارج شده (بایگانی)';
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
                 stepName = 'تایید نهایی مدیر کارخانه (خروج کالا)';
+                p.approverFactoryFinal = user.fullName;
             }
             
             saveDb(db);

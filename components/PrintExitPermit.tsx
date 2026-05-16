@@ -313,18 +313,31 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 {/* SECURITY / EXIT TIME - CRITICAL FIX - ALWAYS RENDER BOX */}
                 <div className="flex flex-col items-center justify-between min-h-[80px]">
                     <div className="mb-2 flex items-center justify-center h-full">
-                        {/* Always render Stamp structure if exited, or placeholder if pending, but BOX is always there */}
-                        {permit.status === ExitPermitStatus.EXITED ? 
+                        {permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL ? 
                             <Stamp 
                                 title="انتظامات / خروج" 
                                 name={permit.approverSecurity || 'نگهبان'} 
-                                time={permit.exitTime} 
+                                time={(permit.exitTime && permit.status !== ExitPermitStatus.EXITED) ? permit.exitTime : undefined} 
                                 isSecurity={true}
                             /> 
                             : <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>
                         }
                     </div>
                     <div className="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید خروج (انتظامات)</div>
+                </div>
+
+                <div className="flex flex-col items-center justify-between min-h-[80px]">
+                    <div className="mb-2 flex items-center justify-center h-full">
+                        {permit.status === ExitPermitStatus.EXITED ? 
+                            <Stamp 
+                                title="مدیر کارخانه" 
+                                name={permit.approverFactoryFinal || 'مدیر کارخانه'} 
+                                time={permit.exitTime}
+                            /> 
+                            : <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء نهایی</div>
+                        }
+                    </div>
+                    <div className="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید نهایی خروج</div>
                 </div>
             </div>
             
