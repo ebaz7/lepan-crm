@@ -131,12 +131,14 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
     // 3. APPLY DATABASE SETTINGS (MERGE)
     if (settings) {
         if (settings.rolePermissions && settings.rolePermissions[userRole]) {
+            console.log(`Applying settings for ${userRole}:`, settings.rolePermissions[userRole]);
             perms = { ...perms, ...settings.rolePermissions[userRole] };
         }
         if (settings.purchaseRolePermissions && settings.purchaseRolePermissions[userRole]) {
             perms = { ...perms, ...settings.purchaseRolePermissions[userRole] };
         }
     }
+    console.log(`Final permissions for ${userRole}:`, perms);
 
     // 4. FORCE SYSTEM DEFAULTS AGAIN (SAFETY NET)
     // Ensure critical approvals for system roles aren't accidentally disabled by empty settings

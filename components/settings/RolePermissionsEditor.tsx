@@ -281,54 +281,56 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {PERMISSION_GROUPS.map(group => {
-                                            const GroupIcon = group.icon;
-                                            // Check if ALL items in this group are checked
-                                            const rolePerms = settings.rolePermissions?.[role.id] || {};
-                                            // @ts-ignore
-                                            const isGroupAllChecked = group.items.every(item => rolePerms[item.id]);
+                                             {PERMISSION_GROUPS.map(group => {
+                                             const GroupIcon = group.icon;
+                                             // Check if ALL items in this group are checked
+                                             const isPurchase = group.id === 'purchase';
+                                             const currentStore = isPurchase ? (settings.purchaseRolePermissions || {}) : (settings.rolePermissions || {});
+                                             const rolePerms = currentStore[role.id] || {};
+                                             // @ts-ignore
+                                             const isGroupAllChecked = group.items.every(item => rolePerms[item.id]);
 
-                                            return (
-                                                <div key={group.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                                                    <div className={`px-4 py-2 bg-${group.color}-50 border-b border-${group.color}-100 flex justify-between items-center`}>
-                                                        <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                                                            <GroupIcon size={16} className={`text-${group.color}-600`}/>
-                                                            {group.title}
-                                                        </div>
-                                                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                className="hidden"
-                                                                checked={isGroupAllChecked}
-                                                                onChange={(e) => toggleGroup(role.id, group.id, group.items, e.target.checked)}
-                                                            />
-                                                            <span className="text-[10px] text-blue-600 hover:underline">
-                                                                {isGroupAllChecked ? 'لغو همه' : 'انتخاب همه'}
-                                                            </span>
-                                                        </label>
-                                                    </div>
-                                                    <div className="p-2 space-y-1">
-                                                        {group.items.map(perm => {
-                                                            // @ts-ignore
-                                                            const isChecked = !!rolePerms[perm.id];
-                                                            
-                                                            return (
-                                                                <div 
-                                                                    key={perm.id} 
-                                                                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-green-50' : 'hover:bg-gray-50'}`}
-                                                                    onClick={() => handlePermissionChange(role.id, group.id, perm.id, !isChecked)}
-                                                                >
-                                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-green-500 border-green-500' : 'glass-panel border-gray-300'}`}>
-                                                                        {isChecked && <CheckSquare size={14} className="text-white"/>}
-                                                                    </div>
-                                                                    <span className={`text-xs select-none ${isChecked ? 'text-gray-800 font-bold' : 'text-gray-600'}`}>{perm.label}</span>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                             return (
+                                                 <div key={group.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                                                     <div className={`px-4 py-2 bg-${group.color}-50 border-b border-${group.color}-100 flex justify-between items-center`}>
+                                                         <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                             <GroupIcon size={16} className={`text-${group.color}-600`}/>
+                                                             {group.title}
+                                                         </div>
+                                                         <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                             <input 
+                                                                 type="checkbox" 
+                                                                 className="hidden"
+                                                                 checked={isGroupAllChecked}
+                                                                 onChange={(e) => toggleGroup(role.id, group.id, group.items, e.target.checked)}
+                                                             />
+                                                             <span className="text-[10px] text-blue-600 hover:underline">
+                                                                 {isGroupAllChecked ? 'لغو همه' : 'انتخاب همه'}
+                                                             </span>
+                                                         </label>
+                                                     </div>
+                                                     <div className="p-2 space-y-1">
+                                                         {group.items.map(perm => {
+                                                             // @ts-ignore
+                                                             const isChecked = !!rolePerms[perm.id];
+                                                             
+                                                             return (
+                                                                 <div 
+                                                                     key={perm.id} 
+                                                                     className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-green-50' : 'hover:bg-gray-50'}`}
+                                                                     onClick={() => handlePermissionChange(role.id, group.id, perm.id, !isChecked)}
+                                                                 >
+                                                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-green-500 border-green-500' : 'glass-panel border-gray-300'}`}>
+                                                                         {isChecked && <CheckSquare size={14} className="text-white"/>}
+                                                                     </div>
+                                                                     <span className={`text-xs select-none ${isChecked ? 'text-gray-800 font-bold' : 'text-gray-600'}`}>{perm.label}</span>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                     </div>
+                                                 </div>
+                                             );
+                                         })}
                                     </div>
                                 )}
                             </div>
