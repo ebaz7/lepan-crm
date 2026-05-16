@@ -1018,7 +1018,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         }
 
         // FORCE BOTH GROUPS IF AFTER WAREHOUSE TICKET or if final exit
-        if (p.status === 'در انتظار خروج' || p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)') {
+        if (p.status === 'در انتظار خروج' || p.status === 'در انتظار خروج (انتظامات)' || p.status === 'در انتظار تایید نهایی مدیر کارخانه' || p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)') {
             if (!targetGroups.includes(1)) targetGroups.push(1);
             if (!targetGroups.includes(2)) targetGroups.push(2);
         }
@@ -1927,10 +1927,10 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'ACT_EXIT_CARTABLE') {
         let pendingPermits = [];
         if (user.role === 'ceo') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار تایید مدیرعامل');
-        else if (user.role === 'factory_manager') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار مدیر کارخانه');
+        else if (user.role === 'factory_manager') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار مدیر کارخانه' || p.status === 'در انتظار تایید نهایی مدیر کارخانه');
         else if (user.role === 'warehouse_keeper') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار تایید انبار');
-        else if (user.role === 'security_head' || user.role === 'security_guard') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار خروج');
-        else if (user.role === 'admin') pendingPermits = db.exitPermits.filter(p => !p.status.includes('بایگانی') && !p.status.includes('رد'));
+        else if (user.role === 'security_head' || user.role === 'security_guard') pendingPermits = db.exitPermits.filter(p => p.status === 'در انتظار خروج (انتظامات)');
+        else if (user.role === 'admin') pendingPermits = db.exitPermits.filter(p => !p.status.includes('بایگانی') && !p.status.includes('خارج شد') && !p.status.includes('رد'));
 
         if (pendingPermits.length === 0) return sendFn(chatId, "✅ کارتابل خروج خالی است.");
 
@@ -1957,7 +1957,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (p.status === 'در انتظار تایید مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canApprove = true;
             else if (p.status === 'در انتظار مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canApprove = true;
             else if (p.status === 'در انتظار تایید انبار' && ['warehouse_keeper', 'admin'].includes(user.role)) canApprove = true;
-            else if (p.status === 'در انتظار خروج' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canApprove = true;
+            else if (p.status === 'در انتظار خروج (انتظامات)' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canApprove = true;
+            else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canApprove = true;
 
             if (!canApprove) {
                 return sendFn(userId, "⛔ شما دسترسی لازم برای تایید این مرحله را ندارید.");
@@ -1973,12 +1974,15 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 p.status = 'در انتظار تایید انبار';
                 stepName = 'مدیر کارخانه';
             } else if (p.status === 'در انتظار تایید انبار') {
-                p.status = 'در انتظار خروج';
+                p.status = 'در انتظار خروج (انتظامات)';
                 stepName = 'سرپرست انبار';
-            } else if (p.status === 'در انتظار خروج') {
+            } else if (p.status === 'در انتظار خروج (انتظامات)') {
+                p.status = 'در انتظار تایید نهایی مدیر کارخانه';
+                stepName = 'انتظامات (ثبت پلاک و راننده)';
+            } else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه') {
                 p.status = 'خارج شده (بایگانی)';
-                p.exitTime = new Date().toLocaleTimeString('fa-IR');
-                stepName = 'انتظامات';
+                p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                stepName = 'مدیر کارخانه (تایید نهایی خروج)';
             }
             
             saveDb(db);
@@ -1999,7 +2003,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (p.status === 'در انتظار تایید مدیرعامل' && ['ceo', 'admin'].includes(user.role)) canReject = true;
             else if (p.status === 'در انتظار مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canReject = true;
             else if (p.status === 'در انتظار تایید انبار' && ['warehouse_keeper', 'admin'].includes(user.role)) canReject = true;
-            else if (p.status === 'در انتظار خروج' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canReject = true;
+            else if (p.status === 'در انتظار خروج (انتظامات)' && ['security_head', 'security_guard', 'admin'].includes(user.role)) canReject = true;
+            else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه' && ['factory_manager', 'admin'].includes(user.role)) canReject = true;
 
             if (!canReject) {
                 return sendFn(userId, "⛔ شما دسترسی لازم برای رد این مرحله را ندارید.");

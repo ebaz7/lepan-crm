@@ -21,6 +21,7 @@ import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '
 import useIsMobile from '../hooks/useIsMobile';
 import * as XLSX from 'xlsx';
 import PrintPurchaseRequest from './PrintPurchaseRequest';
+import PrintPartDataSheet from './PrintPartDataSheet';
 import { generatePdf } from '../utils/pdfGenerator';
 
 const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'DASHBOARD' }) => {
@@ -70,6 +71,12 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
             const data = await getPartKardex(partId);
             setKardexEntries(data);
         } catch (e) { console.error(e); }
+    };
+
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
     };
 
     // Components for each tab will go here
@@ -122,6 +129,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         requests={requests} 
                         setActiveTab={setActiveTab} 
                         currentUser={currentUser}
+                        settings={settings}
                     />
                 )}
                 {activeTab === 'REQUESTS' && (
@@ -130,6 +138,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         currentUser={currentUser} 
                         onRequestUpdate={loadRequests} 
                         parts={parts}
+                        settings={settings}
                     />
                 )}
                 {activeTab === 'ARCHIVE' && (
@@ -139,6 +148,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         onRequestUpdate={loadRequests} 
                         parts={parts}
                         isArchive={true}
+                        settings={settings}
                     />
                 )}
                 {activeTab === 'PARTS' && (
@@ -163,7 +173,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 };
 
 // --- DASHBOARD TAB ---
-const PurchaseDashboard = ({ requests, setActiveTab, currentUser }: any) => {
+const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: any) => {
     const stats = [
         { label: 'کل درخواست‌ها', count: requests.length, color: 'indigo', icon: ShoppingCart, tab: 'REQUESTS' },
         { label: 'در انتظار تایید', count: requests.filter((r: any) => r.status.includes('PENDING')).length, color: 'amber', icon: ClipboardCheck, tab: 'REQUESTS' },
@@ -171,12 +181,27 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser }: any) => {
         { label: 'تکمیل شده', count: requests.filter((r: any) => r.status === PurchaseRequestStatus.COMPLETED).length, color: 'green', icon: CheckCircle, tab: 'ARCHIVE' }
     ];
 
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
+    };
+
     const myTasks = requests.filter((r: any) => {
-        switch (currentUser.role) {
-            case UserRole.FACTORY_MANAGER: return r.status === PurchaseRequestStatus.PENDING_FACTORY || r.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL;
-            case UserRole.CEO: return r.status === PurchaseRequestStatus.PENDING_CEO || r.status === PurchaseRequestStatus.PENDING_CEO_SELECTION;
-            case UserRole.WAREHOUSE_KEEPER: return r.status === PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL || r.status === PurchaseRequestStatus.PENDING_QC || r.status === PurchaseRequestStatus.PENDING_TECHNICAL;
-            default: return r.status.includes('PENDING'); // Proxy for simplicity
+        if (currentUser.role === UserRole.ADMIN) return r.status !== PurchaseRequestStatus.COMPLETED && r.status !== PurchaseRequestStatus.REJECTED;
+        
+        switch (r.status) {
+            case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
+            case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_CEO: return hasPurchasePerm('canApproveCEO');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA: return hasPurchasePerm('canManageProformas');
+            case PurchaseRequestStatus.PENDING_CEO_SELECTION: return hasPurchasePerm('canSelectProforma');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL: return hasPurchasePerm('canApproveFactoryFinal');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL: return hasPurchasePerm('canWarehouseFinalize');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL: return hasPurchasePerm('canCommercialFinalize');
+            default: return false;
         }
     });
 
@@ -221,7 +246,7 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser }: any) => {
 };
 
 // --- REQUESTS TAB ---
-const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts }: any) => {
+const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, isArchive, settings }: any) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [viewingRequest, setViewingRequest] = useState<PurchaseRequest | null>(null);
@@ -230,7 +255,13 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts }: 
         r.itemName.includes(searchTerm) || r.requestNumber.includes(searchTerm)
     );
 
-    const canCreate = currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN;
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
+    };
+
+    const canCreate = hasPurchasePerm('canCreate');
 
     return (
         <div className="space-y-4">
@@ -239,7 +270,7 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts }: 
                     <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی درخواست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
-                {canCreate && (
+                {canCreate && !isArchive && (
                     <button onClick={() => setShowCreate(true)} className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-bold text-sm">
                         <Plus size={20}/> جدید
                     </button>
@@ -248,32 +279,38 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts }: 
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filtered.map((req: PurchaseRequest) => (
-                    <RequestCard key={req.id} req={req} currentUser={currentUser} onClick={() => setViewingRequest(req)} />
+                    <RequestCard key={req.id} req={req} currentUser={currentUser} settings={settings} onClick={() => setViewingRequest(req)} />
                 ))}
             </div>
 
             {showCreate && <CreateRequestModal onClose={() => setShowCreate(false)} currentUser={currentUser} onSuccess={onRequestUpdate} parts={parts} />}
-            {viewingRequest && <ViewRequestModal request={viewingRequest} onClose={() => setViewingRequest(null)} currentUser={currentUser} onSuccess={onRequestUpdate} />}
+            {viewingRequest && <ViewRequestModal request={viewingRequest} onClose={() => setViewingRequest(null)} currentUser={currentUser} onSuccess={onRequestUpdate} settings={settings} />}
         </div>
     );
 };
 
-const RequestCard = ({ req, currentUser, onClick }: { req: PurchaseRequest, currentUser: User, onClick: () => void }) => {
+const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseRequest, currentUser: User, onClick: () => void, settings?: SystemSettings }) => {
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
+    };
+
     const isMyTurn = (r: PurchaseRequest) => {
-        switch (currentUser.role) {
-            case UserRole.FACTORY_MANAGER: 
-                return r.status === PurchaseRequestStatus.PENDING_FACTORY || r.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL;
-            case UserRole.CEO: 
-                return r.status === PurchaseRequestStatus.PENDING_CEO || r.status === PurchaseRequestStatus.PENDING_CEO_SELECTION;
-            case UserRole.MANAGER: // Commercial Manager
-            case UserRole.SALES_MANAGER: // Using Sales manager as proxy for Commercial if not strictly defined
-                return r.status === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA || r.status === PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL;
-            case UserRole.SECURITY_HEAD:
-            case UserRole.SECURITY_GUARD:
-                return r.status === PurchaseRequestStatus.PENDING_SECURITY_ENTRY;
-            case UserRole.WAREHOUSE_KEEPER:
-                return r.status === PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL || r.status === PurchaseRequestStatus.PENDING_QC; // QC check often done involving warehouse
-            case UserRole.ADMIN: return true;
+        if (r.status === PurchaseRequestStatus.COMPLETED || r.status === PurchaseRequestStatus.REJECTED) return false;
+        if (currentUser.role === UserRole.ADMIN) return true;
+
+        switch (r.status) {
+            case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
+            case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_CEO: return hasPurchasePerm('canApproveCEO');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA: return hasPurchasePerm('canManageProformas');
+            case PurchaseRequestStatus.PENDING_CEO_SELECTION: return hasPurchasePerm('canSelectProforma');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL: return hasPurchasePerm('canApproveFactoryFinal');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL: return hasPurchasePerm('canWarehouseFinalize');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL: return hasPurchasePerm('canCommercialFinalize');
             default: return false;
         }
     };
@@ -379,10 +416,12 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     );
 };
 
-const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { request: PurchaseRequest, onClose: () => void, currentUser: User, onSuccess: () => void }) => {
+const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }: { request: PurchaseRequest, onClose: () => void, currentUser: User, onSuccess: () => void, settings?: SystemSettings }) => {
     const [actionLoading, setActionLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
     const [showProformaModal, setShowProformaModal] = useState(false);
     const [showSecurityModal, setShowSecurityModal] = useState(false);
+    const [showDataSheet, setShowDataSheet] = useState(false);
 
     const handleAction = async (nextStatus: PurchaseRequestStatus, extra: any = {}) => {
         setActionLoading(true);
@@ -402,13 +441,23 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
 
     const isCurrentStep = (step: PurchaseRequestStatus) => request.status === step;
 
+    const hasPurchasePerm = (perm: string) => {
+        if (currentUser.role === UserRole.ADMIN) return true;
+        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
+        return !!(rolePerms as any)[perm];
+    };
+
     // Permissions check
-    const canApproveTechnical = currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === 'technical' || currentUser.role === 'admin';
-    const canApproveFactory = currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === 'admin';
-    const canApproveCEO = currentUser.role === UserRole.CEO || currentUser.role === 'admin';
-    const canAddProforma = currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === 'admin';
-    const canSecurityEntry = currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.SECURITY_GUARD || currentUser.role === 'admin';
-    const canQC = currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.MANAGER || currentUser.role === 'admin';
+    const canApproveTechnical = hasPurchasePerm('canApproveTechnical');
+    const canApproveFactory = hasPurchasePerm('canApproveFactory');
+    const canApproveCEO = hasPurchasePerm('canApproveCEO');
+    const canAddProforma = hasPurchasePerm('canManageProformas');
+    const canSelectProforma = hasPurchasePerm('canSelectProforma');
+    const canSecurityEntry = hasPurchasePerm('canRegisterEntry');
+    const canQC = hasPurchasePerm('canCheckQC');
+    const canApproveFactoryFinal = hasPurchasePerm('canApproveFactoryFinal');
+    const canWarehouseFinalize = hasPurchasePerm('canWarehouseFinalize');
+    const canCommercialFinalize = hasPurchasePerm('canCommercialFinalize');
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
@@ -507,7 +556,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                                                         <p className="text-xs font-bold">{p.vendorName}</p>
                                                         <p className="text-[10px] text-gray-500">{formatCurrency(p.totalAmount)} ریال</p>
                                                     </div>
-                                                    {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && canApproveCEO && (
+                                                    {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && (canApproveCEO || canSelectProforma) && (
                                                         <button 
                                                             onClick={async () => {
                                                                 if(confirm('آیا این نهایی این پیش‌فاکتور تایید می‌گردد؟')) {
@@ -535,45 +584,42 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                     <div className="flex gap-2">
                         {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && canApproveTechnical && (
                             <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2"><CheckCircle size={20}/> تایید فنی (ارسال به مدیر کارخانه)</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2"><XCircle size={18}/> رد فنی</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20}/>} تایید فنی (ارسال به مدیر کارخانه)</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <XCircle size={18}/>} رد فنی</button>
                             </>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && canApproveFactory && (
                             <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2"><CheckCircle size={20}/> تایید مدیر کارخانه</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2"><XCircle size={18}/> رد درخواست</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20}/>} تایید مدیر کارخانه</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <XCircle size={18}/>} رد درخواست</button>
                             </>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_CEO) && canApproveCEO && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">تایید نهایی جهت استعلام</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی جهت استعلام'}</button>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) && canAddProforma && request.proformas.length > 0 && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">ارسال لیست جهت تایید نهایی</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'ارسال لیست جهت تایید نهایی'}</button>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && canSecurityEntry && (
-                            <button onClick={() => setShowSecurityModal(true)} className="px-8 py-3 bg-orange-600 text-white rounded-2xl font-black">ثبت ورود کالا</button>
+                            <button onClick={() => setShowSecurityModal(true)} className="px-8 py-3 bg-orange-600 text-white rounded-2xl font-black transition-all active:scale-95">ثبت ورود کالا</button>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && canQC && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL)} className="px-8 py-3 bg-green-600 text-white rounded-2xl font-black">تایید کنترل کیفی (QC)</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL)} className="px-8 py-3 bg-green-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید کنترل کیفی (QC)'}</button>
                         )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL) && canApproveFactory && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">تایید نهایی مدیر کارخانه</button>
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL) && canApproveFactoryFinal && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی مدیر کارخانه'}</button>
                         )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL) && (currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">صدور رسید انبار</button>
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL) && canWarehouseFinalize && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'صدور رسید انبار'}</button>
                         )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL) && canAddProforma && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">تایید نهایی و بایگانی</button>
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL) && canCommercialFinalize && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی و بایگانی'}</button>
                         )}
                     </div>
                     <div className="flex gap-2">
                         <button 
                             onClick={async () => {
-                                const el = document.getElementById('print-purchase-request-section');
-                                if (el) {
-                                    window.print();
-                                }
+                                window.print();
                             }}
                             className="flex items-center gap-2 p-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm" title="چاپ فرم"
                         >
@@ -581,19 +627,19 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                         </button>
                         <button 
                             onClick={async () => {
-                                setLoading(true);
+                                setPdfLoading(true);
                                 try {
                                     await generatePdf({
                                         elementId: 'print-purchase-request-section',
                                         filename: `purchase_request_${request.requestNumber}.pdf`
                                     });
                                 } finally {
-                                    setLoading(false);
+                                    setPdfLoading(false);
                                 }
                             }}
                             className="flex items-center gap-2 p-3 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="دریافت PDF"
                         >
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />} <span className="text-sm font-bold">دانلود PDF</span>
+                            {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />} <span className="text-sm font-bold">دانلود PDF</span>
                         </button>
                     </div>
                 </div>
@@ -679,6 +725,7 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
 const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
+    const [showDataSheet, setShowDataSheet] = useState<PartMasterData | null>(null);
     const [editingPart, setEditingPart] = useState<PartMasterData | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -772,7 +819,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                 {searchTerm ? (
                     filtered.map((p: PartMasterData) => (
                         <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => setShowDataSheet(p)}>
                                 {p.image ? (
                                     <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
                                 ) : (
@@ -795,6 +842,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                         </span>
                                     </div>
                                     <div className="flex gap-1">
+                                        <button onClick={() => setShowDataSheet(p)} className="p-2 bg-gray-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده شناسنامه فنی"><Info size={16}/></button>
                                         {p.pdfAttachment && (
                                             <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
                                         )}
@@ -832,7 +880,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                          // Parts that don't have subcategory
                          parts.filter((p: any) => p.category === selectedCategory && !p.subCategory).map((p: any) => (
                              <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                                <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                                <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => setShowDataSheet(p)}>
                                     {p.image ? (
                                         <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
                                     ) : (
@@ -855,6 +903,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                             </span>
                                         </div>
                                         <div className="flex gap-1">
+                                            <button onClick={() => setShowDataSheet(p)} className="p-2 bg-gray-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده شناسنامه فنی"><Info size={16}/></button>
                                             {p.pdfAttachment && (
                                                 <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
                                             )}
@@ -869,7 +918,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                 ) : (
                      parts.filter((p: any) => p.category === selectedCategory && (!selectedSubCategory || p.subCategory === selectedSubCategory)).map((p: any) => (
                         <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => setShowDataSheet(p)}>
                                 {p.image ? (
                                     <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
                                 ) : (
@@ -892,6 +941,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                                         </span>
                                     </div>
                                     <div className="flex gap-1">
+                                        <button onClick={() => setShowDataSheet(p)} className="p-2 bg-gray-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده شناسنامه فنی"><Info size={16}/></button>
                                         {p.pdfAttachment && (
                                             <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
                                         )}
@@ -906,6 +956,39 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
             </div>
 
             {showModal && <PartModal onClose={() => setShowModal(false)} onSuccess={onPartUpdate} initialData={editingPart} parts={parts} />}
+            {showDataSheet && <DataSheetModal part={showDataSheet} onClose={() => setShowDataSheet(null)} />}
+        </div>
+    );
+};
+
+const DataSheetModal = ({ part, onClose }: { part: PartMasterData, onClose: () => void }) => {
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-900 text-white">
+                    <div className="flex items-center gap-3">
+                        <Info size={28} className="text-yellow-400" />
+                        <div>
+                            <h2 className="text-xl font-black">شناسنامه کالا (Data Sheet)</h2>
+                            <p className="text-[10px] opacity-80 font-mono tracking-widest">{part.id}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><XCircle size={24} /></button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto bg-gray-50 p-4 md:p-8">
+                    <div id="datasheet-print-area" className="bg-white p-4 md:p-12 shadow-sm rounded-2xl mx-auto max-w-3xl border border-gray-200 printable-datasheet">
+                         <PrintPartDataSheet part={part} />
+                    </div>
+                </div>
+
+                <div className="p-6 border-t flex justify-end gap-3 bg-white">
+                    <button onClick={onClose} className="px-6 py-3 border-2 border-gray-200 rounded-2xl font-bold text-gray-500">بستن</button>
+                    <button onClick={() => window.print()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-indigo-100">
+                        <Printer size={20}/> چاپ شناسنامه
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

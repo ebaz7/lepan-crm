@@ -9,7 +9,9 @@ export enum UserRole {
   WAREHOUSE_KEEPER = 'warehouse_keeper',
   SECURITY_HEAD = 'security_head',
   SECURITY_GUARD = 'security_guard',
-  USER = 'user'
+  USER = 'user',
+  COMMERCIAL = 'commercial',
+  QC = 'qc'
 }
 
 export interface User {
@@ -309,6 +311,22 @@ export interface SystemSettings {
   miniAppCarPriceUrl?: string;
   miniAppCarEstimatorUrl?: string;
   miniAppMobilePriceUrl?: string;
+  purchaseRolePermissions?: Record<string, PurchaseRolePermissions>;
+}
+
+export interface PurchaseRolePermissions {
+  canView?: boolean;
+  canCreate?: boolean;
+  canApproveTechnical?: boolean;
+  canApproveFactory?: boolean;
+  canApproveCEO?: boolean;
+  canManageProformas?: boolean;
+  canSelectProforma?: boolean;
+  canRegisterEntry?: boolean;
+  canCheckQC?: boolean;
+  canApproveFactoryFinal?: boolean;
+  canWarehouseFinalize?: boolean;
+  canCommercialFinalize?: boolean;
 }
 
 export interface BirthdayGreetingTemplate {
