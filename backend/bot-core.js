@@ -984,7 +984,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         
         let header = isDelete ? `❌ *حذف شد: مجوز خروج کالا*` : (isEdit ? `✏️ *ویرایش شد: مجوز خروج کالا*` : `🚛 *مجوز خروج کالا*`);
         
-        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : ''}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
+        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالا: ${p.goodsName || 'چند مورد'}\n${countLine}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
@@ -1978,11 +1978,11 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 stepName = 'سرپرست انبار';
             } else if (p.status === 'در انتظار خروج (انتظامات)') {
                 p.status = 'در انتظار تایید نهایی مدیر کارخانه';
-                stepName = 'انتظامات (ثبت پلاک و راننده)';
+                stepName = 'انتظامات (ثبت پلاک و راننده - خروج)';
             } else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه') {
                 p.status = 'خارج شده (بایگانی)';
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-                stepName = 'مدیر کارخانه (تایید نهایی خروج)';
+                stepName = 'تایید نهایی مدیر کارخانه (خروج کالا)';
             }
             
             saveDb(db);

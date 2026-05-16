@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SystemSettings, UserRole, RolePermissions, CustomRole } from '../../types';
-import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList } from 'lucide-react';
+import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList, ShoppingCart } from 'lucide-react';
 
 interface Props {
     settings: SystemSettings;
@@ -9,6 +9,26 @@ interface Props {
 }
 
 const PERMISSION_GROUPS = [
+    { 
+        id: 'purchase', 
+        title: 'ماژول خرید', 
+        icon: ShoppingCart, 
+        color: 'amber', 
+        items: [
+            { id: 'canView', label: 'مشاهده ماژول درخواست خرید (کارتابل)' },
+            { id: 'canCreate', label: 'ثبت درخواست خرید جدید' },
+            { id: 'canApproveTechnical', label: 'بررسی و تایید فنی (واحد فنی/تولید)' },
+            { id: 'canApproveFactory', label: 'تایید مدیر کارخانه' },
+            { id: 'canApproveCEO', label: 'تایید مدیرعامل / مدیر واحد' },
+            { id: 'canManageProformas', label: 'ثبت پیش‌فاکتورها و استعلام (بازرگانی)' },
+            { id: 'canSelectProforma', label: 'انتخاب بهترین گزینه خرید' },
+            { id: 'canRegisterEntry', label: 'ثبت ورود فیزیکی کالا (انتظامات)' },
+            { id: 'canCheckQC', label: 'تایید کنترل کیفیت (QC)' },
+            { id: 'canApproveFactoryFinal', label: 'تایید نهایی مدیر کارخانه (بعد از ورود)' },
+            { id: 'canWarehouseFinalize', label: 'صدور رسید انبار نهایی' },
+            { id: 'canCommercialFinalize', label: 'تایید نهایی و بایگانی بازرگانی' },
+        ] 
+    },
     { 
         id: 'payment', 
         title: 'ماژول پرداخت', 
@@ -91,6 +111,7 @@ const PERMISSION_GROUPS = [
     }
 ];
 
+
 const DEFAULT_ROLES = [
     { id: UserRole.USER, label: 'کاربر عادی' },
     { id: UserRole.FINANCIAL, label: 'مدیر مالی' },
@@ -116,21 +137,22 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
     };
 
     // --- CORE PERMISSION UPDATE LOGIC ---
-    const handlePermissionChange = (roleId: string, permKey: string, value: boolean) => {
-        // 1. Get current permissions for this role (or empty object)
-        const currentRolePerms = settings.rolePermissions?.[roleId] || {};
+    const handlePermissionChange = (roleId: string, groupId: string, permKey: string, value: boolean) => {
+        const isPurchase = groupId === 'purchase';
+        const currentStore = isPurchase ? (settings.purchaseRolePermissions || {}) : (settings.rolePermissions || {});
+        const currentRolePerms = currentStore[roleId] || {};
         
-        // 2. Create updated permissions object
         const updatedRolePerms = {
             ...currentRolePerms,
             [permKey]: value
         };
 
-        // 3. Update Global Settings
+        const newSettingsKey = isPurchase ? 'purchaseRolePermissions' : 'rolePermissions';
+        
         const newSettings = {
             ...settings,
-            rolePermissions: {
-                ...settings.rolePermissions,
+            [newSettingsKey]: {
+                ...currentStore,
                 [roleId]: updatedRolePerms
             }
         };
@@ -138,8 +160,11 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
         onUpdateSettings(newSettings);
     };
 
-    const toggleGroup = (roleId: string, groupItems: {id: string}[], isChecked: boolean) => {
-        const currentRolePerms = settings.rolePermissions?.[roleId] || {};
+    const toggleGroup = (roleId: string, groupId: string, groupItems: {id: string}[], isChecked: boolean) => {
+        const isPurchase = groupId === 'purchase';
+        const currentStore = isPurchase ? (settings.purchaseRolePermissions || {}) : (settings.rolePermissions || {});
+        const currentRolePerms = currentStore[roleId] || {};
+        
         const updatedRolePerms = { ...currentRolePerms };
         
         groupItems.forEach(item => {
@@ -147,10 +172,12 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
             updatedRolePerms[item.id] = isChecked;
         });
 
+        const newSettingsKey = isPurchase ? 'purchaseRolePermissions' : 'rolePermissions';
+
         const newSettings = {
             ...settings,
-            rolePermissions: {
-                ...settings.rolePermissions,
+            [newSettingsKey]: {
+                ...currentStore,
                 [roleId]: updatedRolePerms
             }
         };
@@ -273,7 +300,7 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                                                                 type="checkbox" 
                                                                 className="hidden"
                                                                 checked={isGroupAllChecked}
-                                                                onChange={(e) => toggleGroup(role.id, group.items, e.target.checked)}
+                                                                onChange={(e) => toggleGroup(role.id, group.id, group.items, e.target.checked)}
                                                             />
                                                             <span className="text-[10px] text-blue-600 hover:underline">
                                                                 {isGroupAllChecked ? 'لغو همه' : 'انتخاب همه'}
@@ -289,7 +316,7 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                                                                 <div 
                                                                     key={perm.id} 
                                                                     className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isChecked ? 'bg-green-50' : 'hover:bg-gray-50'}`}
-                                                                    onClick={() => handlePermissionChange(role.id, perm.id, !isChecked)}
+                                                                    onClick={() => handlePermissionChange(role.id, group.id, perm.id, !isChecked)}
                                                                 >
                                                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-green-500 border-green-500' : 'glass-panel border-gray-300'}`}>
                                                                         {isChecked && <CheckSquare size={14} className="text-white"/>}

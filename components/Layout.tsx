@@ -250,14 +250,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canViewPayment = perms.canViewPaymentOrders === true;
   const canCreateExit = perms.canCreateExitPermit === true;
   const canViewExit = perms.canViewExitPermits === true;
-  const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true || perms.canApproveBijak === true;
+  const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true;
   const canSeeTrade = perms.canManageTrade === true;
   const canSeeProducts = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SALES_MANAGER || perms.canManageSales === true; // Sales manager & admins
   const canSeeSettings = currentUser.role === UserRole.ADMIN || perms.canManageSettings === true;
   const canSeeSecurity = currentUser.role === UserRole.ADMIN || perms.canViewSecurity === true;
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
-  const canSeePurchase = currentUser.role === UserRole.ADMIN || perms.canManagePurchase === true;
+  const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
 
   const navItems = [
     { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },

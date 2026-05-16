@@ -13,7 +13,6 @@ import SecondExitGroupSettings from './settings/SecondExitGroupSettings';
 import RolePermissionsEditor from './settings/RolePermissionsEditor';
 import BackupManager from './settings/BackupManager'; 
 import BotManager from './settings/BotManager'; 
-import PurchasePermissionsEditor from './settings/PurchasePermissionsEditor'; 
 
 // Internal QRCode Component with Error Handling
 const QRCode = ({ value, size }: { value: string, size: number }) => { 
@@ -47,7 +46,7 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
-  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'purchase_permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
+  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
       currentTrackingNumber: 1000, 
       currentExitPermitNumber: 1000, 
@@ -431,7 +430,6 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                 <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'glass-panel shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
                 <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
                 <button onClick={() => setActiveCategory('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'meetings' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> صورتجلسات</button>
-                <button onClick={() => setActiveCategory('purchase_permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'purchase_permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌های خرید</button>
                 <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
             </nav>
         </div>
@@ -1278,12 +1276,6 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     <li>برای ارسال به واتساپ، فعلاً ارسال گروهی بر اساس شناسه گروه واتساپ (JID) انجام می‌شود.</li>
                                 </ul>
                             </div>
-                        </div>
-                    )}
-
-                    {activeCategory === 'purchase_permissions' && (
-                        <div className="space-y-6 animate-fade-in">
-                            <PurchasePermissionsEditor settings={settings} onUpdateSettings={handleUpdateSettings} />
                         </div>
                     )}
 

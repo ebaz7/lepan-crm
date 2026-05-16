@@ -78,14 +78,12 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canManageTrade = true;
             perms.canApproveBijak = true;
             perms.canViewSecurity = true;
-            perms.canManagePurchase = true;
             break;
 
         case UserRole.FINANCIAL:
             perms.canCreatePaymentOrder = true;
             perms.canViewPaymentOrders = true;
             perms.canApproveFinancial = true;
-            perms.canManagePurchase = true;
             break;
 
         case UserRole.MANAGER:
@@ -93,7 +91,6 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canViewPaymentOrders = true;
             perms.canApproveManager = true;
             perms.canViewExitPermits = true; 
-            perms.canManagePurchase = true;
             break;
 
         case UserRole.SALES_MANAGER:
@@ -106,13 +103,11 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canViewExitPermits = true;
             perms.canApproveExitFactory = true; // CRITICAL DEFAULT
             perms.canViewSecurity = true;
-            perms.canManagePurchase = true;
             break;
 
         case UserRole.WAREHOUSE_KEEPER:
             perms.canViewExitPermits = true;
             perms.canApproveExitWarehouse = true; // CRITICAL DEFAULT
-            perms.canManageWarehouse = true;
             perms.canManagePurchase = true;
             break;
 
@@ -134,9 +129,13 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
     }
 
     // 3. APPLY DATABASE SETTINGS (MERGE)
-    if (settings && settings.rolePermissions && settings.rolePermissions[userRole]) {
-        const savedPerms = settings.rolePermissions[userRole];
-        perms = { ...perms, ...savedPerms };
+    if (settings) {
+        if (settings.rolePermissions && settings.rolePermissions[userRole]) {
+            perms = { ...perms, ...settings.rolePermissions[userRole] };
+        }
+        if (settings.purchaseRolePermissions && settings.purchaseRolePermissions[userRole]) {
+            perms = { ...perms, ...settings.purchaseRolePermissions[userRole] };
+        }
     }
 
     // 4. FORCE SYSTEM DEFAULTS AGAIN (SAFETY NET)
