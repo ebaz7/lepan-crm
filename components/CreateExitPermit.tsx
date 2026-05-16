@@ -135,14 +135,18 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         const ceo = users.find(u => u.role === UserRole.CEO);
                         
                         if (ceo) {
-                            const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
+                            const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n💰 مبلغ: ${newPermit.price}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
+                            const mediaData = { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` };
                             
                             if (ceo.phoneNumber) {
-                                await apiCall('/send-whatsapp', 'POST', { 
-                                    number: ceo.phoneNumber, 
-                                    message: caption, 
-                                    mediaData: { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` } 
-                                });
+                                await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData });
+                            }
+                            const ceos = users.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+                            for(const c of ceos) {
+                                const tgId = (c as any).telegramId || (c as any).telegramChatId;
+                                const blId = (c as any).baleId || (c as any).baleChatId;
+                                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption, mediaData });
+                                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption, mediaData });
                             }
                         }
                     } catch (e) { console.error("Notification Error", e); }

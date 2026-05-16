@@ -237,14 +237,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
-        // ... (Keep existing notification logic)
-        const element = document.getElementById(`print-permit-autosend-${permit.id}`);
-        if (!element) return;
+        const elementNoPrice = document.getElementById(`print-permit-autosend-noprice-${permit.id}`);
+        const elementWithPrice = document.getElementById(`print-permit-autosend-price-${permit.id}`);
+        if (!elementNoPrice || !elementWithPrice) return;
         try {
-            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
-            const base64 = canvas.toDataURL('image/png').split(',')[1];
+            const canvasNoPrice = await html2canvas(elementNoPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+            const base64NoPrice = canvasNoPrice.toDataURL('image/png').split(',')[1];
             
-            // ... (Target logic same as previous) ...
+            const canvasWithPrice = await html2canvas(elementWithPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+            const base64WithPrice = canvasWithPrice.toDataURL('image/png').split(',')[1];
+            
             const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
             
@@ -328,14 +330,27 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             for (const t of targets) {
                 if (t.role) {
                     const u = allUsers.find(x => x.role === t.role);
-                    if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                    if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
                 }
                 if (t.group) {
-                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
                 }
                 if (t.platform) {
-                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64, filename: `Permit_${permit.permitNumber}.png` } });
+                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64NoPrice, filename: `Permit_${permit.permitNumber}.png` } });
                 }
+            }
+            
+            // Explicitly send WITH PRICE to CEO, SALES_MANAGER, ADMIN
+            const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+            const managerCaption = caption + `\n💰 مبلغ: ${permit.price}`;
+            for (const m of managers) {
+                const tgId = (m as any).telegramId || (m as any).telegramChatId;
+                const blId = (m as any).baleId || (m as any).baleChatId;
+                if (m.phoneNumber) {
+                    await apiCall('/send-whatsapp', 'POST', { number: m.phoneNumber, message: managerCaption, mediaData: { data: base64WithPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                }
+                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
+                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
             }
         } catch (e) { console.error("Notif Error", e); }
     };
@@ -487,8 +502,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
              {/* Hidden Render */}
              {activeAutoSends.map(p => (
                 <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-permit-autosend-${p.id}`}>
+                    <div id={`print-permit-autosend-noprice-${p.id}`}>
                         <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} />
+                    </div>
+                    <div id={`print-permit-autosend-price-${p.id}`}>
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} />
                     </div>
                 </div>
             ))}

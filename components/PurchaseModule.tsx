@@ -11,7 +11,7 @@ import {
     deletePartMasterData, getPartKardex, uploadFileChunked 
 } from '../services/storageService';
 import { 
-    ShoppingBag, Plus, Search, Filter, Eye, Edit, Trash2, 
+    ShoppingCart, Plus, Search, Filter, Eye, Edit, Trash2, 
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
@@ -75,7 +75,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }>
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center glass-panel p-4 rounded-2xl shadow-sm border border-gray-200">
                     <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                        <ShoppingBag className="text-indigo-600"/> مدیریت خرید و قطعات
+                        <ShoppingCart className="text-indigo-600"/> مدیریت خرید و قطعات
                     </h1>
                 </div>
                 
@@ -323,7 +323,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
             <div className="bg-white rounded-[2.5rem] w-full max-w-3xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
                 <div className="p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white">
                     <div className="flex items-center gap-3">
-                        <ShoppingBag size={28} />
+                        <ShoppingCart size={28} />
                         <div>
                             <h2 className="text-xl font-black">جزئیات درخواست خرید</h2>
                             <p className="text-[10px] opacity-80 uppercase tracking-widest">{request.requestNumber}</p>

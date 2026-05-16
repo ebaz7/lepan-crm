@@ -212,10 +212,21 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     caption += `🏁 مقصد: ${tx.destination || '---'}\n`;
                     caption += `👤 تایید توسط: ${tx.approvedBy}\n`;
 
-                    if (managerNumber && managerElement) {
+                    if (managerElement) {
                         const canvas = await html2canvas(managerElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 1200, useCORS: true });
                         const base64 = canvas.toDataURL('image/png').split(',')[1];
-                        await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: caption, mediaData: { data: base64, mimeType: 'image/png', filename: `Bijak_${tx.number}.png` } });
+                        const mediaData = { data: base64, mimeType: 'image/png', filename: `Bijak_${tx.number}.png` };
+                        if (managerNumber) {
+                           await apiCall('/send-whatsapp', 'POST', { number: managerNumber, message: caption, mediaData });
+                        }
+                        
+                        const managers = users.filter((u: any) => (u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN) && (u.telegramId || u.baleId));
+                        for (const m of managers) {
+                            const tgId = (m as any).telegramId || (m as any).telegramChatId;
+                            const blId = (m as any).baleId || (m as any).baleChatId;
+                            if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption, mediaData });
+                            if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption, mediaData });
+                        }
                     }
 
                     if (warehouseElement) {
