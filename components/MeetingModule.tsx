@@ -378,19 +378,19 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header Area */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/70 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-3xl shadow-xl">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/70 dark:bg-gray-900/50 p-6 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-3xl shadow-xl">
                 <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl rotate-3 shadow-blue-500/30">
+                    <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl rotate-3 shadow-blue-500/30">
                         <ClipboardList size={28} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">جلسات تولید</h2>
-                        <p className="text-xs text-gray-400 font-bold mt-0.5">مدیریت و ثبت صورتجلسات کارخانه</p>
+                        <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">جلسات تولید</h2>
+                        <p className="text-[10px] md:text-xs text-gray-400 font-bold mt-0.5">مدیریت و ثبت صورتجلسات کارخانه</p>
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                    <div className="relative group">
+                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                    <div className="relative group flex-1 md:flex-none">
                         <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                         <input
                             type="text"
@@ -403,30 +403,30 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                     {canCreate && (
                         <button
                             onClick={handleOpenCreateModal}
-                            className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl flex items-center gap-2 font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-700"
+                            className="bg-blue-600 text-white px-6 py-3 md:py-3.5 rounded-2xl flex items-center justify-center gap-2 font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-700 text-sm"
                         >
                             <Plus size={20} />
-                            ثبت جلسه جدید
+                            <span>ثبت جلسه جدید</span>
                         </button>
                     )}
                 </div>
             </div>
 
             {/* List and Tabs */}
-            <div className="bg-white/50 dark:bg-gray-900/30 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-2xl overflow-hidden p-6">
-                <div className="flex items-center gap-2 mb-6 bg-gray-100/50 dark:bg-black/20 p-1.5 rounded-2xl w-fit">
-                    <button onClick={() => setActiveTab('all')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'all' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>همه جلسات</button>
-                    <button onClick={() => setActiveTab('kartable')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'kartable' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+            <div className="bg-white/50 dark:bg-gray-900/30 rounded-[2.5rem] border border-white dark:border-white/5 backdrop-blur-2xl overflow-hidden p-4 md:p-6">
+                <div className="flex items-center gap-2 mb-6 bg-gray-100/50 dark:bg-black/20 p-1 rounded-2xl w-full overflow-x-auto no-scrollbar scroll-smooth">
+                    <button onClick={() => setActiveTab('all')} className={`px-4 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${activeTab === 'all' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>همه جلسات</button>
+                    <button onClick={() => setActiveTab('kartable')} className={`px-4 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'kartable' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
                         <span>کارتابل امضا</span>
                         {pendingMySignatureCount > 0 && (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] text-white animate-pulse">
+                            <span className="flex h-4 w-4 md:h-5 md:w-5 items-center justify-center rounded-full bg-orange-500 text-[9px] md:text-[10px] text-white animate-pulse">
                                 {pendingMySignatureCount}
                             </span>
                         )}
                     </button>
-                    <button onClick={() => setActiveTab('pending')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'pending' ? 'bg-white dark:bg-gray-800 text-amber-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>در انتظار تایید</button>
-                    <button onClick={() => setActiveTab('draft')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'draft' ? 'bg-white dark:bg-gray-800 text-gray-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>پیش‌نویس</button>
-                    <button onClick={() => setActiveTab('archive')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'archive' ? 'bg-white dark:bg-gray-800 text-emerald-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>بایگانی</button>
+                    <button onClick={() => setActiveTab('pending')} className={`px-4 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white dark:bg-gray-800 text-amber-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>در انتظار تایید</button>
+                    <button onClick={() => setActiveTab('draft')} className={`px-4 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${activeTab === 'draft' ? 'bg-white dark:bg-gray-800 text-gray-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>پیش‌نویس</button>
+                    <button onClick={() => setActiveTab('archive')} className={`px-4 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${activeTab === 'archive' ? 'bg-white dark:bg-gray-800 text-emerald-600 shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>بایگانی</button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

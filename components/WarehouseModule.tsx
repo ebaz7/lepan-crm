@@ -44,54 +44,90 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-            <div className="glass-panel rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
-                    <h3 className="font-bold text-gray-800">ویرایش {tx.type === 'IN' ? 'رسید انبار' : 'بیجک خروج'}</h3>
-                    <button onClick={onClose}><X size={20} className="text-gray-500 hover:text-red-500"/></button>
+        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-0 md:p-4 animate-fade-in backdrop-blur-sm">
+            <div className="glass-panel rounded-none md:rounded-3xl shadow-2xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col overflow-hidden border-0 md:border md:border-white/20">
+                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200">
+                    <div className="flex items-center gap-2">
+                        <div className={`p-2 rounded-lg ${tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            {tx.type === 'IN' ? <ArrowDownCircle size={20}/> : <ArrowUpCircle size={20}/>}
+                        </div>
+                        <h3 className="font-black text-gray-800 dark:text-white text-base md:text-lg">ویرایش {tx.type === 'IN' ? 'رسید انبار' : 'بیجک خروج'}</h3>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"><X size={24}/></button>
                 </div>
-                <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-white dark:bg-black/20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                         {tx.type === 'OUT' && (
                             <>
-                                <div><label className="text-xs font-bold block mb-1">شماره بیجک</label><input type="number" className="w-full border rounded p-2" value={formData.number} onChange={e => setFormData({...formData, number: Number(e.target.value)})} /></div>
-                                <div><label className="text-xs font-bold block mb-1">گیرنده</label><input className="w-full border rounded p-2" value={formData.recipientName || ''} onChange={e => setFormData({...formData, recipientName: e.target.value})} /></div>
-                                <div><label className="text-xs font-bold block mb-1">راننده</label><input className="w-full border rounded p-2" value={formData.driverName || ''} onChange={e => setFormData({...formData, driverName: e.target.value})} /></div>
-                                <div><label className="text-xs font-bold block mb-1">پلاک</label><input className="w-full border rounded p-2" value={formData.plateNumber || ''} onChange={e => setFormData({...formData, plateNumber: e.target.value})} /></div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">شماره بیجک</label>
+                                    <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50 dark:bg-gray-800 outline-none focus:border-red-400 transition-all" value={formData.number} onChange={e => setFormData({...formData, number: Number(e.target.value)})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">گیرنده نهایی</label>
+                                    <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50 dark:bg-gray-800 outline-none focus:border-red-400 transition-all" value={formData.recipientName || ''} onChange={e => setFormData({...formData, recipientName: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">راننده</label>
+                                    <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50 dark:bg-gray-800 outline-none focus:border-red-400 transition-all" value={formData.driverName || ''} onChange={e => setFormData({...formData, driverName: e.target.value})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">پلاک خودرو</label>
+                                    <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50 dark:bg-gray-800 outline-none focus:border-red-400 transition-all text-center dir-ltr" value={formData.plateNumber || ''} onChange={e => setFormData({...formData, plateNumber: e.target.value})} />
+                                </div>
                             </>
                         )}
                         {tx.type === 'IN' && (
-                            <>
-                                <div><label className="text-xs font-bold block mb-1">شماره پروفرما</label><input className="w-full border rounded p-2" value={formData.proformaNumber || ''} onChange={e => setFormData({...formData, proformaNumber: e.target.value})} /></div>
-                            </>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">شماره پروفرما / سند</label>
+                                <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50 dark:bg-gray-800 outline-none focus:border-green-400 transition-all" value={formData.proformaNumber || ''} onChange={e => setFormData({...formData, proformaNumber: e.target.value})} />
+                            </div>
                         )}
-                        <div><label className="text-xs font-bold block mb-1">تاریخ</label><input className="w-full border rounded p-2 dir-ltr" value={formData.date.split('T')[0]} readOnly /></div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-xl border">
-                        <label className="text-xs font-bold block mb-2">اقلام</label>
-                        <div className="space-y-2">
-                            {txItems.map((item, idx) => (
-                                <div key={idx} className="flex flex-col md:flex-row gap-2 items-end">
-                                    <select className="flex-1 w-full border rounded p-2 text-sm" value={item.itemId} onChange={e => handleItemChange(idx, 'itemId', e.target.value)}>
-                                        <option value="">انتخاب کالا...</option>
-                                        {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                                    </select>
-                                    <div className="flex gap-2 w-full md:w-auto">
-                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="تعداد" type="number" value={item.quantity === 0 ? '' : item.quantity} onFocus={e => e.target.select()} onChange={e => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))} />
-                                        <input className="flex-1 md:w-20 border rounded p-2 text-sm text-center" placeholder="وزن" type="number" value={item.weight === 0 ? '' : item.weight} onFocus={e => e.target.select()} onChange={e => handleItemChange(idx, 'weight', e.target.value === '' ? 0 : Number(e.target.value))} />
-                                        <button onClick={() => removeItem(idx)} className="text-red-500 p-2 bg-red-50 rounded"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                            <button onClick={addItem} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-2"><Plus size={14}/> افزودن سطر</button>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">تاریخ سند (غیرقابل ویرایش)</label>
+                            <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-3 font-bold bg-gray-50/50 dark:bg-gray-900/50 text-gray-400 dark:text-gray-600 outline-none cursor-not-allowed text-center dir-ltr" value={formData.date.split('T')[0]} readOnly />
                         </div>
                     </div>
 
-                    <div className="flex justify-end pt-4 gap-2">
-                        <button onClick={onClose} className="px-4 py-2 border rounded-lg text-gray-600">انصراف</button>
-                        <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">ذخیره تغییرات</button>
+                    <div className="bg-gray-50 dark:bg-gray-800/30 p-4 md:p-6 rounded-3xl border border-gray-200 dark:border-white/5">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-xs font-black text-gray-400 flex items-center gap-2 uppercase tracking-widest"><List size={16} className="text-blue-500"/> جزییات اقلام سند</h4>
+                            <button onClick={addItem} className="text-blue-600 text-xs font-black flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors"><Plus size={14}/> افزودن ردیف</button>
+                        </div>
+                        <div className="space-y-4">
+                            {txItems.map((item, idx) => (
+                                <div key={idx} className="flex flex-col md:flex-row gap-3 bg-white dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm relative group">
+                                    <div className="flex-1 space-y-1">
+                                        <label className="text-[9px] font-black text-gray-400 mr-2">انتخاب کالا</label>
+                                        <select className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-2.5 text-sm font-bold bg-gray-50 dark:bg-gray-800" value={item.itemId} onChange={e => handleItemChange(idx, 'itemId', e.target.value)}>
+                                            <option value="">انتخاب از انبار...</option>
+                                            {items.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 md:w-48">
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black text-gray-400 text-center block">تعداد</label>
+                                            <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-2.5 text-sm font-bold text-center bg-gray-50 dark:bg-gray-800" placeholder="0" type="number" value={item.quantity === 0 ? '' : item.quantity} onFocus={e => e.target.select()} onChange={e => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] font-black text-gray-400 text-center block">وزن (KG)</label>
+                                            <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-2.5 text-sm font-bold text-center bg-gray-50 dark:bg-gray-800" placeholder="0" type="number" value={item.weight === 0 ? '' : item.weight} onFocus={e => e.target.select()} onChange={e => handleItemChange(idx, 'weight', e.target.value === '' ? 0 : Number(e.target.value))} />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-end justify-center">
+                                        <button onClick={() => removeItem(idx)} className="text-red-500 p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 size={20}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
+                </div>
+
+                <div className="p-4 md:p-6 border-t flex gap-3 bg-gray-50/50 dark:bg-gray-900/40 backdrop-blur-md">
+                    <button onClick={onClose} className="flex-1 py-3.5 border-2 border-gray-200 dark:border-white/10 rounded-2xl text-gray-500 font-black text-sm hover:bg-gray-100 active:scale-[0.98] transition-all">انصراف</button>
+                    <button onClick={handleSave} className="flex-[2] py-3.5 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-600/20 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                        <Save size={20}/> ذخیره نهایی تغییرات
+                    </button>
                 </div>
             </div>
         </div>
@@ -559,9 +595,9 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 const containerCapacity = catalogItem.containerCapacity || 0;
                 const containerCount = (containerCapacity > 0 && quantity > 0) ? (quantity / containerCapacity) : 0;
                 return { id: catalogItem.id, name: catalogItem.name, quantity, weight, containerCount };
-            });
+            }).filter(item => item.quantity !== 0); // FILTER NON-ZERO STOCK
             return { company, items: companyItems };
-        });
+        }).filter(group => group.items.length > 0); // ONLY SHOW COMPANIES WITH AT LEAST ONE ITEM
         return result;
     }, [allTransactions, items, settings, financialYear]);
 
@@ -1087,6 +1123,9 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                         <div className="text-xs text-gray-400 mb-3">{formatDate(tx.date)}</div>
                                         <div className="flex gap-2 justify-end border-t pt-2">
                                              <button onClick={() => setViewBijak(tx)} className="text-blue-600 p-2 bg-blue-50 rounded-lg"><Eye size={18}/></button>
+                                             {(currentUser.role === UserRole.ADMIN || (tx.status === 'PENDING' && currentUser.role === UserRole.WAREHOUSE_KEEPER)) && (
+                                                <button onClick={() => setEditingBijak(tx)} className="text-amber-600 p-2 bg-amber-50 rounded-lg"><Edit size={18}/></button>
+                                             )}
                                              {currentUser.role === UserRole.ADMIN && <button onClick={() => handleDeleteTx(tx.id)} className="text-red-600 p-2 bg-red-50 rounded-lg"><Trash2 size={18}/></button>}
                                         </div>
                                     </div>

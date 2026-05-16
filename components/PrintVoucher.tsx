@@ -183,20 +183,28 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
           const h = isBankForm ? (dynamicTemplate?.height || 297) : 148;
           const size = isBankForm ? `${dynamicTemplate?.pageSize || 'A4'} ${dynamicTemplate?.orientation || 'portrait'}` : 'A5 landscape';
           style.innerHTML = `
-            @page { size: ${size}; margin: 0; }
+            @page { 
+                size: ${size}; 
+                margin: 0; 
+            }
             @media print {
-                body * { visibility: hidden; }
-                .printable-content, .printable-content * { visibility: visible; }
+                html, body { height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+                body * { visibility: hidden !important; }
+                .printable-content, .printable-content * { 
+                    visibility: visible !important; 
+                }
                 .printable-content { 
-                    position: absolute; 
-                    left: 0; 
-                    top: 0; 
+                    position: absolute !important; 
+                    left: 0 !important; 
+                    top: 0 !important; 
                     width: ${w}mm !important; 
                     height: ${h}mm !important;
                     margin: 0 !important;
                     padding: ${isBankForm ? '0' : '10mm'} !important;
                     border: none !important;
                     box-shadow: none !important;
+                    background: white !important;
+                    z-index: 99999 !important;
                 }
                 .no-print { display: none !important; }
             }

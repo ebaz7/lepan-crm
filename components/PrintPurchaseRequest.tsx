@@ -77,10 +77,23 @@ const PrintPurchaseRequest: React.FC<Props> = ({ request }) => {
             
             <style dangerouslySetInnerHTML={{__html: `
                 @media print {
-                    @page { size: A5 landscape; margin: 10mm; }
-                    body * { visibility: hidden; }
-                    .print-only-section, .print-only-section * { visibility: visible; }
-                    .print-only-section { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 0 !important; margin: 0 !important; width: 100% !important; background: white !important;}
+                    @page { size: A5 landscape; margin: 0; }
+                    html, body { height: 100%; overflow: hidden !important; }
+                    body * { visibility: hidden !important; }
+                    .print-only-section, .print-only-section * { visibility: visible !important; }
+                    .print-only-section { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        right: 0 !important; 
+                        bottom: 0 !important; 
+                        padding: 10mm !important; 
+                        margin: 0 !important; 
+                        width: 210mm !important; 
+                        height: 148mm !important;
+                        background: white !important;
+                        z-index: 99999 !important;
+                    }
                 }
             `}} />
         </div>

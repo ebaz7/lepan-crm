@@ -23,9 +23,9 @@ import * as XLSX from 'xlsx';
 import PrintPurchaseRequest from './PrintPurchaseRequest';
 import { generatePdf } from '../utils/pdfGenerator';
 
-const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'REQUESTS' }) => {
+const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'DASHBOARD' }) => {
     const isMobile = useIsMobile();
-    const [activeTab, setActiveTab] = useState<'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>(initialTab);
+    const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>(initialTab);
     const [loading, setLoading] = useState(false);
     
     // Requests State
@@ -84,16 +84,22 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                 
                 <div className="flex p-1 bg-gray-200 rounded-xl overflow-x-auto no-scrollbar">
                     <button 
+                        onClick={() => setActiveTab('DASHBOARD')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'DASHBOARD' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
+                    >
+                        داشبورد کارتابل
+                    </button>
+                    <button 
                         onClick={() => setActiveTab('REQUESTS')} 
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'REQUESTS' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
                     >
-                        درخواست‌های خرید
+                        درخواست‌های فعال
                     </button>
                     <button 
                         onClick={() => setActiveTab('PARTS')} 
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PARTS' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
                     >
-                        مدیریت کالا
+                        کدینگ کالا
                     </button>
                     <button 
                         onClick={() => setActiveTab('KARDEX')} 
@@ -105,12 +111,19 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         onClick={() => setActiveTab('ARCHIVE')} 
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
                     >
-                        بایگانی
+                        بایگانی نهایی
                     </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar">
+                {activeTab === 'DASHBOARD' && (
+                    <PurchaseDashboard 
+                        requests={requests} 
+                        setActiveTab={setActiveTab} 
+                        currentUser={currentUser}
+                    />
+                )}
                 {activeTab === 'REQUESTS' && (
                     <PurchaseRequestsTab 
                         requests={requests.filter(r => r.status !== PurchaseRequestStatus.COMPLETED && r.status !== PurchaseRequestStatus.REJECTED)} 
@@ -143,6 +156,64 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         kardexEntries={kardexEntries}
                         loadKardex={loadKardex}
                    />
+                )}
+            </div>
+        </div>
+    );
+};
+
+// --- DASHBOARD TAB ---
+const PurchaseDashboard = ({ requests, setActiveTab, currentUser }: any) => {
+    const stats = [
+        { label: 'کل درخواست‌ها', count: requests.length, color: 'indigo', icon: ShoppingCart, tab: 'REQUESTS' },
+        { label: 'در انتظار تایید', count: requests.filter((r: any) => r.status.includes('PENDING')).length, color: 'amber', icon: ClipboardCheck, tab: 'REQUESTS' },
+        { label: 'ورود به کارخانه', count: requests.filter((r: any) => r.status === PurchaseRequestStatus.PENDING_SECURITY_ENTRY || r.status === PurchaseRequestStatus.PENDING_QC).length, color: 'orange', icon: Truck, tab: 'REQUESTS' },
+        { label: 'تکمیل شده', count: requests.filter((r: any) => r.status === PurchaseRequestStatus.COMPLETED).length, color: 'green', icon: CheckCircle, tab: 'ARCHIVE' }
+    ];
+
+    const myTasks = requests.filter((r: any) => {
+        switch (currentUser.role) {
+            case UserRole.FACTORY_MANAGER: return r.status === PurchaseRequestStatus.PENDING_FACTORY || r.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL;
+            case UserRole.CEO: return r.status === PurchaseRequestStatus.PENDING_CEO || r.status === PurchaseRequestStatus.PENDING_CEO_SELECTION;
+            case UserRole.WAREHOUSE_KEEPER: return r.status === PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL || r.status === PurchaseRequestStatus.PENDING_QC || r.status === PurchaseRequestStatus.PENDING_TECHNICAL;
+            default: return r.status.includes('PENDING'); // Proxy for simplicity
+        }
+    });
+
+    return (
+        <div className="space-y-8 animate-fade-in">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {stats.map((s, idx) => (
+                    <div key={idx} onClick={() => setActiveTab(s.tab)} className={`glass-panel p-6 rounded-[2rem] border-2 cursor-pointer hover:scale-105 transition-all text-center flex flex-col items-center justify-center gap-2 border-indigo-100 bg-indigo-50/30`}>
+                        <div className={`p-3 rounded-2xl bg-indigo-100 text-indigo-600`}>
+                            <s.icon size={28} />
+                        </div>
+                        <div className="text-2xl font-black text-gray-800">{s.count}</div>
+                        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{s.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="glass-panel p-6 rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+                <h3 className="font-black text-indigo-900 border-b pb-4 mb-4 flex items-center gap-2"><ClipboardCheck /> کارتابل وظایف من</h3>
+                {myTasks.length === 0 ? (
+                    <div className="py-12 text-center text-gray-300 italic">موردی جهت اقدام شما یافت نشد.</div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {myTasks.slice(0, 6).map((req: any) => (
+                            <div key={req.id} onClick={() => setActiveTab('REQUESTS')} className="p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 transition-all cursor-pointer group">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[9px] font-mono font-bold text-gray-400">#{req.requestNumber}</span>
+                                    <span className="text-[9px] font-bold text-gray-500 bg-white px-2 py-0.5 rounded-full shadow-sm">{formatDate(req.date)}</span>
+                                </div>
+                                <h4 className="font-black text-gray-800 text-sm group-hover:text-indigo-700 transition-colors uppercase tracking-tight line-clamp-1">{req.itemName}</h4>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-gray-400">{req.status}</span>
+                                    <div className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-indigo-600 shadow-sm"><ArrowRight size={14}/></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>
@@ -613,7 +684,12 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
 
-    const filtered = parts.filter((p: PartMasterData) => p.name.includes(searchTerm) || p.category.includes(searchTerm) || (p.subCategory && p.subCategory.includes(searchTerm)));
+    const filtered = parts.filter((p: PartMasterData) => 
+        p.name.includes(searchTerm) || 
+        p.category.includes(searchTerm) || 
+        (p.subCategory && p.subCategory.includes(searchTerm)) ||
+        (p.dimensions && p.dimensions.includes(searchTerm))
+    );
 
     const categories = Array.from(new Set(parts.map((p: PartMasterData) => p.category)));
     const subCategories = selectedCategory ? Array.from(new Set(parts.filter((p: PartMasterData) => p.category === selectedCategory && p.subCategory).map((p: PartMasterData) => p.subCategory))) : [];
@@ -1015,38 +1091,44 @@ const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKa
                     </div>
 
                     <div className="glass-panel rounded-3xl border border-gray-200 overflow-hidden bg-white shadow-sm">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">تاریخ</th>
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">شماره مرجع</th>
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">نوع</th>
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">تعداد</th>
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">مانده</th>
-                                    <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">توضیحات</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {kardexEntries.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-20 text-center text-gray-400 italic">تراکنشی یافت نشد.</td></tr>
-                                ) : (
-                                    kardexEntries.map((k: any) => (
-                                        <tr key={k.id} className="border-b border-gray-50 hover:bg-indigo-50/20 transition-colors">
-                                            <td className="py-4 px-6 text-xs font-bold text-gray-600">{formatDate(k.date)}</td>
-                                            <td className="py-4 px-6 text-xs font-mono font-bold text-gray-400">#{k.referenceNumber}</td>
-                                            <td className="py-4 px-6 text-center">
-                                                <span className={`text-[9px] px-3 py-1 rounded-full font-black ${k.type === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {k.type === 'IN' ? 'ورود' : 'خروج'}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6 text-center text-sm font-black">{k.quantity}</td>
-                                            <td className="py-4 px-6 text-center text-sm font-black text-indigo-700">{k.balance}</td>
-                                            <td className="py-4 px-6 text-xs text-gray-500">{k.description}</td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">کالا / قطعه</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">تاریخ</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">شماره مرجع</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">نوع</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">تعداد</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">فی/قیمت واحد</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">مانده</th>
+                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">توضیحات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {kardexEntries.length === 0 ? (
+                                        <tr><td colSpan={8} className="py-20 text-center text-gray-400 italic">تراکنشی یافت نشد.</td></tr>
+                                    ) : (
+                                        kardexEntries.map((k: any) => (
+                                            <tr key={k.id} className="border-b border-gray-50 hover:bg-indigo-50/20 transition-colors">
+                                                <td className="py-4 px-6 text-xs font-black text-gray-800">{selectedPart?.name}</td>
+                                                <td className="py-4 px-6 text-xs font-bold text-gray-600">{formatDate(k.date)}</td>
+                                                <td className="py-4 px-6 text-xs font-mono font-bold text-gray-400">#{k.referenceNumber}</td>
+                                                <td className="py-4 px-6 text-center">
+                                                    <span className={`text-[9px] px-3 py-1 rounded-full font-black ${k.type === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {k.type === 'IN' ? 'ورود' : 'خروج'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-6 text-center text-sm font-black">{k.quantity}</td>
+                                                <td className="py-4 px-6 text-center text-sm font-black text-blue-600">{k.unitPrice ? Number(k.unitPrice).toLocaleString() : '-'}</td>
+                                                <td className="py-4 px-6 text-center text-sm font-black text-indigo-700">{k.balance}</td>
+                                                <td className="py-4 px-6 text-xs text-gray-500">{k.description}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             ) : (

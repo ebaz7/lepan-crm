@@ -88,6 +88,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
 
             const inQty = tx.type === 'IN' ? qty : 0;
             const outQty = tx.type === 'OUT' ? qty : 0;
+            const unitPrice = txItem ? txItem.unitPrice : 0;
 
             runningBalance += (inQty - outQty);
 
@@ -102,7 +103,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 in: inQty,
                 out: outQty,
                 balance: runningBalance,
-                weight: weight
+                weight: weight,
+                unitPrice: unitPrice
             };
         });
 
@@ -176,31 +178,33 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
 
             <table className="w-full border-collapse text-center text-[10px]">
                 <thead>
-                    <tr className="bg-gray-800 text-white">
+                    <tr className="bg-gray-800 text-white text-[9px]">
                         <th className="p-2 border border-gray-600">ردیف</th>
                         <th className="p-2 border border-gray-600">تاریخ</th>
                         <th className="p-2 border border-gray-600">نوع</th>
                         <th className="p-2 border border-gray-600">شماره سند</th>
-                        <th className="p-2 border border-gray-600 w-1/3">شرح / طرف حساب</th>
+                        <th className="p-2 border border-gray-600 w-1/4">شرح / طرف حساب</th>
                         <th className="p-2 border border-gray-600 bg-green-700">وارده</th>
                         <th className="p-2 border border-gray-600 bg-red-700">صادره</th>
                         <th className="p-2 border border-gray-600 bg-blue-800">مانده</th>
+                        <th className="p-2 border border-gray-600 bg-amber-700">فی (ریال)</th>
                     </tr>
                 </thead>
                 <tbody>
                     {kardexRows.length === 0 ? (
-                        <tr><td colSpan={8} className="p-4 text-gray-400 border border-gray-300">گردشی برای این کالا یافت نشد.</td></tr>
+                        <tr><td colSpan={9} className="p-4 text-gray-400 border border-gray-300">گردشی برای این کالا یافت نشد.</td></tr>
                     ) : (
                         kardexRows.map((row, idx) => (
                             <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
                                 <td className="border border-gray-300 p-1">{idx + 1}</td>
-                                <td className="border border-gray-300 p-1 font-mono">{formatDate(row.date)}</td>
+                                <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
                                 <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
                                 <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
-                                <td className="border border-gray-300 p-1 text-right pr-2">{row.description}</td>
-                                <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-lg">{row.in > 0 ? row.in : '-'}</td>
-                                <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-lg">{row.out > 0 ? row.out : '-'}</td>
-                                <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-lg font-bold">{row.balance}</td>
+                                <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
+                                <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
+                                <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-base">{row.out > 0 ? row.out : '-'}</td>
+                                <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-base font-bold">{row.balance}</td>
+                                <td className="border border-gray-300 p-1 font-mono text-amber-800 font-bold">{row.unitPrice ? formatNumberString(row.unitPrice) : '-'}</td>
                             </tr>
                         ))
                     )}
@@ -211,6 +215,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                         <td className="p-2 dir-ltr font-mono border border-gray-600">{kardexRows.reduce((a,b)=>a+b.in,0)}</td>
                         <td className="p-2 dir-ltr font-mono border border-gray-600">{kardexRows.reduce((a,b)=>a+b.out,0)}</td>
                         <td className="p-2 dir-ltr font-mono bg-blue-900 border border-gray-600">{kardexRows.length > 0 ? kardexRows[kardexRows.length-1].balance : 0}</td>
+                        <td className="p-2 border border-gray-600 bg-amber-900"></td>
                     </tr>
                 </tfoot>
             </table>

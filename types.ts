@@ -1067,5 +1067,6 @@ export interface PartKardex {
     type: 'IN' | 'OUT';
     quantity: number;
     balance: number;
+    unitPrice?: number;
     description?: string;
 }
