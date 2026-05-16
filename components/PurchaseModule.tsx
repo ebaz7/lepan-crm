@@ -15,15 +15,17 @@ import {
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
-    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings
+    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
 import * as XLSX from 'xlsx';
+import PrintPurchaseRequest from './PrintPurchaseRequest';
+import { generatePdf } from '../utils/pdfGenerator';
 
-const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }> = ({ currentUser, settings }) => {
+const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'REQUESTS' }) => {
     const isMobile = useIsMobile();
-    const [activeTab, setActiveTab] = useState<'REQUESTS' | 'PARTS' | 'KARDEX'>('REQUESTS');
+    const [activeTab, setActiveTab] = useState<'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>(initialTab);
     const [loading, setLoading] = useState(false);
     
     // Requests State
@@ -99,16 +101,31 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings }>
                     >
                         کاردکس موجودی
                     </button>
+                    <button 
+                        onClick={() => setActiveTab('ARCHIVE')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-indigo-700 shadow-md' : 'text-gray-500'}`}
+                    >
+                        بایگانی
+                    </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar">
                 {activeTab === 'REQUESTS' && (
                     <PurchaseRequestsTab 
-                        requests={requests} 
+                        requests={requests.filter(r => r.status !== PurchaseRequestStatus.COMPLETED && r.status !== PurchaseRequestStatus.REJECTED)} 
                         currentUser={currentUser} 
                         onRequestUpdate={loadRequests} 
                         parts={parts}
+                    />
+                )}
+                {activeTab === 'ARCHIVE' && (
+                    <PurchaseRequestsTab 
+                        requests={requests.filter(r => r.status === PurchaseRequestStatus.COMPLETED || r.status === PurchaseRequestStatus.REJECTED)} 
+                        currentUser={currentUser} 
+                        onRequestUpdate={loadRequests} 
+                        parts={parts}
+                        isArchive={true}
                     />
                 )}
                 {activeTab === 'PARTS' && (
@@ -479,6 +496,41 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess }: { reques
                             <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black">تایید نهایی و بایگانی</button>
                         )}
                     </div>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={async () => {
+                                const el = document.getElementById('print-purchase-request-section');
+                                if (el) {
+                                    window.print();
+                                }
+                            }}
+                            className="flex items-center gap-2 p-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm" title="چاپ فرم"
+                        >
+                            <Printer size={18} /> <span className="text-sm font-bold">چاپ</span>
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                setLoading(true);
+                                try {
+                                    await generatePdf({
+                                        elementId: 'print-purchase-request-section',
+                                        filename: `purchase_request_${request.requestNumber}.pdf`
+                                    });
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }}
+                            className="flex items-center gap-2 p-3 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="دریافت PDF"
+                        >
+                            {loading ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />} <span className="text-sm font-bold">دانلود PDF</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="hidden">
+                    <div id="print-purchase-request-section">
+                        <PrintPurchaseRequest request={request} />
+                    </div>
                 </div>
 
                 {showProformaModal && <AddProformaModal 
@@ -558,7 +610,13 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
     const [showModal, setShowModal] = useState(false);
     const [editingPart, setEditingPart] = useState<PartMasterData | null>(null);
 
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+
     const filtered = parts.filter((p: PartMasterData) => p.name.includes(searchTerm) || p.category.includes(searchTerm) || (p.subCategory && p.subCategory.includes(searchTerm)));
+
+    const categories = Array.from(new Set(parts.map((p: PartMasterData) => p.category)));
+    const subCategories = selectedCategory ? Array.from(new Set(parts.filter((p: PartMasterData) => p.category === selectedCategory && p.subCategory).map((p: PartMasterData) => p.subCategory))) : [];
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -604,7 +662,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
         <div className="space-y-4">
             <div className="flex flex-col md:flex-row gap-2 items-center">
                 <div className="relative flex-1 w-full">
-                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی کالا، گروه یا زیرگروه..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی کالا، گروه یا زیرگروه..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setSelectedCategory(null); setSelectedSubCategory(null); }} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
                 {(currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) && (
@@ -620,42 +678,155 @@ const PartsTab = ({ parts, currentUser, onPartUpdate }: any) => {
                 )}
             </div>
 
+            {!searchTerm && selectedCategory && (
+                 <div className="flex items-center gap-2 text-sm font-bold text-gray-600 bg-gray-100 p-3 rounded-xl shadow-inner">
+                    <button onClick={() => { setSelectedCategory(null); setSelectedSubCategory(null); }} className="hover:text-indigo-600">گروه‌ها</button>
+                    <span>/</span>
+                    <button onClick={() => setSelectedSubCategory(null)} className={`hover:text-indigo-600 ${!selectedSubCategory ? 'text-indigo-600' : ''}`}>{selectedCategory}</button>
+                    {selectedSubCategory && (
+                        <>
+                            <span>/</span>
+                            <span className="text-indigo-600">{selectedSubCategory}</span>
+                        </>
+                    )}
+                 </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {filtered.map((p: PartMasterData) => (
-                    <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                        <div className="h-40 bg-gray-100 relative overflow-hidden">
-                            {p.image ? (
-                                <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
-                            ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
-                                    <ImageIcon size={48} />
-                                    <span className="text-[10px] font-bold uppercase mt-2">No Image</span>
-                                </div>
-                            )}
-                            <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.type || 'کالا'} | {p.category}</div>
-                        </div>
-                        <div className="p-4">
-                            <h3 className="font-black text-gray-800 text-sm mb-1">{p.name}</h3>
-                            <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.subCategory ? `زیرگروه: ${p.subCategory}` : 'فاقد زیرگروه'} | {p.dimensions || 'فاقد مشخصات ابعادی'}</p>
-                            
-                            <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Stock Balance</span>
-                                    <span className={`text-sm font-black ${p.currentStock <= (p.minStock || 0) ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>
-                                        {p.currentStock} {p.unit}
-                                    </span>
-                                </div>
-                                <div className="flex gap-1">
-                                    {p.pdfAttachment && (
-                                        <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
-                                    )}
-                                    <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
-                                    <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                {searchTerm ? (
+                    filtered.map((p: PartMasterData) => (
+                        <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                                {p.image ? (
+                                    <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                                        <ImageIcon size={48} />
+                                        <span className="text-[10px] font-bold uppercase mt-2">No Image</span>
+                                    </div>
+                                )}
+                                <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.type || 'کالا'} | {p.category}</div>
+                            </div>
+                            <div className="p-4">
+                                <h3 className="font-black text-gray-800 text-sm mb-1">{p.name}</h3>
+                                <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.subCategory ? `زیرگروه: ${p.subCategory}` : 'فاقد زیرگروه'} | {p.dimensions || 'فاقد مشخصات ابعادی'}</p>
+                                
+                                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Stock Balance</span>
+                                        <span className={`text-sm font-black ${p.currentStock <= (p.minStock || 0) ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>
+                                            {p.currentStock} {p.unit}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {p.pdfAttachment && (
+                                            <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
+                                        )}
+                                        <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                        <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    ))
+                ) : !selectedCategory ? (
+                     categories.map((cat: any) => (
+                         <div key={cat} onClick={() => setSelectedCategory(cat)} className="glass-panel border-2 border-indigo-100 rounded-3xl p-8 text-center cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-indigo-300 transition-all flex flex-col items-center gap-4 bg-gradient-to-b from-white to-indigo-50/30">
+                              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
+                                  <Layers size={32} />
+                              </div>
+                              <div>
+                                  <h3 className="text-xl font-black text-gray-800 mb-1">{cat}</h3>
+                                  <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">{parts.filter((p: any) => p.category === cat).length} کالا</span>
+                              </div>
+                         </div>
+                     ))
+                ) : selectedCategory && !selectedSubCategory && subCategories.length > 0 ? (
+                     subCategories.map((sub: any) => (
+                         <div key={sub} onClick={() => setSelectedSubCategory(sub)} className="glass-panel border-2 border-teal-100 rounded-3xl p-8 text-center cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-teal-300 transition-all flex flex-col items-center gap-4 bg-gradient-to-b from-white to-teal-50/30">
+                              <div className="w-16 h-16 bg-teal-100 rounded-2xl flex items-center justify-center text-teal-600 shadow-inner">
+                                  <Tag size={32} />
+                              </div>
+                              <div>
+                                  <h3 className="text-xl font-black text-gray-800 mb-1">{sub}</h3>
+                                  <span className="text-xs font-bold text-teal-500 bg-teal-50 px-3 py-1 rounded-full">{parts.filter((p: any) => p.category === selectedCategory && p.subCategory === sub).length} کالا</span>
+                              </div>
+                         </div>
+                     )).concat(
+                         // Parts that don't have subcategory
+                         parts.filter((p: any) => p.category === selectedCategory && !p.subCategory).map((p: any) => (
+                             <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                                <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                                    {p.image ? (
+                                        <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                                            <ImageIcon size={48} />
+                                            <span className="text-[10px] font-bold uppercase mt-2">No Image</span>
+                                        </div>
+                                    )}
+                                    <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.type || 'کالا'} | {p.category}</div>
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="font-black text-gray-800 text-sm mb-1">{p.name}</h3>
+                                    <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.subCategory ? `زیرگروه: ${p.subCategory}` : 'فاقد زیرگروه'} | {p.dimensions || 'فاقد مشخصات ابعادی'}</p>
+                                    
+                                    <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                                        <div className="flex flex-col">
+                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Stock Balance</span>
+                                            <span className={`text-sm font-black ${p.currentStock <= (p.minStock || 0) ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>
+                                                {p.currentStock} {p.unit}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            {p.pdfAttachment && (
+                                                <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
+                                            )}
+                                            <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                            <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                         ))
+                     )
+                ) : (
+                     parts.filter((p: any) => p.category === selectedCategory && (!selectedSubCategory || p.subCategory === selectedSubCategory)).map((p: any) => (
+                        <div key={p.id} className="glass-panel border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                            <div className="h-40 bg-gray-100 relative overflow-hidden cursor-pointer" onClick={() => { setEditingPart(p); setShowModal(true); }}>
+                                {p.image ? (
+                                    <img src={p.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} referrerPolicy="no-referrer" />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+                                        <ImageIcon size={48} />
+                                        <span className="text-[10px] font-bold uppercase mt-2">No Image</span>
+                                    </div>
+                                )}
+                                <div className="absolute top-2 right-2 bg-black/60 text-white text-[9px] px-2 py-0.5 rounded-full backdrop-blur-sm">{p.type || 'کالا'} | {p.category}</div>
+                            </div>
+                            <div className="p-4">
+                                <h3 className="font-black text-gray-800 text-sm mb-1">{p.name}</h3>
+                                <p className="text-[10px] text-gray-500 line-clamp-1 mb-3">{p.subCategory ? `زیرگروه: ${p.subCategory}` : 'فاقد زیرگروه'} | {p.dimensions || 'فاقد مشخصات ابعادی'}</p>
+                                
+                                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Stock Balance</span>
+                                        <span className={`text-sm font-black ${p.currentStock <= (p.minStock || 0) ? 'text-red-500 animate-pulse' : 'text-green-600'}`}>
+                                            {p.currentStock} {p.unit}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {p.pdfAttachment && (
+                                            <a href={p.pdfAttachment} target="_blank" rel="noopener noreferrer" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="مشاهده کاتالوگ/PDF"><FileText size={16}/></a>
+                                        )}
+                                        <button onClick={() => { setEditingPart(p); setShowModal(true); }} className="p-2 bg-gray-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="ویرایش کالا"><Edit size={16}/></button>
+                                        <button onClick={async () => { if(confirm('حذف شود؟')) { await deletePartMasterData(p.id); onPartUpdate(); } }} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100" title="حذف کالا"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                     ))
+                )}
             </div>
 
             {showModal && <PartModal onClose={() => setShowModal(false)} onSuccess={onPartUpdate} initialData={editingPart} parts={parts} />}
@@ -686,11 +857,14 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
         if(!formData.name || !formData.category) return alert('نام و گروه‌بندی الزامی است');
         setLoading(true);
         try {
-            if (initialData) await updatePartMasterData({ ...initialData, ...formData } as PartMasterData);
+            if (initialData?.id) await updatePartMasterData({ ...initialData, ...formData } as PartMasterData);
             else await savePartMasterData({ ...formData, id: generateUUID() } as PartMasterData);
             onSuccess();
             onClose();
-        } catch (e) { alert('خطا در ذخیره'); }
+        } catch (e) { 
+            console.error('Save Part error', e); 
+            alert('خطا در ذخیره: ' + (e as any).message); 
+        }
         finally { setLoading(false); }
     };
 

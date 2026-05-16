@@ -5,10 +5,10 @@ import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
-import { getExitPermits, getWarehouseTransactions, getNotes } from '../services/storageService';
+import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
 import { getRandomQuote } from '../utils/quotes';
-import { Note } from '../types';
+import { Note, PurchaseRequest, PurchaseRequestStatus } from '../types';
 
 interface DashboardProps {
   orders: PaymentOrder[];
@@ -19,13 +19,14 @@ interface DashboardProps {
   onGoToPaymentApprovals: () => void;
   onGoToExitApprovals: () => void;
   onGoToBijakApprovals: () => void;
+  onGoToPurchaseApprovals: () => void;
   financialYear?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, financialYear }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, financialYear }) => {
   const orders = useMemo(() => {
         if (!financialYear || financialYear === 'all') return rawOrders;
         return rawOrders.filter(o => isInFinancialYear(o.date, financialYear) || isInFinancialYear(o.payDate, financialYear));
@@ -37,6 +38,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   // Data for additional counts
   const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
   const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>([]);
+  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>([]);
 
   // Personal Notes State
   const [notes, setNotes] = useState<Note[]>([]);
@@ -139,29 +141,31 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   const hasPaymentAccess = permissions.canViewPaymentOrders === true;
   const hasExitAccess = permissions.canViewExitPermits === true;
   const hasWarehouseAccess = permissions.canManageWarehouse === true || permissions.canApproveBijak === true;
+  const hasPurchaseAccess = permissions.canManagePurchase === true || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.FACTORY_MANAGER;
 
   useEffect(() => {
       const fetchData = async () => {
           try {
-              // Only fetch if has access to avoid unnecessary calls (though data might be preloaded in App.tsx)
-              if (hasExitAccess || hasWarehouseAccess) {
-                  let [exits, txs] = await Promise.all([getExitPermits(), getWarehouseTransactions()]);
+              if (hasExitAccess || hasWarehouseAccess || hasPurchaseAccess) {
+                  let [exits, txs, purchases] = await Promise.all([getExitPermits(), getWarehouseTransactions(), getPurchaseRequests()]);
                   if (financialYear && financialYear !== 'all') {
                       exits = exits.filter(e => isInFinancialYear(e.date, financialYear));
                       txs = txs.filter(t => isInFinancialYear(t.date, financialYear));
+                      purchases = purchases.filter(p => isInFinancialYear(p.date, financialYear));
                   }
                   setExitPermits(exits || []);
                   setWarehouseTxs(txs || []);
+                  setPurchaseReqs(purchases || []);
               }
           } catch (error) {
               console.error("Dashboard data load error", error);
               setExitPermits([]);
               setWarehouseTxs([]);
+              setPurchaseReqs([]);
           }
       };
       fetchData();
-  }, [hasExitAccess, hasWarehouseAccess, financialYear]);
-
+  }, [hasExitAccess, hasWarehouseAccess, hasPurchaseAccess, financialYear]);
 
   // --- CALC PENDING COUNTS FOR ACTION CARDS ---
   
@@ -204,7 +208,30 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
       }
   }
 
-  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0;
+  // 4. Purchase Pending Count
+  let pendingPurchaseCount = 0;
+  if (hasPurchaseAccess) {
+      if (currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === UserRole.ADMIN || permissions.canApprovePurchaseFactory) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_TECHNICAL || p.status === PurchaseRequestStatus.PENDING_FACTORY || p.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL).length;
+      }
+      if (currentUser.role === UserRole.CEO || currentUser.role === UserRole.ADMIN || permissions.canApprovePurchaseCeo) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_CEO || p.status === PurchaseRequestStatus.PENDING_CEO_SELECTION).length;
+      }
+      if (currentUser.role === UserRole.COMMERCIAL || currentUser.role === UserRole.ADMIN || permissions.canManagePurchase) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA || p.status === PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL).length;
+      }
+      if (currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.ADMIN) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_SECURITY_ENTRY).length;
+      }
+      if (currentUser.role === UserRole.QC || currentUser.role === UserRole.ADMIN) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_QC).length;
+      }
+      if (currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) {
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL).length;
+      }
+  }
+
+  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0;
 
   // ... (Existing Charts logic) ...
   const completedOrders = orders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -423,11 +450,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Truck size={80}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><ShieldCheck size={24} className="text-white"/></div>
+                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
                                     <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingExitCount} مورد</span>
                                 </div>
                                 <h3 className="text-2xl font-bold mb-1">تایید مجوز خروج</h3>
-                                <p className="text-orange-100 text-sm opacity-90">درخواست‌های خروج بار</p>
+                                <p className="text-orange-100 text-sm opacity-90">مجوزهای منتظر اقدام شما</p>
                             </div>
                         </div>
                     )}
@@ -437,11 +464,25 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Package size={80}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><Activity size={24} className="text-white"/></div>
+                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
                                     <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingBijakCount} مورد</span>
                                 </div>
-                                <h3 className="text-2xl font-bold mb-1">تایید بیجک انبار</h3>
-                                <p className="text-purple-100 text-sm opacity-90">حواله‌های صادر شده از انبار</p>
+                                <h3 className="text-2xl font-bold mb-1">تایید تحویل بیجک</h3>
+                                <p className="text-purple-100 text-sm opacity-90">اعلام بارهای خروجی (انتظامات)</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {pendingPurchaseCount > 0 && hasPurchaseAccess && (
+                        <div onClick={onGoToPurchaseApprovals} className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 cursor-pointer transform hover:scale-105 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Package size={80}/></div>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingPurchaseCount} مورد</span>
+                                </div>
+                                <h3 className="text-2xl font-bold mb-1">تایید درخواست خرید</h3>
+                                <p className="text-emerald-100 text-sm opacity-90">درخواست‌های منتظر تایید شما</p>
                             </div>
                         </div>
                     )}
