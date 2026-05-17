@@ -312,6 +312,7 @@ export interface SystemSettings {
   miniAppCarEstimatorUrl?: string;
   miniAppMobilePriceUrl?: string;
   purchaseRolePermissions?: Record<string, PurchaseRolePermissions>;
+  appName?: string;
 }
 
 export interface PurchaseRolePermissions {

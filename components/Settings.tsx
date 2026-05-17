@@ -444,6 +444,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         <div className="space-y-8 animate-fade-in">
                              <div className="space-y-4">
                                 <h3 className="font-bold text-gray-800 border-b pb-2">تنظیمات ظاهری و اعلان‌ها</h3>
+                                <div className="space-y-4">
+                                    <label className="text-sm font-bold text-gray-700 block mb-1">نام برنامه (جهت نصب PWA)</label>
+                                    <input type="text" className="w-full border rounded-lg p-2 text-sm" value={settings.appName || ''} onChange={(e) => setSettings({...settings, appName: e.target.value})} placeholder="مثال: مدیریت کارخانه X" />
+                                </div>
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center bg-gray-50">{settings.pwaIcon ? <img src={settings.pwaIcon} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" />}</div>
                                     <div>
