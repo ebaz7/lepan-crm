@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PrintMeeting from './print/PrintMeeting';
 import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
-import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes, sendMessage } from '../services/storageService';
+import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes, sendMessage, uploadFileChunked } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
 import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare, Lock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
@@ -99,7 +99,9 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             attendees: initialAttendees,
             guestAttendees: [],
             items: [],
-            status: MeetingStatus.DRAFT
+            status: MeetingStatus.DRAFT,
+            imageAttachments: [],
+            pdfAttachments: []
         });
         setEditingMeeting(null);
         setShowModal(true);
@@ -823,6 +825,45 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                             هیچ مصوبه‌ای ثبت نشده است
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                            
+                            {/* Attachments Section */}
+                            <div className="space-y-4">
+                                <label className="text-sm font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">پیوست‌ها</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="border-2 border-dashed border-gray-200 p-4 rounded-2xl">
+                                        <label className="text-xs font-bold text-gray-500 mb-2 block">تصاویر (عکس صورتجلسه و ...)</label>
+                                        <input type="file" multiple accept="image/*" onChange={async (e) => {
+                                            if (e.target.files) {
+                                                const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
+                                                    const url = await uploadFileChunked(f);
+                                                    return { fileName: f.name, url };
+                                                }));
+                                                setMeetingForm(prev => ({...prev, imageAttachments: [...(prev.imageAttachments || []), ...uploads]}));
+                                            }
+                                        }} />
+                                    </div>
+                                    <div className="border-2 border-dashed border-gray-200 p-4 rounded-2xl">
+                                        <label className="text-xs font-bold text-gray-500 mb-2 block">فایل‌های PDF</label>
+                                        <input type="file" multiple accept=".pdf" onChange={async (e) => {
+                                            if (e.target.files) {
+                                                const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
+                                                    const url = await uploadFileChunked(f);
+                                                    return { fileName: f.name, url };
+                                                }));
+                                                setMeetingForm(prev => ({...prev, pdfAttachments: [...(prev.pdfAttachments || []), ...uploads]}));
+                                            }
+                                        }} />
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {(meetingForm.imageAttachments || []).map((att, i) => (
+                                        <span key={i} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">{att.fileName}</span>
+                                    ))}
+                                    {(meetingForm.pdfAttachments || []).map((att, i) => (
+                                        <span key={i} className="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded-lg">{att.fileName}</span>
+                                    ))}
                                 </div>
                             </div>
                         </div>

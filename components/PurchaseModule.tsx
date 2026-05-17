@@ -428,16 +428,27 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
         setActionLoading(true);
         try {
             const updated = { ...request, status: nextStatus, updatedAt: Date.now(), ...extra };
+            
+            // Logic for workflow transitions
             if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY) updated.approverTechnical = currentUser.fullName;
             if (nextStatus === PurchaseRequestStatus.PENDING_CEO) updated.approverFactory = currentUser.fullName;
-            if (nextStatus === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) updated.approverCeo = currentUser.fullName;
+            
+            // Commercial Decision
+            if (nextStatus === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) {
+                updated.approverCommercial = currentUser.fullName;
+            }
+            
             if (nextStatus === PurchaseRequestStatus.PENDING_QC) updated.entryDate = new Date().toISOString().split('T')[0];
             
             await updatePurchaseRequest(updated);
             onSuccess();
             onClose();
-        } catch (e) { alert('خطا در عملیات'); }
+        } catch (e) { alert('خطا در عملیات'); console.error(e); }
         finally { setActionLoading(false); }
+    };
+
+    const handleCommercialDecision = async (location: 'Tehran' | 'Zanjan') => {
+        await handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, { purchaseLocation: location });
     };
 
     const isCurrentStep = (step: PurchaseRequestStatus) => request.status === step;
@@ -475,29 +486,50 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-50/50">
-                    {/* Progress Bar */}
+                        {/* Progress Bar */}
                     <div className="flex justify-between items-center gap-2 no-scrollbar overflow-x-auto pb-4">
-                        {[
-                            { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'تایید فنی' },
-                            { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
-                            { s: PurchaseRequestStatus.PENDING_CEO, label: 'مدیرعامل' },
-                            { s: PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, label: 'پیش‌فاکتور' },
-                            { s: PurchaseRequestStatus.PENDING_CEO_SELECTION, label: 'انتخاب خرید' },
-                            { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود کالا' },
-                            { s: PurchaseRequestStatus.PENDING_QC, label: 'کنترل کیفی' },
-                            { s: PurchaseRequestStatus.PENDING_FACTORY_FINAL, label: 'تایید نهایی' },
-                            { s: PurchaseRequestStatus.COMPLETED, label: 'بایگانی' }
-                        ].map((step, idx) => (
-                            <div key={idx} className="flex flex-col items-center gap-1 min-w-[70px]">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
-                                    request.status === step.s ? 'bg-indigo-600 text-white border-indigo-700 ring-4 ring-indigo-100' :
-                                    'bg-white text-gray-400 border-gray-200'
-                                }`}>
-                                    {idx + 1}
-                                </div>
-                                <span className="text-[8px] font-bold text-gray-500 whitespace-nowrap">{step.label}</span>
-                            </div>
-                        ))}
+                        {
+                            (() => {
+                                const steps = [
+                                    PurchaseRequestStatus.PENDING_TECHNICAL,
+                                    PurchaseRequestStatus.PENDING_FACTORY,
+                                    PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION,
+                                    PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA,
+                                    PurchaseRequestStatus.PENDING_CEO_SELECTION,
+                                    PurchaseRequestStatus.PENDING_CEO,
+                                    PurchaseRequestStatus.PENDING_SECURITY_ENTRY,
+                                    PurchaseRequestStatus.PENDING_QC,
+                                    PurchaseRequestStatus.PENDING_WAREHOUSE,
+                                    PurchaseRequestStatus.PENDING_FACTORY_FINAL,
+                                    PurchaseRequestStatus.COMPLETED
+                                ];
+                                const currentStepIndex = steps.indexOf(request.status);
+                                
+                                return [
+                                    { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'فنی' },
+                                    { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
+                                    { s: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'تصمیم بازرگانی' },
+                                    { s: PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, label: 'پیش‌فاکتور' },
+                                    { s: PurchaseRequestStatus.PENDING_CEO_SELECTION, label: 'انتخاب' },
+                                    { s: PurchaseRequestStatus.PENDING_CEO, label: 'مدیرعامل' },
+                                    { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود' },
+                                    { s: PurchaseRequestStatus.PENDING_QC, label: 'کیفی' },
+                                    { s: PurchaseRequestStatus.PENDING_WAREHOUSE, label: 'انبار' },
+                                    { s: PurchaseRequestStatus.PENDING_FACTORY_FINAL, label: 'تایید نهایی' },
+                                    { s: PurchaseRequestStatus.COMPLETED, label: 'بایگانی' }
+                                ].map((step, idx) => (
+                                    <div key={idx} className="flex flex-col items-center gap-1 min-w-[70px]">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
+                                            request.status === step.s ? 'bg-indigo-600 text-white border-indigo-700 ring-4 ring-indigo-100' :
+                                            (idx < currentStepIndex ? 'bg-green-500 text-white border-green-600' : 'bg-white text-gray-400 border-gray-200')
+                                        }`}>
+                                            {idx + 1}
+                                        </div>
+                                        <span className="text-[8px] font-bold text-gray-500 whitespace-nowrap">{step.label}</span>
+                                    </div>
+                                ));
+                            })()
+                        }
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -587,6 +619,13 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                             <>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20}/>} تایید فنی (ارسال به مدیر کارخانه)</button>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <XCircle size={18}/>} رد فنی</button>
+                            </>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && canAddProforma && (
+                            <>
+                                <button onClick={() => handleCommercialDecision('Tehran')} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <Truck size={20}/>} خرید در تهران</button>
+                                <button onClick={() => handleCommercialDecision('Zanjan')} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <Warehouse size={20}/>} خرید در زنجان</button>
                             </>
                         )}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && canApproveFactory && (

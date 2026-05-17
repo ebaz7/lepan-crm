@@ -999,11 +999,14 @@ export interface MeetingMinutes {
     announcementSent?: boolean;
     minutesSent?: boolean;
     approvals?: Record<string, { approved: boolean, date: number, comment?: string }>;
+    imageAttachments?: { fileName: string, url: string }[];
+    pdfAttachments?: { fileName: string, url: string }[];
 }
 
 export enum PurchaseRequestStatus {
     PENDING_TECHNICAL = 'در انتظار فنی کارخانه',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
+    PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی',
     PENDING_CEO = 'در انتظار مدیرعامل',
     PENDING_COMMERCIAL_PROFORMA = 'در انتظار ثبت پیش‌فاکتور',
     PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور',
@@ -1058,6 +1061,8 @@ export interface PurchaseRequest {
     entryWeight?: number;
     entryDate?: string;
     entryTime?: string;
+    
+    purchaseLocation?: 'Tehran' | 'Zanjan';
     
     rejectionReason?: string;
     createdAt: number;
