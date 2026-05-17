@@ -45,7 +45,8 @@ const SecondExitGroupSettings: React.FC<Props> = ({
         { value: ExitPermitStatus.PENDING_FACTORY, label: 'تایید مدیرعامل (ارسال به کارخانه)' },
         { value: ExitPermitStatus.PENDING_WAREHOUSE, label: 'تایید کارخانه (ارسال به انبار)' },
         { value: ExitPermitStatus.PENDING_SECURITY, label: 'تایید انبار (ارسال به انتظامات)' },
-        { value: ExitPermitStatus.EXITED, label: 'خروج نهایی (تایید انتظامات)' },
+        { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: 'تایید انتظامات (ارسال به کارخانه)' },
+        { value: ExitPermitStatus.EXITED, label: 'خروج نهایی (تایید مدیر کارخانه)' },
     ];
 
     return (

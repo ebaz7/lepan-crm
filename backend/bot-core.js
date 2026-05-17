@@ -1013,20 +1013,9 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         let targetGroups = [];
 
         // Group 1 logic (Settings-based routing)
-        const g1Config = settings.exitPermitFirstGroupConfig || null;
-        if (g1Config && g1Config.activeStatuses && g1Config.activeStatuses.length > 0) {
-            if (g1Config.activeStatuses.includes(p.status)) {
-                targetGroups.push(1);
-            }
-        } else {
-            // Legacy default fallback
-            if (p.status === 'در انتظار بررسی' ||
-                p.status === 'در انتظار تایید مدیرعامل' || 
-                p.status === 'در انتظار مدیر کارخانه' || 
-                p.status === 'خارج شد' || 
-                p.status.includes('رد')) {
-                targetGroups.push(1);
-            }
+        const g1Config = settings.exitPermitFirstGroupConfig || { activeStatuses: [] };
+        if (g1Config.activeStatuses && g1Config.activeStatuses.includes(p.status)) {
+            targetGroups.push(1);
         }
         
         // Group 2 logic (Settings-based routing)

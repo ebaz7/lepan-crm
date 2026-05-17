@@ -333,7 +333,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   );
 
   return (
-    <div className="flex min-h-[100dvh] bg-transparent text-[var(--text-primary)] font-sans relative overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-transparent text-[var(--text-primary)] font-sans relative overflow-hidden">
       {/* Background Blobs for fluid depth */}
       <div className="bg-blobs">
           <div className="blob blob-1"></div>

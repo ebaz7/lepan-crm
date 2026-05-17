@@ -316,14 +316,14 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                         {permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL ? 
                             <Stamp 
                                 title="انتظامات / خروج" 
-                                name={permit.approverSecurity || 'نگهبان'} 
+                                name={permit.approverSecurity || 'سرپرست انتظامات'} 
                                 time={(permit.exitTime && permit.status !== ExitPermitStatus.EXITED) ? permit.exitTime : undefined} 
                                 isSecurity={true}
                             /> 
                             : <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>
                         }
                     </div>
-                    <div className="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید خروج (انتظامات)</div>
+                    <div className="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">سرپرست انتظامات</div>
                 </div>
 
                 <div className="flex flex-col items-center justify-between min-h-[80px]">

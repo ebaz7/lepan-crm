@@ -345,7 +345,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     </div>
                     <div style="text-align: center; flex: 1; min-width: 80px;">
                         ${(record.status === 'در انتظار تایید نهایی مدیر کارخانه' || record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)') ? `
-                            <div class="stamp black"><div class="stamp-title">انتظامات</div><div class="stamp-name">${record.approverSecurity || 'نگهبان'}</div></div>
+                            <div class="stamp black"><div class="stamp-title">انتظامات</div><div class="stamp-name">${record.approverSecurity || 'سرپرست انتظامات'}</div></div>
                         ` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
                         <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">سرپرست انتظامات / بازرسی و تایید بارگیری</div>
                     </div>
