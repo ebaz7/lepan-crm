@@ -253,7 +253,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true;
   const canSeeTrade = perms.canManageTrade === true;
   const canSeeProducts = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SALES_MANAGER || perms.canManageSales === true; // Sales manager & admins
-  const canSeeSettings = currentUser.role === UserRole.ADMIN || perms.canManageSettings === true;
+  const canSeeSettings = currentUser.role === UserRole.ADMIN || perms.canManageSettings === true || perms.canManageTradeSettings === true;
   const canSeeSecurity = currentUser.role === UserRole.ADMIN || perms.canViewSecurity === true;
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;

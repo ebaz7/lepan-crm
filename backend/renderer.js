@@ -298,6 +298,23 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     <div style="text-align: left;"><div style="font-size: 16px; font-weight: 900; background: #e5e7eb; padding: 6px 12px; border: 2px solid black; border-radius: 6px;">شماره: ${record.permitNumber}</div><div style="font-size: 12px; font-weight: bold; margin-top: 3px;">تاریخ: ${formatDateSafe(record.date)}</div></div>
                 </div>
 
+                <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                        <div>
+                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 3px;">مقصد / تحویل گیرنده:</div>
+                            ${destsHtml}
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 3px;">مشخصات راننده:</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <div><span style="color: #6b7280; margin-left: 2px;">نام:</span> <b style="font-size: 14px;">${record.driverName || '-'}</b></div>
+                                <div><span style="color: #6b7280; margin-left: 2px;">موبایل:</span> <b style="font-size: 14px; font-family: monospace;">${record.driverPhone || '-'}</b></div>
+                                <div><span style="color: #6b7280; margin-left: 2px;">پلاک:</span> <b dir="ltr" style="display: inline-block; font-size: 14px; border: 1px solid #333; padding: 1px 4px; border-radius: 4px; background: white;">${record.plateNumber || '-'}</b></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="flex: 1;">
                     <h3 style="margin-bottom: 5px; font-weight: bold;">لیست اقلام و کالاها</h3>
                     <table>
@@ -309,10 +326,11 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                 <th>تعداد خروجی</th>
                                 <th>وزن درخواستی</th>
                                 <th>وزن خروجی</th>
+                                <th>فی / قیمت</th>
                             </tr>
                         </thead>
                         <tbody style="font-size: 12px;">
-                            ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, deliveredCartonCount: record.deliveredCartonCount, weight: record.weight, deliveredWeight: record.deliveredWeight}]).map((i, idx) => `
+                            ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, deliveredCartonCount: record.deliveredCartonCount, weight: record.weight, deliveredWeight: record.deliveredWeight, price: record.price}]).map((i, idx) => `
                                 <tr>
                                     <td>${idx+1}</td>
                                     <td style="font-weight: bold;">${i.goodsName}</td>
@@ -320,6 +338,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                     <td style="font-weight: bold; color: #166534;">${i.deliveredCartonCount ?? 0}</td>
                                     <td>${i.weight || 0}</td>
                                     <td style="font-weight: bold; color: #166534;">${i.deliveredWeight ?? 0}</td>
+                                    <td>${i.price ? Number(i.price).toLocaleString() : '-'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -329,7 +348,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                 <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px;">
                     <div style="text-align: center; flex: 1; min-width: 80px;">
                         <div class="stamp"><div class="stamp-title">ثبت کننده</div><div class="stamp-name">${record.requesterRole || record.requester || '-'}</div></div>
-                        <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">واحد فروش / درخواست</div>
+                        <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیر فروش / سفارش جدید فروش</div>
                     </div>
                     <div style="text-align: center; flex: 1; min-width: 80px;">                
                         ${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیرعامل</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}

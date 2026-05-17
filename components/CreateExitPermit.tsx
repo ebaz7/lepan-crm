@@ -18,7 +18,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const currentShamsi = getCurrentShamsiDate();
     const [shamsiDate, setShamsiDate] = useState({ year: currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
 
-    const [items, setItems] = useState<ExitPermitItem[]>([{ id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }]);
+    const [items, setItems] = useState<ExitPermitItem[]>([{ id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0, price: 0 }]);
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
     const [price, setPrice] = useState(0);
@@ -110,7 +110,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
-                price: price,
+                price: items.reduce((acc, i) => acc + (Number(i.price) || 0), 0), // Kept for backwards compatibility or total
                 status: ExitPermitStatus.PENDING_CEO,
                 createdAt: Date.now()
             };
@@ -147,6 +147,31 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                 const blId = (c as any).baleId || (c as any).baleChatId;
                                 if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption, mediaData });
                                 if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption, mediaData });
+                            }
+                            
+                            // Check GROUP settings for CREATE action
+                            const companyConfig = settings?.companyNotifications?.[newPermit.company];
+                            const g1WA = companyConfig?.warehouseGroup || settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
+                            const g1Bale = companyConfig?.baleChannelId || settings?.exitPermitNotificationBaleId;
+                            const g1Tg = companyConfig?.telegramChannelId || settings?.exitPermitNotificationTelegramId;
+
+                            const g2Config = settings?.exitPermitSecondGroupConfig;
+                            const g2WA = g2Config?.groupId;
+                            const g2Bale = g2Config?.baleId;
+                            const g2Tg = g2Config?.telegramId;
+                            
+                            const g1StatusArray = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
+                            if (g1StatusArray.includes('CREATE')) {
+                                if (g1WA) await apiCall('/send-whatsapp', 'POST', { number: g1WA, message: caption, mediaData });
+                                if (g1Bale) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: g1Bale, caption, mediaData });
+                                if (g1Tg) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: g1Tg, caption, mediaData });
+                            }
+                            
+                            const g2StatusArray = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
+                            if (g2StatusArray.includes('CREATE')) {
+                                if (g2WA) await apiCall('/send-whatsapp', 'POST', { number: g2WA, message: caption, mediaData });
+                                if (g2Bale) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: g2Bale, caption, mediaData });
+                                if (g2Tg) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: g2Tg, caption, mediaData });
                             }
                         }
                     } catch (e) { console.error("Notification Error", e); }
@@ -226,19 +251,25 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     </div>
                     <div className="mt-2 space-y-3">
                         {items.map((item, idx) => (
-                            <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end glass-panel p-3 rounded-xl border border-gray-200 shadow-sm">
-                                <div className="flex-1 w-full">
+                            <div key={item.id} className="flex flex-col md:flex-row gap-3 items-end glass-panel p-3 rounded-xl border border-gray-200 shadow-sm flex-wrap">
+                                <div className="flex-1 w-full min-w-[200px]">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1">نام کالا / محصول</label>
                                     <input className="w-full border-b border-gray-300 p-2 text-sm font-bold focus:border-teal-500 outline-none" placeholder="مثال: میلگرد 14..." value={item.goodsName} onChange={e => { const n = [...items]; n[idx].goodsName = e.target.value; setItems(n); }} />
                                 </div>
-                                <div className="w-full md:w-32">
+                                <div className="w-full md:w-28">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
                                     <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.cartonCount === 0 ? '' : item.cartonCount} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].cartonCount = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
-                                <div className="w-full md:w-32">
+                                <div className="w-full md:w-28">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">وزن تقریبی (KG)</label>
                                     <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight === 0 ? '' : item.weight} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].weight = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
+                                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                                    <div className="w-full md:w-32">
+                                        <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">فی / قیمت واحد</label>
+                                        <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-blue-50 text-blue-700 focus:glass-panel transition-colors outline-none" placeholder="مبلغ" value={item.price || ''} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].price = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
+                                    </div>
+                                )}
                                 {items.length > 1 && (
                                     <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="bg-red-100 text-red-500 p-2.5 rounded-lg hover:bg-red-200 transition-colors">
                                         <Trash2 size={18}/>
@@ -270,12 +301,6 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             <Truck size={16}/> حمل و نقل و مالی (بخش مدیریت)
                         </div>
                         <div className="space-y-3 mt-2">
-                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
-                                <div>
-                                    <label className="text-xs font-bold block mb-1">فی / قیمت (جهت اطلاع مدیران)</label>
-                                    <input type="number" className="w-full border rounded-xl p-2 text-sm glass-panel font-bold text-blue-600" placeholder="مبلغ واحد..." value={price || ''} onChange={e => setPrice(+e.target.value)} />
-                                </div>
-                            )}
                             <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-xl p-2 text-sm glass-panel" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div>
                             <div><label className="text-xs font-bold block mb-1">پلاک خودرو</label><input className="w-full border rounded-xl p-2 text-sm glass-panel dir-ltr text-center font-mono font-bold tracking-widest" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div>
                             <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm glass-panel h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>

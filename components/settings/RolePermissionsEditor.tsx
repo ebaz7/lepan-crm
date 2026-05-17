@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SystemSettings, UserRole, RolePermissions, CustomRole } from '../../types';
-import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList, ShoppingCart } from 'lucide-react';
+import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList, ShoppingCart, Pencil, Check } from 'lucide-react';
 
 interface Props {
     settings: SystemSettings;
@@ -129,8 +129,26 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
     // State to track which role accordion is open
     const [expandedRole, setExpandedRole] = useState<string | null>(null);
     const [newRoleName, setNewRoleName] = useState('');
+    const [renamingRole, setRenamingRole] = useState<{id: string, name: string} | null>(null);
 
-    const allRoles = [...DEFAULT_ROLES, ...(settings.customRoles || [])];
+    const allRoles = [...DEFAULT_ROLES, ...(settings.customRoles || [])].map(r => ({
+        ...r,
+        label: settings.customRoleNames?.[r.id] || r.label
+    }));
+
+    const handleSaveRoleName = () => {
+        if (!renamingRole) return;
+        if (!renamingRole.name.trim()) { setRenamingRole(null); return; }
+        
+        onUpdateSettings({
+            ...settings,
+            customRoleNames: {
+                ...(settings.customRoleNames || {}),
+                [renamingRole.id]: renamingRole.name.trim()
+            }
+        });
+        setRenamingRole(null);
+    };
 
     const toggleExpand = (roleId: string) => {
         setExpandedRole(prev => prev === roleId ? null : roleId);
@@ -253,7 +271,23 @@ const RolePermissionsEditor: React.FC<Props> = ({ settings, onUpdateSettings }) 
                                     <ShieldCheck size={20}/>
                                 </div>
                                 <div>
-                                    <span className="font-bold text-gray-800 block">{role.label}</span>
+                                    {renamingRole?.id === role.id ? (
+                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                            <input 
+                                                autoFocus
+                                                value={renamingRole.name} 
+                                                onChange={e => setRenamingRole({...renamingRole, name: e.target.value})} 
+                                                onKeyDown={e => e.key === 'Enter' && handleSaveRoleName()}
+                                                className="border-b border-blue-500 font-bold text-gray-800 bg-transparent outline-none px-1 py-0.5 text-sm"
+                                            />
+                                            <button onClick={handleSaveRoleName} className="text-green-600 bg-green-50 p-1 rounded hover:bg-green-100"><Check size={14}/></button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-gray-800 block">{role.label}</span>
+                                            <button onClick={(e) => { e.stopPropagation(); setRenamingRole({id: role.id, name: role.label}); }} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"><Pencil size={12}/></button>
+                                        </div>
+                                    )}
                                     <span className="text-[10px] text-gray-500 font-mono">{role.id}</span>
                                 </div>
                             </div>

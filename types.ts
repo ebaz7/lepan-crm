@@ -117,6 +117,7 @@ export interface RolePermissions {
   canEditAll?: boolean;
   canDeleteAll?: boolean;
   canManageTrade?: boolean;
+  canManageTradeSettings?: boolean;
   canManageSales?: boolean;
   canManageSettings?: boolean;
   canCreateExitPermit?: boolean;
@@ -240,6 +241,7 @@ export interface SystemSettings {
   itemCategories?: { name: string; subCategories: string[] }[]; // NEW
   rolePermissions?: Record<string, RolePermissions>;
   customRoles?: CustomRole[];
+  customRoleNames?: Record<string, string>;
   savedContacts?: Contact[];
   knowledgeBaseItems?: KnowledgeBaseItem[];
   pwaIcon?: string;
@@ -428,6 +430,7 @@ export interface ExitPermitItem {
   weight: number;
   deliveredCartonCount?: number;
   deliveredWeight?: number;
+  price?: number;
 }
 
 export interface ExitPermitDestination {

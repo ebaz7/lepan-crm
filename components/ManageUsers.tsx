@@ -59,6 +59,10 @@ const ManageUsers: React.FC = () => {
   };
 
   const getRoleLabel = (roleId: string) => {
+      // Check if there is a custom name
+      if (settings?.customRoleNames?.[roleId]) {
+          return settings.customRoleNames[roleId];
+      }
       switch (roleId) {
           case UserRole.ADMIN: return 'مدیر سیستم';
           case UserRole.CEO: return 'مدیر عامل';
@@ -111,16 +115,16 @@ const ManageUsers: React.FC = () => {
             <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full border-2 border-blue-100 rounded-lg px-3 py-2 text-sm glass-panel focus:border-blue-500 transition-colors">
                 <option disabled value="">انتخاب کنید...</option>
                 <optgroup label="✅ نقش‌های سیستمی (پیش‌فرض)">
-                    <option value={UserRole.ADMIN}>مدیر سیستم (دسترسی کامل)</option>
-                    <option value={UserRole.CEO}>مدیر عامل</option>
-                    <option value={UserRole.FACTORY_MANAGER}>مدیر کارخانه (تایید خروج)</option>
-                    <option value={UserRole.WAREHOUSE_KEEPER}>سرپرست انبار (تایید توزین)</option>
-                    <option value={UserRole.SECURITY_HEAD}>سرپرست انتظامات (تایید نهایی)</option>
-                    <option value={UserRole.SECURITY_GUARD}>نگهبان</option>
-                    <option value={UserRole.MANAGER}>مدیر داخلی</option>
-                    <option value={UserRole.FINANCIAL}>مدیر مالی</option>
-                    <option value={UserRole.SALES_MANAGER}>مدیر فروش</option>
-                    <option value={UserRole.USER}>کاربر عادی</option>
+                    <option value={UserRole.ADMIN}>{getRoleLabel(UserRole.ADMIN)} (دسترسی کامل)</option>
+                    <option value={UserRole.CEO}>{getRoleLabel(UserRole.CEO)}</option>
+                    <option value={UserRole.FACTORY_MANAGER}>{getRoleLabel(UserRole.FACTORY_MANAGER)} (تایید خروج)</option>
+                    <option value={UserRole.WAREHOUSE_KEEPER}>{getRoleLabel(UserRole.WAREHOUSE_KEEPER)} (تایید توزین)</option>
+                    <option value={UserRole.SECURITY_HEAD}>{getRoleLabel(UserRole.SECURITY_HEAD)} (تایید نهایی)</option>
+                    <option value={UserRole.SECURITY_GUARD}>{getRoleLabel(UserRole.SECURITY_GUARD)}</option>
+                    <option value={UserRole.MANAGER}>{getRoleLabel(UserRole.MANAGER)}</option>
+                    <option value={UserRole.FINANCIAL}>{getRoleLabel(UserRole.FINANCIAL)}</option>
+                    <option value={UserRole.SALES_MANAGER}>{getRoleLabel(UserRole.SALES_MANAGER)}</option>
+                    <option value={UserRole.USER}>{getRoleLabel(UserRole.USER)}</option>
                 </optgroup>
                 {settings?.customRoles && settings.customRoles.length > 0 && (
                     <optgroup label="✏️ نقش‌های سفارشی (نیاز به تنظیم دسترسی)">

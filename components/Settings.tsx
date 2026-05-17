@@ -150,6 +150,27 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   // App Users for various settings
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
   const [appContacts, setAppContacts] = useState<Contact[]>([]);
+  
+  // Current User Permissions
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  
+  useEffect(() => {
+    const userStr = localStorage.getItem('app_current_user');
+    if (userStr) {
+        setCurrentUser(JSON.parse(userStr));
+    }
+  }, []);
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const hasFullSettings = isAdmin || (currentUser && settings?.rolePermissions?.[currentUser.role]?.canManageSettings);
+  const canManageTradeSettings = isAdmin || hasFullSettings || (currentUser && settings?.rolePermissions?.[currentUser.role]?.canManageTradeSettings);
+  
+  useEffect(() => {
+      // Force navigation to trade if they ONLY have trade settings
+      if (!hasFullSettings && canManageTradeSettings && activeCategory !== 'commerce') {
+          setActiveCategory('commerce');
+      }
+  }, [hasFullSettings, canManageTradeSettings, activeCategory]);
 
   useEffect(() => { 
       if (propSettings) {
@@ -420,17 +441,25 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
         <div className="w-full md:w-64 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border-b md:border-b-0 md:border-l border-gray-200 p-4">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 px-2"><SettingsIcon size={24} className="text-blue-600"/> تنظیمات</h2>
             <nav className="space-y-1">
-                <button onClick={() => setActiveCategory('system')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'system' ? 'glass-panel shadow text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200'}`}><AppWindow size={18}/> عمومی و سیستم</button>
-                <button onClick={() => setActiveCategory('fiscal')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'fiscal' ? 'glass-panel shadow text-emerald-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FolderSync size={18}/> مدیریت سال مالی</button>
-                <button onClick={() => setActiveCategory('data')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'data' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Database size={18}/> اطلاعات پایه</button>
-                <button onClick={() => setActiveCategory('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'templates' ? 'glass-panel shadow text-teal-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><LayoutTemplate size={18}/> قالب‌های چاپ</button>
-                <button onClick={() => setActiveCategory('commerce')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'commerce' ? 'glass-panel shadow text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Container size={18}/> تنظیمات بازرگانی</button>
-                <button onClick={() => setActiveCategory('warehouse')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'warehouse' ? 'glass-panel shadow text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Warehouse size={18}/> انبار</button>
-                <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'glass-panel shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
-                <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'glass-panel shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
-                <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
-                <button onClick={() => setActiveCategory('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'meetings' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> صورتجلسات</button>
-                <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
+                {hasFullSettings && (
+                    <>
+                        <button onClick={() => setActiveCategory('system')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'system' ? 'glass-panel shadow text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200'}`}><AppWindow size={18}/> عمومی و سیستم</button>
+                        <button onClick={() => setActiveCategory('fiscal')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'fiscal' ? 'glass-panel shadow text-emerald-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FolderSync size={18}/> مدیریت سال مالی</button>
+                        <button onClick={() => setActiveCategory('data')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'data' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Database size={18}/> اطلاعات پایه</button>
+                        <button onClick={() => setActiveCategory('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'templates' ? 'glass-panel shadow text-teal-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><LayoutTemplate size={18}/> قالب‌های چاپ</button>
+                    </>
+                )}
+                {canManageTradeSettings && <button onClick={() => setActiveCategory('commerce')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'commerce' ? 'glass-panel shadow text-rose-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Container size={18}/> تنظیمات بازرگانی</button>}
+                {hasFullSettings && (
+                    <>
+                        <button onClick={() => setActiveCategory('warehouse')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'warehouse' ? 'glass-panel shadow text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Warehouse size={18}/> انبار</button>
+                        <button onClick={() => setActiveCategory('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'integrations' ? 'glass-panel shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Link size={18}/> اتصالات (API)</button>
+                        <button onClick={() => setActiveCategory('whatsapp')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'whatsapp' ? 'glass-panel shadow text-green-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><MessageCircle size={18}/> پیام‌رسان‌ها</button>
+                        <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
+                        <button onClick={() => setActiveCategory('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'meetings' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> صورتجلسات</button>
+                        <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
+                    </>
+                )}
             </nav>
         </div>
 

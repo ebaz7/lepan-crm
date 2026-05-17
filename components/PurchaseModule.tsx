@@ -499,7 +499,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                                     PurchaseRequestStatus.PENDING_CEO,
                                     PurchaseRequestStatus.PENDING_SECURITY_ENTRY,
                                     PurchaseRequestStatus.PENDING_QC,
-                                    PurchaseRequestStatus.PENDING_WAREHOUSE,
+                                    PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL,
                                     PurchaseRequestStatus.PENDING_FACTORY_FINAL,
                                     PurchaseRequestStatus.COMPLETED
                                 ];
@@ -514,7 +514,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                                     { s: PurchaseRequestStatus.PENDING_CEO, label: 'مدیرعامل' },
                                     { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود' },
                                     { s: PurchaseRequestStatus.PENDING_QC, label: 'کیفی' },
-                                    { s: PurchaseRequestStatus.PENDING_WAREHOUSE, label: 'انبار' },
+                                    { s: PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL, label: 'انبار' },
                                     { s: PurchaseRequestStatus.PENDING_FACTORY_FINAL, label: 'تایید نهایی' },
                                     { s: PurchaseRequestStatus.COMPLETED, label: 'بایگانی' }
                                 ].map((step, idx) => (

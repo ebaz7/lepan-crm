@@ -261,17 +261,27 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             let g2Bale = g2Config?.baleId;
             let g2Tg = g2Config?.telegramId;
 
-            // Routing Logic based on user request:
-            // 1. CEO Approval (prevStatus was PENDING_CEO, now PENDING_FACTORY) -> Group 1
-            // 2. Factory Manager Approval (prevStatus was PENDING_FACTORY, now PENDING_WAREHOUSE) -> Group 2
-            // 3. Warehouse Supervisor Approval (prevStatus was PENDING_WAREHOUSE, now PENDING_SECURITY) -> Group 2
-            // 4. Security Guard Exit (prevStatus was PENDING_SECURITY, now EXITED) -> BOTH Group 1 & Group 2
-
-            const isCEOApproved = prevStatus === ExitPermitStatus.PENDING_CEO;
-            const isFactoryApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY;
-            const isWarehouseApproved = prevStatus === ExitPermitStatus.PENDING_WAREHOUSE;
-            const isSecurityProcessed = prevStatus === ExitPermitStatus.PENDING_SECURITY;
-            const isFactoryFinalApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL;
+            // Check config arrays directly
+            const nextStatus = permit.status;
+            const configOptionStr1 = prevStatus + '->' + nextStatus;
+            const fallbackOptionStr = prevStatus; // For older formats
+            
+            const g1StatusArray = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
+            const isG1Active = g1StatusArray.includes(configOptionStr1) || g1StatusArray.includes(fallbackOptionStr);
+            
+            const g2StatusArray = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
+            const isG2Active = g2StatusArray.includes(configOptionStr1) || g2StatusArray.includes(fallbackOptionStr);
+            
+            if (isG1Active) {
+                if (g1WA) targets.push({ group: g1WA });
+                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+            }
+            if (isG2Active) {
+                if (g2WA) targets.push({ group: g2WA });
+                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+            }
 
             let captionTitle = '';
             if (prevStatus === ExitPermitStatus.PENDING_CEO) {

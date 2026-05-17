@@ -837,8 +837,8 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         <input type="file" multiple accept="image/*" onChange={async (e) => {
                                             if (e.target.files) {
                                                 const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
-                                                    const url = await uploadFileChunked(f);
-                                                    return { fileName: f.name, url };
+                                                    const res = await uploadFileChunked(f, () => {});
+                                                    return { fileName: f.name, url: res.url };
                                                 }));
                                                 setMeetingForm(prev => ({...prev, imageAttachments: [...(prev.imageAttachments || []), ...uploads]}));
                                             }
@@ -849,8 +849,8 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         <input type="file" multiple accept=".pdf" onChange={async (e) => {
                                             if (e.target.files) {
                                                 const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
-                                                    const url = await uploadFileChunked(f);
-                                                    return { fileName: f.name, url };
+                                                    const res = await uploadFileChunked(f, () => {});
+                                                    return { fileName: f.name, url: res.url };
                                                 }));
                                                 setMeetingForm(prev => ({...prev, pdfAttachments: [...(prev.pdfAttachments || []), ...uploads]}));
                                             }
