@@ -273,20 +273,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const isSecurityProcessed = prevStatus === ExitPermitStatus.PENDING_SECURITY;
             const isFactoryFinalApproved = prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL;
 
-            // Add Group 1 if CEO Approved or Factory Final Approved
-            if (isCEOApproved || isFactoryFinalApproved) {
-                if (g1WA) targets.push({ group: g1WA });
-                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
-                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
-            }
-
-            // Add Group 2 if Factory Approved, Warehouse Approved, FACTORY FINAL APPROVED
-            if (isFactoryApproved || isWarehouseApproved || isFactoryFinalApproved) {
-                if (g2WA) targets.push({ group: g2WA });
-                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
-                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
-            }
-
             let captionTitle = '';
             if (prevStatus === ExitPermitStatus.PENDING_CEO) {
                 captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';

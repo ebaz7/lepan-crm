@@ -45,8 +45,9 @@ export const updateExitPermitStatus = async (id: string, status: ExitPermitStatu
         if (status === ExitPermitStatus.PENDING_FACTORY) updates.approverCeo = approverUser.fullName;
         else if (status === ExitPermitStatus.PENDING_WAREHOUSE) updates.approverFactory = approverUser.fullName;
         else if (status === ExitPermitStatus.PENDING_SECURITY) updates.approverWarehouse = approverUser.fullName;
+        else if (status === ExitPermitStatus.PENDING_FACTORY_FINAL) updates.approverSecurity = approverUser.fullName;
         else if (status === ExitPermitStatus.EXITED) {
-            updates.approverSecurity = approverUser.fullName;
+            updates.approverFactoryFinal = approverUser.fullName;
             if (extra?.exitTime) updates.exitTime = extra.exitTime;
         }
 

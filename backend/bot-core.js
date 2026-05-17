@@ -1035,12 +1035,6 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             targetGroups.push(2);
         }
 
-        // FORCE BOTH GROUPS IF AFTER WAREHOUSE TICKET or if final exit
-        if (p.status === 'در انتظار خروج' || p.status === 'در انتظار خروج (انتظامات)' || p.status === 'در انتظار تایید نهایی مدیر کارخانه' || p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)') {
-            if (!targetGroups.includes(1)) targetGroups.push(1);
-            if (!targetGroups.includes(2)) targetGroups.push(2);
-        }
-
         // Distinctly and separately fire off to all targets, without await to prevent blocking
         for (const gNum of targetGroups) {
             let tgGroupId = '';
@@ -1988,15 +1982,19 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (p.status === 'در انتظار تایید مدیرعامل') {
                 p.status = 'در انتظار مدیر کارخانه';
                 stepName = 'مدیرعامل';
+                p.approverCeo = user.fullName;
             } else if (p.status === 'در انتظار مدیر کارخانه') {
                 p.status = 'در انتظار تایید انبار';
                 stepName = 'مدیر کارخانه';
+                p.approverFactory = user.fullName;
             } else if (p.status === 'در انتظار تایید انبار') {
                 p.status = 'در انتظار خروج (انتظامات)';
                 stepName = 'سرپرست انبار';
+                p.approverWarehouse = user.fullName;
             } else if (p.status === 'در انتظار خروج (انتظامات)') {
                 p.status = 'در انتظار تایید نهایی مدیر کارخانه';
                 stepName = 'انتظامات (ثبت پلاک و راننده - خروج)';
+                p.approverSecurity = user.fullName;
             } else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه') {
                 p.status = 'خارج شده (بایگانی)';
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
