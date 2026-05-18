@@ -5,7 +5,7 @@ import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft, GitMerge, Users, X } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import html2canvas from 'html2canvas';
 
@@ -31,6 +31,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [existingPermits, setExistingPermits] = useState<ExitPermit[]>([]);
     const [settings, setSettings] = useState<SystemSettings | null>(null);
 
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [searchTermLead, setSearchTermLead] = useState('');
+
     useEffect(() => {
         getSettings().then(s => {
             setSettings(s);
@@ -51,6 +54,31 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             if (Array.isArray(res)) setBotSubscribers(res);
         }).catch(console.error);
     }, []);
+
+    const handleMergeLead = async (lead: any) => {
+        if (!settings) return;
+        
+        const newContact: SalesContact = {
+            id: generateUUID(),
+            name: lead.fullName || 'بدون نام',
+            mobile: lead.mobile || '',
+            telegramId: lead.telegramChatId || lead.chatId,
+            baleId: lead.baleChatId || lead.chatId,
+            sendBirthdayGreeting: false
+        };
+
+        const updatedContacts = [...(settings.salesContacts || []), newContact];
+        const updatedSettings = { ...settings, salesContacts: updatedContacts };
+        
+        try {
+            await apiCall('/settings', 'POST', updatedSettings);
+            setSettings(updatedSettings);
+            setSavedContacts(updatedContacts);
+            alert('مخاطب با موفقیت به لیست مشتریان اضافه شد.');
+        } catch (e) {
+            alert('خطا در ذخیره مخاطب');
+        }
+    };
 
     const handleRecipientChange = (val: string) => {
         const d = [...destinations];
@@ -341,7 +369,16 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         </div>
                         <div className="space-y-3 mt-2">
                             <div className="relative">
-                                <label className="text-xs font-bold block mb-1">نام گیرنده</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-xs font-bold block">نام گیرنده</label>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowMergeModal(true)}
+                                        className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg flex items-center gap-1 hover:bg-blue-100 transition-colors"
+                                    >
+                                        <GitMerge size={12}/> ادغام لیدها و مخاطبین
+                                    </button>
+                                </div>
                                 <input 
                                     className="w-full border rounded-xl p-2 text-sm glass-panel" 
                                     placeholder="شخص یا شرکت..." 
@@ -392,6 +429,76 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                     </button>
                 </div>
 
+                {/* Lead Merge Modal */}
+                {showMergeModal && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                        <div className="glass-panel w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col max-h-[80vh] shadow-2xl animate-fade-in border border-white/20">
+                            <div className="bg-teal-900 p-4 text-white flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <Users size={20}/>
+                                    <span className="font-bold text-sm">مدیریت لیدهای ربات (تبدیل به مخاطب)</span>
+                                </div>
+                                <button type="button" onClick={() => setShowMergeModal(false)}><X/></button>
+                            </div>
+                            
+                            <div className="p-4 bg-teal-50/30 border-b">
+                                <div className="relative">
+                                    <input 
+                                        className="w-full border rounded-xl p-3 pr-10 text-sm glass-panel" 
+                                        placeholder="جستجوی لید بر اساس نام یا شماره..." 
+                                        value={searchTermLead}
+                                        onChange={e => setSearchTermLead(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <Users className="absolute right-3 top-3 text-gray-400" size={18}/>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                                    💡 لیدهایی که در اینجا می‌بینید، افرادی هستند که با ربات تعامل داشته‌اند. با زدن دکمه "ادغام"، آن‌ها به لیست مخاطبین اصلی شما اضافه می‌شوند.
+                                </p>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                {botSubscribers
+                                    .filter(l => (l.fullName || 'بدون نام').includes(searchTermLead) || (l.mobile || '').includes(searchTermLead))
+                                    .map(lead => {
+                                        const isAlreadyMerged = savedContacts.some(sc => sc.mobile?.replace(/^0/, '') === lead.mobile?.replace(/^0/, ''));
+                                        return (
+                                            <div key={lead.id} className={`flex items-center justify-between p-3 rounded-xl border ${isAlreadyMerged ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-teal-100'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold uppercase text-xs">
+                                                        {(lead.fullName || '؟').charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-sm text-gray-800">{lead.fullName || 'بدون نام'}</div>
+                                                        <div className="text-xs text-gray-500 font-mono">{lead.mobile || 'فاقد شماره'}</div>
+                                                    </div>
+                                                </div>
+                                                {isAlreadyMerged ? (
+                                                    <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">قبلاً ادغام شده</span>
+                                                ) : (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleMergeLead(lead)}
+                                                        className="bg-teal-600 text-white text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-teal-700 transition-shadow shadow-sm active:scale-95"
+                                                    >
+                                                        <GitMerge size={12}/> ادغام با مخاطبین
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                }
+                                {botSubscribers.length === 0 && (
+                                    <div className="text-center py-10 text-gray-400 italic text-sm">هیچ لیدی یافت نشد</div>
+                                )}
+                            </div>
+                            
+                            <div className="p-4 border-t bg-gray-50 flex justify-end">
+                                <button type="button" onClick={() => setShowMergeModal(false)} className="px-5 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">بستن</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </form>
         </div>
     );
