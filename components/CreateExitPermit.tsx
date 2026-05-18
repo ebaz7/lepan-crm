@@ -23,7 +23,8 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
     const [price, setPrice] = useState(0);
     const [savedContacts, setSavedContacts] = useState<SalesContact[]>([]);
-    const [contactSuggestions, setContactSuggestions] = useState<SalesContact[]>([]);
+    const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
+    const [contactSuggestions, setContactSuggestions] = useState<any[]>([]);
     
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
@@ -45,6 +46,10 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         apiCall<ExitPermit[]>('/exit-permits').then(res => {
             if (Array.isArray(res)) setExistingPermits(res);
         }).catch(console.error);
+
+        apiCall<any[]>('/bot-subscribers').then(res => {
+            if (Array.isArray(res)) setBotSubscribers(res);
+        }).catch(console.error);
     }, []);
 
     const handleRecipientChange = (val: string) => {
@@ -53,14 +58,33 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         setDestinations(d);
 
         if (val.trim().length > 1) {
-            const filtered = savedContacts.filter(c => c.name.includes(val) || (c.mobile && c.mobile.includes(val)));
-            setContactSuggestions(filtered);
+            const contacts = savedContacts.filter(c => c.name.includes(val) || (c.mobile && c.mobile.includes(val)));
+            const leads = botSubscribers.filter(l => (l.fullName && l.fullName.includes(val)) || (l.mobile && l.mobile.includes(val)));
+            
+            // Deduplicate and prioritize contacts over leads if mobile matches
+            const merged = [...contacts];
+            leads.forEach(l => {
+                const mobile = l.mobile?.replace(/^0/, '') || '';
+                const exists = merged.some(m => m.mobile?.replace(/^0/, '') === mobile);
+                if (!exists) {
+                    merged.push({
+                        id: l.id,
+                        name: l.fullName || 'بدون نام',
+                        mobile: l.mobile || '',
+                        telegramId: l.telegramChatId || l.chatId,
+                        baleId: l.baleChatId || l.chatId,
+                        isLead: true
+                    } as any);
+                }
+            });
+
+            setContactSuggestions(merged);
         } else {
             setContactSuggestions([]);
         }
     };
 
-    const selectContact = (contact: SalesContact) => {
+    const selectContact = (contact: any) => {
         const d = [...destinations];
         d[0].recipientName = contact.name;
         d[0].phone = contact.mobile;
@@ -334,7 +358,10 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                                 className="w-full text-right p-3 hover:bg-gray-50 border-b last:border-0 flex justify-between items-center"
                                             >
                                                 <span className="font-bold text-sm">{con.name}</span>
-                                                <span className="text-xs text-gray-400 font-mono">{con.mobile}</span>
+                                                <div className="flex items-center gap-2">
+                                                    {con.isLead && <span className="text-[8px] bg-blue-50 text-blue-500 px-1 rounded">ربات</span>}
+                                                    <span className="text-xs text-gray-400 font-mono">{con.mobile}</span>
+                                                </div>
                                             </button>
                                         ))}
                                     </div>

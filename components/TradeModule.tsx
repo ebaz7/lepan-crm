@@ -10,6 +10,7 @@ import CurrencyReport from './reports/CurrencyReport';
 import CompanyPerformanceReport from './reports/CompanyPerformanceReport';
 import PrintFinalCostReport from './print/PrintFinalCostReport';
 import PrintClearanceDeclaration from './print/PrintClearanceDeclaration';
+import PrintProforma from './print/PrintProforma';
 import InsuranceLedgerReport from './reports/InsuranceLedgerReport';
 import GuaranteeReport from './reports/GuaranteeReport';
 import InsuranceTab from './InsuranceTab';
@@ -143,6 +144,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const [showFinalReportPrint, setShowFinalReportPrint] = useState(false);
     
     const [showClearancePrint, setShowClearancePrint] = useState(false);
+    const [showProformaPrint, setShowProformaPrint] = useState(false);
+    const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'bale' | 'telegram' | null>(null);
+    const [contactSearch, setContactSearch] = useState('');
+    const [allContacts, setAllContacts] = useState<any[]>([]);
 
     // Filter banks based on the selected company
     const companySpecificBanks = useMemo(() => {
@@ -163,6 +168,14 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             setOperatingBanks(s.operatingBankNames || []);
             setAvailableCompanies(s.companyNames || []);
             setNewRecordCompany(s.defaultCompany || '');
+            
+            // Load contacts for sharing
+            const c = s.savedContacts || [];
+            const sales = s.salesContacts || [];
+            setAllContacts([
+                ...c.map(x => ({ ...x, type: 'Technical' })),
+                ...sales.map(x => ({ id: x.id, name: x.name, number: x.mobile, chatId: x.baleId || x.telegramId, platform: x.baleId ? 'Bale' : 'Telegram', type: 'Customer' }))
+            ]);
         });
     }, []);
 
@@ -342,6 +355,41 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const handleAddCurrencyTranche = async () => { if (!selectedRecord || !newCurrencyTranche.amountStr || !newCurrencyTranche.rialAmountStr) return; let updatedTranches = [...(currencyForm.tranches || [])]; const rawAmount = parseFloat(newCurrencyTranche.amountStr); const rawRialAmount = deformatNumberString(newCurrencyTranche.rialAmountStr); const rawCurrencyFee = newCurrencyTranche.currencyFeeStr ? parseFloat(newCurrencyTranche.currencyFeeStr) : 0; const rawReceived = newCurrencyTranche.receivedAmountStr ? parseFloat(newCurrencyTranche.receivedAmountStr) : 0; const trancheData: any = { date: newCurrencyTranche.date || '', amount: rawAmount, currencyType: newCurrencyTranche.currencyType || selectedRecord.mainCurrency || 'EUR', brokerName: newCurrencyTranche.brokerName || '', exchangeName: newCurrencyTranche.exchangeName || '', rate: 0, rialAmount: rawRialAmount, currencyFee: rawCurrencyFee, isDelivered: newCurrencyTranche.isDelivered, deliveryDate: newCurrencyTranche.deliveryDate, returnAmount: newCurrencyTranche.returnAmount ? deformatNumberString(newCurrencyTranche.returnAmount.toString()) : undefined, returnDate: newCurrencyTranche.returnDate, receivedAmount: rawReceived }; if (editingTrancheId) { updatedTranches = updatedTranches.map(t => t.id === editingTrancheId ? { ...t, ...trancheData } : t); } else { updatedTranches.push({ ...trancheData, id: generateUUID() }); } const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const totalRialCost = updatedTranches.reduce((acc, t) => { return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); }, 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); setNewCurrencyTranche({ amount: 0, currencyType: selectedRecord.mainCurrency || 'EUR', date: '', exchangeName: '', brokerName: '', isDelivered: false, returnAmount: '', returnDate: '', receivedAmount: 0, amountStr: '', rialAmountStr: '', receivedAmountStr: '', currencyFeeStr: '' }); setEditingTrancheId(null); };
     const handleEditTranche = (tranche: any) => { setNewCurrencyTranche({ amount: tranche.amount, amountStr: tranche.amount.toString(), currencyType: tranche.currencyType, date: tranche.date, exchangeName: tranche.exchangeName, brokerName: tranche.brokerName, isDelivered: tranche.isDelivered, deliveryDate: tranche.deliveryDate, rate: tranche.rate, rialAmountStr: formatNumberString(tranche.rialAmount || 0), currencyFeeStr: tranche.currencyFee ? tranche.currencyFee.toString() : '', returnAmount: tranche.returnAmount ? formatNumberString(tranche.returnAmount) : '', returnDate: tranche.returnDate, receivedAmount: tranche.receivedAmount, receivedAmountStr: tranche.receivedAmount ? tranche.receivedAmount.toString() : '' }); setEditingTrancheId(tranche.id); };
     const handleCancelEditTranche = () => { setNewCurrencyTranche({ amount: 0, currencyType: selectedRecord?.mainCurrency || 'EUR', date: '', exchangeName: '', brokerName: '', isDelivered: false, returnAmount: '', returnDate: '', receivedAmount: 0, amountStr: '', rialAmountStr: '', receivedAmountStr: '', currencyFeeStr: '' }); setEditingTrancheId(null); };
+
+    const handleShareProforma = async (targetId: string) => {
+        if (!selectedRecord) return;
+        try {
+            const platform = sharePlatform || 'bale';
+            const totalAmount = selectedRecord.items.reduce((a, b) => a + b.totalPrice, 0);
+            const totalWeight = selectedRecord.items.reduce((a, b) => a + b.weight, 0);
+            
+            const message = `📄 *پیش‌فاکتور جدید*\n\n` +
+                `🏢 شرکت: ${selectedRecord.company}\n` +
+                `📦 کالا: ${selectedRecord.goodsName}\n` +
+                `🔢 شماره پرونده: ${selectedRecord.fileNumber}\n` +
+                `👤 فروشنده: ${selectedRecord.sellerName}\n` +
+                `⚖️ وزن کل: ${formatNumberString(totalWeight)} KG\n` +
+                `💰 ارزش کل: ${formatNumberString(totalAmount)} ${selectedRecord.mainCurrency}\n\n` +
+                `نمایش آنلاین:\n${window.location.origin}/share/proforma/${selectedRecord.id}`;
+
+            const response: any = await apiCall(`/share/${platform}`, 'POST', {
+                targetId,
+                message,
+                documentId: selectedRecord.id,
+                documentType: 'PROFORMA'
+            });
+
+            if (response.success) {
+                alert('پیش‌فاکتور با موفقیت ارسال شد.');
+                setSharePlatform(null);
+            } else {
+                throw new Error(response.error || 'خطا در ارسال');
+            }
+        } catch (error: any) {
+            alert('خطا در ارسال: ' + error.message);
+        }
+    };
+
     const handleRemoveTranche = async (id: string) => { if (!selectedRecord) return; if (!confirm('آیا از حذف این پارت مطمئن هستید؟')) return; const updatedTranches = (currencyForm.tranches || []).filter(t => t.id !== id); const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const totalRialCost = updatedTranches.reduce((acc, t) => { return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); }, 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleToggleTrancheDelivery = async (id: string) => { if (!selectedRecord) return; const updatedTranches = (currencyForm.tranches || []).map(t => { if (t.id === id) return { ...t, isDelivered: !t.isDelivered }; return t; }); const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleSaveCurrencyGuarantee = async () => { if (!selectedRecord) return; const gCheck = { amount: deformatNumberString(currencyGuarantee.amount), bank: currencyGuarantee.bank, chequeNumber: currencyGuarantee.number, dueDate: currencyGuarantee.date, isDelivered: currencyGuarantee.isDelivered }; const updatedForm = { ...currencyForm, guaranteeCheque: gCheck }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); alert("اطلاعات چک ضمانت ارزی ذخیره شد."); };
@@ -567,6 +615,26 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     />
                 )}
 
+                {/* Proforma Print Overlay */}
+                {showProformaPrint && selectedRecord && (
+                    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col animate-scale-in">
+                            <div className="p-4 border-b flex justify-between items-center bg-gray-50/50">
+                                <h3 className="font-black text-gray-700">پیش‌نمایش پروفرما اینویس</h3>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95"><Printer size={14}/> چاپ مستقیم</button>
+                                    <button onClick={() => setShowProformaPrint(false)} className="p-2 hover:bg-red-50 text-red-500 rounded-xl transition-colors"><X size={20}/></button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-auto bg-gray-200/50 p-8 custom-scrollbar">
+                                <div className="mx-auto w-[210mm] bg-white shadow-xl min-h-[297mm]">
+                                    <PrintProforma record={selectedRecord} settings={settings} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* EDIT METADATA MODAL */}
                 {showEditMetadataModal && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
@@ -723,7 +791,42 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             </div>
 
                             <div className="glass-panel p-6 rounded-xl shadow-sm border">
-                                <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">اقلام پروفرما</h3>
+                                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                    <h3 className="font-bold text-gray-800">اقلام پروفرما</h3>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => setShowProformaPrint(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-black hover:bg-blue-100 transition-all active:scale-95"><Printer size={14}/> مشاهده و چاپ</button>
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={() => setSharePlatform('bale')} className="p-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100" title="ارسال به بله"><Share2 size={14}/></button>
+                                            <button onClick={() => setSharePlatform('whatsapp')} className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600" title="ارسال به واتساپ"><Share2 size={14}/></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {sharePlatform && (
+                                    <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-xs font-black text-gray-700">انتخاب گیرنده ({sharePlatform === 'bale' ? 'بله' : sharePlatform === 'whatsapp' ? 'واتساپ' : 'تلگرام'})</span>
+                                            <button onClick={() => setSharePlatform(null)} className="text-red-500 hover:bg-red-50 p-1 rounded-lg"><X size={16}/></button>
+                                        </div>
+                                        <div className="relative mb-3">
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
+                                            <input type="text" placeholder="جستجوی مخاطب..." className="w-full pr-9 pl-4 py-2 bg-white border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20" value={contactSearch} onChange={e => setContactSearch(e.target.value)}/>
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+                                            {allContacts.filter(c => c.name.includes(contactSearch) || c.number.includes(contactSearch)).map(c => (
+                                                <button key={c.id} onClick={() => handleShareProforma(c.chatId || c.number)} className="w-full flex justify-between items-center p-2.5 hover:bg-blue-50/50 rounded-lg text-xs transition-colors group">
+                                                    <div className="flex flex-col text-right">
+                                                        <span className="font-bold text-gray-800">{c.name}</span>
+                                                        <span className="text-[10px] text-gray-400 font-mono">{c.number}</span>
+                                                    </div>
+                                                    <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all text-blue-600 font-black">ارسال</div>
+                                                </button>
+                                            ))}
+                                            {allContacts.filter(c => c.name.includes(contactSearch) || c.number.includes(contactSearch)).length === 0 && <div className="p-4 text-center text-gray-400 text-[10px]">مخاطبی یافت نشد</div>}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex gap-2 items-end mb-4 bg-gray-50 p-3 rounded-lg flex-wrap">
                                     <div className="flex-1 min-w-[150px] space-y-1"><label className="text-xs text-gray-500">شرح کالا</label><input className="w-full border rounded p-2 text-sm" placeholder="نام کالا" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})}/></div>
                                     <div className="w-32 space-y-1"><label className="text-xs text-gray-500">HS Code</label><input className="w-full border rounded p-2 text-sm dir-ltr" placeholder="کد تعرفه" value={newItem.hsCode || ''} onChange={e => setNewItem({...newItem, hsCode: e.target.value})}/></div>

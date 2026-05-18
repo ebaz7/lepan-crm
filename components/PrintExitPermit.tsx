@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole, SalesContact } from '../types';
+import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole, SalesContact, User } from '../types';
 import { formatDate, formatCurrency, formatIranianPlate } from '../constants';
 import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
 import { apiCall } from '../services/apiService';
@@ -188,11 +188,11 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
       }
   };
 
-  // Combine Settings Contacts AND Sales Contacts AND Bot Leads into filterable list
+  // Combine Settings Contacts AND Sales Contacts AND Bot Leads into filterable list (For Recipients)
   const combinedContacts = (() => {
     const list: { id: string; name: string; number: string; platform?: string; chatId?: string; isLinked?: boolean }[] = [];
     
-    // 1. Sales Contacts (Manual)
+    // 1. Sales Contacts (Manual customers)
     (settings?.salesContacts || []).forEach(c => {
         // Try to FIND a matching Bot Lead by mobile (last 10 digits to be safe)
         const lead = botSubscribers.find(s => {
@@ -231,9 +231,14 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
     return list;
   })();
 
-  const filteredContacts = combinedContacts.filter(c => 
-    c.name.toLowerCase().includes(contactSearch.toLowerCase()) || 
-    c.number.includes(contactSearch)
+  const [staffUsers, setStaffUsers] = useState<User[]>([]);
+  useEffect(() => {
+      getUsers().then(setStaffUsers).catch(() => {});
+  }, []);
+
+  const filteredStaff = staffUsers.filter(u => 
+    u.fullName.toLowerCase().includes(contactSearch.toLowerCase()) || 
+    u.phoneNumber?.includes(contactSearch)
   );
 
   const displayItems = permit.items && permit.items.length > 0 ? permit.items : [{ id: 'legacy', goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: permit.cartonCount || 0, deliveredWeight: permit.weight || 0 }];
@@ -359,7 +364,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             </div>
 
             <div className="mt-auto pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end">
-                <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full"><Stamp title="مدیر فروش" name={permit.requester} /></div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرفروش / ثبت سفارش</div></div>
+                <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full"><Stamp title="مدیر فروش" name={permit.requester} /></div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرفروش/ثبت سفارش</div></div>
                 
                 <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full">{permit.approverCeo ? <Stamp title="مدیریت" name={permit.approverCeo} /> : <span className="text-gray-300 text-xs">---</span>}</div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرعامل</div></div>
                 
@@ -430,15 +435,13 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                     <button onClick={handleDownloadPDF} disabled={processing} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-[12px] font-black hover:bg-gray-200 flex items-center gap-2 transition-all active:scale-95">{processing ? <Loader2 size={14} className="animate-spin"/> : <FileDown size={14}/>} دریافت PDF</button>
                     <button onClick={handlePrint} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-[12px] font-black hover:bg-blue-700 flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all active:scale-95"><Printer size={14}/> چاپ</button>
                     {onEdit && <button onClick={onEdit} className="bg-amber-50 text-amber-600 px-4 py-2 rounded-lg text-[12px] font-black hover:bg-amber-100 flex items-center gap-2 border border-amber-200 transition-all active:scale-95"><Edit size={14}/> اصلاح</button>}
-                </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden lg:block"></div>
-                <div className="flex items-center gap-1.5">
-                    <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600 shadow-lg shadow-green-500/30' : 'bg-white border-gray-100 text-green-600 hover:bg-green-50'}`} title="واتساپ"><Share2 size={18}/></button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'bale' ? 'bg-green-600 text-white border-green-700 shadow-lg shadow-green-600/30' : 'bg-white border-gray-100 text-green-700 hover:bg-green-50'}`} title="بله"><Share2 size={18}/></button>
-                    <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/30' : 'bg-white border-gray-100 text-blue-600 hover:bg-blue-50'}`} title="تلگرام"><Share2 size={18}/></button>
+                    
+                    <div className="h-6 w-px bg-gray-200 mx-1 hidden lg:block"></div>
+                    <div className="flex items-center gap-1.5">
+                        <button onClick={() => setSharePlatform(sharePlatform === 'whatsapp' ? null : 'whatsapp')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'whatsapp' ? 'bg-green-500 text-white border-green-600 shadow-lg shadow-green-500/30' : 'bg-white border-gray-100 text-green-600 hover:bg-green-50'}`} title="واتساپ"><Share2 size={18}/></button>
+                        <button onClick={() => setSharePlatform(sharePlatform === 'bale' ? null : 'bale')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'bale' ? 'bg-green-600 text-white border-green-700 shadow-lg shadow-green-600/30' : 'bg-white border-gray-100 text-green-700 hover:bg-green-50'}`} title="بله"><Share2 size={18}/></button>
+                        <button onClick={() => setSharePlatform(sharePlatform === 'telegram' ? null : 'telegram')} className={`p-2 rounded-xl border transition-all active:scale-95 ${sharePlatform === 'telegram' ? 'bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/30' : 'bg-white border-gray-100 text-blue-600 hover:bg-blue-50'}`} title="تلگرام"><Share2 size={18}/></button>
+                    </div>
                 </div>
             </div>
 
@@ -450,40 +453,74 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                 <div className={`w-2 h-2 rounded-full ${sharePlatform === 'telegram' ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`}></div>
                                 <span className="text-xs font-black text-gray-700">ارسال به {sharePlatform === 'whatsapp' ? 'واتساپ' : sharePlatform === 'bale' ? 'بله' : 'تلگرام'}</span>
                              </div>
-                             <button onClick={() => setSharePlatform(null)} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
+                             <button onClick={() => setSharePlatform(null)} className="p-1 px-3 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><X size={16}/></button>
                          </div>
-                         <div className="p-3 border-b bg-white/50">
-                            <div className="relative">
-                                <Search className="absolute right-3 top-2.5 text-gray-400" size={14}/>
-                                <input className="w-full text-xs py-2 pr-9 pl-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 transition-all font-bold" placeholder="جستجو در مخاطبین..." value={contactSearch} onChange={e=>setContactSearch(e.target.value)} autoFocus/>
-                            </div>
+                         <div className="px-3 py-2 border-b bg-gray-50/50">
+                             <div className="relative">
+                                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
+                                 <input 
+                                     type="text" 
+                                     placeholder="جستجوی همکار یا مشتری..." 
+                                     className="w-full pr-9 pl-4 py-2 bg-white border border-gray-100 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                                     value={contactSearch}
+                                     onChange={(e) => setContactSearch(e.target.value)}
+                                 />
+                             </div>
                          </div>
                          <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                            {filteredContacts.length > 0 ? filteredContacts.map(c => {
-                                const targetId = c.chatId || c.number;
-                                return (
-                                    <button 
-                                        key={c.id} 
-                                        onClick={() => { if(!targetId){alert("شناسه تنظیم نشده است");return;} handleShare(targetId); }} 
-                                        className="w-full text-right px-4 py-3 hover:bg-blue-50/50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
-                                    >
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-gray-800">{c.name}</span>
-                                                {c.isLinked && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" title="متصل به ربات"></div>}
-                                            </div>
-                                            <span className="text-[9px] text-gray-400 font-mono mt-0.5">{targetId}</span>
-                                            {c.platform && <span className="text-[8px] bg-blue-100 text-blue-600 px-1 inline-block w-fit rounded mt-0.5">{c.platform}</span>}
-                                            {!c.chatId && <span className="text-[7px] text-orange-500 font-bold mt-0.5">⚠️ بدون Chat ID (ارسال دستی)</span>}
-                                        </div>
-                                        <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
-                                            <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1">ارسال <Share2 size={10}/></div>
-                                        </div>
-                                    </button>
-                                );
-                            }) : (
-                                <div className="p-8 text-center text-gray-400 text-[11px] font-bold">مخاطبی یافت نشد.</div>
-                            )}
+                             {/* Staff List */}
+                             <div className="px-4 py-2 bg-gray-100 text-[10px] font-bold text-gray-400">کاربران نرم افزار (گروه های بله/تلگرام)</div>
+                             {filteredStaff.map(u => {
+                                 const targetId = u.phoneNumber || (u as any).telegramId || (u as any).baleId || (u as any).telegramChatId || (u as any).baleChatId;
+                                 return (
+                                     <button 
+                                         key={u.id} 
+                                         onClick={() => { if(!targetId){alert("شناسه تنظیم نشده است");return;} handleShare(targetId); }} 
+                                         className="w-full text-right px-4 py-3 hover:bg-blue-50/50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
+                                     >
+                                         <div className="flex flex-col">
+                                             <div className="flex items-center gap-2">
+                                                 <span className="font-bold text-gray-800">{u.fullName}</span>
+                                                 <span className="text-[8px] bg-gray-100 text-gray-600 px-1 rounded">{u.role}</span>
+                                             </div>
+                                             <span className="text-[9px] text-gray-400 font-mono mt-0.5">{targetId}</span>
+                                         </div>
+                                         <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
+                                             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1">ارسال <Share2 size={10}/></div>
+                                         </div>
+                                     </button>
+                                 );
+                             })}
+
+                             {/* Customers / Leads */}
+                             <div className="px-4 py-2 bg-gray-100 text-[10px] font-bold text-gray-400 mt-2">مشتریان و لیدهای بات</div>
+                             {combinedContacts.filter(c => c.name.toLowerCase().includes(contactSearch.toLowerCase()) || c.number.includes(contactSearch)).map(c => {
+                                 const targetId = c.chatId || c.number;
+                                 return (
+                                     <button 
+                                         key={c.id} 
+                                         onClick={() => handleShare(targetId)} 
+                                         className="w-full text-right px-4 py-3 hover:bg-blue-50/50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
+                                     >
+                                         <div className="flex flex-col">
+                                             <div className="flex items-center gap-2">
+                                                 <span className="font-bold text-gray-800">{c.name}</span>
+                                                 {c.isLinked && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" title="متصل به ربات"></div>}
+                                             </div>
+                                             <span className="text-[9px] text-gray-400 font-mono mt-0.5">{targetId}</span>
+                                             {c.platform && <span className="text-[8px] bg-blue-100 text-blue-600 px-1 inline-block w-fit rounded mt-0.5">{c.platform}</span>}
+                                             {!c.chatId && <span className="text-[7px] text-orange-500 font-bold mt-0.5">⚠️ بدون Chat ID (ارسال دستی)</span>}
+                                         </div>
+                                         <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
+                                             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1">ارسال <Share2 size={10}/></div>
+                                         </div>
+                                     </button>
+                                 );
+                             })}
+                             
+                             {filteredStaff.length === 0 && combinedContacts.filter(c => c.name.toLowerCase().includes(contactSearch.toLowerCase()) || c.number.includes(contactSearch)).length === 0 && (
+                                 <div className="p-8 text-center text-gray-400 text-[11px] font-bold">موردی یافت نشد.</div>
+                             )}
                          </div>
                          <div className="p-3 bg-gray-50/50 border-t">
                             <button onClick={() => { const n = prompt('شناسه یا شماره مقصد:'); if(n) handleShare(n); }} className="w-full text-center py-2.5 text-[10px] text-blue-600 font-black hover:bg-blue-100/50 rounded-xl border border-blue-200 border-dashed transition-all active:scale-[0.98]">ارسال به شماره یا شناسه‌ی دستی</button>

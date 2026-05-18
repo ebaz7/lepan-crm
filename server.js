@@ -99,6 +99,37 @@ app.use((req, res, next) => {
     next();
 });
 
+// --- DYNAMIC MANIFEST.JSON ---
+app.get('/manifest.json', (req, res) => {
+    const db = getDb();
+    const settings = db.settings || {};
+    const appName = settings.appName || 'مدیریت کارخانه';
+    const pwaIcon = settings.pwaIcon || '/icons/icon-512x512.png';
+
+    const manifest = {
+        name: appName,
+        short_name: appName,
+        description: appName,
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#ffffff',
+        theme_color: '#0d9488',
+        icons: [
+            {
+                src: pwaIcon,
+                sizes: "192x192",
+                type: "image/png"
+            },
+            {
+                src: pwaIcon,
+                sizes: "512x512",
+                type: "image/png"
+            }
+        ]
+    };
+    res.json(manifest);
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
 
 // Shared data logic moved to db-manager.js and utils.js
@@ -562,6 +593,33 @@ app.get('/api/part-master-data', (req, res) => res.json(getDb().partMasterData |
 app.post('/api/part-master-data', (req, res) => { const db = getDb(); if(!db.partMasterData) db.partMasterData=[]; db.partMasterData.push(req.body); saveDb(db); res.json(db.partMasterData); });
 app.put('/api/part-master-data/:id', (req, res) => { const db = getDb(); const idx = (db.partMasterData||[]).findIndex(p => p.id === req.params.id); if(idx > -1) { db.partMasterData[idx] = { ...db.partMasterData[idx], ...req.body }; saveDb(db); res.json(db.partMasterData); } else res.status(404).send('Not Found'); });
 app.delete('/api/part-master-data/:id', (req, res) => { const db = getDb(); db.partMasterData = (db.partMasterData||[]).filter(p => p.id !== req.params.id); saveDb(db); res.json(db.partMasterData); });
+
+// --- NOTES API ---
+app.get('/api/notes', (req, res) => {
+    res.json(getDb().notes || []);
+});
+app.post('/api/notes', (req, res) => {
+    const db = getDb();
+    if (!db.notes) db.notes = [];
+    db.notes.unshift(req.body);
+    saveDb(db);
+    res.json(db.notes);
+});
+app.put('/api/notes/:id', (req, res) => {
+    const db = getDb();
+    const idx = (db.notes || []).findIndex(n => n.id === req.params.id);
+    if (idx > -1) {
+        db.notes[idx] = { ...db.notes[idx], ...req.body };
+        saveDb(db);
+        res.json(db.notes);
+    } else res.status(404).send('Not Found');
+});
+app.delete('/api/notes/:id', (req, res) => {
+    const db = getDb();
+    db.notes = (db.notes || []).filter(n => n.id !== req.params.id);
+    saveDb(db);
+    res.json(db.notes);
+});
 
 app.get('/api/part-kardex/:partId', (req, res) => {
     const db = getDb();

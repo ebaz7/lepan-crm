@@ -31,7 +31,8 @@ export const getDb = () => {
             subscriptions: [],
             botSubscribers: [],
             fiscalYears: {},
-            sequences: {}
+            sequences: {},
+            notes: []
         };
 
         if (fs.existsSync(DB_FILE)) {
@@ -41,7 +42,7 @@ export const getDb = () => {
                 MEMORY_DB_CACHE = { ...defaultDb, ...data };
                 
                 // Ensure arrays exist
-                const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords'];
+                const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords', 'notes'];
                 arrays.forEach(arr => {
                     if (!Array.isArray(MEMORY_DB_CACHE[arr])) MEMORY_DB_CACHE[arr] = [];
                 });

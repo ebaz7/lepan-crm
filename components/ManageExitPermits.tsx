@@ -7,11 +7,12 @@ import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
 import SecurityFinalizeModal from './SecurityFinalizeModal';
+import PriceFinalizeModal from './PriceFinalizeModal';
 import EditExitPermitModal from './EditExitPermitModal';
 import useIsMobile from '../hooks/useIsMobile';
 import html2canvas from 'html2canvas';
@@ -27,6 +28,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
+    const [priceFinalize, setPriceFinalize] = useState<ExitPermit | null>(null);
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [activeAutoSends, setActiveAutoSends] = useState<ExitPermit[]>([]);
@@ -63,6 +65,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             case UserRole.CEO: return p.status === ExitPermitStatus.PENDING_CEO;
             case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL;
             case UserRole.WAREHOUSE_KEEPER: return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
+            case UserRole.SALES_MANAGER: return p.status === ExitPermitStatus.PENDING_PRICE;
             case UserRole.SECURITY_HEAD:
             case UserRole.SECURITY_GUARD: return p.status === ExitPermitStatus.PENDING_SECURITY;
             case UserRole.ADMIN: return true; 
@@ -75,6 +78,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             case ExitPermitStatus.PENDING_CEO: return 'تایید مدیرعامل';
             case ExitPermitStatus.PENDING_FACTORY: return 'تایید مدیر کارخانه';
             case ExitPermitStatus.PENDING_WAREHOUSE: return 'توزین و تحویل انبار';
+            case ExitPermitStatus.PENDING_PRICE: return 'قیمت‌گذاری نهایی';
             case ExitPermitStatus.PENDING_SECURITY: return 'ثبت مشخصات راننده';
             case ExitPermitStatus.PENDING_FACTORY_FINAL: return 'تایید نهایی خروج و ارسال گروه';
             default: return '';
@@ -85,7 +89,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const proformaPermits = permits.filter(p => 
         p.status !== ExitPermitStatus.REJECTED && 
         p.status !== ExitPermitStatus.EXITED && 
-        (p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
+        (p.status === ExitPermitStatus.PENDING_PRICE || p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
     );
     const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
 
@@ -105,7 +109,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     const displayPermits = getDisplayPermits();
 
-    const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'SECURITY') => {
+    const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'PRICE' | 'SECURITY') => {
         if (p.status === ExitPermitStatus.EXITED) return 'done';
         if (p.status === ExitPermitStatus.REJECTED) return 'rejected';
 
@@ -113,6 +117,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             ExitPermitStatus.PENDING_CEO,
             ExitPermitStatus.PENDING_FACTORY,
             ExitPermitStatus.PENDING_WAREHOUSE,
+            ExitPermitStatus.PENDING_PRICE,
             ExitPermitStatus.PENDING_SECURITY
         ];
         
@@ -122,7 +127,8 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         if (step === 'CEO') stepIdx = 0;
         else if (step === 'FACTORY') stepIdx = 1;
         else if (step === 'WAREHOUSE') stepIdx = 2;
-        else if (step === 'SECURITY') stepIdx = 3;
+        else if (step === 'PRICE') stepIdx = 3;
+        else if (step === 'SECURITY') stepIdx = 4;
 
         if (currentIdx === -1) return 'pending'; 
 
@@ -135,6 +141,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
             setWarehouseFinalize(p); 
             return; 
+        }
+
+        if (p.status === ExitPermitStatus.PENDING_PRICE) {
+            setPriceFinalize(p);
+            return;
         }
         
         if (p.status === ExitPermitStatus.PENDING_SECURITY) {
@@ -223,9 +234,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 ...warehouseFinalize, 
                 items: finalItems, 
                 approverWarehouse: currentUser.fullName, 
-                status: ExitPermitStatus.PENDING_SECURITY,
-                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0),
-                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0)
+                status: ExitPermitStatus.PENDING_PRICE,
+                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0) : warehouseFinalize.weight,
+                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0) : warehouseFinalize.cartonCount
             };
             
             await editExitPermit(updated); 
@@ -239,6 +250,33 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 loadData();
             }, 2500);
         } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
+    };
+
+    const handlePriceSubmit = async (itemsWithPrice: any[], totalPrice: number) => {
+        if (!priceFinalize) return;
+        setProcessingId(priceFinalize.id);
+        try {
+            const updated = {
+                ...priceFinalize,
+                items: itemsWithPrice,
+                price: totalPrice,
+                status: ExitPermitStatus.PENDING_SECURITY,
+                updatedAt: Date.now()
+            };
+            await editExitPermit(updated);
+            
+            setActiveAutoSends(prev => [...prev, updated]);
+            setTimeout(async () => {
+                await sendNotification(updated, ExitPermitStatus.PENDING_PRICE);
+                setProcessingId(null);
+                setPriceFinalize(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
+                loadData();
+            }, 2500);
+        } catch (e) {
+            alert('خطا در ثبت قیمت');
+            setProcessingId(null);
+        }
     };
 
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
@@ -296,7 +334,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
                 targets.push({ role: UserRole.WAREHOUSE_KEEPER });
             } else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
-                captionTitle = '⚖️ تایید و توزین انبار - ارجاع به انتظامات';
+                captionTitle = '⚖️ تایید و توزین انبار - در انتظار قیمت گذاری';
+                targets.push({ role: UserRole.SALES_MANAGER });
+            } else if (prevStatus === ExitPermitStatus.PENDING_PRICE) {
+                captionTitle = '💰 قیمت‌گذاری انجام شد - ارجاع به انتظامات';
                 targets.push({ role: UserRole.SECURITY_HEAD });
             } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
                 captionTitle = '🚨 ثبت اطلاعات خودرو - در انتظار تایید نهایی خروج';
@@ -368,12 +409,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         // Simplify for mobile
         if (isMobile) {
             return (
-                <div className={`w-2 h-2 rounded-full ${colorClass.includes('bg-green') ? 'bg-green-500' : colorClass.includes('bg-blue') ? 'bg-blue-500 animate-pulse' : colorClass.includes('bg-red') ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+                <div className={`w-2.5 h-2.5 rounded-full ${colorClass.includes('bg-green') ? 'bg-green-500' : colorClass.includes('bg-blue') ? 'bg-blue-500 animate-pulse' : colorClass.includes('bg-red') ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
             );
         }
 
         return (
-            <div className="flex flex-col items-center gap-1 z-10 w-14">
+            <div className="flex flex-col items-center gap-1 z-10 w-16">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${colorClass}`}>
                     <Icon size={14} />
                 </div>
@@ -393,11 +434,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 {p.status === ExitPermitStatus.EXITED ? (
                     <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold">خارج شده</span>
                 ) : (
-                     <div className="flex gap-1">
+                     <div className="flex gap-1.5 items-center">
                          <TimelineStep status="done" label="" icon={UserIcon} />
                          <TimelineStep status={getStepStatus(p, 'CEO')} label="" icon={UserCheck} />
                          <TimelineStep status={getStepStatus(p, 'FACTORY')} label="" icon={Building2} />
                          <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="" icon={Warehouse} />
+                         <TimelineStep status={getStepStatus(p, 'PRICE')} label="" icon={Edit3} />
                          <TimelineStep status={getStepStatus(p, 'SECURITY')} label="" icon={ShieldCheck} />
                      </div>
                 )}
@@ -472,14 +514,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         </div>
                     </div>
 
-                    {/* Timeline */}
-                    <div className="relative mt-6 px-2 pb-2">
-                        <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 -z-0"></div>
+                    <div className="relative mt-8 px-2 pb-2">
+                        <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 dark:bg-gray-800 -z-0"></div>
                         <div className="flex justify-between relative z-10">
                             <TimelineStep status="done" label="ثبت" icon={UserIcon} />
                             <TimelineStep status={getStepStatus(p, 'CEO')} label="مدیرعامل" icon={UserCheck} />
                             <TimelineStep status={getStepStatus(p, 'FACTORY')} label="کارخانه" icon={Building2} />
                             <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="انبار" icon={Warehouse} />
+                            <TimelineStep status={getStepStatus(p, 'PRICE')} label="مالی" icon={Edit3} />
                             <TimelineStep status={getStepStatus(p, 'SECURITY')} label="انتظامات" icon={ShieldCheck} />
                         </div>
                     </div>
@@ -613,6 +655,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     permit={securityFinalize}
                     onClose={() => setSecurityFinalize(null)}
                     onConfirm={handleSecuritySubmit}
+                />
+            )}
+
+            {priceFinalize && (
+                <PriceFinalizeModal
+                    permit={priceFinalize}
+                    onClose={() => setPriceFinalize(null)}
+                    onConfirm={handlePriceSubmit}
                 />
             )}
         </div>

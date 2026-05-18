@@ -33,7 +33,8 @@ export const LS_KEYS = {
     TASKS: 'app_data_tasks',
     TRADE: 'app_data_trade',
     WH_ITEMS: 'app_data_wh_items',
-    WH_TX: 'app_data_wh_tx'
+    WH_TX: 'app_data_wh_tx',
+    NOTES: 'app_data_notes'
 };
 
 // Exported so App.tsx can use it for instant load
@@ -103,6 +104,7 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/trade') localStorage.setItem(LS_KEYS.TRADE, JSON.stringify(data));
                     else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
                     else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
+                    else if (endpoint === '/notes') localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(data));
                 } catch (cacheError) {
                     console.warn("Cache write failed (storage full?)", cacheError);
                 }
@@ -148,6 +150,7 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             if (endpoint === '/settings') return getLocalData<any>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 });
             if (endpoint === '/chat') return getLocalData<any>(LS_KEYS.CHAT, []);
             if (endpoint === '/users') return getLocalData<any>(LS_KEYS.USERS, MOCK_USERS);
+            if (endpoint === '/notes') return getLocalData<any>(LS_KEYS.NOTES, []);
         }
         
         throw error;

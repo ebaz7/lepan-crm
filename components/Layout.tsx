@@ -124,11 +124,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   useEffect(() => {
     getSettings().then(data => {
         setSettings(data);
+        if (data.appName) {
+            document.title = data.appName;
+        }
         if (data.pwaIcon) {
             const timestamp = Date.now();
             const iconUrl = data.pwaIcon.includes('?') ? `${data.pwaIcon}&t=${timestamp}` : `${data.pwaIcon}?t=${timestamp}`;
-            const link = document.querySelector("link[rel*='apple-touch-icon']") as HTMLLinkElement;
-            if (link) { link.href = iconUrl; } else { const newLink = document.createElement('link'); newLink.rel = 'apple-touch-icon'; newLink.href = iconUrl; document.head.appendChild(newLink); }
+            
+            // Update Apple Icon
+            const appleLink = document.querySelector("link[rel*='apple-touch-icon']") as HTMLLinkElement;
+            if (appleLink) { appleLink.href = iconUrl; } else { const newLink = document.createElement('link'); newLink.rel = 'apple-touch-icon'; newLink.href = iconUrl; document.head.appendChild(newLink); }
+            
+            // Update Shortcut Icon
+            const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+            if (iconLink) { iconLink.href = iconUrl; } else { const newLink = document.createElement('link'); newLink.rel = 'shortcut icon'; newLink.href = iconUrl; document.head.appendChild(newLink); }
         }
     });
     

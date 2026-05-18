@@ -418,6 +418,7 @@ export enum ExitPermitStatus {
   PENDING_CEO = 'در انتظار تایید مدیرعامل',
   PENDING_FACTORY = 'در انتظار مدیر کارخانه',
   PENDING_WAREHOUSE = 'در انتظار تایید انبار',
+  PENDING_PRICE = 'در انتظار ثبت فی (مدیر فروش)',
   PENDING_SECURITY = 'در انتظار خروج (انتظامات)',
   PENDING_FACTORY_FINAL = 'در انتظار تایید نهایی مدیر کارخانه',
   EXITED = 'خارج شده (بایگانی)',

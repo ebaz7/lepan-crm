@@ -432,8 +432,17 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
 
     const refreshNotes = async () => {
         try {
+            console.log("Refreshing notes for user:", currentUser?.id);
             const allNotes = await getNotes();
-            setPersonalNotes(allNotes.filter(n => n.userId === currentUser.id));
+            console.log("Notes fetched from API:", allNotes);
+            if (!Array.isArray(allNotes)) {
+                console.error("Notes fetched is not an array:", allNotes);
+                setPersonalNotes([]);
+                return;
+            }
+            const filtered = allNotes.filter(n => n && n.userId === currentUser.id);
+            console.log("Filtered notes for user:", filtered);
+            setPersonalNotes(filtered);
         } catch (e) {
             console.error("Refresh notes error", e);
         }
@@ -457,18 +466,27 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
     }, [personalNotes]);
 
     const handleSavePersonalNote = async (note: Note) => {
+        console.log("Saving personal note:", note);
+        if (!note || !note.userId) {
+            console.error("Invalid note data for save:", note);
+            alert('خطا: اطلاعات یادداشت ناقص است');
+            return;
+        }
         try {
             const existingIdx = personalNotes.findIndex(n => n.id === note.id);
             if (existingIdx >= 0) {
+                console.log("Updating existing note...");
                 await updateNote(note);
             } else {
+                console.log("Saving new note...");
                 await saveNote(note);
             }
             refreshNotes();
             setShowPersonalModal(false);
             window.dispatchEvent(new CustomEvent('REFRESH_UI'));
-        } catch (e) {
-            alert('خطا در ذخیره یادداشت');
+        } catch (e: any) {
+            console.error("Save note error:", e);
+            alert(`خطا در ذخیره یادداشت: ${e.message || 'خطای ناشناخته'}`);
         }
     };
 
