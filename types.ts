@@ -141,6 +141,8 @@ export interface RolePermissions {
   canApproveMeeting?: boolean;
   canManageMeetings?: boolean;
   canManagePurchase?: boolean;
+  canViewNotifications?: boolean;
+  canCreateAnnouncements?: boolean;
   [key: string]: boolean | undefined;
 }
 

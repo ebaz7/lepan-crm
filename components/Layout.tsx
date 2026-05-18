@@ -267,6 +267,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
+  const canSeeNotifications = currentUser.role === UserRole.ADMIN || perms.canViewNotifications === true;
 
   const navItems = [
     { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
@@ -441,23 +442,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                   ); 
               })}
               
-              <div className="pt-4 mt-2 border-t border-gray-200/50 dark:border-white/5 relative" ref={notifRef}>
-                  <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
-                      <div className="relative">
-                          <Bell size={20} />
-                          {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-bounce">{unreadCount}</span>)}
-                      </div>
-                      {isSidebarOpen && <span className="font-bold whitespace-nowrap">مرکز اعلان‌ها</span>}
-                  </button>
-                  {showNotifDropdown && <NotificationDropdown />}
-                  
-                  {!notifEnabled && isSidebarOpen && (
-                      <button onClick={handleToggleNotif} className="mt-4 w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs bg-red-50 text-red-600 hover:bg-red-100 transition-all font-black border border-red-100">
-                          <BellRing size={18} />
-                          <span>فعال‌سازی نوتـیفـیکیشـن</span>
+              {canSeeNotifications && (
+                  <div className="pt-4 mt-2 border-t border-gray-200/50 dark:border-white/5 relative" ref={notifRef}>
+                      <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
+                          <div className="relative">
+                              <Bell size={20} />
+                              {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-bounce">{unreadCount}</span>)}
+                          </div>
+                          {isSidebarOpen && <span className="font-bold whitespace-nowrap">مرکز اعلان‌ها</span>}
                       </button>
-                  )}
-              </div>
+                      {showNotifDropdown && <NotificationDropdown />}
+                      
+                      {!notifEnabled && isSidebarOpen && (
+                          <button onClick={handleToggleNotif} className="mt-4 w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs bg-red-50 text-red-600 hover:bg-red-100 transition-all font-black border border-red-100">
+                              <BellRing size={18} />
+                              <span>فعال‌سازی نوتـیفـیکیشـن</span>
+                          </button>
+                      )}
+                  </div>
+              )}
           </nav>
           
           <div className="p-4 border-t border-gray-200/50 dark:border-white/10 flex flex-col gap-2">
@@ -491,7 +494,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                   </div>
                   
                   {/* Notification Toggle */}
-                  {!notifEnabled && (
+                  {canSeeNotifications && !notifEnabled && (
                       <div className="px-5 mt-5">
                           <div className="bg-red-50/80 border border-red-100 p-3 rounded-2xl flex flex-col gap-2 shadow-sm backdrop-blur-md">
                               <div className="flex items-center gap-2 text-red-600 text-xs font-bold">
@@ -634,13 +637,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 >
                     {theme === 'light' ? <Moon size={20} /> : <Sun size={20} className="text-yellow-400" />}
                 </button>
-                <div className="relative notification-trigger" ref={mobileNotifRef}>
-                    <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
-                        <Bell size={20} className="text-gray-700 dark:text-gray-200" />
-                        {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
-                    </button>
-                    {showNotifDropdown && <NotificationDropdown />}
-                </div>
+                {canSeeNotifications && (
+                    <div className="relative notification-trigger" ref={mobileNotifRef}>
+                        <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
+                            <Bell size={20} className="text-gray-700 dark:text-gray-200" />
+                            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+                        </button>
+                        {showNotifDropdown && <NotificationDropdown />}
+                    </div>
+                )}
             </div>
         </header>
         

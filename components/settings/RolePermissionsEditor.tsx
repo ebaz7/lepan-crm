@@ -106,7 +106,9 @@ const PERMISSION_GROUPS = [
             { id: 'canManageTrade', label: 'دسترسی به بخش بازرگانی' },
             { id: 'canManageSettings', label: 'دسترسی به تنظیمات سیستم' },
             { id: 'canViewKnowledgeBase', label: 'دسترسی به اطلاعات حساب‌ها و بانک‌ها' },
-            { id: 'canManageKnowledgeBase', label: 'مدیریت اطلاعات حساب‌ها و بانک‌ها' }
+            { id: 'canManageKnowledgeBase', label: 'مدیریت اطلاعات حساب‌ها و بانک‌ها' },
+            { id: 'canViewNotifications', label: 'دسترسی به سیستم اعلان‌ها' },
+            { id: 'canCreateAnnouncements', label: 'دسترسی به ثبت اعلان در داشبورد' }
         ] 
     }
 ];

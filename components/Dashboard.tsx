@@ -308,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         </div>
 
         {/* ANNOUNCEMENTS SECTION */}
-        {(visibleAnnouncements.length > 0 || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
+        {(visibleAnnouncements.length > 0 || permissions.canCreateAnnouncements || currentUser.role === UserRole.ADMIN) && (
             <div className={`rounded-2xl border border-blue-100 shadow-sm relative transition-all ${visibleAnnouncements.length === 0 ? 'bg-transparent p-2 border-dashed' : 'bg-blue-50/50 p-6'}`}>
                 
                 {visibleAnnouncements.length === 0 ? (
@@ -326,7 +326,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                 </div>
                                 <h3 className="font-black text-gray-800">اعلانات مدیران</h3>
                             </div>
-                            {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                            {(permissions.canCreateAnnouncements || currentUser.role === UserRole.ADMIN) && (
                                 <button onClick={() => setShowAnnounceModal(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
                                     <Plus size={14}/> اعلامیه جدید
                                 </button>
@@ -349,7 +349,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                             <div className="flex items-center gap-2">
                                                 {ann.isCompleted && <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold">تکمیل شده</span>}
                                                 {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold border border-blue-200">پیام اختصاصی</span>}
-                                                {[UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole) && (
+                                                {(permissions.canCreateAnnouncements || currentUser.role === UserRole.ADMIN) && (
                                                     <button onClick={async (e) => {
                                                         e.stopPropagation();
                                                         const mod = await import('../services/storageService');
