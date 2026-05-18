@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Copy of PaymentOrderPro11.13",
+  "name": "Payment & Order Management System",
   "description": "A comprehensive payment order and bot management system with approval workflows, formal printing, and multi-platform bot integration.",
   "requestFramePermissions": [
     "microphone"

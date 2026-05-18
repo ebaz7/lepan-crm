@@ -11,6 +11,22 @@
     <link rel="manifest" href="/manifest.json" />
     <title>سیستم مدیریت پرداخت</title>
     
+    <script>
+      // Apply cached settings immediately for better PWA feel
+      try {
+        const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+        if (settings.appName) {
+          document.title = settings.appName;
+          const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appleTitle) appleTitle.setAttribute('content', settings.appName);
+        }
+        if (settings.pwaIcon) {
+          const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+          if (appleIcon) appleIcon.setAttribute('href', settings.pwaIcon);
+        }
+      } catch (e) {}
+    </script>
+
     <!-- Dynamic Page Size Style Placeholder -->
     <style id="page-size-style"></style>
 </head>

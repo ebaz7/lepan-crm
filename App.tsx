@@ -224,6 +224,63 @@ function App() {
   const handleLogout = () => { setCurrentUser(null); isFirstLoad.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
 
   useEffect(() => {
+    if (settings) {
+        // Meta Updates
+        if (settings.appName) {
+            document.title = settings.appName;
+            const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (appleTitle) appleTitle.setAttribute('content', settings.appName);
+        }
+
+        // Dynamic Manifest
+        const manifest = {
+            name: settings.appName || "Payment & Order System",
+            short_name: settings.appName || "FinanceApp",
+            start_url: "/",
+            display: "standalone",
+            background_color: "#ffffff",
+            theme_color: "#2563eb",
+            orientation: "portrait",
+            icons: [
+                {
+                    src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                    sizes: "192x192",
+                    type: "image/png"
+                },
+                {
+                    src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                    sizes: "512x512",
+                    type: "image/png"
+                }
+            ]
+        };
+
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        
+        let link = document.querySelector('link[rel="manifest"]');
+        if (!link) {
+            link = document.createElement('link');
+            // @ts-ignore
+            link.rel = 'manifest';
+            document.head.appendChild(link);
+        }
+        link.setAttribute('href', manifestURL);
+
+        // Apple Touch Icon
+        let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (!appleIcon) {
+            appleIcon = document.createElement('link');
+            // @ts-ignore
+            appleIcon.rel = 'apple-touch-icon';
+            document.head.appendChild(appleIcon);
+        }
+        if (settings.pwaIcon) appleIcon.setAttribute('href', settings.pwaIcon);
+    }
+  }, [settings]);
+
+  useEffect(() => {
     if (currentUser) {
         const resetIdleTimer = () => {
             if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);

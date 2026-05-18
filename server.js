@@ -1493,6 +1493,33 @@ app.post('/api/emergency-restore', (req, res) => {
 
 app.get('/api/version', (req, res) => { res.json({ version: '1.3.1' }); });
 
+app.get('/manifest.json', (req, res) => {
+    const db = getDb();
+    const settings = db.settings || {};
+    const manifest = {
+        name: settings.appName || "Payment & Order System",
+        short_name: settings.appName || "FinanceApp",
+        start_url: "/",
+        display: "standalone",
+        background_color: "#ffffff",
+        theme_color: "#2563eb",
+        orientation: "portrait",
+        icons: [
+            {
+                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                sizes: "192x192",
+                type: "image/png"
+            },
+            {
+                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                sizes: "512x512",
+                type: "image/png"
+            }
+        ]
+    };
+    res.json(manifest);
+});
+
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 if (fs.existsSync(DIST_DIR)) {
     app.use(express.static(DIST_DIR, { maxAge: '1d' })); // Cache static assets
