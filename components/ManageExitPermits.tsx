@@ -22,7 +22,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'PROFORMA' | 'ARCHIVE'>('CARTABLE');
+    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'PROFORMA' | 'ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
@@ -87,25 +87,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         p.status !== ExitPermitStatus.EXITED && 
         (p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
     );
-    const activeFlowPermits = permits.filter(p => 
-        !isMyTurn(p) && 
-        p.status !== ExitPermitStatus.EXITED && 
-        p.status !== ExitPermitStatus.REJECTED &&
-        !proformaPermits.find(x => x.id === p.id)
-    );
     const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
 
     const getDisplayPermits = () => {
-        let source = [];
+        let source: ExitPermit[] = [];
         if (activeTab === 'CARTABLE') source = myCartablePermits;
-        else if (activeTab === 'FLOW') source = activeFlowPermits;
         else if (activeTab === 'PROFORMA') source = proformaPermits;
         else source = archivePermits;
 
         return source.filter(p => 
-            p.permitNumber.toString().includes(searchTerm) || 
+            p.permitNumber?.toString().includes(searchTerm) || 
             p.recipientName?.includes(searchTerm) || 
-            p.goodsName?.includes(searchTerm)
+            p.goodsName?.includes(searchTerm) ||
+            p.driverName?.includes(searchTerm)
         );
     };
 
@@ -529,12 +523,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     >
                         <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
                         کارتابل من ({myCartablePermits.length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('FLOW')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
-                    >
-                        جریان فعال
                     </button>
                     <button 
                         onClick={() => setActiveTab('PROFORMA')} 

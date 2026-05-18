@@ -285,25 +285,33 @@ export default function SalesCRMModule() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {contacts.map(c => (
-                                        <tr key={c.id} className="border-b hover:bg-gray-50 transition-colors">
-                                            <td className="p-4 font-bold text-gray-800">{c.name}</td>
-                                            <td className="p-4 text-center font-mono">{c.mobile}</td>
-                                            <td className="p-4 text-center">{c.birthday || '-'}</td>
-                                            <td className="p-4 text-center">
-                                                {c.sendBirthdayGreeting ? 
-                                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">فعال</span> : 
-                                                    <span className="bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-[10px] font-bold">غیرفعال</span>
-                                                }
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex justify-center gap-2">
-                                                    <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16}/></button>
-                                                    <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {contacts.map(c => {
+                                        const isLinked = botSubscribers.some(sub => sub.mobile?.includes(c.mobile.slice(-10)) || c.mobile.includes(sub.mobile?.slice(-10)));
+                                        return (
+                                            <tr key={c.id} className="border-b hover:bg-gray-50 transition-colors">
+                                                <td className="p-4 font-bold text-gray-800">
+                                                    <div className="flex flex-col">
+                                                        <span>{c.name}</span>
+                                                        {isLinked && <span className="text-[8px] bg-blue-100 text-blue-600 px-1 rounded w-fit mt-1">متصل به ربات</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-center font-mono">{c.mobile}</td>
+                                                <td className="p-4 text-center">{c.birthday || '-'}</td>
+                                                <td className="p-4 text-center">
+                                                    {c.sendBirthdayGreeting ? 
+                                                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">فعال</span> : 
+                                                        <span className="bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-[10px] font-bold">غیرفعال</span>
+                                                    }
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex justify-center gap-2">
+                                                        <button onClick={() => handleEditContact(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                                                        <button onClick={() => handleDeleteContact(c.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                     {contacts.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">هیچ مخاطبی ثبت نشده است.</td></tr>}
                                 </tbody>
                             </table>
@@ -344,27 +352,35 @@ export default function SalesCRMModule() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {botSubscribers.map(sub => (
-                                    <tr key={sub.id} className="border-b hover:bg-gray-50">
-                                        <td className="p-4 font-bold text-gray-800">{sub.fullName || '(بدون نام)'}</td>
-                                        <td className="p-4 text-center font-mono">{sub.mobile || '-'}</td>
-                                        <td className="p-4 text-center">{sub.birthday || '-'}</td>
-                                        <td className="p-4 text-center">
-                                            {sub.platform === 'telegram' ? 
-                                                <span className="text-blue-500 font-bold">تلگرام</span> : 
-                                                <span className="text-emerald-500 font-bold">بله</span>
-                                            }
-                                        </td>
-                                        <td className="p-4 text-center font-mono text-[10px] text-gray-400">
-                                            {sub.telegramChatId || sub.baleChatId || sub.chatId}
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex justify-center gap-2">
-                                                <button onClick={() => handleDeleteBotSub(sub.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {botSubscribers.map(sub => {
+                                    const linkedContact = contacts.find(c => sub.mobile?.includes(c.mobile.slice(-10)) || c.mobile.includes(sub.mobile?.slice(-10)));
+                                    return (
+                                        <tr key={sub.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-4 font-bold text-gray-800">
+                                                <div className="flex flex-col">
+                                                    <span>{sub.fullName || '(بدون نام)'}</span>
+                                                    {linkedContact && <span className="text-[8px] bg-emerald-100 text-emerald-600 px-1 rounded w-fit mt-1">لینک شده به مخاطب: {linkedContact.name}</span>}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-center font-mono">{sub.mobile || '-'}</td>
+                                            <td className="p-4 text-center">{sub.birthday || '-'}</td>
+                                            <td className="p-4 text-center">
+                                                {sub.platform === 'telegram' ? 
+                                                    <span className="text-blue-500 font-bold text-[10px]">تلگرام</span> : 
+                                                    <span className="text-emerald-500 font-bold text-[10px]">بله</span>
+                                                }
+                                            </td>
+                                            <td className="p-4 text-center font-mono text-[10px] text-gray-400">
+                                                {sub.telegramChatId || sub.baleChatId || sub.chatId}
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => handleDeleteBotSub(sub.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف لید"><Trash2 size={16}/></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 {botSubscribers.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">هیچ لیدی هنوز از ربات جمع‌آوری نشده است.</td></tr>}
                             </tbody>
                         </table>

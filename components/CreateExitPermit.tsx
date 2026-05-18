@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole, Contact, SystemSettings } from '../types';
+import { ExitPermit, ExitPermitStatus, User, ExitPermitItem, ExitPermitDestination, UserRole, SalesContact, SystemSettings } from '../types';
 import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
@@ -22,8 +22,8 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
     const [destinations, setDestinations] = useState<ExitPermitDestination[]>([{ id: generateUUID(), recipientName: '', address: '', phone: '' }]);
     const [driverInfo, setDriverInfo] = useState({ plateNumber: '', driverName: '', description: '' });
     const [price, setPrice] = useState(0);
-    const [savedContacts, setSavedContacts] = useState<Contact[]>([]);
-    const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
+    const [savedContacts, setSavedContacts] = useState<SalesContact[]>([]);
+    const [contactSuggestions, setContactSuggestions] = useState<SalesContact[]>([]);
     
     // Auto-Send Hook
     const [tempPermit, setTempPermit] = useState<ExitPermit | null>(null);
@@ -35,7 +35,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             setSettings(s);
             const names = s.companies?.map(c => c.name) || s.companyNames || [];
             setAvailableCompanies(names);
-            setSavedContacts(s.savedContacts || []);
+            setSavedContacts(s.salesContacts || []);
             if (s.defaultCompany) {
                 setSelectedCompany(s.defaultCompany);
                 fetchNextNumber(s.defaultCompany);
@@ -53,18 +53,17 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         setDestinations(d);
 
         if (val.trim().length > 1) {
-            const filtered = savedContacts.filter(c => c.name.includes(val) || c.number.includes(val));
+            const filtered = savedContacts.filter(c => c.name.includes(val) || (c.mobile && c.mobile.includes(val)));
             setContactSuggestions(filtered);
         } else {
             setContactSuggestions([]);
         }
     };
 
-    const selectContact = (contact: Contact) => {
+    const selectContact = (contact: SalesContact) => {
         const d = [...destinations];
         d[0].recipientName = contact.name;
-        d[0].phone = contact.number;
-        // Optionally fetch address if available in some other field? contacts don't have address in type.
+        d[0].phone = contact.mobile;
         setDestinations(d);
         setContactSuggestions([]);
     };
@@ -335,7 +334,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                                 className="w-full text-right p-3 hover:bg-gray-50 border-b last:border-0 flex justify-between items-center"
                                             >
                                                 <span className="font-bold text-sm">{con.name}</span>
-                                                <span className="text-xs text-gray-400 font-mono">{con.number}</span>
+                                                <span className="text-xs text-gray-400 font-mono">{con.mobile}</span>
                                             </button>
                                         ))}
                                     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole } from '../types';
+import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole, SalesContact } from '../types';
 import { formatDate, formatCurrency, formatIranianPlate } from '../constants';
 import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
 import { apiCall } from '../services/apiService';
@@ -24,6 +24,11 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
+  const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
+
+  useEffect(() => {
+     apiCall<any[]>('/bot-subscribers').then(setBotSubscribers).catch(() => {});
+  }, []);
 
   // Scaling State
   const [scale, setScale] = useState(1);
@@ -183,11 +188,53 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
       }
   };
 
-  // Combine Settings Contacts AND Groups into filterable list
-  const filteredContacts = settings?.savedContacts?.filter(c => 
+  // Combine Settings Contacts AND Sales Contacts AND Bot Leads into filterable list
+  const combinedContacts = (() => {
+    const list: { id: string; name: string; number: string; platform?: string; chatId?: string; isLinked?: boolean }[] = [];
+    
+    // 1. Sales Contacts (Manual)
+    (settings?.salesContacts || []).forEach(c => {
+        // Try to FIND a matching Bot Lead by mobile (last 10 digits to be safe)
+        const lead = botSubscribers.find(s => {
+           const sMob = s.mobile ? s.mobile.replace(/\D/g, '').slice(-10) : '';
+           const cMob = c.mobile ? c.mobile.replace(/\D/g, '').slice(-10) : '';
+           return sMob && cMob && sMob === cMob;
+        });
+        
+        list.push({ 
+            id: c.id, 
+            name: c.name, 
+            number: c.mobile, 
+            platform: lead?.platform, 
+            chatId: lead?.chatId || c.telegramId || c.baleId,
+            isLinked: !!lead
+        });
+    });
+
+    // 2. Add remaining Bot Leads that aren't linked manually
+    botSubscribers.forEach(s => {
+        const sMob = s.mobile ? s.mobile.replace(/\D/g, '').slice(-10) : '';
+        const alreadyAdded = list.find(l => l.number.replace(/\D/g, '').slice(-10) === sMob);
+        
+        if (!alreadyAdded) {
+            list.push({
+                id: s.id || s.chatId,
+                name: s.fullName || s.customerName || s.username || 'نامشخص (بات)',
+                number: s.mobile || '',
+                platform: s.platform,
+                chatId: s.chatId,
+                isLinked: true
+            });
+        }
+    });
+
+    return list;
+  })();
+
+  const filteredContacts = combinedContacts.filter(c => 
     c.name.toLowerCase().includes(contactSearch.toLowerCase()) || 
     c.number.includes(contactSearch)
-  ) || [];
+  );
 
   const displayItems = permit.items && permit.items.length > 0 ? permit.items : [{ id: 'legacy', goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: permit.cartonCount || 0, deliveredWeight: permit.weight || 0 }];
   const displayDestinations = permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: 'legacy', recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }];
@@ -413,9 +460,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                          </div>
                          <div className="max-h-60 overflow-y-auto custom-scrollbar">
                             {filteredContacts.length > 0 ? filteredContacts.map(c => {
-                                let targetId = c.number;
-                                if (sharePlatform === 'telegram') targetId = c.telegramId || c.number;
-                                if (sharePlatform === 'bale') targetId = c.baleId || c.number;
+                                const targetId = c.chatId || c.number;
                                 return (
                                     <button 
                                         key={c.id} 
@@ -423,8 +468,13 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         className="w-full text-right px-4 py-3 hover:bg-blue-50/50 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
                                     >
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-gray-800">{c.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-gray-800">{c.name}</span>
+                                                {c.isLinked && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" title="متصل به ربات"></div>}
+                                            </div>
                                             <span className="text-[9px] text-gray-400 font-mono mt-0.5">{targetId}</span>
+                                            {c.platform && <span className="text-[8px] bg-blue-100 text-blue-600 px-1 inline-block w-fit rounded mt-0.5">{c.platform}</span>}
+                                            {!c.chatId && <span className="text-[7px] text-orange-500 font-bold mt-0.5">⚠️ بدون Chat ID (ارسال دستی)</span>}
                                         </div>
                                         <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
                                             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1">ارسال <Share2 size={10}/></div>
