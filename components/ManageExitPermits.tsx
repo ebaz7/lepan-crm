@@ -3,7 +3,7 @@ import { ExitPermit, ExitPermitStatus, User, UserRole, SystemSettings } from '..
 import { getExitPermits, updateExitPermitStatus, deleteExitPermit, editExitPermit } from '../services/storageService';
 import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
-import { formatDate } from '../constants';
+import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
@@ -22,7 +22,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'ARCHIVE'>('CARTABLE');
+    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'FLOW' | 'PROFORMA' | 'ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
@@ -35,7 +35,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     
     useEffect(() => {
         if (statusFilter) {
-            // Logic to switch tab based on external filter requests
+            if (statusFilter === 'PROFORMA') setActiveTab('PROFORMA');
         }
     }, [statusFilter]);
 
@@ -82,13 +82,24 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const myCartablePermits = permits.filter(p => isMyTurn(p));
-    const activeFlowPermits = permits.filter(p => !isMyTurn(p) && p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
+    const proformaPermits = permits.filter(p => 
+        p.status !== ExitPermitStatus.REJECTED && 
+        p.status !== ExitPermitStatus.EXITED && 
+        (p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
+    );
+    const activeFlowPermits = permits.filter(p => 
+        !isMyTurn(p) && 
+        p.status !== ExitPermitStatus.EXITED && 
+        p.status !== ExitPermitStatus.REJECTED &&
+        !proformaPermits.find(x => x.id === p.id)
+    );
     const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
 
     const getDisplayPermits = () => {
         let source = [];
         if (activeTab === 'CARTABLE') source = myCartablePermits;
         else if (activeTab === 'FLOW') source = activeFlowPermits;
+        else if (activeTab === 'PROFORMA') source = proformaPermits;
         else source = archivePermits;
 
         return source.filter(p => 
@@ -308,10 +319,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             // NOTE: price is omitted here as per user request to hide it in bot/groups.
             
             if (permit.plateNumber) {
-                // Format: 11A11111 -> 11 A 111 11
-                const p = permit.plateNumber;
-                const formattedPlate = p.length >= 8 ? `${p.slice(0,2)} ${p.slice(2,3)} ${p.slice(3,6)} | ${p.slice(6,8)}` : p;
-                caption += `🆔 پلاک: ${formattedPlate}\n`;
+                caption += `🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}\n`;
             }
             if (permit.driverName) caption += `👨‍✈️ راننده: ${permit.driverName}\n`;
             if (permit.driverPhone) caption += `📞 تماس: ${permit.driverPhone}\n`;
@@ -527,6 +535,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'FLOW' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
                     >
                         جریان فعال
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('PROFORMA')} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
+                    >
+                        جریان پیش‌فاکتور ({proformaPermits.length})
                     </button>
                     <button 
                         onClick={() => setActiveTab('ARCHIVE')} 

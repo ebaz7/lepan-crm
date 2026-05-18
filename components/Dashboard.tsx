@@ -46,7 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   useEffect(() => {
     if (currentUser?.id) {
         getNotes().then(allNotes => {
-            setNotes(allNotes.filter(n => n.userId === currentUser.id));
+            setNotes(allNotes.filter(n => n.userId === currentUser.id && !n.isPrivate));
         }).catch(e => console.error("Load dashboard notes error", e));
     }
   }, [currentUser]);

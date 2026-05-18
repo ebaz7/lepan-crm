@@ -1,43 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { User, SystemSettings, KnowledgeBaseItem } from '../types';
-import { BookOpen, Copy, Share2, Check, ExternalLink, Plus, X, Edit2, Trash2, User as UserIcon, ListChecks, Bell, Clock, Search, Grid, List as ListIcon, MoreVertical, Square, CheckSquare, Trash } from 'lucide-react';
+import { User, SystemSettings, KnowledgeBaseItem, Note } from '../types';
+import { BookOpen, Copy, Share2, Check, ExternalLink, Plus, X, Edit2, Trash2, User as UserIcon, ListChecks, Bell, Clock, Search, Grid, List as ListIcon, MoreVertical, Square, CheckSquare, Trash, Lock, Unlock } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
-import { saveSettings } from '../services/storageService';
+import { saveSettings, getNotes, saveNote, updateNote, deleteNote } from '../services/storageService';
 import { sendNotification } from '../services/notificationService';
-
-interface NoteTask {
-    id: string;
-    text: string;
-    isCompleted: boolean;
-}
-
-interface PersonalNote {
-    id: string;
-    userId: string;
-    title: string;
-    content: string;
-    tasks?: NoteTask[];
-    reminderTime?: number;
-    color?: string;
-    createdAt: number;
-    updatedAt: number;
-}
 
 // --- Modals for better focus handling ---
 
 interface PersonalNoteModalProps {
-    note: Partial<PersonalNote> | null;
+    note: Partial<Note> | null;
     onClose: () => void;
-    onSave: (note: PersonalNote) => void;
+    onSave: (note: Note) => void;
     userId: string;
 }
 
 const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, onSave, userId }) => {
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.content || '');
-    const [tasks, setTasks] = useState<NoteTask[]>(note?.tasks || []);
+    const [tasks, setTasks] = useState<any[]>(note?.tasks || []);
     const [reminder, setReminder] = useState<string>(note?.reminderTime ? new Date(note.reminderTime).toISOString().slice(0, 16) : '');
     const [color, setColor] = useState(note?.color || 'glass-panel');
+    const [isPrivate, setIsPrivate] = useState(note?.isPrivate || false);
 
     const handleAddTask = () => {
         setTasks([...tasks, { id: Date.now().toString(), text: '', isCompleted: false }]);
@@ -57,17 +40,18 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
 
     const handleSave = () => {
         if (!title.trim() && !content.trim() && tasks.length === 0) return;
-        const finalNote: PersonalNote = {
+        const finalNote: Note = {
             id: note?.id || Date.now().toString(),
             userId,
             title: title.trim() || 'بدون عنوان',
             content,
-            tasks,
+            tasks: tasks as any,
             reminderTime: reminder ? new Date(reminder).getTime() : undefined,
             color,
+            isPrivate,
             createdAt: note?.createdAt || Date.now(),
             updatedAt: Date.now()
-        };
+        } as any;
         onSave(finalNote);
     };
 
@@ -135,10 +119,18 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
                     )}
 
                     <div className="flex flex-wrap gap-2 pt-4">
-                        <button onClick={handleAddTask} className="text-xs bg-black/5 text-gray-600 px-3 py-1.5 rounded-lg flex items-center gap-1 font-bold hover:bg-black/10 transition-colors">
+                        <button onClick={handleAddTask} className="text-xs bg-black/5 text-gray-600 px-3 py-1.5 rounded-lg flex items-center gap-1 font-bold hover:bg-black/10 transition-all active:scale-95">
                             <Plus size={14}/> افزودن تسک
                         </button>
                         
+                        <button 
+                            onClick={() => setIsPrivate(!isPrivate)} 
+                            className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 font-bold transition-all active:scale-95 ${isPrivate ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}
+                        >
+                            {isPrivate ? <Lock size={14}/> : <Unlock size={14}/>}
+                            {isPrivate ? 'یادداشت خصوصی (مخفی در پیشخوان)' : 'یادداشت عمومی (نمایش در پیشخوان)'}
+                        </button>
+
                         <div className="flex-1"></div>
 
                         <div className="flex flex-col gap-1">
@@ -428,59 +420,67 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
     const canManageKnowledge = currentUser.role === 'admin' || permissions.canManageKnowledgeBase === true;
     
     // Personal Notes State
-    const [personalNotes, setPersonalNotes] = useState<PersonalNote[]>([]);
+    const [personalNotes, setPersonalNotes] = useState<Note[]>([]);
     const [showPersonalModal, setShowPersonalModal] = useState(false);
-    const [editingPersonalNote, setEditingPersonalNote] = useState<Partial<PersonalNote> | null>(null);
+    const [editingPersonalNote, setEditingPersonalNote] = useState<Partial<Note> | null>(null);
 
     useEffect(() => {
         if (currentUser?.id) {
-            const saved = localStorage.getItem(`personal_notes_v2_${currentUser.id}`);
-            if (saved) {
-                try { setPersonalNotes(JSON.parse(saved)); } catch(e) { setPersonalNotes([]); }
-            }
+            refreshNotes();
         }
     }, [currentUser]);
+
+    const refreshNotes = async () => {
+        try {
+            const allNotes = await getNotes();
+            setPersonalNotes(allNotes.filter(n => n.userId === currentUser.id));
+        } catch (e) {
+            console.error("Refresh notes error", e);
+        }
+    };
 
     // Reminder Checker
     useEffect(() => {
         const interval = setInterval(() => {
             const now = Date.now();
-            personalNotes.forEach(note => {
+            personalNotes.forEach(async (note) => {
                 if (note.reminderTime && note.reminderTime > now && note.reminderTime < now + 60000) {
                     sendNotification(`یادآوری: ${note.title}`, note.content.slice(0, 50));
                     // Optional: remove reminder after firing once
-                    const updated = personalNotes.map(n => n.id === note.id ? { ...n, reminderTime: undefined } : n);
-                    savePersonalNotes(updated);
+                    const updated = { ...note, reminderTime: undefined };
+                    await updateNote(updated);
+                    refreshNotes();
                 }
             });
         }, 30000); // Check every 30s
         return () => clearInterval(interval);
     }, [personalNotes]);
 
-    const savePersonalNotes = (newNotes: PersonalNote[]) => {
-        setPersonalNotes(newNotes);
-        if (currentUser?.id) {
-            localStorage.setItem(`personal_notes_v2_${currentUser.id}`, JSON.stringify(newNotes));
+    const handleSavePersonalNote = async (note: Note) => {
+        try {
+            const existingIdx = personalNotes.findIndex(n => n.id === note.id);
+            if (existingIdx >= 0) {
+                await updateNote(note);
+            } else {
+                await saveNote(note);
+            }
+            refreshNotes();
+            setShowPersonalModal(false);
+            window.dispatchEvent(new CustomEvent('REFRESH_UI'));
+        } catch (e) {
+            alert('خطا در ذخیره یادداشت');
         }
-        // Force refresh dashboard if needed via window event
-        window.dispatchEvent(new CustomEvent('REFRESH_UI'));
     };
 
-    const handleSavePersonalNote = (note: PersonalNote) => {
-        const existingIdx = personalNotes.findIndex(n => n.id === note.id);
-        let newNotes = [...personalNotes];
-        if (existingIdx >= 0) {
-            newNotes[existingIdx] = note;
-        } else {
-            newNotes.unshift(note);
-        }
-        savePersonalNotes(newNotes);
-        setShowPersonalModal(false);
-    };
-
-    const handleDeletePersonalNote = (id: string) => {
+    const handleDeletePersonalNote = async (id: string) => {
         if (window.confirm('آیا این یادداشت حذف شود؟')) {
-            savePersonalNotes(personalNotes.filter(n => n.id !== id));
+            try {
+                await deleteNote(id);
+                refreshNotes();
+                window.dispatchEvent(new CustomEvent('REFRESH_UI'));
+            } catch (e) {
+                alert('خطا در حذف یادداشت');
+            }
         }
     };
 
@@ -782,6 +782,11 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                                 className={`rounded-2xl p-5 shadow-sm border border-black/5 hover:shadow-md transition-all cursor-pointer relative group flex flex-col ${note.color || 'glass-panel'}`}
                             >
                                 <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    {note.isPrivate && (
+                                        <div className="p-1.5 bg-white/50 backdrop-blur-sm rounded-lg text-orange-500" title="خصوصی">
+                                            <Lock size={16}/>
+                                        </div>
+                                    )}
                                     <button 
                                         onClick={(e) => { e.stopPropagation(); handleDeletePersonalNote(note.id); }}
                                         className="p-1.5 bg-white/50 backdrop-blur-sm rounded-lg text-red-500 hover:bg-red-50 transition-colors"

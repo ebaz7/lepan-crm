@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole } from '../types';
-import { formatDate, formatCurrency } from '../constants';
+import { formatDate, formatCurrency, formatIranianPlate } from '../constants';
 import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
@@ -134,7 +134,10 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
           
           // CAPTION GENERATION MATCHING MANAGEEXITPERMITS LOGIC
           let caption = `🚛 *مجوز خروج کالا*\n🔢 شماره: ${permit.permitNumber}\n📅 تاریخ: ${formatDate(permit.date)}\n👤 گیرنده: ${permit.recipientName}`;
-          if(permit.exitTime) caption += `\n🕒 ساعت خروج: ${permit.exitTime}`;
+          if (permit.plateNumber) caption += `\n🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}`;
+          if (permit.driverName) caption += `\n👨‍✈️ راننده: ${permit.driverName}`;
+          if (permit.driverPhone) caption += `\n📞 تماس: ${permit.driverPhone}`;
+          if (permit.exitTime) caption += `\n🕒 ساعت خروج: ${permit.exitTime}`;
           
           // Items Detail
           caption += `\n📦 *اقلام:*`;
@@ -295,14 +298,21 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 </div>
 
                 {(permit.driverName || permit.plateNumber) && (
-                    <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Truck size={20}/> مشخصات حمل</h3><div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm flex gap-8"><div><span className="font-bold text-gray-500 ml-2">نام راننده:</span> <span className="font-bold text-lg">{permit.driverName}</span></div><div><span className="font-bold text-gray-500 ml-2">شماره پلاک:</span> <span className="font-mono font-bold text-lg dir-ltr">{permit.plateNumber}</span></div></div></div>
+                    <div className="space-y-1">
+                        <h3 className="font-black text-lg flex items-center gap-2"><Truck size={20}/> مشخصات حمل</h3>
+                        <div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm grid grid-cols-3 gap-4">
+                            <div><span className="font-bold text-gray-500 ml-2">نام راننده:</span> <span className="font-bold text-lg">{permit.driverName}</span></div>
+                            <div><span className="font-bold text-gray-500 ml-2">شماره پلاک:</span> <span className="font-mono font-bold text-lg dir-ltr">{formatIranianPlate(permit.plateNumber)}</span></div>
+                            {permit.driverPhone && <div><span className="font-bold text-gray-500 ml-2">تلفن همراه:</span> <span className="font-mono font-bold text-lg dir-ltr">{permit.driverPhone}</span></div>}
+                        </div>
+                    </div>
                 )}
                 
                 {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات</h3><div className="border-2 border-black rounded-xl p-3 glass-panel text-sm min-h-[40px]">{permit.description}</div></div>)}
             </div>
 
             <div className="mt-auto pt-4 border-t-4 border-black grid grid-cols-5 gap-2 text-center items-end">
-                <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full"><Stamp title="مدیر فروش" name={permit.requester} /></div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">درخواست کننده</div></div>
+                <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full"><Stamp title="مدیر فروش" name={permit.requester} /></div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرفروش / ثبت سفارش</div></div>
                 
                 <div className="flex flex-col items-center justify-between min-h-[80px]"><div className="mb-2 flex items-center justify-center h-full">{permit.approverCeo ? <Stamp title="مدیریت" name={permit.approverCeo} /> : <span className="text-gray-300 text-xs">---</span>}</div><div className="w-full border-t-2 border-gray-400 pt-1 text-[10px] font-bold text-gray-600">مدیرعامل</div></div>
                 
@@ -315,7 +325,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                     <div className="mb-2 flex items-center justify-center h-full">
                         {permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL ? 
                             <Stamp 
-                                title="انتظامات / خروج" 
+                                title="سرپرست انتظامات" 
                                 name={permit.approverSecurity || 'سرپرست انتظامات'} 
                                 time={(permit.exitTime && permit.status !== ExitPermitStatus.EXITED) ? permit.exitTime : undefined} 
                                 isSecurity={true}

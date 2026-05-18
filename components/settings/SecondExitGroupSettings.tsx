@@ -41,12 +41,12 @@ const SecondExitGroupSettings: React.FC<Props> = ({
     };
 
     const statusOptions = [
-        { value: 'CREATE', label: 'ثبت اولیه درخواست (موقع ایجاد)' },
-        { value: ExitPermitStatus.PENDING_CEO, label: 'تایید مدیرعامل (ارجاع به مدیر کارخانه)' },
-        { value: ExitPermitStatus.PENDING_FACTORY, label: 'تایید مدیر کارخانه (ارجاع به سرپرست انبار)' },
-        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: 'تایید سرپرست انبار (ارجاع به انتظامات)' },
-        { value: ExitPermitStatus.PENDING_SECURITY, label: 'تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
-        { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: 'تایید نهایی مدیر کارخانه (خروج بار)' },
+        { value: 'CREATE', label: '۱. ثبت اولیه (ارجاع به مدیرعامل)' },
+        { value: ExitPermitStatus.PENDING_CEO, label: '۲. تایید مدیرعامل (ارجاع به مدیر کارخانه)' },
+        { value: ExitPermitStatus.PENDING_FACTORY, label: '۳. تایید مدیر کارخانه (ارجاع به سرپرست انبار)' },
+        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: '۴. تایید و توزین انبار (ارجاع به انتظامات)' },
+        { value: ExitPermitStatus.PENDING_SECURITY, label: '۵. تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
+        { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: '۶. تایید نهایی مدیر کارخانه (خروج بار)' },
     ];
 
     return (

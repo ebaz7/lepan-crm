@@ -217,6 +217,7 @@ export interface Note {
   type?: 'note' | 'list';
   reminderTime?: number;
   isPinned?: boolean;
+  isPrivate?: boolean;
   createdAt: number;
   updatedAt: number;
 }

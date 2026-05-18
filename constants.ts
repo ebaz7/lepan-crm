@@ -254,3 +254,14 @@ export const numberToPersianWords = (input: number | string): string => {
     
     return result.join(' و ') + ' ریال';
 };
+
+export const formatIranianPlate = (plate: string): string => {
+    if (!plate) return '';
+    // Expected format: 12A34567 or generic string
+    // Standard: 12 A 345 - 67
+    const normalized = normalizeInputNumber(plate).replace(/\s/g, '').toUpperCase();
+    if (normalized.length === 8) {
+        return `${normalized.slice(0, 2)} ${normalized.slice(2, 3)} ${normalized.slice(3, 6)} - ${normalized.slice(6, 8)}`;
+    }
+    return plate; // Return as is if non-standard
+};

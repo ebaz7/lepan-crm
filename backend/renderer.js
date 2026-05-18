@@ -348,7 +348,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                 <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px;">
                     <div style="text-align: center; flex: 1; min-width: 80px;">
                         <div class="stamp"><div class="stamp-title">ثبت کننده</div><div class="stamp-name">${record.requesterRole || record.requester || '-'}</div></div>
-                        <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیر فروش / سفارش جدید فروش</div>
+                        <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیرفروش / ثبت سفارش</div>
                     </div>
                     <div style="text-align: center; flex: 1; min-width: 80px;">                
                         ${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیرعامل</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
