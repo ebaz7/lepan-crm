@@ -101,8 +101,28 @@ const PrintMeeting: React.FC<PrintMeetingProps> = ({ meeting, onClose }) => {
                     </tbody>
                 </table>
             </div>
+
+            <div className="mt-10 border-t-2 border-gray-900 pt-6">
+                <h3 className="font-black text-sm mb-4">امضاها و تاییدات:</h3>
+                <div className="flex flex-wrap gap-4">
+                {Object.entries(meeting.approvals || {}).map(([username, appInfo]) => {
+                    const attendee = meeting.attendees.find(a => a.username === username);
+                    const name = attendee ? attendee.fullName : username;
+                    const role = attendee ? attendee.role : 'عضو';
+                    return (
+                        <div key={username} className="border-2 border-emerald-800 text-emerald-800 rounded-xl p-3 transform -rotate-3 text-center bg-white min-w-[100px] shadow-sm">
+                            <div className="text-[9px] font-black border-b border-emerald-800 mb-1 pb-0.5">تایید شد</div>
+                            <div className="text-xs font-black">{name}</div>
+                            <div className="text-[8px] font-bold mt-1">{role}</div>
+                            <div className="text-[8px] font-bold">{new Date(appInfo.date).toLocaleDateString('fa-IR')}</div>
+                        </div>
+                    );
+                })}
+                </div>
+            </div>
         </div>
       </div>
+
     </div>
   );
 };
