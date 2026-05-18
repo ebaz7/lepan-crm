@@ -726,99 +726,67 @@ export const generateMeetingMinutesPDF = async (meeting) => {
         const page = await browser.newPage();
         
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
-            <script src="https://cdn.tailwindcss.com"></script>
             <style>
-                ${fontFaceRule}
-                body { font-family: 'Vazirmatn', sans-serif !important; }
-                .stamp { border: 2px solid #166534; color: #166534; border-radius: 10px; padding: 6px; transform: rotate(-3deg); text-align: center; background: white; min-width: 100px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: inline-block; }
+                ${BASE_STYLE}
+                .meeting-header { border: 2px solid #333; padding: 15px; margin-bottom: 20px; }
+                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+                .sub-title { font-size: 18px; font-weight: bold; border-right: 4px solid #1e3a8a; padding-right: 10px; margin: 20px 0 10px 0; }
+                .stamp { border: 2px solid #166534; color: #166534; border-radius: 10px; padding: 6px; transform: rotate(-3deg); text-align: center; background: white; min-width: 100px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: inline-block; margin: 5px; }
                 .stamp-title { font-size: 9px; font-weight: bold; border-bottom: 1px solid #166534; margin-bottom: 3px; padding-bottom: 1px; }
                 .stamp-name { font-size: 12px; font-weight: 900; }
                 .stamp-date { font-size: 8px; font-weight: bold; margin-top: 2px; }
             </style>
         </head><body>
-            <div id="meeting-print-area" class="w-full max-w-4xl bg-white p-10 font-sans text-black" style="direction: rtl;">
-                <div class="border-4 border-gray-900 p-6 relative">
-                    <h1 class="text-2xl font-black text-center mb-8">صورتجلسه</h1>
+            <div class="header">
+                <div class="title">صورتجلسه</div>
+                <div class="meta" style="justify-content: center; gap: 20px;"><span>شماره: ${meeting.meetingNumber}</span><span>تاریخ: ${meeting.date}</span></div>
+            </div>
 
-                    <div class="grid grid-cols-2 gap-6 text-sm mb-8 border-b-2 border-gray-200 pb-8">
-                        <div class="space-y-1">
-                            <div class="text-gray-500 font-bold text-xs">شماره جلسه:</div>
-                            <div class="font-black">${meeting.meetingNumber}</div>
-                        </div>
-                        <div class="space-y-1">
-                            <div class="text-gray-500 font-bold text-xs">تاریخ برگزاری:</div>
-                            <div class="font-black font-mono">${meeting.date}</div>
-                        </div>
-                        <div class="space-y-1">
-                            <div class="text-gray-500 font-bold text-xs">ساعت برگزاری:</div>
-                            <div class="font-black font-mono">${meeting.time}</div>
-                        </div>
-                        <div class="space-y-1">
-                            <div class="text-gray-500 font-bold text-xs">محل برگزاری:</div>
-                            <div class="font-black">${meeting.location}</div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-8 mb-8">
-                        <div><span class="font-black">رئیس جلسه:</span> ${meeting.chairman}</div>
-                        <div><span class="font-black">دبیر جلسه:</span> ${meeting.secretary}</div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h2 class="font-black border-b-2 border-gray-200 mb-4 pb-2">اعضای حاضر</h2>
-                        <div class="grid grid-cols-2 gap-2">
-                             ${meeting.attendees.filter(a => a.isPresent).map((a, i) => `
-                                <div class="text-sm">• ${a.fullName} - ${a.role}</div>
-                             `).join('')}
-                             ${(meeting.guestAttendees || []).map((g, i) => `
-                                <div class="text-sm text-gray-700">• ${g} - مدعو</div>
-                             `).join('')}
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <h2 class="font-black border-b-2 border-gray-200 mb-4 pb-2">مصوبات</h2>
-                        <table class="w-full border-collapse border border-gray-400">
-                            <thead>
-                                <tr class="bg-gray-100">
-                                    <th class="border border-gray-400 p-2 text-xs">ردیف</th>
-                                    <th class="border border-gray-400 p-2 text-xs">شرح</th>
-                                    <th class="border border-gray-400 p-2 text-xs">مسئول</th>
-                                    <th class="border border-gray-400 p-2 text-xs">مهلت</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${meeting.items.map((item, idx) => `
-                                    <tr>
-                                        <td class="border border-gray-400 p-2 text-center text-sm">${idx + 1}</td>
-                                        <td class="border border-gray-400 p-2 text-sm">${item.description}</td>
-                                        <td class="border border-gray-400 p-2 text-center text-sm">${item.responsiblePerson}</td>
-                                        <td class="border border-gray-400 p-2 text-center text-sm">${item.duration}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="mt-10 border-t-2 border-gray-900 pt-6">
-                        <h3 class="font-black text-sm mb-4">امضاها و تاییدات:</h3>
-                        <div class="flex flex-wrap gap-4">
-                        ${Object.entries(meeting.approvals || {}).map(([username, appInfo]) => {
-                            const attendee = meeting.attendees.find(a => a.username === username);
-                            const name = attendee ? attendee.fullName : username;
-                            const role = attendee ? attendee.role : 'عضو';
-                            return `
-                                <div class="stamp">
-                                    <div class="stamp-title">تایید شد</div>
-                                    <div class="stamp-name">${name}</div>
-                                    <div class="stamp-date">${role}</div>
-                                    <div class="stamp-date">${new Date(appInfo.date).toLocaleDateString('fa-IR')}</div>
-                                </div>
-                            `;
-                        }).join('')}
-                        </div>
-                    </div>
+            <div class="meeting-header">
+                <div class="grid-2">
+                    <div><b>زمان برگزاری:</b> ${meeting.time}</div>
+                    <div><b>مکان:</b> ${meeting.location}</div>
+                    <div><b>رئیس جلسه:</b> ${meeting.chairman}</div>
+                    <div><b>دبیر جلسه:</b> ${meeting.secretary}</div>
                 </div>
+            </div>
+
+            <div class="sub-title">اعضای حاضر</div>
+            <div style="font-size: 13px;">${meeting.attendees.filter(a => a.isPresent).map(a => `• ${a.fullName} - ${a.role}`).join('<br/>')}
+                 ${(meeting.guestAttendees || []).map(g => `• ${g} - مدعو`).join('<br/>')}</div>
+
+            <div class="sub-title">مصوبات و تصمیمات</div>
+            <table>
+                <thead>
+                    <tr><th style="width: 40px;">ردیف</th><th>شرح مصوبه</th><th style="width: 150px;">مسئول اجرا</th><th style="width: 100px;">زمان/مهلت</th></tr>
+                </thead>
+                <tbody>
+                    ${meeting.items.map((item, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td style="text-align: right;">${item.description}</td>
+                            <td>${item.responsiblePerson}</td>
+                            <td>${item.duration}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+                    
+            <div class="sub-title">امضاها و تاییدات</div>
+            <div style="display: flex; flex-wrap: wrap; margin-top: 20px;">
+                ${Object.entries(meeting.approvals || {}).map(([username, appInfo]) => {
+                    const attendee = meeting.attendees.find(a => a.username === username);
+                    const name = attendee ? attendee.fullName : username;
+                    const role = attendee ? attendee.role : 'عضو';
+                    return `
+                        <div class="stamp">
+                            <div class="stamp-title">تایید شد</div>
+                            <div class="stamp-name">${name}</div>
+                            <div class="stamp-date">${role}</div>
+                            <div class="stamp-date">${new Date(appInfo.date).toLocaleDateString('fa-IR')}</div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
         </body></html>`;
 
