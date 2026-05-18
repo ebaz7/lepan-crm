@@ -380,10 +380,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         </div>
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-500">شماره موبایل (واتساپ)</label><input type="tel" value={profileForm.phoneNumber} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="98912..."/></div>
                         
-                        <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 p-3 rounded-lg">
-                            <input type="checkbox" checked={profileForm.receiveNotifications} onChange={e => setProfileForm({...profileForm, receiveNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
-                            <span className="text-gray-700 dark:text-gray-300">دریافت پیام‌های اطلاع‌رسانی</span>
-                        </label>
+                        {canSeeNotifications && (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 p-3 rounded-lg">
+                                <input type="checkbox" checked={profileForm.receiveNotifications} onChange={e => setProfileForm({...profileForm, receiveNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
+                                <span className="text-gray-700 dark:text-gray-300">دریافت پیام‌های اطلاع‌رسانی</span>
+                            </label>
+                        )}
 
                         <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition-all mt-2">ذخیره تغییرات</button>
                     </form>

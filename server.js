@@ -984,8 +984,24 @@ app.post('/api/settings', (req, res) => {
     if (newSettings.baleReportsGroupId2) newSettings.baleReportsGroupId2 = utils.sanitizeGroupId(newSettings.baleReportsGroupId2);
     if (newSettings.whatsappReportsGroupId2) newSettings.whatsappReportsGroupId2 = utils.sanitizeGroupId(newSettings.whatsappReportsGroupId2);
 
+    if (newSettings.botMeetingMinutesTelegramId) newSettings.botMeetingMinutesTelegramId = utils.sanitizeGroupId(newSettings.botMeetingMinutesTelegramId);
+    if (newSettings.botMeetingMinutesSecondGroupIdTele) newSettings.botMeetingMinutesSecondGroupIdTele = utils.sanitizeGroupId(newSettings.botMeetingMinutesSecondGroupIdTele);
+    if (newSettings.botMeetingMinutesBaleId) newSettings.botMeetingMinutesBaleId = utils.sanitizeGroupId(newSettings.botMeetingMinutesBaleId);
+    if (newSettings.botMeetingMinutesSecondGroupIdBale) newSettings.botMeetingMinutesSecondGroupIdBale = utils.sanitizeGroupId(newSettings.botMeetingMinutesSecondGroupIdBale);
+    if (newSettings.botMeetingMinutesWhatsAppId) newSettings.botMeetingMinutesWhatsAppId = utils.sanitizeGroupId(newSettings.botMeetingMinutesWhatsAppId);
+    if (newSettings.botMeetingMinutesSecondGroupIdWhatsApp) newSettings.botMeetingMinutesSecondGroupIdWhatsApp = utils.sanitizeGroupId(newSettings.botMeetingMinutesSecondGroupIdWhatsApp);
+
+    const oldSettings = db.settings || {};
     db.settings = { ...db.settings, ...newSettings }; 
     saveDb(db); 
+
+    // Auto-restart bots if tokens changed
+    if (newSettings.telegramBotToken && newSettings.telegramBotToken !== oldSettings.telegramBotToken) {
+        safeImport('./backend/telegram.js').then(m => m && m.initTelegram(newSettings.telegramBotToken));
+    }
+    if (newSettings.baleBotToken && newSettings.baleBotToken !== oldSettings.baleBotToken) {
+        safeImport('./backend/bale.js').then(m => m && m.initBaleBot(newSettings.baleBotToken));
+    }
     
     // Reschedule backup if interval changed
     if (newSettings.backupIntervalHours !== undefined) {

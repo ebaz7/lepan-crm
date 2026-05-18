@@ -50,7 +50,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             canViewAll: true, canCreatePaymentOrder: true, canViewPaymentOrders: true, canApproveFinancial: true, canApproveManager: true, canApproveCeo: true, canEditOwn: true, canEditAll: true, canDeleteOwn: true, canDeleteAll: true, canManageTrade: true, canManageSettings: true,
             canCreateExitPermit: true, canViewExitPermits: true, canApproveExitCeo: true, canApproveExitFactory: true, canApproveExitWarehouse: true, canApproveExitSecurity: true, canViewExitArchive: true, canEditExitArchive: true,
             canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
-            canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true
+            canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
+            canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true
         };
     }
 
@@ -64,7 +65,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
         canManageTrade: false, canManageSettings: false,
         canCreateExitPermit: false, canViewExitPermits: false, canApproveExitCeo: false, canApproveExitFactory: false, canApproveExitWarehouse: false, canApproveExitSecurity: false, canViewExitArchive: false, canEditExitArchive: false,
         canManageWarehouse: false, canViewWarehouseReports: false, canApproveBijak: false,
-        canViewSecurity: false, canCreateSecurityLog: false, canApproveSecuritySupervisor: false
+        canViewSecurity: false, canCreateSecurityLog: false, canApproveSecuritySupervisor: false,
+        canViewNotifications: false, canCreateNotifications: false, canCreateAnnouncements: false
     };
 
     // Apply System Defaults (Hardcoded Logic)

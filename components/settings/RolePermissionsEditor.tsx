@@ -108,6 +108,7 @@ const PERMISSION_GROUPS = [
             { id: 'canViewKnowledgeBase', label: 'دسترسی به اطلاعات حساب‌ها و بانک‌ها' },
             { id: 'canManageKnowledgeBase', label: 'مدیریت اطلاعات حساب‌ها و بانک‌ها' },
             { id: 'canViewNotifications', label: 'دسترسی به سیستم اعلان‌ها' },
+            { id: 'canCreateNotifications', label: 'دسترسی به ثبت نوتیفیکیشن اپلیکیشن' },
             { id: 'canCreateAnnouncements', label: 'دسترسی به ثبت اعلان در داشبورد' }
         ] 
     }

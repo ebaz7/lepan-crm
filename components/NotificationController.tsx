@@ -4,7 +4,9 @@ import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Share, PlusSquare, X, Bell } from 'lucide-react';
-import { User } from '../types';
+import { User, UserRole } from '../types';
+import { getSettings } from '../services/storageService';
+import { getRolePermissions } from '../services/authService';
 
 interface Props {
     currentUser?: User | null;
@@ -37,6 +39,13 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
 
     const registerOrUpdateSubscription = async () => {
         try {
+            const settings = await getSettings();
+            const perms = getRolePermissions(currentUser.role, settings, currentUser);
+            const canSeeNotifications = currentUser.role === UserRole.ADMIN || perms.canViewNotifications === true;
+            
+            if (!canSeeNotifications) {
+                return; // User has no permission to use notifications
+            }
             if (Capacitor.isNativePlatform()) {
                 const permStatus = await PushNotifications.checkPermissions();
                 if (permStatus.receive !== 'granted') {

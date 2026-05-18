@@ -142,6 +142,7 @@ export interface RolePermissions {
   canManageMeetings?: boolean;
   canManagePurchase?: boolean;
   canViewNotifications?: boolean;
+  canCreateNotifications?: boolean;
   canCreateAnnouncements?: boolean;
   [key: string]: boolean | undefined;
 }
@@ -296,6 +297,10 @@ export interface SystemSettings {
   botMeetingMinutesGroupId?: string;
   botMeetingMinutesTelegramId?: string;
   botMeetingMinutesBaleId?: string;
+  botMeetingMinutesWhatsAppId?: string;
+  botMeetingMinutesSecondGroupIdTele?: string;
+  botMeetingMinutesSecondGroupIdBale?: string;
+  botMeetingMinutesSecondGroupIdWhatsApp?: string;
   botMeetingMinutesNotificationMode?: 'after_approval' | 'immediately';
   botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' | 'all' }[];

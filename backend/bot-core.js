@@ -2383,8 +2383,8 @@ export const notifyMeetingMinutes = async (meeting, db) => {
         return text;
     }).join('\n');
 
-    if (resolutionsText.length > 700) {
-        resolutionsText = resolutionsText.substring(0, 700) + '... (ادامه در فایل پیوست)';
+    if (resolutionsText.length > 900) {
+        resolutionsText = resolutionsText.substring(0, 900) + '... (ادامه در فایل پیوست)';
     }
 
     const message = `🏁 *صورتجلسه نهایی و مصوبات تایید شده* 🏁\n\n📄 شماره: *${meeting.meetingNumber}*\n📅 تاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید الکترونیکی تمامی حاضرین رسیده است.\n\n📝 *لیست مصوبات و تصمیمات*:\n${resolutionsText}\n\n📎 فایل PDF پیوست جهت بایگانی ارسال شد.`;
@@ -2399,14 +2399,33 @@ export const notifyMeetingMinutes = async (meeting, db) => {
             import('./telegram.js').then(m => m.sendBotDocument(teleId, pdfBuffer, fileName, message)).catch(e => {});
         }
 
+        const teleId2 = s.botMeetingMinutesSecondGroupIdTele;
+        if (teleId2) {
+            import('./telegram.js').then(m => m.sendBotDocument(teleId2, pdfBuffer, fileName, message)).catch(e => {});
+        }
+
         const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
         if (baleId) {
             import('./bale.js').then(m => m.sendBotDocument(baleId, pdfBuffer, fileName, message)).catch(e => {});
         }
 
-        const waId = s.botMeetingMinutesGroupId;
+        const baleId2 = s.botMeetingMinutesSecondGroupIdBale;
+        if (baleId2) {
+            import('./bale.js').then(m => m.sendBotDocument(baleId2, pdfBuffer, fileName, message)).catch(e => {});
+        }
+
+        const waId = s.botMeetingMinutesWhatsAppId || s.botMeetingMinutesGroupId;
         if (waId) {
             import('./whatsapp.js').then(m => m.sendMessage(waId, message, {
+                data: pdfBuffer.toString('base64'),
+                mimeType: 'application/pdf',
+                filename: fileName
+            })).catch(e => {});
+        }
+
+        const waId2 = s.botMeetingMinutesSecondGroupIdWhatsApp;
+        if (waId2) {
+            import('./whatsapp.js').then(m => m.sendMessage(waId2, message, {
                 data: pdfBuffer.toString('base64'),
                 mimeType: 'application/pdf',
                 filename: fileName
@@ -2417,10 +2436,18 @@ export const notifyMeetingMinutes = async (meeting, db) => {
         // Fallback to text message if PDF fails
         const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
         if (teleId) import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
+        const teleId2 = s.botMeetingMinutesSecondGroupIdTele;
+        if (teleId2) import('./telegram.js').then(m => m.sendMessage(teleId2, message)).catch(e => {});
+
         const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
         if (baleId) import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
+        const baleId2 = s.botMeetingMinutesSecondGroupIdBale;
+        if (baleId2) import('./bale.js').then(m => m.sendMessage(baleId2, message)).catch(e => {});
+
         const waId = s.botMeetingMinutesGroupId;
         if (waId) import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
+        const waId2 = s.botMeetingMinutesSecondGroupIdWhatsApp;
+        if (waId2) import('./whatsapp.js').then(m => m.sendMessage(waId2, message)).catch(e => {});
     }
 };
 
