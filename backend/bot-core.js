@@ -247,15 +247,20 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
             };
 
-            let dateStr = toEnglishDigits(toShamsiFull(new Date().toISOString()).split(' ')[0]);
+            const normalizeDateString = (str) => {
+                if (!str) return str;
+                return str.split('/').map(part => part.padStart(2, '0')).join('/');
+            };
+
+            let dateStr = normalizeDateString(toEnglishDigits(toShamsiFull(new Date().toISOString()).split(' ')[0]));
 
             if (args.length > 1) {
-                dateStr = toEnglishDigits(args[1]);
+                dateStr = normalizeDateString(toEnglishDigits(args[1]));
             }
             
             const matchesDate = (dateVal) => {
                 if (!dateVal) return false;
-                const shamsiOfRecord = toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]);
+                const shamsiOfRecord = normalizeDateString(toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]));
                 return shamsiOfRecord === dateStr;
             };
 
@@ -282,8 +287,16 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
                 finalPayments.forEach((p, idx) => {
                     const amount = Number(p.totalAmount || 0).toLocaleString();
-                    const bankStr = p.paymentBank ? `بانک: ${p.paymentBank}` : 'نامشخص';
-                    reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | ${bankStr}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
+                    
+                    let paymentBankInfo = 'نامشخص';
+                    if (p.paymentDetails && p.paymentDetails.length > 0) {
+                        const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
+                        if (banks.length > 0) {
+                            paymentBankInfo = banks.join('، ');
+                        }
+                    }
+                    
+                    reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
                 });
                 return sendFn(chatId, reportMsg);
             } 
@@ -1195,8 +1208,16 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
 
         if (!tgGroupId && !baleGroupId && !waGroupId) return; // No targets
 
+        let paymentBankInfo = '-';
+        if (o.paymentDetails && o.paymentDetails.length > 0) {
+            const banks = [...new Set(o.paymentDetails.map(d => d.bankName).filter(Boolean))];
+            if (banks.length > 0) {
+                paymentBankInfo = banks.join('، ');
+            }
+        }
+
         let header = isDelete ? `❌ *حذف شد: دستور پرداخت*` : (isEdit ? `✏️ *ویرایش شد: دستور پرداخت*` : `💸 *دستور پرداخت*`);
-        let caption = `${header}\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber || o.id}\n📅 تاریخ پرداخت: ${o.date ? toShamsiFull(o.date) : '-'}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n💳 نوع پرداختی: ${(o.paymentDetails&&o.paymentDetails.length>0) ? o.paymentDetails[0].method : '-'}\n👤 ذینفع: ${o.payee || '-'}\n📍 محل پرداخت: ${o.paymentPlace || '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
+        let caption = `${header}\n🏢 شرکت: ${o.payingCompany || '-'}\n🔢 شماره: ${o.trackingNumber || o.id}\n📅 تاریخ پرداخت: ${o.date ? toShamsiFull(o.date) : '-'}\n💰 مبلغ: ${Number(o.totalAmount || 0).toLocaleString()} ریال\n🏦 بانک پرداختی: ${paymentBankInfo}\n💳 نوع پرداختی: ${(o.paymentDetails&&o.paymentDetails.length>0) ? o.paymentDetails[0].method : '-'}\n👤 ذینفع: ${o.payee || '-'}\n📍 محل پرداخت: ${o.paymentPlace || '-'}\n📝 توضیحات: ${o.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${o.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         
         const attachFiles = o.attachments && o.attachments.length > 0;
         if (attachFiles) caption += `\n📎 همراه با ${o.attachments.length} فایل/سند الحاقی`;
