@@ -1158,7 +1158,9 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
 
         const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
         
-        let header = isDelete ? `❌ *حذف شد: مجوز خروج کالا*` : (isEdit ? `✏️ *ویرایش شد: مجوز خروج کالا*` : `🚛 *مجوز خروج کالا*`);
+        const isFinalStep = p.status === 'خارج شده (بایگانی)';
+        let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
+        if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
         
         // Correctly format goods as a list
         let goodsList = '';
@@ -1186,18 +1188,60 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         }
 
         const settings = db.settings || {};
+        
+        // Map Persian Status to Internal Key for checking settings
+        // We match against the values in SecondExitGroupSettings.tsx (Persian strings or 'CREATE')
+        let statusKey = p.status;
+        if (eventType === 'DELETE') {
+            statusKey = 'REJECTED'; // Or handle delete separately? Usually reject settings handle cancellations
+        } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات') {
+            statusKey = 'CREATE';
+        } else if (p.status === 'خارج شده (بایگانی)') {
+            // For settings check, this maps to the final approval step
+            statusKey = 'در انتظار تایید نهایی مدیر کارخانه';
+        }
+
         let targetGroups = [];
 
         // Group 1 logic (Settings-based routing)
         const g1Config = settings.exitPermitFirstGroupConfig || { activeStatuses: [] };
-        if (g1Config.activeStatuses && g1Config.activeStatuses.includes(p.status)) {
+        if (g1Config.activeStatuses && g1Config.activeStatuses.includes(statusKey)) {
             targetGroups.push(1);
         }
         
         // Group 2 logic (Settings-based routing)
         const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
-        if (g2Config.activeStatuses && g2Config.activeStatuses.includes(p.status)) {
+        if (g2Config.activeStatuses && g2Config.activeStatuses.includes(statusKey)) {
             targetGroups.push(2);
+        }
+
+        // --- NEW: Customer Notification with Proforma Image ---
+        if (p.status === 'خارج شده (بایگانی)' && !isEdit && !isDelete) {
+            const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : (p.driverPhone || null);
+            if (customerPhone && whatsapp && typeof whatsapp.sendMessage === 'function') {
+                (async () => {
+                    try {
+                        const customerCaption = `🚚 *پیش‌فاکتور تکمیل شده (خروج نهایی) #${p.permitNumber}*\n\n` +
+                                              `👤 گیرنده: ${p.recipientName || '-'}\n` +
+                                              `⚖️ وزن نهایی: ${p.weight} KG\n` +
+                                              `🔢 تعداد نهایی: ${p.cartonCount} کارتن\n` +
+                                              (p.driverName ? `👨‍✈️ راننده: ${p.driverName}\n` : '') +
+                                              (p.plateNumber ? `🆔 پلاک: ${p.plateNumber}\n` : '') +
+                                              `🕒 ساعت خروج: ${p.exitTime || '-'}\n\n` +
+                                              `✅ بار با موفقیت از کارخانه خارج شد. تصویر پیش‌فاکتور نهایی پیوست گردید.`;
+                        
+                        const customerImg = await Renderer.generateRecordImage(p, 'EXIT');
+                        await whatsapp.sendMessage(customerPhone, customerCaption, {
+                            data: customerImg.toString('base64'),
+                            mimeType: 'image/png',
+                            filename: `invoice-${p.permitNumber}.png`
+                        });
+                        console.log(`✅ Final proforma sent to customer: ${customerPhone}`);
+                    } catch (e) {
+                        console.error("❌ Customer Whatsapp proforma failed:", e.message);
+                    }
+                })();
+            }
         }
 
         // Distinctly and separately fire off to all targets, without await to prevent blocking
@@ -2133,11 +2177,12 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (pendingPermits.length === 0) return sendFn(chatId, "✅ کارتابل خروج خالی است.");
 
         for (const p of pendingPermits) {
-            const caption = `🚛 مجوز #${p.permitNumber}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔄 وضعیت: ${p.status}`;
+            const isFinalStep = p.status === 'در انتظار تایید نهایی مدیر کارخانه';
+            const caption = `🚛 مجوز #${p.permitNumber}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName}\n🔄 وضعیت: ${isFinalStep ? 'در انتظار تایید نهایی خروج' : p.status}`;
             const kb = {
                 inline_keyboard: [
                     [
-                        { text: '✅ تایید', callback_data: `APP_EXIT_${p.id}` },
+                        { text: isFinalStep ? '✅ تایید نهایی خروج' : '✅ تایید', callback_data: `APP_EXIT_${p.id}` },
                         { text: '❌ رد', callback_data: `REJ_EXIT_${p.id}` }
                     ]
                 ]
@@ -2185,25 +2230,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
                 stepName = 'تایید نهایی مدیر کارخانه (خروج کالا)';
                 p.approverFactoryFinal = user.fullName;
-
-                // Send Final Notification to Customer via Bot approval
-                const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : null;
-                if (customerPhone) {
-                    let customerCaption = `🚚 *حواله نهایی خروج کالا #${p.permitNumber}*\n\n`;
-                    customerCaption += `👤 گیرنده: ${p.recipientName}\n`;
-                    customerCaption += `📦 کالا: ${p.goodsName}\n`;
-                    customerCaption += `⚖️ وزن نهایی: ${p.weight} KG\n`;
-                    customerCaption += `🔢 تعداد نهایی: ${p.cartonCount} کارتن\n`;
-                    if (p.driverName) customerCaption += `👨‍✈️ راننده: ${p.driverName}\n`;
-                    if (p.plateNumber) customerCaption += `🆔 پلاک: ${p.plateNumber}\n`;
-                    customerCaption += `🕒 ساعت خروج: ${p.exitTime}\n`;
-                    customerCaption += `\n✅ بار با موفقیت از انبار خارج شد.`;
-                    
-                    // Call WhatsApp API from server context
-                    if (whatsapp && typeof whatsapp.sendMessage === 'function') {
-                        whatsapp.sendMessage(customerPhone, customerCaption).catch(e => console.error("Customer Whatsapp failed", e.message));
-                    }
-                }
+                // Note: Customer WhatsApp with proforma image is now sent automatically via notifyExitPermitStep
             }
             
             saveDb(db);

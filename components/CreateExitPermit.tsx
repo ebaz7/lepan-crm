@@ -162,6 +162,11 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
         if (!selectedCompany) return alert('لطفا شرکت صادرکننده را انتخاب کنید');
         if (!permitNumber) return alert('شماره حواله الزامی است');
         if (items.some(i => !i.goodsName)) return alert('نام کالا الزامی است');
+        /* START EDIT: MANDATORY PRICE FOR SALES MANAGER/ADMIN */
+        if (items.some(i => !i.price || i.price <= 0)) {
+            return alert('وارد کردن فی (قیمت واحد) برای تمامی اقلام الزامی است.');
+        }
+        /* END EDIT */
         if (destinations.some(d => !d.recipientName)) return alert('نام گیرنده الزامی است');
 
         setIsSubmitting(true);

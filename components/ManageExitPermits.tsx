@@ -414,7 +414,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     <h3 className="font-bold text-gray-800 text-base">{p.recipientName}</h3>
                 </div>
                 {p.status === ExitPermitStatus.EXITED ? (
-                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold">خارج شده</span>
+                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold">پیش‌فاکتور تکمیل شده</span>
                 ) : (
                      <div className="flex gap-1.5 items-center">
                          <TimelineStep status="done" label="" icon={UserIcon} />
@@ -556,7 +556,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         onClick={() => setActiveTab('ARCHIVE')} 
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
                     >
-                        بایگانی
+                        بایگانی پیش‌فاکتورها
                     </button>
                 </div>
 

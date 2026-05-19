@@ -267,7 +267,12 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             {watermark === 'EDITED' && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none overflow-hidden"><div className="border-[12px] border-orange-500 text-orange-500 font-black text-9xl opacity-40 rotate-[-45deg] p-10 rounded-3xl whitespace-nowrap bg-white/50 backdrop-blur-[2px]">اصلاحیه</div></div>)}
 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
-                <div className="flex flex-col"><h1 className="text-3xl font-black mb-1">مجوز خروج کالا از کارخانه</h1><p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p></div>
+                <div className="flex flex-col">
+                    <h1 className="text-3xl font-black mb-1">
+                        {permit.status === ExitPermitStatus.EXITED ? 'پیش‌فاکتور تکمیل شده (خروج کالا)' : 'پیش‌فاکتور حواله خروج کالا'}
+                    </h1>
+                    <p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p>
+                </div>
                 <div className="text-left space-y-2">
                     <div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div>
                     <div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div>
