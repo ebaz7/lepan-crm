@@ -227,162 +227,181 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
 
     const matchesDate = (dateVal) => {
         if (!dateVal) return false;
-        const shamsiOfRecord = normalizeDateString(toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]));
-        return shamsiOfRecord === dateStr;
+        try {
+            const d = new Date(dateVal);
+            if (isNaN(d.getTime())) return false;
+            
+            // Explicitly format in Tehran timezone to avoid UTC shifts
+            const fmt = new Intl.DateTimeFormat('fa-IR', { 
+                year: 'numeric', month: '2-digit', day: '2-digit', 
+                timeZone: 'Asia/Tehran' 
+            });
+            const shamsiRaw = fmt.format(d);
+            
+            return normalizeDateString(toEnglishDigits(shamsiRaw)) === dateStr;
+        } catch(e) { return false; }
     };
 
+    // Determine which reports to show. If it's a recognized group, show only that module.
+    // If it's not a recognized group (e.g. ad-hoc request), show all available for that date.
+    
     const isAccounting = 
-        (platform === 'telegram' && (String(chatId) === settings.botAccountingGroupIdTele || String(chatId) === settings.botAccountingGroupId)) ||
-        (platform === 'bale' && String(chatId) === settings.botAccountingGroupIdBale) ||
-        (platform === 'whatsapp' && String(chatId) === settings.botAccountingGroupIdWhatsApp) ||
-        String(chatId) === settings.botAccountingGroupId;
+        (platform === 'telegram' && (String(chatId) === String(settings.botAccountingGroupIdTele) || String(chatId) === String(settings.botAccountingGroupId))) ||
+        (platform === 'bale' && String(chatId) === String(settings.botAccountingGroupIdBale)) ||
+        (platform === 'whatsapp' && (String(chatId) === String(settings.botAccountingGroupIdWhatsApp) || String(chatId) === String(settings.botAccountingGroupId)));
 
     const isBijak = 
-        (platform === 'telegram' && String(chatId) === settings.botBijakGroupId) ||
-        (platform === 'bale' && String(chatId) === settings.botBijakGroupIdBale) ||
-        (platform === 'whatsapp' && String(chatId) === settings.botBijakGroupIdWhatsApp);
+        (platform === 'telegram' && String(chatId) === String(settings.botBijakGroupId)) ||
+        (platform === 'bale' && String(chatId) === String(settings.botBijakGroupIdBale)) ||
+        (platform === 'whatsapp' && String(chatId) === String(settings.botBijakGroupIdWhatsApp));
 
-    if (isAccounting) {
+    const isLogistics = 
+        (platform === 'telegram' && (String(chatId) === String(settings.exitPermitNotificationTelegramId) || String(chatId) === String(settings.botSecurityGroupId))) ||
+        (platform === 'bale' && String(chatId) === String(settings.exitPermitNotificationBaleId)) ||
+        (platform === 'whatsapp' && String(chatId) === String(settings.exitPermitNotificationGroup));
+
+    const isUnrecognizedGroup = !isAccounting && !isBijak && !isLogistics;
+
+    if (isUnrecognizedGroup) {
+        // Find if user is admin - ideally we'd check session/user but we'll allow reports if they explicitly requested
+        // However, to keep it clean, if it's unrecognized, we show ALL reports that have data.
+    }
+
+    // 1. PAYMENT REPORT
+    if (isAccounting || isUnrecognizedGroup) {
         const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
-        if (finalPayments.length === 0) {
-            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`) : null;
-        }
-        
-        let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
-        finalPayments.forEach((p, idx) => {
-            const amount = Number(p.totalAmount || 0).toLocaleString();
-            let paymentBankInfo = 'نامشخص';
-            if (p.paymentDetails && p.paymentDetails.length > 0) {
-                const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
-                if (banks.length > 0) paymentBankInfo = banks.join('، ');
-            }
-            reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
-        });
-        if (sendFn) await sendFn(chatId, reportMsg);
-
-        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
-        try {
-            const htmlParts = [];
-            for (const p of finalPayments) {
-                try {
-                    const imgBuffer = await Renderer.generateRecordImage(p, 'PAYMENT', { forceHidePrices: false });
-                    if (imgBuffer) {
-                        const b64 = imgBuffer.toString('base64');
-                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                    }
-                } catch(e) { }
-            }
-            if (htmlParts.length > 0) {
-                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
-                if (sendDocFn) {
-                    await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+        if (finalPayments.length > 0) {
+            let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
+            finalPayments.forEach((p, idx) => {
+                const amount = Number(p.totalAmount || 0).toLocaleString();
+                let paymentBankInfo = 'صندوق / نقدی';
+                if (p.paymentDetails && p.paymentDetails.length > 0) {
+                    const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
+                    if (banks.length > 0) paymentBankInfo = banks.join('، ');
                 }
-            }
-        } catch (e) { console.error("PDF generation failed:", e); }
-    } 
-    else if (isBijak) {
-        const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
-        if (finalBijaks.length === 0) {
-            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`) : null;
-        }
-        
-        let reportMsg = `📦 *گزارش بیجک‌های خروج ${dateStr}*\n\n`;
-        const grouped = finalBijaks.reduce((acc, b) => {
-            const comp = b.company || 'بدون شرکت';
-            acc[comp] = acc[comp] || [];
-            acc[comp].push(b);
-            return acc;
-        }, {});
-        
-        for (const [comp, bijaks] of Object.entries(grouped)) {
-            reportMsg += `🏢 *شرکت: ${comp}*\n`;
-            bijaks.forEach((b, idx) => {
-                reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
+                reportMsg += `${idx + 1}. *#${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
             });
-            reportMsg += `------------------\n`;
-        }
-        if (sendFn) await sendFn(chatId, reportMsg);
+            if (sendFn) await sendFn(chatId, reportMsg);
 
-        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
-        try {
-            const htmlParts = [];
-            for (const b of finalBijaks) {
-                try {
-                    const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: true });
-                    if (imgBuffer) {
-                        const b64 = imgBuffer.toString('base64');
-                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                    }
-                } catch(e) { }
-            }
-            if (htmlParts.length > 0) {
-                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
-                if (sendDocFn) {
-                    await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+            if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
+            try {
+                const htmlParts = [];
+                for (const p of finalPayments) {
+                    try {
+                        const imgBuffer = await Renderer.generateRecordImage(p, 'PAYMENT', { forceHidePrices: false });
+                        if (imgBuffer) {
+                            const b64 = imgBuffer.toString('base64');
+                            htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                        }
+                    } catch(e) { }
                 }
+                if (htmlParts.length > 0) {
+                    const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                    if (sendDocFn) {
+                        await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+                    }
+                }
+            } catch (e) { console.error("PDF generation failed:", e); }
+        } else if (isAccounting) {
+            if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`);
+        }
+    }
+
+    // 2. BIJAK / LOGISTICS REPORT
+    if (isBijak || isLogistics || isUnrecognizedGroup) {
+        // If it's logistics group or general request, show Exit Permits report, else if Bijak group show Bijak report
+        const showBijak = isBijak || isUnrecognizedGroup;
+        const showLogistics = isLogistics || isUnrecognizedGroup;
+
+        if (showBijak) {
+            const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
+            if (finalBijaks.length > 0) {
+            const grouped = finalBijaks.reduce((acc, b) => {
+                const comp = b.company || 'بدون شرکت';
+                acc[comp] = acc[comp] || [];
+                acc[comp].push(b);
+                return acc;
+            }, {});
+            
+            for (const [comp, bijaks] of Object.entries(grouped)) {
+                reportMsg += `🏢 *شرکت: ${comp}*\n`;
+                bijaks.forEach((b, idx) => {
+                    reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
+                });
+                reportMsg += `------------------\n`;
             }
-        } catch (e) { console.error("PDF generation failed:", e); }
+            if (sendFn) await sendFn(chatId, reportMsg);
+
+            if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
+            try {
+                const htmlParts = [];
+                for (const b of finalBijaks) {
+                    try {
+                        const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: true });
+                        if (imgBuffer) {
+                            const b64 = imgBuffer.toString('base64');
+                            htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                        }
+                    } catch(e) { }
+                }
+                if (htmlParts.length > 0) {
+                    const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                    if (sendDocFn) {
+                        await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+                    }
+                }
+            } catch (e) { console.error("PDF generation failed:", e); }
+        } else {
+            // Exit permits report
+            const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
+            if (finalExits.length === 0) {
+                return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`) : null;
+            }
+
+            const hidePrice = true; // Logistics groups always hide prices
+            
+            let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
+            finalExits.forEach((p, idx) => {
+                const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+                
+                let goodsInfo = '';
+                if (p.items && p.items.length > 0) {
+                    goodsInfo = p.items.map(it => it.goodsName).join('، ');
+                } else {
+                    goodsInfo = p.goodsName || 'چند مورد';
+                }
+
+                reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${goodsInfo} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
+            });
+            if (sendFn) await sendFn(chatId, reportMsg);
+
+            if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
+            
+            try {
+                const htmlParts = [];
+                for (const p of finalExits) {
+                    try {
+                        const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: hidePrice });
+                        if (imgBuffer) {
+                            const b64 = imgBuffer.toString('base64');
+                            htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                        }
+                    } catch(e) { console.error("Error generating image for permit", p.id, e); }
+                }
+                
+                if (htmlParts.length > 0) {
+                    const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                    if (sendDocFn) {
+                        await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
+                    }
+                }
+            } catch (e) { console.error("PDF generation failed:", e); }
+        }
     } 
     else {
-        // Exit permits group
-        const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
-        if (finalExits.length === 0) {
-            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`) : null;
-        }
-
-        const isLogisticsGroup = (id) => {
-            if (!id) return false;
-            const logisticsIds = [
-                settings.botSecurityGroupId,
-                settings.botBijakGroupId,
-                settings.botBijakGroupIdBale,
-                settings.botBijakGroupIdWhatsApp,
-                settings.exitPermitNotificationTelegramId,
-                settings.exitPermitNotificationBaleId
-            ].filter(Boolean);
-            return logisticsIds.includes(String(id));
-        };
-        const hidePrice = isLogisticsGroup(chatId);
-        
-        let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
-        finalExits.forEach((p, idx) => {
-            const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-            
-            let goodsInfo = '';
-            if (p.items && p.items.length > 0) {
-                goodsInfo = p.items.map(it => {
-                    const priceSub = (!hidePrice && it.price) ? ` (فی: ${Number(it.price).toLocaleString()})` : '';
-                    return `${it.goodsName} ${priceSub}`;
-                }).join('، ');
-            } else {
-                goodsInfo = p.goodsName || 'چند مورد';
-            }
-
-            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${goodsInfo} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
-        });
-        if (sendFn) await sendFn(chatId, reportMsg);
-
-        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
-        
-        try {
-            const htmlParts = [];
-            for (const p of finalExits) {
-                try {
-                    const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: hidePrice });
-                    if (imgBuffer) {
-                        const b64 = imgBuffer.toString('base64');
-                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                    }
-                } catch(e) { console.error("Error generating image for permit", p.id, e); }
-            }
-            
-            if (htmlParts.length > 0) {
-                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
-                if (sendDocFn) {
-                    await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
-                }
-            }
-        } catch (e) { console.error("PDF generation failed:", e); }
+        // PV or Generic context - only triggered if explicitly requested by authorized user in unknown chat
+        // but for now we'll just show a "Not Authorized" message to avoid cross-posting
+        return sendFn ? sendFn(chatId, `⚠️ این گروه به عنوان گروه گزارشات (مالی/انبار/خروج) در تنظیمات سیستم تعریف نشده است. لطفا شناسه این گروه (${chatId}) را در بخش تنظیمات وارد کنید.`) : null;
     }
 };
 
@@ -395,6 +414,44 @@ const formatProduct = (p) => {
 };
 
 // --- MAIN HANDLERS ---
+
+// --- PHONE SEARCH & SEND ---
+export const sendBotMessageByPhone = async (phone, text, photoBase64 = null) => {
+    if (!phone) return false;
+    const db = getDb();
+    const cleanPhone = phone.toString().replace(/[^0-9]/g, '').slice(-10); // Last 10 digits
+    
+    // Find subscriber
+    const sub = (db.botSubscribers || []).find(s => {
+        if (!s.mobile) return false;
+        const subPhone = s.mobile.toString().replace(/[^0-9]/g, '').slice(-10);
+        return subPhone === cleanPhone;
+    });
+
+    if (!sub) return false;
+
+    try {
+        const platform = sub.platform;
+        const chatId = platform === 'telegram' ? sub.telegramChatId : sub.baleChatId;
+        if (!chatId) return false;
+
+        const baleModule = await import('./bale.js');
+        const tgModule = await import('./telegram.js');
+
+        if (photoBase64) {
+            const buffer = Buffer.from(photoBase64, 'base64');
+            if (platform === 'telegram') await tgModule.sendBotPhoto(chatId, buffer, text);
+            else if (platform === 'bale') await baleModule.sendBotPhoto(chatId, buffer, text);
+        } else {
+            if (platform === 'telegram') await tgModule.sendBotMessage(chatId, text);
+            else if (platform === 'bale') await baleModule.sendBotMessage(chatId, text);
+        }
+        return true;
+    } catch (e) {
+        console.error(`[BotCore] Failed to send to ${phone}:`, e.message);
+        return false;
+    }
+};
 
 export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn, sendDocFn, checkMembershipFn, senderId, rawMsg = null) => {
     const db = getDb();
@@ -416,20 +473,27 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             return sendFn(chatId, `🆔 شناسه چت فعلی شما در ${platform === 'telegram' ? 'تلگرام' : 'بله'}: \`${chatId}\`\n\n⚠️ *توجه برای کارمندان:* برای استفاده از امکانات اختصاصی (مانند گزارش‌ها) بدون نیاز به عضویت در کانال‌های اجباری، این کد را در بخش "پیکربندی سیستم" یا "پروفایل من" در داخل نرم‌افزار مقابل نام خود وارد کنید.`);
         }
 
+        const toEnglishDigits = (str) => {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+        };
+
+        const normalizeDateString = (str) => {
+            if (!str) return str;
+            return str.split('/').map(part => part.padStart(2, '0')).join('/');
+        };
+
+        // --- DIRECT DATE HANDLER ---
+        const cleanedText = normalizeDateString(toEnglishDigits(text));
+        if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(cleanedText)) {
+            await runDailyReport(platform, chatId, cleanedText, sendFn, sendDocFn);
+            return;
+        }
+
         if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
             const args = text.split(' ');
             
-            const toEnglishDigits = (str) => {
-                if (typeof str !== 'string') return str;
-                return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-            };
-
-            const normalizeDateString = (str) => {
-                if (!str) return str;
-                return str.split('/').map(part => part.padStart(2, '0')).join('/');
-            };
-
-            let dateStr = normalizeDateString(toEnglishDigits(toShamsiFull(new Date().toISOString()).split(' ')[0]));
+            let dateStr = normalizeDateString(toEnglishDigits(new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date())));
 
             if (args.length > 1) {
                 // Find the argument that looks like a date (e.g., 1403/02/01 or 1403/2/1)
@@ -1250,27 +1314,38 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         // --- NEW: Customer Notification with Proforma Image ---
         if (p.status === 'خارج شده (بایگانی)' && !isEdit && !isDelete) {
             const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : (p.driverPhone || null);
-            if (customerPhone && whatsapp && typeof whatsapp.sendMessage === 'function') {
+            if (customerPhone) {
                 (async () => {
                     try {
-                        const customerCaption = `🚚 *پیش‌فاکتور تکمیل شده (خروج نهایی) #${p.permitNumber}*\n\n` +
-                                              `👤 گیرنده: ${p.recipientName || '-'}\n` +
-                                              `⚖️ وزن نهایی: ${p.weight} KG\n` +
-                                              `🔢 تعداد نهایی: ${p.cartonCount} کارتن\n` +
+                        const amount = (p.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0);
+                        const customerCaption = `✨ *فاکتور نهایی خروج کالا #${p.permitNumber}*\n\n` +
+                                              `👤 خریدار: *${p.recipientName || '-'}*\n` +
+                                              `⚖️ وزن کل: ${p.weight} کیلوگرم\n` +
+                                              `📦 تعداد کل: ${p.cartonCount} کارتن\n` +
+                                              `💵 مبلغ کل: ${amount.toLocaleString()} ریال\n` +
                                               (p.driverName ? `👨‍✈️ راننده: ${p.driverName}\n` : '') +
                                               (p.plateNumber ? `🆔 پلاک: ${p.plateNumber}\n` : '') +
                                               `🕒 ساعت خروج: ${p.exitTime || '-'}\n\n` +
-                                              `✅ بار با موفقیت از کارخانه خارج شد. تصویر پیش‌فاکتور نهایی پیوست گردید.`;
+                                              `✅ کالای شما با موفقیت بارگیری و از کارخانه خارج شد. تصویر فاکتور رسمی پیوست گردید.\n\nبا سپاس از اعتماد شما 🙏`;
                         
-                        const customerImg = await Renderer.generateRecordImage(p, 'EXIT');
-                        await whatsapp.sendMessage(customerPhone, customerCaption, {
-                            data: customerImg.toString('base64'),
-                            mimeType: 'image/png',
-                            filename: `invoice-${p.permitNumber}.png`
-                        });
-                        console.log(`✅ Final proforma sent to customer: ${customerPhone}`);
+                        const customerImg = await Renderer.generateRecordImage(p, 'CUSTOMER_INVOICE');
+                        const imgB64 = customerImg.toString('base64');
+
+                        // 1. WhatsApp
+                        if (whatsapp && typeof whatsapp.sendMessage === 'function') {
+                            await whatsapp.sendMessage(customerPhone, customerCaption, {
+                                data: imgB64,
+                                mimeType: 'image/png',
+                                filename: `invoice-${p.permitNumber}.png`
+                            });
+                        }
+
+                        // 2. Telegram / Bale (Via bot-core helper)
+                        await sendBotMessageByPhone(customerPhone, customerCaption, imgB64);
+
+                        console.log(`✅ Professional proforma sent to customer: ${customerPhone}`);
                     } catch (e) {
-                        console.error("❌ Customer Whatsapp proforma failed:", e.message);
+                        console.error("❌ Customer proforma notification failed:", e.message);
                     }
                 })();
             }

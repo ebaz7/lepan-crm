@@ -243,13 +243,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
         const elementNoPrice = document.getElementById(`print-permit-autosend-noprice-${permit.id}`);
         const elementWithPrice = document.getElementById(`print-permit-autosend-price-${permit.id}`);
-        if (!elementNoPrice || !elementWithPrice) return;
+        const elementCustomer = document.getElementById(`print-permit-autosend-customer-${permit.id}`);
+        
+        if (!elementNoPrice || !elementWithPrice || !elementCustomer) return;
         try {
             const canvasNoPrice = await html2canvas(elementNoPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
             const base64NoPrice = canvasNoPrice.toDataURL('image/png').split(',')[1];
             
             const canvasWithPrice = await html2canvas(elementWithPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
             const base64WithPrice = canvasWithPrice.toDataURL('image/png').split(',')[1];
+
+            const canvasCustomer = await html2canvas(elementCustomer, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+            const base64Customer = canvasCustomer.toDataURL('image/png').split(',')[1];
             
             const targets = [];
             const companyConfig = settings?.companyNotifications?.[permit.company];
@@ -322,8 +327,15 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     await apiCall('/send-whatsapp', 'POST', { 
                         number: customerPhone, 
                         message: customerCaption, 
-                        mediaData: { data: base64WithPrice, mimeType: 'image/png', filename: `Final_Invoice_${permit.permitNumber}.png` } 
+                        mediaData: { data: base64Customer, mimeType: 'image/png', filename: `Invoice_${permit.permitNumber}.png` } 
                     });
+                    
+                    // Also send via bots if the customer is linked (using phone search)
+                    await apiCall('/bot/send-by-phone', 'POST', { 
+                        phone: customerPhone, 
+                        text: customerCaption, 
+                        photoBase64: base64Customer 
+                    }).catch(e => console.error("Bot Phone Notify failed", e));
                 }
             }
 
@@ -526,6 +538,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                     </div>
                     <div id={`print-permit-autosend-price-${p.id}`}>
                         <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="EXIT" />
+                    </div>
+                    <div id={`print-permit-autosend-customer-${p.id}`}>
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="CUSTOMER_INVOICE" />
                     </div>
                 </div>
             ))}

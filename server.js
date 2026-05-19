@@ -1014,6 +1014,18 @@ app.post('/api/meetings/:id/send-minutes', async (req, res) => {
     } else res.status(404).send('Not Found');
 });
 
+app.post('/api/bot/send-by-phone', async (req, res) => {
+    try {
+        const { phone, text, photoBase64 } = req.body;
+        const botCore = await import('./backend/bot-core.js');
+        const success = await botCore.sendBotMessageByPhone(phone, text, photoBase64);
+        res.json({ success });
+    } catch (e) {
+        console.error("API Send Bot Phone Error:", e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // 7. SYSTEM (Settings, Users, Login)
 app.get('/api/settings', (req, res) => {
     res.json(getDb().settings);
