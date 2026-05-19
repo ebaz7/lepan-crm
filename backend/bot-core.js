@@ -329,11 +329,36 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         if (finalExits.length === 0) {
             return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`) : null;
         }
+
+        const isLogisticsGroup = (id) => {
+            if (!id) return false;
+            const logisticsIds = [
+                settings.botSecurityGroupId,
+                settings.botBijakGroupId,
+                settings.botBijakGroupIdBale,
+                settings.botBijakGroupIdWhatsApp,
+                settings.exitPermitNotificationTelegramId,
+                settings.exitPermitNotificationBaleId
+            ].filter(Boolean);
+            return logisticsIds.includes(String(id));
+        };
+        const hidePrice = isLogisticsGroup(chatId);
         
         let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
         finalExits.forEach((p, idx) => {
             const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
+            
+            let goodsInfo = '';
+            if (p.items && p.items.length > 0) {
+                goodsInfo = p.items.map(it => {
+                    const priceSub = (!hidePrice && it.price) ? ` (فی: ${Number(it.price).toLocaleString()})` : '';
+                    return `${it.goodsName} ${priceSub}`;
+                }).join('، ');
+            } else {
+                goodsInfo = p.goodsName || 'چند مورد';
+            }
+
+            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${goodsInfo} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
         });
         if (sendFn) await sendFn(chatId, reportMsg);
 
@@ -343,7 +368,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
             const htmlParts = [];
             for (const p of finalExits) {
                 try {
-                    const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: false });
+                    const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: hidePrice });
                     if (imgBuffer) {
                         const b64 = imgBuffer.toString('base64');
                         htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
@@ -1132,7 +1157,8 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
         
-        const img = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete });
+        const imgPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: false });
+        const imgNoPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: true });
         
         const itemsToCalculate = (p.items && p.items.length > 0) ? p.items : [{ cartonCount: p.cartonCount || 0, weight: p.weight || 0, deliveredCartonCount: undefined, deliveredWeight: undefined }];
         const totalReqCount = itemsToCalculate.reduce((sum, i) => sum + (Number(i.cartonCount) || 0), 0);
@@ -1144,7 +1170,6 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
 
         const settings = db.settings || {};
 
-        // Determine if this is a price-sensitive group (Warehouse/Security)
         const isLogisticsGroup = (id) => {
             if (!id) return false;
             const logisticsIds = [
@@ -1158,42 +1183,44 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             return logisticsIds.includes(String(id));
         };
 
-        // Correctly format goods as a list
-        let goodsList = '';
-        if (p.items && p.items.length > 0) {
-            goodsList = p.items.map((it, idx) => {
-                const priceTxt = (!isLogisticsGroup(chatId) && it.price) ? ` (فی: ${Number(it.price).toLocaleString()} ریال)` : '';
-                return `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)${priceTxt}`;
-            }).join('\n');
-        } else if (p.goodsName) {
-            goodsList = `1. ${p.goodsName} (${p.cartonCount || 0} عدد)`;
-        } else {
-            goodsList = 'نامشخص';
-        }
+        const generateCaption = (targetGroupId) => {
+            const hidePrice = isLogisticsGroup(targetGroupId);
+            let goodsList = '';
+            if (p.items && p.items.length > 0) {
+                goodsList = p.items.map((it, idx) => {
+                    const priceTxt = (!hidePrice && it.price) ? ` (فی: ${Number(it.price).toLocaleString()} ریال)` : '';
+                    return `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)${priceTxt}`;
+                }).join('\n');
+            } else if (p.goodsName) {
+                goodsList = `1. ${p.goodsName} (${p.cartonCount || 0} عدد)`;
+            } else {
+                goodsList = 'نامشخص';
+            }
 
-        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
-        
-        const isFinalStep = p.status === 'خارج شده (بایگانی)';
-        let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
-        if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
-        
-        let approvers = [];
-        if (p.approverCeo) approvers.push(`مدیرعامل / تایید فروش: ${p.approverCeo}`);
-        if (p.approverFactory) approvers.push(`مدیر کارخانه / مجوز ورود و بارگیری: ${p.approverFactory}`);
-        if (p.approverWarehouse) approvers.push(`سرپرست انبار / انجام بارگیری: ${p.approverWarehouse}`);
-        if (p.approverSecurity) approvers.push(`سرپرست انتظامات / بازرسی و تایید بارگیری: ${p.approverSecurity}`);
-        if (p.approverFactoryFinal) approvers.push(`مدیر کارخانه / تایید نهایی خروج: ${p.approverFactoryFinal}`);
-        const approversLine = approvers.length > 0 ? `\n✅ *تاییدها:* \n${approvers.join('\n')}` : '';
+            const isFinalStep = p.status === 'خارج شده (بایگانی)';
+            let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
+            if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
+            
+            let approvers = [];
+            if (p.approverCeo) approvers.push(`مدیرعامل / تایید فروش: ${p.approverCeo}`);
+            if (p.approverFactory) approvers.push(`مدیر کارخانه / مجوز ورود و بارگیری: ${p.approverFactory}`);
+            if (p.approverWarehouse) approvers.push(`سرپرست انبار / انجام بارگیری: ${p.approverWarehouse}`);
+            if (p.approverSecurity) approvers.push(`سرپرست انتظامات / بازرسی و تایید بارگیری: ${p.approverSecurity}`);
+            if (p.approverFactoryFinal) approvers.push(`مدیر کارخانه / تایید نهایی خروج: ${p.approverFactoryFinal}`);
+            const approversLine = approvers.length > 0 ? `\n✅ *تاییدها:* \n${approvers.join('\n')}` : '';
 
-        const caption = `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالاها:\n${goodsList}\n${countLine}\n👤 ثبت کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}${approversLine}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
-        
+            const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
+            
+            return `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالاها:\n${goodsList}\n${countLine}\n👤 ثبت کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'})${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}${approversLine}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
+        };
+
         // Notify the user who did the action (if possible)
         if (chatId && sendPhotoFn) {
-            sendPhotoFn(platform, chatId, img, caption).catch(e => console.error("User Notify Error:", e));
+            const userCaption = generateCaption(chatId);
+            const userImg = isLogisticsGroup(chatId) ? imgNoPrice : imgPrice;
+            sendPhotoFn(platform, chatId, userImg, userCaption).catch(e => console.error("User Notify Error:", e));
         }
 
-        const settings = db.settings || {};
-        
         // Map Persian Status to Internal Key for checking settings
         // We match against the values in SecondExitGroupSettings.tsx (Persian strings or 'CREATE')
         let statusKey = p.status;
@@ -1270,26 +1297,32 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             // Fire Telegram
             if (tgGroupId && settings.telegramBotToken) {
                 const cleanId = sanitizeGroupId(tgGroupId);
+                const targetCaption = generateCaption(cleanId);
+                const targetImg = isLogisticsGroup(cleanId) ? imgNoPrice : imgPrice;
                 import('./telegram.js').then(mod => {
-                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, img, caption).catch(e => console.error("TG Group Notify Error:", e));
+                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error("TG Group Notify Error:", e));
                 }).catch(e => console.error("TG Import Error", e));
             }
 
             // Fire Bale
             if (baleGroupId && settings.baleBotToken) {
                 const cleanId = sanitizeGroupId(baleGroupId);
+                const targetCaption = generateCaption(cleanId);
+                const targetImg = isLogisticsGroup(cleanId) ? imgNoPrice : imgPrice;
                 import('./bale.js').then(mod => {
-                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, img, caption).catch(e => console.error("Bale Group Notify Error:", e));
+                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error("Bale Group Notify Error:", e));
                 }).catch(e => console.error("Bale Import Error", e));
             }
 
             // Fire WhatsApp
             if (waGroupId && settings.whatsappEnabled) {
+                const targetCaption = generateCaption(waGroupId);
+                const targetImg = isLogisticsGroup(waGroupId) ? imgNoPrice : imgPrice;
                 import('./whatsapp.js').then(mod => {
                     if (mod?.sendMessage) {
-                        const buffer = Buffer.from(img);
+                        const buffer = Buffer.from(targetImg);
                         const b64 = buffer.toString('base64');
-                        mod.sendMessage(waGroupId, caption, { data: b64, mimeType: 'image/png', filename: 'permit.png' })
+                        mod.sendMessage(waGroupId, targetCaption, { data: b64, mimeType: 'image/png', filename: 'permit.png' })
                             .catch(e => console.error("WA Group Notify Error:", e));
                     }
                 }).catch(e => console.error("WA Import Error", e));
