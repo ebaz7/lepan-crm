@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import * as Renderer from './renderer.js';
 import * as dbManager from './db-manager.js';
 import * as utils from './utils.js';
+import * as whatsapp from './whatsapp.js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -2184,6 +2185,25 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
                 stepName = 'تایید نهایی مدیر کارخانه (خروج کالا)';
                 p.approverFactoryFinal = user.fullName;
+
+                // Send Final Notification to Customer via Bot approval
+                const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : null;
+                if (customerPhone) {
+                    let customerCaption = `🚚 *حواله نهایی خروج کالا #${p.permitNumber}*\n\n`;
+                    customerCaption += `👤 گیرنده: ${p.recipientName}\n`;
+                    customerCaption += `📦 کالا: ${p.goodsName}\n`;
+                    customerCaption += `⚖️ وزن نهایی: ${p.weight} KG\n`;
+                    customerCaption += `🔢 تعداد نهایی: ${p.cartonCount} کارتن\n`;
+                    if (p.driverName) customerCaption += `👨‍✈️ راننده: ${p.driverName}\n`;
+                    if (p.plateNumber) customerCaption += `🆔 پلاک: ${p.plateNumber}\n`;
+                    customerCaption += `🕒 ساعت خروج: ${p.exitTime}\n`;
+                    customerCaption += `\n✅ بار با موفقیت از انبار خارج شد.`;
+                    
+                    // Call WhatsApp API from server context
+                    if (whatsapp && typeof whatsapp.sendMessage === 'function') {
+                        whatsapp.sendMessage(customerPhone, customerCaption).catch(e => console.error("Customer Whatsapp failed", e.message));
+                    }
+                }
             }
             
             saveDb(db);
