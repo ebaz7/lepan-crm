@@ -13,7 +13,9 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep, runDailyReport } from './backend/bot-core.js';
+import * as telegram from './backend/telegram.js';
+import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
 
 const getDb = dbManager.getDb;
@@ -199,7 +201,66 @@ const setupAutoBackup = () => {
     activeBackupJob = cron.schedule(`0 */${intervalHours} * * *`, performAutoBackup);
 };
 
+const setupDailyReports = () => {
+    // Schedule daily reports for 23:45 Tehran time
+    // Cron runs in UTC. Tehran is UTC+3:30. So 23:45 Tehran is 20:15 UTC.
+    cron.schedule('15 20 * * *', async () => {
+        console.log(">>> Running Automatic Daily Reports...");
+        const db = getDb();
+        const settings = db.settings || {};
+        
+        // Get Tehran current date in Shamsi format for the report
+        const now = new Date();
+        const dateStr = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
+        
+        // Groups to notify
+        const targets = [];
+        
+        // 1. Accounting Groups
+        if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele, type: 'accounting' });
+        if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale, type: 'accounting' });
+        if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId, type: 'accounting' }); // Fallback
+
+        // 2. Bijak Groups
+        if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
+        if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
+
+        // 3. Exit Permit Groups (First & Second)
+        if (settings.exitPermitNotificationTelegramId) targets.push({ platform: 'telegram', id: settings.exitPermitNotificationTelegramId, type: 'exit' });
+        if (settings.exitPermitNotificationBaleId) targets.push({ platform: 'bale', id: settings.exitPermitNotificationBaleId, type: 'exit' });
+        
+        if (settings.exitPermitFirstGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'exit' });
+        if (settings.exitPermitFirstGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitFirstGroupConfig.baleId, type: 'exit' });
+        
+        if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
+        if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
+
+        // Remove duplicates
+        const uniqueTargets = Array.from(new Set(targets.map(t => `${t.platform}:${t.id}`)))
+            .map(uid => targets.find(t => `${t.platform}:${t.id}` === uid));
+
+        for (const target of uniqueTargets) {
+            try {
+                const sendFn = async (id, txt, opts) => {
+                    if (target.platform === 'telegram') return telegram.sendBotMessage(id, txt, opts);
+                    if (target.platform === 'bale') return bale.sendBotMessage(id, txt, opts);
+                };
+                const sendDocFn = async (id, buf, name, cap) => {
+                    if (target.platform === 'telegram') return telegram.sendBotDocument(id, buf, name, cap);
+                    if (target.platform === 'bale') return bale.sendBotDocument(id, buf, name, cap);
+                };
+                
+                console.log(`[Cron] Sending daily report to ${target.platform} group ${target.id}`);
+                await runDailyReport(target.platform, target.id, dateStr, sendFn, sendDocFn);
+            } catch (e) {
+                console.error(`[Cron] Failed to send daily report to ${target.id}:`, e.message);
+            }
+        }
+    });
+};
+
 setupAutoBackup();
+setupDailyReports();
 setTimeout(performAutoBackup, 15000); 
 
 // Shared helpers moved to utils.js

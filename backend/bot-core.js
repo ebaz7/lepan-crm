@@ -211,6 +211,156 @@ const searchAndSendResults = async (db, company, query, mode, type, platform, ch
     await sendFn(chatId, "✅ پایان لیست.", { reply_markup: endMenu });
 };
 
+export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocFn) => {
+    const db = getDb();
+    const settings = db.settings || {};
+
+    const toEnglishDigits = (str) => {
+        if (typeof str !== 'string') return str;
+        return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    };
+
+    const normalizeDateString = (str) => {
+        if (!str) return str;
+        return str.split('/').map(part => part.padStart(2, '0')).join('/');
+    };
+
+    const matchesDate = (dateVal) => {
+        if (!dateVal) return false;
+        const shamsiOfRecord = normalizeDateString(toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]));
+        return shamsiOfRecord === dateStr;
+    };
+
+    const isAccounting = 
+        (platform === 'telegram' && (String(chatId) === settings.botAccountingGroupIdTele || String(chatId) === settings.botAccountingGroupId)) ||
+        (platform === 'bale' && String(chatId) === settings.botAccountingGroupIdBale) ||
+        (platform === 'whatsapp' && String(chatId) === settings.botAccountingGroupIdWhatsApp) ||
+        String(chatId) === settings.botAccountingGroupId;
+
+    const isBijak = 
+        (platform === 'telegram' && String(chatId) === settings.botBijakGroupId) ||
+        (platform === 'bale' && String(chatId) === settings.botBijakGroupIdBale) ||
+        (platform === 'whatsapp' && String(chatId) === settings.botBijakGroupIdWhatsApp);
+
+    if (isAccounting) {
+        const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
+        if (finalPayments.length === 0) {
+            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`) : null;
+        }
+        
+        let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
+        finalPayments.forEach((p, idx) => {
+            const amount = Number(p.totalAmount || 0).toLocaleString();
+            let paymentBankInfo = 'نامشخص';
+            if (p.paymentDetails && p.paymentDetails.length > 0) {
+                const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
+                if (banks.length > 0) paymentBankInfo = banks.join('، ');
+            }
+            reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
+        });
+        if (sendFn) await sendFn(chatId, reportMsg);
+
+        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
+        try {
+            const htmlParts = [];
+            for (const p of finalPayments) {
+                try {
+                    const imgBuffer = await Renderer.generateRecordImage(p, 'PAYMENT', { forceHidePrices: false });
+                    if (imgBuffer) {
+                        const b64 = imgBuffer.toString('base64');
+                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                    }
+                } catch(e) { }
+            }
+            if (htmlParts.length > 0) {
+                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                if (sendDocFn) {
+                    await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+                }
+            }
+        } catch (e) { console.error("PDF generation failed:", e); }
+    } 
+    else if (isBijak) {
+        const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
+        if (finalBijaks.length === 0) {
+            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`) : null;
+        }
+        
+        let reportMsg = `📦 *گزارش بیجک‌های خروج ${dateStr}*\n\n`;
+        const grouped = finalBijaks.reduce((acc, b) => {
+            const comp = b.company || 'بدون شرکت';
+            acc[comp] = acc[comp] || [];
+            acc[comp].push(b);
+            return acc;
+        }, {});
+        
+        for (const [comp, bijaks] of Object.entries(grouped)) {
+            reportMsg += `🏢 *شرکت: ${comp}*\n`;
+            bijaks.forEach((b, idx) => {
+                reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
+            });
+            reportMsg += `------------------\n`;
+        }
+        if (sendFn) await sendFn(chatId, reportMsg);
+
+        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
+        try {
+            const htmlParts = [];
+            for (const b of finalBijaks) {
+                try {
+                    const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: false });
+                    if (imgBuffer) {
+                        const b64 = imgBuffer.toString('base64');
+                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                    }
+                } catch(e) { }
+            }
+            if (htmlParts.length > 0) {
+                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                if (sendDocFn) {
+                    await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+                }
+            }
+        } catch (e) { console.error("PDF generation failed:", e); }
+    } 
+    else {
+        // Exit permits group
+        const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
+        if (finalExits.length === 0) {
+            return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`) : null;
+        }
+        
+        let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
+        finalExits.forEach((p, idx) => {
+            const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+            reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
+        });
+        if (sendFn) await sendFn(chatId, reportMsg);
+
+        if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
+        
+        try {
+            const htmlParts = [];
+            for (const p of finalExits) {
+                try {
+                    const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: false });
+                    if (imgBuffer) {
+                        const b64 = imgBuffer.toString('base64');
+                        htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                    }
+                } catch(e) { console.error("Error generating image for permit", p.id, e); }
+            }
+            
+            if (htmlParts.length > 0) {
+                const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                if (sendDocFn) {
+                    await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
+                }
+            }
+        } catch (e) { console.error("PDF generation failed:", e); }
+    }
+};
+
 // --- PRODUCT HELPERS ---
 const formatProduct = (p) => {
     const priceTxt = p.hidePrice ? "📞 تماس با فروش" : `${Number(p.price || 0).toLocaleString()} ریال`;
@@ -264,172 +414,8 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 }
             }
             
-            const matchesDate = (dateVal) => {
-                if (!dateVal) return false;
-                const shamsiOfRecord = normalizeDateString(toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]));
-                return shamsiOfRecord === dateStr;
-            };
-
-            const g1Config = settings.exitPermitFirstGroupConfig || {};
-            const g2Config = settings.exitPermitSecondGroupConfig || {};
-            
-            const isAccounting = 
-                (platform === 'telegram' && (String(chatId) === settings.botAccountingGroupIdTele || String(chatId) === settings.botAccountingGroupId)) ||
-                (platform === 'bale' && String(chatId) === settings.botAccountingGroupIdBale) ||
-                (platform === 'whatsapp' && String(chatId) === settings.botAccountingGroupIdWhatsApp) ||
-                String(chatId) === settings.botAccountingGroupId;
-
-            const isBijak = 
-                (platform === 'telegram' && String(chatId) === settings.botBijakGroupId) ||
-                (platform === 'bale' && String(chatId) === settings.botBijakGroupIdBale) ||
-                (platform === 'whatsapp' && String(chatId) === settings.botBijakGroupIdWhatsApp);
-
-            if (isAccounting) {
-                const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
-                if (finalPayments.length === 0) {
-                    return sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`);
-                }
-                
-                let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
-                finalPayments.forEach((p, idx) => {
-                    const amount = Number(p.totalAmount || 0).toLocaleString();
-                    
-                    let paymentBankInfo = 'نامشخص';
-                    if (p.paymentDetails && p.paymentDetails.length > 0) {
-                        const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
-                        if (banks.length > 0) {
-                            paymentBankInfo = banks.join('، ');
-                        }
-                    }
-                    
-                    reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
-                });
-                await sendFn(chatId, reportMsg);
-
-                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
-                try {
-                    const htmlParts = [];
-                    for (const p of finalPayments) {
-                        try {
-                            const imgBuffer = await Renderer.generateRecordImage(p, 'PAYMENT', { forceHidePrices: false });
-                            if (imgBuffer) {
-                                const b64 = imgBuffer.toString('base64');
-                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                            }
-                        } catch(e) { }
-                    }
-                    if (htmlParts.length > 0) {
-                        const browser = await Renderer.getBrowser();
-                        const page = await browser.newPage();
-                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
-                        await page.setContent(html, { waitUntil: 'networkidle0' });
-                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
-                        await page.close();
-                        if (sendDocFn) {
-                            await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
-                        }
-                    }
-                } catch (e) {
-                    console.error("PDF generation failed:", e);
-                }
-                return;
-            } 
-            else if (isBijak) {
-                const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
-                if (finalBijaks.length === 0) {
-                    return sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`);
-                }
-                
-                let reportMsg = `📦 *گزارش بیجک‌های خروج ${dateStr}*\n\n`;
-                const grouped = finalBijaks.reduce((acc, b) => {
-                    const comp = b.company || 'بدون شرکت';
-                    acc[comp] = acc[comp] || [];
-                    acc[comp].push(b);
-                    return acc;
-                }, {});
-                
-                for (const [comp, bijaks] of Object.entries(grouped)) {
-                    reportMsg += `🏢 *شرکت: ${comp}*\n`;
-                    bijaks.forEach((b, idx) => {
-                        reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
-                    });
-                    reportMsg += `------------------\n`;
-                }
-                await sendFn(chatId, reportMsg);
-
-                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
-                try {
-                    const htmlParts = [];
-                    for (const b of finalBijaks) {
-                        try {
-                            const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: false });
-                            if (imgBuffer) {
-                                const b64 = imgBuffer.toString('base64');
-                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                            }
-                        } catch(e) { }
-                    }
-                    if (htmlParts.length > 0) {
-                        const browser = await Renderer.getBrowser();
-                        const page = await browser.newPage();
-                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
-                        await page.setContent(html, { waitUntil: 'networkidle0' });
-                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
-                        await page.close();
-                        if (sendDocFn) {
-                            await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
-                        }
-                    }
-                } catch (e) {
-                    console.error("PDF generation failed:", e);
-                }
-                return;
-            } 
-            else {
-                // Exit permits group
-                const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
-                if (finalExits.length === 0) {
-                    return sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`);
-                }
-                
-                let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
-                finalExits.forEach((p, idx) => {
-                    const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
-                });
-                await sendFn(chatId, reportMsg);
-
-                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
-                
-                try {
-                    const htmlParts = [];
-                    for (const p of finalExits) {
-                        try {
-                            const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: false });
-                            if (imgBuffer) {
-                                const b64 = imgBuffer.toString('base64');
-                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                            }
-                        } catch(e) { console.error("Error generating image for permit", p.id, e); }
-                    }
-                    
-                    if (htmlParts.length > 0) {
-                        const browser = await Renderer.getBrowser();
-                        const page = await browser.newPage();
-                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
-                        await page.setContent(html, { waitUntil: 'networkidle0' });
-                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
-                        await page.close();
-                        
-                        if (sendDocFn) {
-                            await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
-                        }
-                    }
-                } catch (e) {
-                    console.error("PDF generation failed:", e);
-                }
-                return;
-            }
+            await runDailyReport(platform, chatId, dateStr, sendFn, sendDocFn);
+            return;
         }
 
         // Silent for all other group messages as per user request
@@ -1156,22 +1142,41 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const totalDelivCount = showDeliv ? itemsToCalculate.reduce((sum, i) => sum + (Number(i.deliveredCartonCount) || 0), 0) : totalReqCount;
         const totalDelivWeight = showDeliv ? itemsToCalculate.reduce((sum, i) => sum + (Number(i.deliveredWeight) || 0), 0) : totalReqWeight;
 
-        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
-        
-        const isFinalStep = p.status === 'خارج شده (بایگانی)';
-        let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
-        if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
-        
+        const settings = db.settings || {};
+
+        // Determine if this is a price-sensitive group (Warehouse/Security)
+        const isLogisticsGroup = (id) => {
+            if (!id) return false;
+            const logisticsIds = [
+                settings.botSecurityGroupId,
+                settings.botBijakGroupId,
+                settings.botBijakGroupIdBale,
+                settings.botBijakGroupIdWhatsApp,
+                settings.exitPermitNotificationTelegramId,
+                settings.exitPermitNotificationBaleId
+            ].filter(Boolean);
+            return logisticsIds.includes(String(id));
+        };
+
         // Correctly format goods as a list
         let goodsList = '';
         if (p.items && p.items.length > 0) {
-            goodsList = p.items.map((it, idx) => `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)`).join('\n');
+            goodsList = p.items.map((it, idx) => {
+                const priceTxt = (!isLogisticsGroup(chatId) && it.price) ? ` (فی: ${Number(it.price).toLocaleString()} ریال)` : '';
+                return `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)${priceTxt}`;
+            }).join('\n');
         } else if (p.goodsName) {
             goodsList = `1. ${p.goodsName} (${p.cartonCount || 0} عدد)`;
         } else {
             goodsList = 'نامشخص';
         }
 
+        const countLine = `🔢 تعداد درخواستی: ${totalReqCount} واحد/کارتن ${totalReqWeight > 0 ? `(${totalReqWeight} کیلوگرم)` : ''} ${showDeliv ? `\n✅ ارسالی از انبار: ${totalDelivCount} واحد/کارتن ${totalDelivWeight > 0 ? `(${totalDelivWeight} کیلوگرم)` : ''}` : ''}`;
+        
+        const isFinalStep = p.status === 'خارج شده (بایگانی)';
+        let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
+        if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
+        
         let approvers = [];
         if (p.approverCeo) approvers.push(`مدیرعامل / تایید فروش: ${p.approverCeo}`);
         if (p.approverFactory) approvers.push(`مدیر کارخانه / مجوز ورود و بارگیری: ${p.approverFactory}`);

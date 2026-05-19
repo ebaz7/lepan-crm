@@ -22,9 +22,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'PROFORMA' | 'ARCHIVE'>('CARTABLE');
+    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'PROFORMA_ARCHIVE' | 'EXIT_ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
+    const [viewMode, setViewMode] = useState<'PROFORMA' | 'EXIT'>('PROFORMA');
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
@@ -35,7 +36,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     
     useEffect(() => {
         if (statusFilter) {
-            if (statusFilter === 'PROFORMA') setActiveTab('PROFORMA');
+            if (statusFilter === 'PROFORMA') setActiveTab('PROFORMA_ARCHIVE');
         }
     }, [statusFilter]);
 
@@ -82,18 +83,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const myCartablePermits = permits.filter(p => isMyTurn(p));
-    const proformaPermits = permits.filter(p => 
-        p.status !== ExitPermitStatus.REJECTED && 
-        p.status !== ExitPermitStatus.EXITED && 
-        (p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
-    );
-    const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
+    const proformaArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
+    const exitArchivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED);
+
+    const canSeeProforma = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.CEO || currentUser?.role === UserRole.SALES_MANAGER;
 
     const getDisplayPermits = () => {
         let source: ExitPermit[] = [];
         if (activeTab === 'CARTABLE') source = myCartablePermits;
-        else if (activeTab === 'PROFORMA') source = proformaPermits;
-        else source = archivePermits;
+        else if (activeTab === 'PROFORMA_ARCHIVE') source = proformaArchivePermits;
+        else source = exitArchivePermits;
 
         return source.filter(p => 
             p.permitNumber?.toString().includes(searchTerm) || 
@@ -546,17 +545,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
                         کارتابل من ({myCartablePermits.length})
                     </button>
+                    {canSeeProforma && (
+                        <button 
+                            onClick={() => { setActiveTab('PROFORMA_ARCHIVE'); setViewMode('PROFORMA'); }} 
+                            className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA_ARCHIVE' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
+                        >
+                            بایگانی پیش‌فاکتورها
+                        </button>
+                    )}
                     <button 
-                        onClick={() => setActiveTab('PROFORMA')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
+                        onClick={() => { setActiveTab('EXIT_ARCHIVE'); setViewMode('EXIT'); }} 
+                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'EXIT_ARCHIVE' ? 'glass-panel text-green-800 shadow-md' : 'text-gray-500'}`}
                     >
-                        جریان پیش‌فاکتور ({proformaPermits.length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('ARCHIVE')} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
-                    >
-                        بایگانی پیش‌فاکتورها
+                        بایگانی خروج
                     </button>
                 </div>
 
@@ -589,6 +590,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         permit={viewPermit} 
                         onClose={() => setViewPermit(null)} 
                         settings={settings}
+                        mode={viewMode}
                         showPrice={currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === UserRole.ADMIN}
                         onApprove={
                             (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 

@@ -18,9 +18,10 @@ interface Props {
   embed?: boolean; 
   watermark?: 'DELETED' | 'EDITED' | null; 
   showPrice?: boolean;
+  mode?: 'PROFORMA' | 'EXIT';
 }
 
-export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice }: Props) {
+export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice, mode = 'EXIT' }: Props) {
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -248,7 +249,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const totalWeightReq = Number(displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0).toFixed(2));
   const totalCartonsDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
   const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(2));
-  const showDeliveryColumns = displayItems.some(i => i.deliveredCartonCount !== undefined);
+  const showDeliveryColumns = mode === 'EXIT' && displayItems.some(i => i.deliveredCartonCount !== undefined);
 
   const content = (
       <div id={containerId} 
@@ -269,7 +270,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
                 <div className="flex flex-col">
                     <h1 className="text-3xl font-black mb-1">
-                        {permit.status === ExitPermitStatus.EXITED ? 'پیش‌فاکتور تکمیل شده (خروج کالا)' : 'پیش‌فاکتور حواله خروج کالا'}
+                        {mode === 'PROFORMA' ? 'پیش‌فاکتور حواله خروج کالا' : (permit.status === ExitPermitStatus.EXITED ? 'پیش‌فاکتور تکمیل شده (خروج کالا)' : 'پیش‌فاکتور حواله خروج کالا')}
                     </h1>
                     <p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p>
                 </div>
@@ -354,7 +355,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                     </div>
                 </div>
 
-                {(permit.driverName || permit.plateNumber) && (
+                {mode === 'EXIT' && (permit.driverName || permit.plateNumber) && (
                     <div className="space-y-1">
                         <h3 className="font-black text-lg flex items-center gap-2"><Truck size={20}/> مشخصات حمل</h3>
                         <div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm grid grid-cols-3 gap-4">
@@ -380,7 +381,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 {/* SECURITY / EXIT TIME - CRITICAL FIX - ALWAYS RENDER BOX */}
                 <div className="flex flex-col items-center justify-between min-h-[80px]">
                     <div className="mb-2 flex items-center justify-center h-full">
-                        {permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL ? 
+                        {mode === 'EXIT' && (permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL) ? 
                             <Stamp 
                                 title="سرپرست انتظامات" 
                                 name={permit.approverSecurity || 'سرپرست انتظامات'} 
@@ -395,7 +396,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
                 <div className="flex flex-col items-center justify-between min-h-[80px]">
                     <div className="mb-2 flex items-center justify-center h-full">
-                        {permit.status === ExitPermitStatus.EXITED ? 
+                        {mode === 'EXIT' && permit.status === ExitPermitStatus.EXITED ? 
                             <Stamp 
                                 title="مدیر کارخانه" 
                                 name={permit.approverFactoryFinal || 'مدیر کارخانه'} 
