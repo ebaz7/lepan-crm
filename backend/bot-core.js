@@ -227,6 +227,11 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
 
     const matchesDate = (dateVal) => {
         if (!dateVal) return false;
+        const normalizedInput = normalizeDateString(toEnglishDigits(String(dateVal)));
+        if (normalizedInput.includes('/') && normalizedInput.length >= 8) {
+             // It's likely already a shamsi string
+             return normalizedInput.startsWith(dateStr) || normalizedInput === dateStr;
+        }
         try {
             const d = new Date(dateVal);
             if (isNaN(d.getTime())) return false;
@@ -237,7 +242,6 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                 timeZone: 'Asia/Tehran' 
             });
             const shamsiRaw = fmt.format(d);
-            
             return normalizeDateString(toEnglishDigits(shamsiRaw)) === dateStr;
         } catch(e) { return false; }
     };
@@ -276,7 +280,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                 const amount = Number(p.totalAmount || 0).toLocaleString();
                 let paymentBankInfo = 'صندوق / نقدی';
                 if (p.paymentDetails && p.paymentDetails.length > 0) {
-                    const banks = [...new Set(p.paymentDetails.map(d => d.bankName).filter(Boolean))];
+                    const banks = [...new Set(p.paymentDetails.map(d => d.bankName || d.method).filter(Boolean))];
                     if (banks.length > 0) paymentBankInfo = banks.join('، ');
                 }
                 reportMsg += `${idx + 1}. *#${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
@@ -351,57 +355,50 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                     }
                 }
             } catch (e) { console.error("PDF generation failed:", e); }
-        } else {
-            // Exit permits report
+          }
+        }
+
+        // 3. EXIT PERMITS REPORT
+        if (showLogistics) {
             const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
-            if (finalExits.length === 0) {
-                return sendFn ? sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`) : null;
-            }
-
-            const hidePrice = true; // Logistics groups always hide prices
-            
-            let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
-            finalExits.forEach((p, idx) => {
-                const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+            if (finalExits.length > 0) {
+                const hidePrice = true; // Logistics groups always hide prices
+                let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
+                finalExits.forEach((p, idx) => {
+                    const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+                    let goodsInfo = (p.items && p.items.length > 0) ? p.items.map(it => it.goodsName).join('، ') : (p.goodsName || 'چند مورد');
+                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${goodsInfo} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
+                });
+                if (sendFn) await sendFn(chatId, reportMsg);
+                if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
                 
-                let goodsInfo = '';
-                if (p.items && p.items.length > 0) {
-                    goodsInfo = p.items.map(it => it.goodsName).join('، ');
-                } else {
-                    goodsInfo = p.goodsName || 'چند مورد';
-                }
-
-                reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${goodsInfo} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
-            });
-            if (sendFn) await sendFn(chatId, reportMsg);
-
-            if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
-            
-            try {
-                const htmlParts = [];
-                for (const p of finalExits) {
-                    try {
-                        const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: hidePrice });
-                        if (imgBuffer) {
-                            const b64 = imgBuffer.toString('base64');
-                            htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                        }
-                    } catch(e) { console.error("Error generating image for permit", p.id, e); }
-                }
-                
-                if (htmlParts.length > 0) {
-                    const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
-                    if (sendDocFn) {
-                        await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
+                try {
+                    const htmlParts = [];
+                    for (const p of finalExits) {
+                        try {
+                            const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: hidePrice });
+                            if (imgBuffer) {
+                                const b64 = imgBuffer.toString('base64');
+                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                            }
+                        } catch(e) { console.error("Error generating image for permit", p.id, e); }
                     }
-                }
-            } catch (e) { console.error("PDF generation failed:", e); }
+                    if (htmlParts.length > 0) {
+                        const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                        if (sendDocFn) {
+                            await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
+                        }
+                    }
+                } catch (e) { console.error("PDF generation failed:", e); }
+            } else if (isLogistics) {
+                if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`);
+            }
         }
     } 
-    else {
-        // PV or Generic context - only triggered if explicitly requested by authorized user in unknown chat
-        // but for now we'll just show a "Not Authorized" message to avoid cross-posting
-        return sendFn ? sendFn(chatId, `⚠️ این گروه به عنوان گروه گزارشات (مالی/انبار/خروج) در تنظیمات سیستم تعریف نشده است. لطفا شناسه این گروه (${chatId}) را در بخش تنظیمات وارد کنید.`) : null;
+    
+    if (isUnrecognizedGroup) {
+        // PV or Unregistered context
+        // if we are here and nothing was sent (checked elsewhere or just fallback)
     }
 };
 
@@ -1442,7 +1439,7 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
 
         let paymentBankInfo = '-';
         if (o.paymentDetails && o.paymentDetails.length > 0) {
-            const banks = [...new Set(o.paymentDetails.map(d => d.bankName).filter(Boolean))];
+            const banks = [...new Set(o.paymentDetails.map(d => d.bankName || d.method).filter(Boolean))];
             if (banks.length > 0) {
                 paymentBankInfo = banks.join('، ');
             }

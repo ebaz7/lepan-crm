@@ -182,19 +182,23 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
           const w = isBankForm ? (dynamicTemplate?.width || 210) : 210;
           const h = isBankForm ? (dynamicTemplate?.height || 297) : 148;
           const size = isBankForm ? `${dynamicTemplate?.pageSize || 'A4'} ${dynamicTemplate?.orientation || 'portrait'}` : 'A5 landscape';
+          
           style.innerHTML = `
             @page { 
                 size: ${size}; 
                 margin: 0; 
             }
             @media print {
-                html, body { height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
-                body * { visibility: hidden !important; }
-                #${printAreaId}, #${printAreaId} * { 
-                    visibility: visible !important; 
-                }
+                html, body { height: 100vh !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; background: white !important; }
+                #root, .fixed.inset-0 { display: none !important; } /* Hide the app and current modal backdrop */
+                
+                body > * { display: none !important; }
+                
+                /* Ensure only the specific printed div is visible and correctly positioned */
                 #${printAreaId} { 
-                    position: absolute !important; 
+                    display: block !important;
+                    visibility: visible !important;
+                    position: fixed !important; 
                     left: 0 !important; 
                     top: 0 !important; 
                     width: ${w}mm !important; 
@@ -204,13 +208,20 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                     border: none !important;
                     box-shadow: none !important;
                     background: white !important;
-                    z-index: 99999 !important;
+                    z-index: 9999999 !important;
+                    overflow: hidden !important;
                 }
+                #${printAreaId} * { visibility: visible !important; }
                 .no-print { display: none !important; }
             }
           `;
       }
-      window.print(); 
+      
+      // We temporary append the element to body for print if it's nested
+      const el = document.getElementById(printAreaId);
+      if (el) {
+          window.print();
+      }
   };
 
   const handleDownloadPDF = async () => {

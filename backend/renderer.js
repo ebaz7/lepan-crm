@@ -202,14 +202,14 @@ export const generateRecordImage = async (record, type, options = {}) => {
             if (isEdit) title += ' (ویرایش شده)';
             if (isDelete) title += ' (حذف شده)';
             const banks = (record.paymentDetails && record.paymentDetails.length > 0) 
-                ? [...new Set(record.paymentDetails.map(d => d.bankName || 'صندوق / نقدی').filter(Boolean))].join('، ')
+                ? [...new Set(record.paymentDetails.map(d => d.bankName || d.method || 'صندوق / نقدی').filter(Boolean))].join('، ')
                 : 'صندوق / نقدی';
 
             htmlData = `
                 <div class="row"><span class="label">شماره پیگیری:</span><span class="value">#${record.trackingNumber}</span></div>
                 <div class="row"><span class="label">نام ذینفع:</span><span class="value" style="font-size: 24px;">${record.payee}</span></div>
                 <div class="row"><span class="label">مبلغ پرداختی:</span><span class="value amount" style="color:#1e40af; font-size: 28px;">${parseInt(record.totalAmount).toLocaleString()} ریال</span></div>
-                <div class="row"><span class="label">بانک مقصد:</span><span class="value" style="color:#b91c1c">${banks}</span></div>
+                <div class="row"><span class="label">بانک / منبع پرداخت:</span><span class="value" style="color:#b91c1c">${banks}</span></div>
                 <div class="row"><span class="label">شرکت پرداخت‌کننده:</span><span class="value">${record.payingCompany}</span></div>
                 <div class="row"><span class="label">بابت / شرح:</span><span class="value" style="font-size: 16px; border: 1px solid #eee; padding: 10px; border-radius: 8px; background: #fafafa; display: block; width: 100%; text-align: right; margin-top: 5px;">${record.description}</span></div>
                 <div class="row" style="margin-top: 15px; border-top: 2px solid #eee; padding-top: 10px;"><span class="label">درخواست‌کننده:</span><span class="value">${record.requester}</span></div>
@@ -307,8 +307,8 @@ export const generateRecordImage = async (record, type, options = {}) => {
                 ${isInvoice ? `
                     <div class="invoice-header">
                         <div>
-                            <h1 style="font-size: 28px; font-weight: 900; margin: 0;">پیش‌فاکتور فروش (حوالی خروج)</h1>
-                            <p style="font-size: 14px; opacity: 0.8; margin: 0;">سند قطعی تحویل کالا به مشتری</p>
+                            <h1 style="font-size: 28px; font-weight: 900; margin: 0;">پیش‌فاکتور فروش کالا</h1>
+                            <p style="font-size: 14px; opacity: 0.8; margin: 0;">سند تایید تحویل کالا و بارنامه پیوست</p>
                         </div>
                         <div style="text-align: left;">
                             <div style="font-size: 20px; font-weight: 900; border: 2px solid white; padding: 5px 15px; border-radius: 8px;">No: ${record.permitNumber}</div>
@@ -381,7 +381,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     </table>
                 </div>
 
-                ${!isInvoice ? `
+                ${(isInvoice || record.status === 'خارج شده (بایگانی)') ? '' : `
                     <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px;">
                         <div style="text-align: center; flex: 1; min-width: 80px;">
                             <div class="stamp"><div class="stamp-title">ثبت کننده</div><div class="stamp-name">${record.requesterRole || record.requester || '-'}</div></div>
@@ -412,7 +412,9 @@ export const generateRecordImage = async (record, type, options = {}) => {
                             <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیر کارخانه / تایید نهایی خروج</div>
                         </div>
                     </div>
-                ` : `
+                `}
+
+                ${isInvoice ? `
                     <div style="margin-top: 40px; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px;">
                         <div style="background: #f1f5f9; padding: 15px; border-radius: 12px; font-size: 11px;">
                             <b style="color: #1e3a8a; display: block; margin-bottom: 5px; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px;">توضیحات و شرایط فروش:</b>
@@ -429,7 +431,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                             <div style="height: 60px;"></div>
                         </div>
                     </div>
-                `}
+                ` : ''}
             </div></body></html>`;
 
             // Make viewport wide enough
