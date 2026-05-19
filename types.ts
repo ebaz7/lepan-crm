@@ -170,6 +170,8 @@ export interface ExitPermitGroupConfig {
 
 export interface CompanyNotificationConfig {
     salesManager?: string;
+    salesManagerBale?: string;
+    salesManagerTelegram?: string;
     warehouseGroup?: string;
     baleChannelId?: string; // NEW: Company specific Bale
     telegramChannelId?: string; // NEW: Company specific Telegram

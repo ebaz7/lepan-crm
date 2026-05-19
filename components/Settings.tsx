@@ -620,21 +620,9 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <h5 className="font-bold text-sm text-blue-800 mb-3 border-b border-gray-200 pb-1">{c.name}</h5>
                                                 
                                                 <div className="space-y-3">
-                                                    <div>
-                                                        <label className="text-xs block mb-1 font-bold text-gray-600">مدیر فروش (واتساپ):</label>
-                                                        <input 
-                                                            className="w-full border rounded p-2 text-xs dir-ltr" 
-                                                            value={conf.salesManager || ''} 
-                                                            onChange={e => {
-                                                                const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManager: e.target.value } };
-                                                                setSettings({ ...settings, companyNotifications: newConf });
-                                                            }} 
-                                                            placeholder="98912..." 
-                                                        />
-                                                    </div>
-
+                                                    <h6 className="font-bold text-[11px] text-gray-600 mb-1 border-b pb-1">تنظیمات گروه اطلاع‌رسانی:</h6>
                                                     {/* UPDATED: Unified Group Config (WhatsApp, Bale, Telegram) */}
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                                         {/* WhatsApp */}
                                                         <div className="bg-green-50 p-2 rounded border border-green-200">
                                                             <div className="flex items-center gap-1 mb-1 text-green-700 font-bold text-[10px]">
@@ -684,6 +672,52 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                     const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, telegramChannelId: e.target.value } };
                                                                     setSettings({ ...settings, companyNotifications: newConf });
                                                                 }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <h6 className="font-bold text-[11px] text-orange-600 mb-1 border-b pb-1">اطلاع‌رسانی به مدیر فروش (هنگام تایید مدیرعامل):</h6>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                        <div className="bg-orange-50 p-2 rounded border border-orange-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-orange-700 font-bold text-[10px]">
+                                                                <MessageCircle size={12}/> مدیر فروش (واتساپ)
+                                                            </div>
+                                                            <input 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
+                                                                value={conf.salesManager || ''} 
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManager: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }} 
+                                                                placeholder="شماره (989...)" 
+                                                            />
+                                                        </div>
+                                                        <div className="bg-orange-50 p-2 rounded border border-orange-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-orange-700 font-bold text-[10px]">
+                                                                <Send size={12}/> مدیر فروش (بله)
+                                                            </div>
+                                                            <input 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
+                                                                value={conf.salesManagerBale || ''} 
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManagerBale: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }} 
+                                                                placeholder="ID..." 
+                                                            />
+                                                        </div>
+                                                        <div className="bg-orange-50 p-2 rounded border border-orange-200">
+                                                            <div className="flex items-center gap-1 mb-1 text-orange-700 font-bold text-[10px]">
+                                                                <Send size={12}/> مدیر فروش (تلگرام)
+                                                            </div>
+                                                            <input 
+                                                                className="w-full border rounded p-1.5 text-xs dir-ltr glass-panel" 
+                                                                value={conf.salesManagerTelegram || ''} 
+                                                                onChange={e => {
+                                                                    const newConf = { ...settings.companyNotifications, [c.name]: { ...conf, salesManagerTelegram: e.target.value } };
+                                                                    setSettings({ ...settings, companyNotifications: newConf });
+                                                                }} 
+                                                                placeholder="Chat ID..." 
                                                             />
                                                         </div>
                                                     </div>

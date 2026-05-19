@@ -1235,11 +1235,19 @@ export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP')
         // 2. Send to Company-Specific Groups/Managers -> GROUPS NO PRICE
         const companyConfig = settings.companyNotifications?.[tx.company];
         if (companyConfig) {
+            // Group notifications
             if (tx.status === 'APPROVED' && companyConfig.warehouseGroup) sendToTarget({ type: 'wa', id: companyConfig.warehouseGroup }, false);
             if (tx.status === 'APPROVED' && companyConfig.telegramChannelId) sendToTarget({ type: 'tg', id: companyConfig.telegramChannelId }, false);
             if (tx.status === 'APPROVED' && companyConfig.baleChannelId) sendToTarget({ type: 'bale', id: companyConfig.baleChannelId }, false);
             
+            // Sales Manager notifications on Approval
+            if (tx.status === 'APPROVED' && companyConfig.salesManager) sendToTarget({ type: 'wa', id: companyConfig.salesManager }, false);
+            if (tx.status === 'APPROVED' && companyConfig.salesManagerBale) sendToTarget({ type: 'bale', id: companyConfig.salesManagerBale }, false);
+            if (tx.status === 'APPROVED' && companyConfig.salesManagerTelegram) sendToTarget({ type: 'tg', id: companyConfig.salesManagerTelegram }, false);
+
             if (stepName === 'ثبت اولیه' && companyConfig.salesManager) sendToTarget({ type: 'wa', id: companyConfig.salesManager }, false);
+            if (stepName === 'ثبت اولیه' && companyConfig.salesManagerBale) sendToTarget({ type: 'bale', id: companyConfig.salesManagerBale }, false);
+            if (stepName === 'ثبت اولیه' && companyConfig.salesManagerTelegram) sendToTarget({ type: 'tg', id: companyConfig.salesManagerTelegram }, false);
         }
 
         // 3. If Pending, Notify CEO/Managers (Private) -> WITH PRICE

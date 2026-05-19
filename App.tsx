@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CreateOrder from './components/CreateOrder';
@@ -21,9 +21,9 @@ import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
 import { Tickets } from './components/Tickets';
 import KnowledgeBaseModule from './components/KnowledgeBaseModule';
-import { getOrders, getSettings, getMessages, saveSettings } from './services/storageService'; 
+import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
-import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage } from './types';
+import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
 import { apiCall, getLocalData, LS_KEYS } from './services/apiService'; 
@@ -373,7 +373,7 @@ function App() {
         }).catch(err => console.error("Settings load error", err));
 
         // Load Heavy Data in Parallel
-        const [ordersData, messagesData] = await Promise.all([getOrders(), getMessages()]);
+        const [ordersData, messagesData, announcementsData] = await Promise.all([getOrders(), getMessages(), getSystemAnnouncements()]);
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
         const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
@@ -383,13 +383,14 @@ function App() {
         })) : [];
 
         const safeMessages = Array.isArray(messagesData) ? messagesData : [];
+        const safeAnnouncements = Array.isArray(announcementsData) ? announcementsData : [];
         
         // --- OPTIMIZATION: ONLY SET IF CHANGED ---
         setOrders(prev => JSON.stringify(prev) !== JSON.stringify(safeOrders) ? safeOrders : prev);
         setChatMessages(prev => JSON.stringify(prev) !== JSON.stringify(safeMessages) ? safeMessages : prev); 
         
         const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
-        checkForNotifications(safeOrders, currentUser, lastCheck);
+        checkForNotifications(safeOrders, safeAnnouncements, currentUser, lastCheck);
         
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
@@ -437,24 +438,31 @@ function App() {
       if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); }
   };
 
-  const checkForNotifications = (newList: PaymentOrder[], user: User, lastCheckTime: number) => {
+  const checkForNotifications = (newList: PaymentOrder[], announcementsList: SystemAnnouncement[], user: User, lastCheckTime: number) => {
      // Safe guard against non-array input
-     if (!Array.isArray(newList)) return;
+     if (Array.isArray(newList)) {
+         const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
+         newEvents.forEach(newItem => {
+            const status = newItem.status;
+            const isAdmin = user.role === UserRole.ADMIN;
+            if (isAdmin) {
+                 const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
+                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
+            }
+            if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); }
+            else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); }
+            else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
+            else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
+            else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
+         });
+     }
 
-     const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
-     newEvents.forEach(newItem => {
-        const status = newItem.status;
-        const isAdmin = user.role === UserRole.ADMIN;
-        if (isAdmin) {
-             const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
-             if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
-        }
-        if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); }
-        else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); }
-        else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
-        else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
-        else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
-     });
+     if (Array.isArray(announcementsList)) {
+         const newAnnouncements = announcementsList.filter(a => a.createdAt > lastCheckTime && (!a.targetUsers || a.targetUsers.length === 0 || a.targetUsers.includes(user.id) || a.targetUsers.includes(user.role)));
+         newAnnouncements.forEach(ann => {
+             addAppNotification('اعلان جدید داشبورد', ann.message);
+         });
+     }
   };
 
   useEffect(() => {
@@ -528,8 +536,30 @@ function App() {
   const [purchaseInitialTab, setPurchaseInitialTab] = useState<'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>('REQUESTS');
   const handleGoToPurchaseApprovals = () => { setPurchaseInitialTab('REQUESTS'); setActiveTab('purchase'); };
 
+  const unreadChatCount = useMemo(() => {
+      if (!currentUser) return 0;
+      return chatMessages.filter(m => {
+          if (m.senderUsername === currentUser.username) return false;
+          if (m.readBy?.includes(currentUser.username)) return false;
+          if (m.groupId) return true;
+          if (m.recipient && m.recipient !== currentUser.username) return false;
+          return true;
+      }).length;
+  }, [chatMessages, currentUser]);
+
   return (
     <>
+        {toast && toast.show && (
+            <div style={{ zIndex: 9999999 }} className="fixed top-4 md:top-8 left-1/2 transform -translate-x-1/2 glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-start gap-4 min-w-[320px] max-w-[90vw] animate-slide-down backdrop-blur-3xl overflow-hidden" onClick={closeToast}>
+                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+                <div className="bg-blue-500/10 p-2.5 rounded-2xl text-blue-600 dark:text-blue-400 border border-blue-500/20"><Bell size={20} className="animate-pulse" /></div>
+                <div className="flex-1">
+                    <h4 className="font-black text-gray-900 dark:text-gray-100 text-sm mb-0.5 tracking-tight">{toast.title}</h4>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><X size={18} /></button>
+            </div>
+        )}
         {!currentUser ? (
             <Login onLogin={handleLogin} />
         ) : (
@@ -547,21 +577,10 @@ function App() {
             settings={settings}
             theme={theme}
             toggleTheme={toggleTheme}
+            unreadChatCount={unreadChatCount}
             >
             
             <NotificationController currentUser={currentUser} />
-
-            {toast && toast.show && (
-                <div className="fixed top-24 md:top-8 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-start gap-4 min-w-[320px] max-w-[90vw] animate-slide-down backdrop-blur-3xl overflow-hidden" onClick={closeToast}>
-                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-                    <div className="bg-blue-500/10 p-2.5 rounded-2xl text-blue-600 dark:text-blue-400 border border-blue-500/20"><Bell size={20} className="animate-pulse" /></div>
-                    <div className="flex-1">
-                        <h4 className="font-black text-gray-900 dark:text-gray-100 text-sm mb-0.5 tracking-tight">{toast.title}</h4>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><X size={18} /></button>
-                </div>
-            )}
 
             {backgroundJobs.length > 0 && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
