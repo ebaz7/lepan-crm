@@ -241,17 +241,21 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
         if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
             const args = text.split(' ');
-            let dateStr = toShamsiFull(new Date().toISOString()).split(' ')[0]; // Default to today in Shamsi
+            
+            const toEnglishDigits = (str) => {
+                if (typeof str !== 'string') return str;
+                return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+            };
+
+            let dateStr = toEnglishDigits(toShamsiFull(new Date().toISOString()).split(' ')[0]);
 
             if (args.length > 1) {
-                // Check if user provided a Shamsi date like 1403/02/05
-                dateStr = args[1];
+                dateStr = toEnglishDigits(args[1]);
             }
             
-            // Helper to check if a permit date matches the given Shamsi date
             const matchesDate = (dateVal) => {
                 if (!dateVal) return false;
-                const shamsiOfRecord = toShamsiFull(dateVal).split(' ')[0];
+                const shamsiOfRecord = toEnglishDigits(toShamsiFull(dateVal).split(' ')[0]);
                 return shamsiOfRecord === dateStr;
             };
 
@@ -270,16 +274,16 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 (platform === 'whatsapp' && String(chatId) === settings.botBijakGroupIdWhatsApp);
 
             if (isAccounting) {
-                const finalPayments = (db.orders || []).filter(p => matchesDate(p.date) && p.status === 'پرداخت شده');
+                const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
                 if (finalPayments.length === 0) {
                     return sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`);
                 }
                 
-                let reportMsg = `💰 *گزارش پرداختی‌های نهایی ${dateStr}*\n\n`;
+                let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
                 finalPayments.forEach((p, idx) => {
                     const amount = Number(p.totalAmount || 0).toLocaleString();
                     const bankStr = p.paymentBank ? `بانک: ${p.paymentBank}` : 'نامشخص';
-                    reportMsg += `${idx + 1}. *شماره ${p.trackingNumber}* | ${bankStr}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n------------------\n`;
+                    reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | ${bankStr}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
                 });
                 return sendFn(chatId, reportMsg);
             } 
@@ -308,9 +312,9 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             } 
             else {
                 // Exit permits group
-                const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+                const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
                 if (finalExits.length === 0) {
-                    return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
+                    return sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`);
                 }
                 
                 sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
@@ -345,10 +349,10 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 }
                 
                 // Fallback to text message
-                let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
+                let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
                 finalExits.forEach((p, idx) => {
                     const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
                 });
                 return sendFn(chatId, reportMsg);
             }
