@@ -54,7 +54,18 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
   // State for rendering the hidden invoice for auto-send
   const [tempPermitForCapture, setTempPermitForCapture] = useState<ExitPermit | null>(null);
 
-  const getIsoDate = () => { try { const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day); return date.toISOString().split('T')[0]; } catch (e) { return new Date().toISOString().split('T')[0]; } };
+  const getIsoDate = () => { 
+      try { 
+          const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day); 
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+      } catch (e) { 
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      } 
+  };
   const handleAddItem = () => { setItems([...items, { id: generateUUID(), goodsName: '', cartonCount: 0, weight: 0 }]); };
   const handleRemoveItem = (id: string) => { if (items.length > 1) setItems(items.filter(i => i.id !== id)); };
   const handleUpdateItem = (id: string, field: keyof ExitPermitItem, value: string | number) => { setItems(items.map(i => i.id === id ? { ...i, [field]: value } : i)); };

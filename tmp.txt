@@ -1,0 +1,672 @@
+1:import React, { useState, useEffect } from 'react';
+2:import { ExitPermit, ExitPermitStatus, User, UserRole, SystemSettings } from '../types';
+3:import { getExitPermits, updateExitPermitStatus, deleteExitPermit, editExitPermit } from '../services/storageService';
+4:import { getUsers } from '../services/authService';
+5:import { apiCall } from '../services/apiService';
+6:import { formatDate, formatIranianPlate } from '../constants';
+7:import { 
+8:    Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
+9:    Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
+10:    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3
+11:} from 'lucide-react';
+12:import PrintExitPermit from './PrintExitPermit';
+13:import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
+14:import SecurityFinalizeModal from './SecurityFinalizeModal';
+15:import PriceFinalizeModal from './PriceFinalizeModal';
+16:import EditExitPermitModal from './EditExitPermitModal';
+17:import useIsMobile from '../hooks/useIsMobile';
+18:import html2canvas from 'html2canvas';
+19:
+20:import { isInFinancialYear } from '../utils/dateUtils';
+21:
+22:const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any, financialYear?: string }> = ({ currentUser, settings, statusFilter, financialYear }) => {
+23:    const isMobile = useIsMobile();
+24:    const [permits, setPermits] = useState<ExitPermit[]>([]);
+25:    const [loading, setLoading] = useState(true);
+26:    const [activeTab, setActiveTab] = useState<'CARTABLE' | 'PROFORMA' | 'ARCHIVE'>('CARTABLE');
+27:    const [searchTerm, setSearchTerm] = useState('');
+28:    const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
+29:    const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
+30:    const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
+31:    const [priceFinalize, setPriceFinalize] = useState<ExitPermit | null>(null);
+32:    const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
+33:    const [processingId, setProcessingId] = useState<string | null>(null);
+34:    const [activeAutoSends, setActiveAutoSends] = useState<ExitPermit[]>([]);
+35:
+36:    useEffect(() => { loadData(); }, [financialYear]);
+37:    
+38:    useEffect(() => {
+39:        if (statusFilter) {
+40:            if (statusFilter === 'PROFORMA') setActiveTab('PROFORMA');
+41:        }
+42:    }, [statusFilter]);
+43:
+44:    const loadData = async () => {
+45:        setLoading(true);
+46:        try {
+47:            const data = await getExitPermits();
+48:            let safeData = Array.isArray(data) ? data : [];
+49:            if (financialYear && financialYear !== 'all') {
+50:                safeData = safeData.filter(p => isInFinancialYear(p.date, financialYear));
+51:            }
+52:            setPermits(safeData.sort((a, b) => b.createdAt - a.createdAt));
+53:        } catch (e) {
+54:            console.error("Failed to load permits", e);
+55:            setPermits([]);
+56:        } finally {
+57:            setLoading(false);
+58:        }
+59:    };
+60:
+61:    // ... (isMyTurn, getActionLabel, filtering logic remains same)
+62:    const isMyTurn = (p: ExitPermit) => {
+63:        if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
+64:        switch (currentUser.role) {
+65:            case UserRole.CEO: return p.status === ExitPermitStatus.PENDING_CEO;
+66:            case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL;
+67:            case UserRole.WAREHOUSE_KEEPER: return p.status === ExitPermitStatus.PENDING_WAREHOUSE;
+68:            case UserRole.SALES_MANAGER: return p.status === ExitPermitStatus.PENDING_PRICE;
+69:            case UserRole.SECURITY_HEAD:
+70:            case UserRole.SECURITY_GUARD: return p.status === ExitPermitStatus.PENDING_SECURITY;
+71:            case UserRole.ADMIN: return true; 
+72:            default: return false;
+73:        }
+74:    };
+75:
+76:    const getActionLabel = (status: ExitPermitStatus) => {
+77:        switch(status) {
+78:            case ExitPermitStatus.PENDING_CEO: return 'تایید مدیرعامل';
+79:            case ExitPermitStatus.PENDING_FACTORY: return 'تایید مدیر کارخانه';
+80:            case ExitPermitStatus.PENDING_WAREHOUSE: return 'توزین و تحویل انبار';
+81:            case ExitPermitStatus.PENDING_PRICE: return 'قیمت‌گذاری نهایی';
+82:            case ExitPermitStatus.PENDING_SECURITY: return 'ثبت مشخصات راننده';
+83:            case ExitPermitStatus.PENDING_FACTORY_FINAL: return 'تایید نهایی خروج و ارسال گروه';
+84:            default: return '';
+85:        }
+86:    };
+87:
+88:    const myCartablePermits = permits.filter(p => isMyTurn(p));
+89:    const proformaPermits = permits.filter(p => 
+90:        p.status !== ExitPermitStatus.REJECTED && 
+91:        p.status !== ExitPermitStatus.EXITED && 
+92:        (p.status === ExitPermitStatus.PENDING_PRICE || p.status === ExitPermitStatus.PENDING_SECURITY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL || (p.price && p.price > 0))
+93:    );
+94:    const archivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.REJECTED);
+95:
+96:    const getDisplayPermits = () => {
+97:        let source: ExitPermit[] = [];
+98:        if (activeTab === 'CARTABLE') source = myCartablePermits;
+99:        else if (activeTab === 'PROFORMA') source = proformaPermits;
+100:        else source = archivePermits;
+101:
+102:        return source.filter(p => 
+103:            p.permitNumber?.toString().includes(searchTerm) || 
+104:            p.recipientName?.includes(searchTerm) || 
+105:            p.goodsName?.includes(searchTerm) ||
+106:            p.driverName?.includes(searchTerm)
+107:        );
+108:    };
+109:
+110:    const displayPermits = getDisplayPermits();
+111:
+112:    const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'PRICE' | 'SECURITY') => {
+113:        if (p.status === ExitPermitStatus.EXITED) return 'done';
+114:        if (p.status === ExitPermitStatus.REJECTED) return 'rejected';
+115:
+116:        const statusOrder = [
+117:            ExitPermitStatus.PENDING_CEO,
+118:            ExitPermitStatus.PENDING_FACTORY,
+119:            ExitPermitStatus.PENDING_WAREHOUSE,
+120:            ExitPermitStatus.PENDING_PRICE,
+121:            ExitPermitStatus.PENDING_SECURITY
+122:        ];
+123:        
+124:        const currentIdx = statusOrder.indexOf(p.status);
+125:        let stepIdx = -1;
+126:        
+127:        if (step === 'CEO') stepIdx = 0;
+128:        else if (step === 'FACTORY') stepIdx = 1;
+129:        else if (step === 'WAREHOUSE') stepIdx = 2;
+130:        else if (step === 'PRICE') stepIdx = 3;
+131:        else if (step === 'SECURITY') stepIdx = 4;
+132:
+133:        if (currentIdx === -1) return 'pending'; 
+134:
+135:        if (currentIdx > stepIdx) return 'done';
+136:        if (currentIdx === stepIdx) return 'current';
+137:        return 'pending';
+138:    };
+139:
+140:    const handleApprove = async (p: ExitPermit) => {
+141:        if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
+142:            setWarehouseFinalize(p); 
+143:            return; 
+144:        }
+145:
+146:        if (p.status === ExitPermitStatus.PENDING_PRICE) {
+147:            setPriceFinalize(p);
+148:            return;
+149:        }
+150:        
+151:        if (p.status === ExitPermitStatus.PENDING_SECURITY) {
+152:            setSecurityFinalize(p);
+153:            return;
+154:        }
+155:
+156:        const actionLabel = getActionLabel(p.status);
+157:        if (!confirm(`آیا از ${actionLabel} اطمینان دارید؟`)) return;
+158:
+159:        setProcessingId(p.id);
+160:        
+161:        try {
+162:            let nextStatus = ExitPermitStatus.PENDING_FACTORY;
+163:            if (p.status === ExitPermitStatus.PENDING_CEO) nextStatus = ExitPermitStatus.PENDING_FACTORY;
+164:            else if (p.status === ExitPermitStatus.PENDING_FACTORY) nextStatus = ExitPermitStatus.PENDING_WAREHOUSE;
+165:            else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) nextStatus = ExitPermitStatus.EXITED;
+166:            else nextStatus = p.status; // Fallback
+167:
+168:            const updatedPermit = { ...p, status: nextStatus };
+169:            let extraUpdateData: any = {};
+170:
+171:            if (p.status === ExitPermitStatus.PENDING_CEO) updatedPermit.approverCeo = currentUser.fullName;
+172:            else if (p.status === ExitPermitStatus.PENDING_FACTORY) updatedPermit.approverFactory = currentUser.fullName;
+173:            else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) {
+174:                updatedPermit.approverFactoryFinal = currentUser.fullName;
+175:                updatedPermit.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+176:                extraUpdateData.exitTime = updatedPermit.exitTime;
+177:            }
+178:
+179:            await updateExitPermitStatus(p.id, nextStatus, currentUser, extraUpdateData);
+180:            
+181:            // Notification queue
+182:            setActiveAutoSends(prev => [...prev, updatedPermit]);
+183:            
+184:            setTimeout(async () => {
+185:                await sendNotification(updatedPermit, p.status);
+186:                setProcessingId(null);
+187:                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
+188:                loadData();
+189:            }, 2500);
+190:
+191:        } catch (e) {
+192:            alert('خطا در عملیات تایید');
+193:            setProcessingId(null);
+194:        }
+195:    };
+196:
+197:    const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string }) => {
+198:        if (!securityFinalize) return;
+199:        setProcessingId(securityFinalize.id);
+200:        try {
+201:            const nextStatus = ExitPermitStatus.PENDING_FACTORY_FINAL;
+202:            const updatedPermit = { 
+203:                ...securityFinalize, 
+204:                status: nextStatus,
+205:                driverName: data.driverName,
+206:                driverPhone: data.driverPhone,
+207:                plateNumber: data.plateNumber,
+208:                approverSecurity: currentUser.fullName,
+209:                updatedAt: Date.now()
+210:            };
+211:
+212:            await editExitPermit(updatedPermit); 
+213:            
+214:            setActiveAutoSends(prev => [...prev, updatedPermit]);
+215:            
+216:            setTimeout(async () => {
+217:                await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY);
+218:                setProcessingId(null);
+219:                setSecurityFinalize(null);
+220:                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
+221:                loadData();
+222:            }, 2500);
+223:        } catch (e) {
+224:            alert('خطا در ثبت مشخصات انتظامات');
+225:            setProcessingId(null);
+226:        }
+227:    };
+228:
+229:    const handleWarehouseSubmit = async (finalItems: any[]) => {
+230:        if (!warehouseFinalize) return;
+231:        setProcessingId(warehouseFinalize.id);
+232:        try {
+233:            const updated = { 
+234:                ...warehouseFinalize, 
+235:                items: finalItems, 
+236:                approverWarehouse: currentUser.fullName, 
+237:                status: ExitPermitStatus.PENDING_PRICE,
+238:                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0) : warehouseFinalize.weight,
+239:                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0) : warehouseFinalize.cartonCount
+240:            };
+241:            
+242:            await editExitPermit(updated); 
+243:            
+244:            setActiveAutoSends(prev => [...prev, updated]);
+245:            setTimeout(async () => {
+246:                await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
+247:                setProcessingId(null);
+248:                setWarehouseFinalize(null);
+249:                setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
+250:                loadData();
+251:            }, 2500);
+252:        } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
+253:    };
+254:
+255:    const handlePriceSubmit = async (itemsWithPrice: any[], totalPrice: number) => {
+256:        if (!priceFinalize) return;
+257:        setProcessingId(priceFinalize.id);
+258:        try {
+259:            const updated = {
+260:                ...priceFinalize,
+261:                items: itemsWithPrice,
+262:                price: totalPrice,
+263:                status: ExitPermitStatus.PENDING_SECURITY,
+264:                updatedAt: Date.now()
+265:            };
+266:            await editExitPermit(updated);
+267:            
+268:            setActiveAutoSends(prev => [...prev, updated]);
+269:            setTimeout(async () => {
+270:                await sendNotification(updated, ExitPermitStatus.PENDING_PRICE);
+271:                setProcessingId(null);
+272:                setPriceFinalize(null);
+273:                setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
+274:                loadData();
+275:            }, 2500);
+276:        } catch (e) {
+277:            alert('خطا در ثبت قیمت');
+278:            setProcessingId(null);
+279:        }
+280:    };
+281:
+282:    const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
+283:        const elementNoPrice = document.getElementById(`print-permit-autosend-noprice-${permit.id}`);
+284:        const elementWithPrice = document.getElementById(`print-permit-autosend-price-${permit.id}`);
+285:        if (!elementNoPrice || !elementWithPrice) return;
+286:        try {
+287:            const canvasNoPrice = await html2canvas(elementNoPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+288:            const base64NoPrice = canvasNoPrice.toDataURL('image/png').split(',')[1];
+289:            
+290:            const canvasWithPrice = await html2canvas(elementWithPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+291:            const base64WithPrice = canvasWithPrice.toDataURL('image/png').split(',')[1];
+292:            
+293:            const targets = [];
+294:            const companyConfig = settings?.companyNotifications?.[permit.company];
+295:            
+296:            // Group 1 IDs
+297:            let g1WA = companyConfig?.warehouseGroup || settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
+298:            let g1Bale = companyConfig?.baleChannelId || settings?.exitPermitNotificationBaleId;
+299:            let g1Tg = companyConfig?.telegramChannelId || settings?.exitPermitNotificationTelegramId;
+300:
+301:            // Group 2 IDs
+302:            const g2Config = settings?.exitPermitSecondGroupConfig;
+303:            let g2WA = g2Config?.groupId;
+304:            let g2Bale = g2Config?.baleId;
+305:            let g2Tg = g2Config?.telegramId;
+306:
+307:            // Check config arrays directly
+308:            const nextStatus = permit.status;
+309:            const configOptionStr1 = prevStatus + '->' + nextStatus;
+310:            const fallbackOptionStr = prevStatus; // For older formats
+311:            
+312:            const g1StatusArray = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
+313:            const isG1Active = g1StatusArray.includes(configOptionStr1) || g1StatusArray.includes(fallbackOptionStr);
+314:            
+315:            const g2StatusArray = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
+316:            const isG2Active = g2StatusArray.includes(configOptionStr1) || g2StatusArray.includes(fallbackOptionStr);
+317:            
+318:            if (isG1Active) {
+319:                if (g1WA) targets.push({ group: g1WA });
+320:                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+321:                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+322:            }
+323:            if (isG2Active) {
+324:                if (g2WA) targets.push({ group: g2WA });
+325:                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+326:                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+327:            }
+328:
+329:            let captionTitle = '';
+330:            if (prevStatus === ExitPermitStatus.PENDING_CEO) {
+331:                captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
+332:                targets.push({ role: UserRole.FACTORY_MANAGER });
+333:            } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
+334:                captionTitle = '✅ تایید مدیر کارخانه - ارجاع به انبار';
+335:                targets.push({ role: UserRole.WAREHOUSE_KEEPER });
+336:            } else if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) {
+337:                captionTitle = '⚖️ تایید و توزین انبار - در انتظار قیمت گذاری';
+338:                targets.push({ role: UserRole.SALES_MANAGER });
+339:            } else if (prevStatus === ExitPermitStatus.PENDING_PRICE) {
+340:                captionTitle = '💰 قیمت‌گذاری انجام شد - ارجاع به انتظامات';
+341:                targets.push({ role: UserRole.SECURITY_HEAD });
+342:            } else if (prevStatus === ExitPermitStatus.PENDING_SECURITY) {
+343:                captionTitle = '🚨 ثبت اطلاعات خودرو - در انتظار تایید نهایی خروج';
+344:                targets.push({ role: UserRole.FACTORY_MANAGER }); // Factory manager needs to see this
+345:            } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY_FINAL) {
+346:                captionTitle = '👋 خروج نهایی بار از کارخانه';
+347:            }
+348:
+349:            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n`;
+350:            caption += `🔢 شماره: ${permit.permitNumber}\n`;
+351:            caption += `👤 گیرنده: ${permit.recipientName}\n`;
+352:            caption += `📦 کالا: ${permit.goodsName}\n`;
+353:            
+354:            // NOTE: price is omitted here as per user request to hide it in bot/groups.
+355:            
+356:            if (permit.plateNumber) {
+357:                caption += `🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}\n`;
+358:            }
+359:            if (permit.driverName) caption += `👨‍✈️ راننده: ${permit.driverName}\n`;
+360:            if (permit.driverPhone) caption += `📞 تماس: ${permit.driverPhone}\n`;
+361:            
+362:            if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
+363:            if (prevStatus === ExitPermitStatus.PENDING_WAREHOUSE) caption += `⚖️ وزن نهایی: ${permit.weight} KG\n`;
+364:            
+365:            caption += `\n👤 تایید کننده: ${currentUser.fullName}`;
+366:
+367:            const allUsers = await getUsers();
+368:            
+369:            for (const t of targets) {
+370:                if (t.role) {
+371:                    const u = allUsers.find(x => x.role === t.role);
+372:                    if (u?.phoneNumber) await apiCall('/send-whatsapp', 'POST', { number: u.phoneNumber, message: caption, mediaData: { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+373:                }
+374:                if (t.group) {
+375:                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+376:                }
+377:                if (t.platform) {
+378:                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64NoPrice, filename: `Permit_${permit.permitNumber}.png` } });
+379:                }
+380:            }
+381:            
+382:            // Explicitly send WITH PRICE to CEO, SALES_MANAGER, ADMIN
+383:            const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+384:            const managerCaption = caption + `\n💰 مبلغ: ${permit.price}`;
+385:            for (const m of managers) {
+386:                const tgId = (m as any).telegramId || (m as any).telegramChatId;
+387:                const blId = (m as any).baleId || (m as any).baleChatId;
+388:                if (m.phoneNumber) {
+389:                    await apiCall('/send-whatsapp', 'POST', { number: m.phoneNumber, message: managerCaption, mediaData: { data: base64WithPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+390:                }
+391:                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
+392:                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
+393:            }
+394:        } catch (e) { console.error("Notif Error", e); }
+395:    };
+396:
+397:    const handleDelete = async (id: string) => {
+398:        if(!confirm('حذف شود؟')) return;
+399:        await deleteExitPermit(id);
+400:        loadData();
+401:    };
+402:
+403:    const TimelineStep = ({ status, label, icon: Icon }: any) => {
+404:        let colorClass = 'bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-400 border-gray-200/50 dark:border-white/10';
+405:        if (status === 'current') colorClass = 'bg-blue-100 text-blue-600 border-blue-500 animate-pulse ring-2 ring-blue-200';
+406:        if (status === 'done') colorClass = 'bg-green-500 text-white border-green-600 shadow-md';
+407:        if (status === 'rejected') colorClass = 'bg-red-500 text-white border-red-600';
+408:
+409:        // Simplify for mobile
+410:        if (isMobile) {
+411:            return (
+412:                <div className={`w-2.5 h-2.5 rounded-full ${colorClass.includes('bg-green') ? 'bg-green-500' : colorClass.includes('bg-blue') ? 'bg-blue-500 animate-pulse' : colorClass.includes('bg-red') ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+413:            );
+414:        }
+415:
+416:        return (
+417:            <div className="flex flex-col items-center gap-1 z-10 w-16">
+418:                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${colorClass}`}>
+419:                    <Icon size={14} />
+420:                </div>
+421:                <span className={`text-[9px] font-bold text-center leading-tight ${status === 'current' ? 'text-blue-700' : 'text-gray-500'}`}>{label}</span>
+422:            </div>
+423:        );
+424:    };
+425:
+426:    // Mobile Card Renderer
+427:    const MobilePermitCard = ({ p, canAct }: { p: ExitPermit, canAct: boolean }) => (
+428:        <div className={`glass-panel rounded-xl border p-4 mb-3 shadow-sm relative overflow-hidden ${canAct ? 'border-blue-400 ring-1 ring-blue-100' : 'border-gray-200'}`}>
+429:            <div className="flex justify-between items-start mb-2">
+430:                <div>
+431:                    <span className="text-xs font-mono text-gray-400">#{p.permitNumber}</span>
+432:                    <h3 className="font-bold text-gray-800 text-base">{p.recipientName}</h3>
+433:                </div>
+434:                {p.status === ExitPermitStatus.EXITED ? (
+435:                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-lg font-bold">خارج شده</span>
+436:                ) : (
+437:                     <div className="flex gap-1.5 items-center">
+438:                         <TimelineStep status="done" label="" icon={UserIcon} />
+439:                         <TimelineStep status={getStepStatus(p, 'CEO')} label="" icon={UserCheck} />
+440:                         <TimelineStep status={getStepStatus(p, 'FACTORY')} label="" icon={Building2} />
+441:                         <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="" icon={Warehouse} />
+442:                         <TimelineStep status={getStepStatus(p, 'PRICE')} label="" icon={Edit3} />
+443:                         <TimelineStep status={getStepStatus(p, 'SECURITY')} label="" icon={ShieldCheck} />
+444:                     </div>
+445:                )}
+446:            </div>
+447:            
+448:            <div className="text-xs text-gray-500 mb-3 flex flex-wrap gap-3">
+449:                <span>📦 {p.goodsName}</span>
+450:                <span>📅 {formatDate(p.date)}</span>
+451:            </div>
+452:
+453:            <div className="flex gap-2 mt-2">
+454:                {canAct && !processingId && (
+455:                     <button onClick={() => handleApprove(p)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
+456:                         {getActionLabel(p.status)}
+457:                     </button>
+458:                )}
+459:                <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+460:                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
+461:                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
+462:                )}
+463:            </div>
+464:            
+465:            {processingId === p.id && (
+466:                <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex items-center justify-center z-20">
+467:                    <Loader2 className="animate-spin text-blue-600" size={24}/>
+468:                </div>
+469:            )}
+470:        </div>
+471:    );
+472:
+473:    const renderPermitCard = (p: ExitPermit) => {
+474:        const canAct = isMyTurn(p);
+475:        
+476:        if (isMobile) {
+477:            return (
+478:                <React.Fragment key={p.id}>
+479:                    <MobilePermitCard p={p} canAct={canAct} />
+480:                </React.Fragment>
+481:            );
+482:        }
+483:
+484:        return (
+485:            <div key={p.id} className={`glass-panel rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
+486:                {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
+487:                {p.status === ExitPermitStatus.REJECTED && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
+488:                
+489:                <div className="p-5">
+490:                    <div className="flex justify-between items-start mb-4">
+491:                        <div className="flex gap-3 items-center">
+492:                            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center font-black text-xl text-gray-700 border border-gray-200 shadow-inner">
+493:                                {p.permitNumber}
+494:                            </div>
+495:                            <div>
+496:                                <h3 className="font-bold text-gray-800 text-lg">{p.recipientName}</h3>
+497:                                <p className="text-xs text-gray-500">{p.goodsName} | {formatDate(p.date)}</p>
+498:                            </div>
+499:                        </div>
+500:                        
+501:                        <div className="flex gap-2">
+502:                            {canAct && !processingId && (
+503:                                <button onClick={() => handleApprove(p)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
+504:                                    <CheckCircle size={16}/> {getActionLabel(p.status)}
+505:                                </button>
+506:                            )}
+507:                            <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+508:                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
+509:                                <>
+510:                                    <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
+511:                                    <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-100"><Trash2 size={18}/></button>
+512:                                </>
+513:                            )}
+514:                        </div>
+515:                    </div>
+516:
+517:                    <div className="relative mt-8 px-2 pb-2">
+518:                        <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 dark:bg-gray-800 -z-0"></div>
+519:                        <div className="flex justify-between relative z-10">
+520:                            <TimelineStep status="done" label="ثبت" icon={UserIcon} />
+521:                            <TimelineStep status={getStepStatus(p, 'CEO')} label="مدیرعامل" icon={UserCheck} />
+522:                            <TimelineStep status={getStepStatus(p, 'FACTORY')} label="کارخانه" icon={Building2} />
+523:                            <TimelineStep status={getStepStatus(p, 'WAREHOUSE')} label="انبار" icon={Warehouse} />
+524:                            <TimelineStep status={getStepStatus(p, 'PRICE')} label="مالی" icon={Edit3} />
+525:                            <TimelineStep status={getStepStatus(p, 'SECURITY')} label="انتظامات" icon={ShieldCheck} />
+526:                        </div>
+527:                    </div>
+528:                </div>
+529:
+530:                {processingId === p.id && (
+531:                    <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center z-20">
+532:                        <Loader2 className="animate-spin text-blue-600 mb-2" size={32}/>
+533:                        <span className="text-xs font-bold text-blue-700 animate-pulse">در حال ثبت و ارسال پیام...</span>
+534:                    </div>
+535:                )}
+536:            </div>
+537:        );
+538:    };
+539:
+540:    return (
+541:        <div className="space-y-6 pb-20 animate-fade-in">
+542:             {/* Hidden Render */}
+543:             {activeAutoSends.map(p => (
+544:                <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
+545:                    <div id={`print-permit-autosend-noprice-${p.id}`}>
+546:                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} />
+547:                    </div>
+548:                    <div id={`print-permit-autosend-price-${p.id}`}>
+549:                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} />
+550:                    </div>
+551:                </div>
+552:            ))}
+553:
+554:            {/* Header / Tabs */}
+555:            <div className="flex flex-col gap-4">
+556:                <div className="flex justify-between items-center glass-panel p-4 rounded-2xl shadow-sm border border-gray-200">
+557:                    <h1 className="text-xl font-black text-gray-800 flex items-center gap-2"><Truck className="text-teal-600"/> کارتابل خروج</h1>
+558:                    <button onClick={loadData} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><RefreshCw size={18} className={loading ? 'animate-spin' : ''}/></button>
+559:                </div>
+560:                
+561:                <div className="flex p-1 bg-gray-200 rounded-xl overflow-x-auto no-scrollbar">
+562:                    <button 
+563:                        onClick={() => setActiveTab('CARTABLE')} 
+564:                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'glass-panel text-blue-700 shadow-md' : 'text-gray-500'}`}
+565:                    >
+566:                        <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
+567:                        کارتابل من ({myCartablePermits.length})
+568:                    </button>
+569:                    <button 
+570:                        onClick={() => setActiveTab('PROFORMA')} 
+571:                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
+572:                    >
+573:                        جریان پیش‌فاکتور ({proformaPermits.length})
+574:                    </button>
+575:                    <button 
+576:                        onClick={() => setActiveTab('ARCHIVE')} 
+577:                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'ARCHIVE' ? 'glass-panel text-gray-800 shadow-md' : 'text-gray-500'}`}
+578:                    >
+579:                        بایگانی
+580:                    </button>
+581:                </div>
+582:
+583:                <div className="relative">
+584:                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="جستجو در لیست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+585:                    <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
+586:                </div>
+587:            </div>
+588:
+589:            {/* List */}
+590:            <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} min-h-[300px]`}>
+591:                {loading ? (
+592:                    <div className="text-center py-20 text-gray-400 flex flex-col items-center gap-2">
+593:                        <Loader2 className="animate-spin text-blue-500"/> در حال بارگذاری...
+594:                    </div>
+595:                ) : displayPermits.length === 0 ? (
+596:                    <div className="text-center py-20 glass-panel rounded-2xl border border-dashed border-gray-300">
+597:                        <div className="text-gray-400 font-bold">موردی یافت نشد.</div>
+598:                        {activeTab === 'CARTABLE' && <div className="text-xs text-gray-300 mt-2">خوشبختانه کارتابل شما خالی است! 🎉</div>}
+599:                    </div>
+600:                ) : (
+601:                    displayPermits.map(p => renderPermitCard(p))
+602:                )}
+603:            </div>
+604:
+605:            {/* Modals */}
+606:            {viewPermit && (
+607:                <div className={isMobile ? "fixed inset-0 z-[100] glass-panel overflow-y-auto" : ""}>
+608:                    <PrintExitPermit 
+609:                        permit={viewPermit} 
+610:                        onClose={() => setViewPermit(null)} 
+611:                        settings={settings}
+612:                        showPrice={currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === UserRole.ADMIN}
+613:                        onApprove={
+614:                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+615:                            ? () => handleApprove(viewPermit) 
+616:                            : undefined
+617:                        }
+618:                        onReject={
+619:                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+620:                            ? async () => {
+621:                                const reason = prompt('دلیل رد:'); 
+622:                                if(reason) { 
+623:                                    await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
+624:                                    loadData(); setViewPermit(null); 
+625:                                } 
+626:                            } : undefined
+627:                        }
+628:                        onEdit={
+629:                            (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
+630:                            ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
+631:                            : undefined
+632:                        }
+633:                    />
+634:                </div>
+635:            )}
+636:
+637:            {editPermit && (
+638:                <EditExitPermitModal 
+639:                    permit={editPermit} 
+640:                    onClose={() => setEditPermit(null)} 
+641:                    onSave={() => { setEditPermit(null); loadData(); }} 
+642:                />
+643:            )}
+644:
+645:            {warehouseFinalize && (
+646:                <WarehouseFinalizeModal 
+647:                    permit={warehouseFinalize} 
+648:                    onClose={() => setWarehouseFinalize(null)} 
+649:                    onConfirm={handleWarehouseSubmit} 
+650:                />
+651:            )}
+652:
+653:            {securityFinalize && (
+654:                <SecurityFinalizeModal
+655:                    permit={securityFinalize}
+656:                    onClose={() => setSecurityFinalize(null)}
+657:                    onConfirm={handleSecuritySubmit}
+658:                />
+659:            )}
+660:
+661:            {priceFinalize && (
+662:                <PriceFinalizeModal
+663:                    permit={priceFinalize}
+664:                    onClose={() => setPriceFinalize(null)}
+665:                    onConfirm={handlePriceSubmit}
+666:                />
+667:            )}
+668:        </div>
+669:    );
+670:};
+671:
+672:export default ManageExitPermits;

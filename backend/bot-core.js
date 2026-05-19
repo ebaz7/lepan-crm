@@ -13,6 +13,7 @@ const toShamsiFull = utils.toShamsiFull;
 const findNextGapNumber = utils.findNextGapNumber;
 const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
+const getTehranDateString = utils.getTehranDateString;
 
 const normalizeChannelId = (id) => {
     if (!id) return id;
@@ -255,7 +256,11 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             let dateStr = normalizeDateString(toEnglishDigits(toShamsiFull(new Date().toISOString()).split(' ')[0]));
 
             if (args.length > 1) {
-                dateStr = normalizeDateString(toEnglishDigits(args[1]));
+                // Find the argument that looks like a date (e.g., 1403/02/01 or 1403/2/1)
+                const dateArg = args.find(a => a.includes('/'));
+                if (dateArg) {
+                    dateStr = normalizeDateString(toEnglishDigits(dateArg));
+                }
             }
             
             const matchesDate = (dateVal) => {
@@ -298,7 +303,35 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                     
                     reportMsg += `${idx + 1}. *شماره دستور پرداخت ${p.trackingNumber}* | بانک: ${paymentBankInfo}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n📊 وضعیت: ${p.status}\n------------------\n`;
                 });
-                return sendFn(chatId, reportMsg);
+                await sendFn(chatId, reportMsg);
+
+                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
+                try {
+                    const htmlParts = [];
+                    for (const p of finalPayments) {
+                        try {
+                            const imgBuffer = await Renderer.generateRecordImage(p, 'PAYMENT', { forceHidePrices: false });
+                            if (imgBuffer) {
+                                const b64 = imgBuffer.toString('base64');
+                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                            }
+                        } catch(e) { }
+                    }
+                    if (htmlParts.length > 0) {
+                        const browser = await Renderer.getBrowser();
+                        const page = await browser.newPage();
+                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
+                        await page.setContent(html, { waitUntil: 'networkidle0' });
+                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
+                        await page.close();
+                        if (sendDocFn) {
+                            await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+                        }
+                    }
+                } catch (e) {
+                    console.error("PDF generation failed:", e);
+                }
+                return;
             } 
             else if (isBijak) {
                 const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
@@ -321,7 +354,35 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                     });
                     reportMsg += `------------------\n`;
                 }
-                return sendFn(chatId, reportMsg);
+                await sendFn(chatId, reportMsg);
+
+                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
+                try {
+                    const htmlParts = [];
+                    for (const b of finalBijaks) {
+                        try {
+                            const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: false });
+                            if (imgBuffer) {
+                                const b64 = imgBuffer.toString('base64');
+                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                            }
+                        } catch(e) { }
+                    }
+                    if (htmlParts.length > 0) {
+                        const browser = await Renderer.getBrowser();
+                        const page = await browser.newPage();
+                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
+                        await page.setContent(html, { waitUntil: 'networkidle0' });
+                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
+                        await page.close();
+                        if (sendDocFn) {
+                            await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+                        }
+                    }
+                } catch (e) {
+                    console.error("PDF generation failed:", e);
+                }
+                return;
             } 
             else {
                 // Exit permits group
@@ -330,6 +391,13 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                     return sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`);
                 }
                 
+                let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
+                finalExits.forEach((p, idx) => {
+                    const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
+                });
+                await sendFn(chatId, reportMsg);
+
                 sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
                 
                 try {
@@ -354,20 +422,12 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                         
                         if (sendDocFn) {
                             await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
-                            return;
                         }
                     }
                 } catch (e) {
                     console.error("PDF generation failed:", e);
                 }
-                
-                // Fallback to text message
-                let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
-                finalExits.forEach((p, idx) => {
-                    const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company || 'نامشخص'}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n📊 وضعیت: ${p.status}\n------------------\n`;
-                });
-                return sendFn(chatId, reportMsg);
+                return;
             }
         }
 
@@ -927,7 +987,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         const order = {
             id: generateUUID(),
             trackingNumber: trackingNumber,
-            date: new Date().toISOString().split('T')[0],
+            date: getTehranDateString(),
             payee: session.data.payee,
             totalAmount: session.data.amount,
             description: text,
@@ -978,7 +1038,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         const permit = {
             id: generateUUID(),
             permitNumber: permitNumber,
-            date: new Date().toISOString().split('T')[0],
+            date: getTehranDateString(),
             company: company,
             requester: user.fullName,
             recipientName: session.data.recipient,
@@ -1017,6 +1077,16 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         return sendFn(chatId, "👤 نام تحویل گیرنده:");
     }
     if (session.state === 'WH_BIJAK_RECIPIENT') {
+        session.data.recipient = text;
+        session.state = 'WH_BIJAK_PRICE';
+        return sendFn(chatId, "💰 فی (قیمت واحد) را وارد کنید:\n(در صورت عدم نیاز به قیمت، عدد 0 را وارد کنید)");
+    }
+
+    if (session.state === 'WH_BIJAK_PRICE') {
+        const cleanPrice = text.replace(/,/g, '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+        let price = parseInt(cleanPrice);
+        if(isNaN(price) || price < 0) return sendFn(chatId, "❌ لطفا یک عدد معتبر برای قیمت وارد کنید:");
+
         const company = session.data.company || db.settings.defaultCompany || '';
         let minStart = 1000;
         if (db.settings.activeFiscalYearId && company) {
@@ -1035,26 +1105,30 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         const tx = {
             id: generateUUID(),
             type: 'OUT',
-            date: new Date().toISOString(),
+            date: getTehranDateString(),
             company: company,
             number: nextSeq,
-            recipientName: text,
+            recipientName: session.data.recipient,
             items: [{
                 itemId: 'bot_gen',
                 itemName: session.data.itemName,
                 quantity: session.data.count,
                 weight: 0,
-                unitPrice: 0
+                unitPrice: price
             }],
             createdAt: Date.now(),
             createdBy: user.fullName + ' (Bot)',
-            status: 'PENDING'
+            status: 'APPROVED',
+            approvedBy: user.fullName + ' (Bot)'
         };
         if(!db.warehouseTransactions) db.warehouseTransactions = [];
         db.warehouseTransactions.unshift(tx);
         dbManager.saveDb(db);
         session.state = 'IDLE';
-        return sendFn(chatId, `✅ بیجک خروج #${nextSeq} ثبت شد.`);
+        
+        notifyWarehouseBijak(tx, db, 'تایید نهایی').catch(e => console.error("Bot Bijak Notify Error:", e));
+
+        return sendFn(chatId, `✅ بیجک خروج #${nextSeq} ثبت و تایید نهایی شد.`);
     }
 
     if (isGroup) return; // Silent for groups on unrecognized messages
@@ -1892,7 +1966,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // --- MANAGEMENT REPORTS HANDLERS ---
     if (data === 'RPT_DAILY') {
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const today = getTehranDateString(); // YYYY-MM-DD
         const shamsiToday = toShamsiFull(new Date());
         
         const payToday = db.orders.filter(o => o.date.startsWith(today));
@@ -1978,7 +2052,12 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (pendingOrders.length === 0) return sendFn(chatId, "✅ کارتابل شما خالی است.");
 
         for (const order of pendingOrders) {
-            const caption = `🔸 سند #${order.trackingNumber}\n👤 ${order.payee}\n💰 ${parseInt(order.totalAmount).toLocaleString()} ریال\n📝 بابت: ${order.description}`;
+            let paymentBankInfo = 'نامشخص';
+            if (order.paymentDetails && order.paymentDetails.length > 0) {
+                const banks = [...new Set(order.paymentDetails.map(d => d.bankName).filter(Boolean))];
+                if (banks.length > 0) paymentBankInfo = banks.join('، ');
+            }
+            const caption = `🔸 سند #${order.trackingNumber}\n👤 ${order.payee}\n💰 ${parseInt(order.totalAmount).toLocaleString()} ریال\n🏦 بانک: ${paymentBankInfo}\n📝 بابت: ${order.description}`;
             const kb = {
                 inline_keyboard: [
                     [
@@ -2082,6 +2161,13 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 return sendFn(userId, "⛔ شما دسترسی لازم برای تایید این مرحله را ندارید.");
             }
 
+            if (p.status === 'در انتظار تایید انبار') {
+                return sendFn(chatId, "⚠️ جهت تایید انبار و الزام ثبت مقادیر واقعی (توزین نهایی)، لطفا حتما از طریق وب‌اپلیکیشن اقدام نمایید.");
+            }
+            if (p.status === 'در انتظار خروج (انتظامات)') {
+                return sendFn(chatId, "⚠️ جهت ثبت مشخصات راننده و پلاک خودرو، لطفا حتما از طریق وب‌اپلیکیشن اقدام نمایید.");
+            }
+
             const oldStatus = p.status;
             let stepName = '';
 
@@ -2093,14 +2179,6 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 p.status = 'در انتظار تایید انبار';
                 stepName = 'مدیر کارخانه';
                 p.approverFactory = user.fullName;
-            } else if (p.status === 'در انتظار تایید انبار') {
-                p.status = 'در انتظار خروج (انتظامات)';
-                stepName = 'سرپرست انبار';
-                p.approverWarehouse = user.fullName;
-            } else if (p.status === 'در انتظار خروج (انتظامات)') {
-                p.status = 'در انتظار تایید نهایی مدیر کارخانه';
-                stepName = 'انتظامات (ثبت پلاک و راننده - خروج)';
-                p.approverSecurity = user.fullName;
             } else if (p.status === 'در انتظار تایید نهایی مدیر کارخانه') {
                 p.status = 'خارج شده (بایگانی)';
                 p.exitTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });

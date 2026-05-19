@@ -170,8 +170,14 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             let isoDate;
             try {
                 const date = jalaliToGregorian(shamsiDate.year, shamsiDate.month, shamsiDate.day);
-                isoDate = date.toISOString().split('T')[0];
-            } catch (err) { isoDate = new Date().toISOString().split('T')[0]; }
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                isoDate = `${y}-${m}-${d}`;
+            } catch (err) { 
+                const d = new Date();
+                isoDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
 
             const newPermit: ExitPermit = {
                 id: generateUUID(),
@@ -216,9 +222,10 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             const caption = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n💰 مبلغ: ${newPermit.price}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
                             const mediaData = { data: base64, mimeType: 'image/png', filename: `Remittance_${newPermit.permitNumber}.png` };
                             
-                            if (ceo.phoneNumber) {
+                                if (ceo.phoneNumber) {
                                 await apiCall('/send-whatsapp', 'POST', { number: ceo.phoneNumber, message: caption, mediaData });
                             }
+
                             const ceos = users.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
                             for(const c of ceos) {
                                 const tgId = (c as any).telegramId || (c as any).telegramChatId;

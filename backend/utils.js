@@ -1,4 +1,17 @@
 
+export const getTehranDateString = () => {
+    try {
+        const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+        const y = parts.find(p => p.type === 'year')?.value;
+        const m = parts.find(p => p.type === 'month')?.value;
+        const d = parts.find(p => p.type === 'day')?.value;
+        if (y && m && d) return `${y}-${m}-${d}`;
+    } catch(e) {}
+    // fallback
+    const date = new Date(Date.now() + 12600000); // +3:30
+    return date.toISOString().split('T')[0];
+};
+
 export const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 export const findNextGapNumber = (items, company, field, settingsStart) => {
@@ -57,7 +70,7 @@ export const toShamsiFull = (isoDate) => {
         if (!isoDate) return '';
         const d = new Date(isoDate);
         if (isNaN(d.getTime())) return isoDate;
-        return new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+        return new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' }).format(d);
     } catch(e) { return isoDate; }
 };
 
