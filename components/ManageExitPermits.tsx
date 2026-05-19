@@ -432,11 +432,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             <div className="flex gap-2 mt-2">
                 {canAct && !processingId && (
-                     <button onClick={() => handleApprove(p)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
+                     <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); handleApprove(p); }} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
                          {getActionLabel(p.status)}
                      </button>
                 )}
-                <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+                <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
                 )}
@@ -480,11 +480,11 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         
                         <div className="flex gap-2">
                             {canAct && !processingId && (
-                                <button onClick={() => handleApprove(p)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
+                                <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); handleApprove(p); }} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
                                     <CheckCircle size={16}/> {getActionLabel(p.status)}
                                 </button>
                             )}
-                            <button onClick={() => setViewPermit(p)} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+                            <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
                                 <>
                                     <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
@@ -522,10 +522,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
              {activeAutoSends.map(p => (
                 <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-autosend-noprice-${p.id}`}>
-                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} />
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} mode="EXIT" />
                     </div>
                     <div id={`print-permit-autosend-price-${p.id}`}>
-                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} />
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="EXIT" />
                     </div>
                 </div>
             ))}

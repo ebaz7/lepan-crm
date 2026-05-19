@@ -1199,7 +1199,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
 
             const isFinalStep = p.status === 'خارج شده (بایگانی)';
             let header = isDelete ? `❌ *حذف شد: پیش‌فاکتور*` : (isEdit ? `✏️ *ویرایش شد: پیش‌فاکتور*` : `🚛 *پیش‌فاکتور خروج کالا*`);
-            if (isFinalStep && !isDelete && !isEdit) header = `✅ *پیش‌فاکتور تکمیل شده (خروج نهایی)*`;
+            if (isFinalStep && !isDelete && !isEdit) header = `✅ *خروج کارخانه (تکمیل شده)*`;
             
             let approvers = [];
             if (p.approverCeo) approvers.push(`مدیرعامل / تایید فروش: ${p.approverCeo}`);

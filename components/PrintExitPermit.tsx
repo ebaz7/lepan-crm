@@ -249,6 +249,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const totalWeightReq = Number(displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0).toFixed(2));
   const totalCartonsDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
   const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(2));
+  const totalAmount = displayItems.reduce((acc, i) => acc + (Number(i.weight || 0) * (Number(i.price || 0) || Number(permit.price || 0))), 0);
   const showDeliveryColumns = mode === 'EXIT' && displayItems.some(i => i.deliveredCartonCount !== undefined);
 
   const content = (
@@ -270,20 +271,57 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
                 <div className="flex flex-col">
                     <h1 className="text-3xl font-black mb-1">
-                        {mode === 'PROFORMA' ? 'پیش‌فاکتور حواله خروج کالا' : (permit.status === ExitPermitStatus.EXITED ? 'پیش‌فاکتور تکمیل شده (خروج کالا)' : 'پیش‌فاکتور حواله خروج کالا')}
+                        {mode === 'PROFORMA' ? 'پیش‌فاکتور فروش کالا' : (permit.status === ExitPermitStatus.EXITED ? 'خروج کارخانه (تکمیل شده)' : 'حواله خروج کالا')}
                     </h1>
-                    <p className="text-sm font-bold text-gray-600">سیستم مکانیزه مدیریت بار و خروج</p>
+                    <p className="text-sm font-bold text-gray-600">
+                        {mode === 'PROFORMA' ? 'سند موقت فروش و رزرو کالا' : 'سیستم مکانیزه مدیریت بار و خروج'}
+                    </p>
                 </div>
                 <div className="text-left space-y-2">
-                    <div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">شماره: {permit.permitNumber}</div>
+                    <div className="text-xl font-black bg-gray-100 text-gray-800 px-4 py-2 border-2 border-black rounded-lg">
+                        {mode === 'PROFORMA' ? 'شماره فاکتور: ' : 'شماره: '} {permit.permitNumber}
+                    </div>
                     <div className="text-sm font-bold">تاریخ: {formatDate(permit.date)}</div>
-                    {showPrice && permit.price ? (
-                        <div className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">فی: {formatCurrency(permit.price)} ریال</div>
-                    ) : null}
                 </div>
             </div>
             <div className="flex-1 space-y-6">
-                <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Package size={20}/> لیست اقلام و کالاها</h3>
+                {mode === 'PROFORMA' ? (
+                    <div className="border-2 border-black rounded-xl overflow-hidden">
+                        <div className="bg-gray-100 border-b-2 border-black p-2 text-center font-black text-sm">مشخصات خریدار / متقاضی کالا</div>
+                        <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-8 bg-blue-50/10">
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 font-bold text-[10px] uppercase">نام شخص / شرکت:</span>
+                                <span className="text-xl font-black text-blue-900">{permit.company || permit.recipientName}</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <span className="text-gray-500 font-bold text-[10px] uppercase">وضعیت سفارش:</span>
+                                <span className="text-sm font-black text-blue-700 bg-blue-100 px-3 py-1 rounded-full inline-block mr-auto">{permit.status}</span>
+                            </div>
+                            {permit.description && (
+                                <div className="col-span-2 border-t border-gray-200 mt-2 pt-2">
+                                    <span className="text-gray-500 font-bold text-[10px] ml-2">توضیحات سفارش:</span>
+                                    <span className="text-sm font-medium">{permit.description}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><MapPin size={20}/> مشخصات گیرنده و مقصد</h3>
+                        <div className="border-2 border-black rounded-xl p-3 bg-gray-50 text-sm space-y-2">
+                            {displayDestinations.map((dest, idx) => (
+                                <div key={idx} className="border-b-2 border-gray-200/50 pb-2 last:border-0 last:pb-0">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><span className="font-bold text-gray-500 ml-2">تحویل گیرنده:</span> <span className="font-bold text-lg">{dest.recipientName}</span></div>
+                                        <div><span className="font-bold text-gray-500 ml-2">شماره تماس:</span> <span className="font-mono dir-ltr">{dest.phone || '-'}</span></div>
+                                    </div>
+                                    <div className="mt-1"><span className="font-bold text-gray-500 ml-2">آدرس مقصد:</span> <span className="font-medium">{dest.address}</span></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="space-y-1"><h3 className="font-black text-lg flex items-center gap-2"><Package size={20}/> {mode === 'PROFORMA' ? 'شرح ردیف‌های فروش' : 'لیست اقلام و کالاها'}</h3>
                     <table className="w-full text-sm border-collapse border-2 border-black text-center">
                         <thead>
                             <tr className="bg-gray-100 text-base">
@@ -291,6 +329,12 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                 <th className="border-2 border-black p-2 text-center" rowSpan={2}>شرح کالا / محصول</th>
                                 <th className="border-2 border-black p-1" colSpan={showDeliveryColumns ? 2 : 1}>تعداد (کارتن)</th>
                                 <th className="border-2 border-black p-1" colSpan={showDeliveryColumns ? 2 : 1}>وزن (KG)</th>
+                                {mode === 'PROFORMA' && showPrice && (
+                                    <>
+                                        <th className="border-2 border-black p-1 w-24" rowSpan={2}>فی (ریال)</th>
+                                        <th className="border-2 border-black p-1 w-32" rowSpan={2}>مبلغ کل</th>
+                                    </>
+                                )}
                             </tr>
                             {showDeliveryColumns && (
                                 <tr className="bg-gray-50 text-gray-800 text-xs">
@@ -317,6 +361,12 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         <>
                                             <td className="border-2 border-black p-2 font-mono font-bold">{item.cartonCount}</td>
                                             <td className="border-2 border-black p-2 font-mono font-bold">{Number(Number(item.weight).toFixed(2))}</td>
+                                            {mode === 'PROFORMA' && showPrice && (
+                                                <>
+                                                    <td className="border-2 border-black p-2 font-mono">{formatCurrency(item.price || permit.price || 0)}</td>
+                                                    <td className="border-2 border-black p-2 font-mono font-bold">{formatCurrency((Number(item.weight) || 0) * (Number(item.price || permit.price) || 0))}</td>
+                                                </>
+                                            )}
                                         </>
                                     )}
                                 </tr>
@@ -334,6 +384,12 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                     <>
                                         <td className="border-2 border-black p-2 font-mono">{totalCartonsReq}</td>
                                         <td className="border-2 border-black p-2 font-mono">{totalWeightReq}</td>
+                                        {mode === 'PROFORMA' && showPrice && (
+                                            <>
+                                                <td className="border-2 border-black p-2 font-mono">-</td>
+                                                <td className="border-2 border-black p-2 font-mono bg-blue-50 text-blue-900">{formatCurrency(totalAmount)}</td>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </tr>
