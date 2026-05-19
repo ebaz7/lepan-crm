@@ -255,19 +255,103 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 return shamsiOfRecord === dateStr;
             };
 
-            const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+            const g1Config = settings.exitPermitFirstGroupConfig || {};
+            const g2Config = settings.exitPermitSecondGroupConfig || {};
             
-            if (finalExits.length === 0) {
-                return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
+            const isAccounting = 
+                (platform === 'telegram' && (String(chatId) === settings.botAccountingGroupIdTele || String(chatId) === settings.botAccountingGroupId)) ||
+                (platform === 'bale' && String(chatId) === settings.botAccountingGroupIdBale) ||
+                (platform === 'whatsapp' && String(chatId) === settings.botAccountingGroupIdWhatsApp) ||
+                String(chatId) === settings.botAccountingGroupId;
+
+            const isBijak = 
+                (platform === 'telegram' && String(chatId) === settings.botBijakGroupId) ||
+                (platform === 'bale' && String(chatId) === settings.botBijakGroupIdBale) ||
+                (platform === 'whatsapp' && String(chatId) === settings.botBijakGroupIdWhatsApp);
+
+            if (isAccounting) {
+                const finalPayments = (db.orders || []).filter(p => matchesDate(p.date) && p.status === 'پرداخت شده');
+                if (finalPayments.length === 0) {
+                    return sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`);
+                }
+                
+                let reportMsg = `💰 *گزارش پرداختی‌های نهایی ${dateStr}*\n\n`;
+                finalPayments.forEach((p, idx) => {
+                    const amount = Number(p.totalAmount || 0).toLocaleString();
+                    const bankStr = p.paymentBank ? `بانک: ${p.paymentBank}` : 'نامشخص';
+                    reportMsg += `${idx + 1}. *شماره ${p.trackingNumber}* | ${bankStr}\n💵 مبلغ: ${amount} ریال\n👤 در وجه: ${p.payee}\n📝 بابت: ${p.description}\n------------------\n`;
+                });
+                return sendFn(chatId, reportMsg);
+            } 
+            else if (isBijak) {
+                const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
+                if (finalBijaks.length === 0) {
+                    return sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`);
+                }
+                
+                let reportMsg = `📦 *گزارش بیجک‌های خروج ${dateStr}*\n\n`;
+                const grouped = finalBijaks.reduce((acc, b) => {
+                    const comp = b.company || 'بدون شرکت';
+                    acc[comp] = acc[comp] || [];
+                    acc[comp].push(b);
+                    return acc;
+                }, {});
+                
+                for (const [comp, bijaks] of Object.entries(grouped)) {
+                    reportMsg += `🏢 *شرکت: ${comp}*\n`;
+                    bijaks.forEach((b, idx) => {
+                        reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
+                    });
+                    reportMsg += `------------------\n`;
+                }
+                return sendFn(chatId, reportMsg);
+            } 
+            else {
+                // Exit permits group
+                const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date) && (p.status === 'خارج شد' || p.status === 'خارج شده (بایگانی)'));
+                if (finalExits.length === 0) {
+                    return sendFn(chatId, `📭 در تاریخ ${dateStr} خروج نهایی ثبت نشده است.`);
+                }
+                
+                sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
+                
+                try {
+                    const htmlParts = [];
+                    for (const p of finalExits) {
+                        try {
+                            const imgBuffer = await Renderer.generateRecordImage(p, 'EXIT', { forceHidePrices: false });
+                            if (imgBuffer) {
+                                const b64 = imgBuffer.toString('base64');
+                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                            }
+                        } catch(e) { console.error("Error generating image for permit", p.id, e); }
+                    }
+                    
+                    if (htmlParts.length > 0) {
+                        const browser = await Renderer.getBrowser();
+                        const page = await browser.newPage();
+                        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;padding:0;background:#fff;}</style></head><body>${htmlParts.join('')}</body></html>`;
+                        await page.setContent(html, { waitUntil: 'networkidle0' });
+                        const pdfBuffer = await page.pdf({ printBackground: true, format: 'A4' });
+                        await page.close();
+                        
+                        if (sendDocFn) {
+                            await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error("PDF generation failed:", e);
+                }
+                
+                // Fallback to text message
+                let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
+                finalExits.forEach((p, idx) => {
+                    const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
+                    reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
+                });
+                return sendFn(chatId, reportMsg);
             }
-            
-            let reportMsg = `🚛 *گزارش خروج‌های نهایی ${dateStr}*\n\n`;
-            finalExits.forEach((p, idx) => {
-                const totalOutCount = (p.items||[]).reduce((sum, i) => sum + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), p.cartonCount || 0);
-                reportMsg += `${idx + 1}. *مجوز #${p.permitNumber}*\n🏢 شرکت: ${p.company}\n👤 گیرنده: ${p.recipientName}\n📦 کالا: ${p.goodsName || 'چند مورد'} (${totalOutCount} عدد)\n🕒 خروج: ${p.exitTime || '---'}\n------------------\n`;
-            });
-            
-            return sendFn(chatId, reportMsg);
         }
 
         // Silent for all other group messages as per user request
