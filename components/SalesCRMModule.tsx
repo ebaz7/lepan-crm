@@ -104,7 +104,7 @@ export default function SalesCRMModule() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingContact, setEditingContact] = useState<SalesContact | null>(null);
-    const [formData, setFormData] = useState<Partial<SalesContact>>({ name: '', mobile: '', birthday: '' });
+    const [formData, setFormData] = useState<Partial<SalesContact>>({ name: '', mobile: '', birthday: '', telegramId: '', baleId: '' });
 
     // Handler to open modal for new contact
     const handleAddManualContact = () => {
@@ -127,7 +127,7 @@ export default function SalesCRMModule() {
         }
 
         if (editingContact) {
-            updateContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData } as SalesContact : c));
+            updateContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData, telegramId: formData.telegramId, baleId: formData.baleId } as SalesContact : c));
         } else {
             const newContact: SalesContact = {
                 id: Date.now().toString(),
@@ -415,10 +415,29 @@ export default function SalesCRMModule() {
                                     placeholder="۰۹۱۲..."
                                 />
                             </div>
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">تاریخ تولد (شمسی)</label>
-                                    <div className="flex gap-2" dir="ltr">
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">آیدی تلگرام</label>
+                                    <input 
+                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all font-bold"
+                                        value={formData.telegramId || ''}
+                                        onChange={e => setFormData({...formData, telegramId: e.target.value})}
+                                        placeholder="@id"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">آیدی بله</label>
+                                    <input 
+                                        className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all font-bold"
+                                        value={formData.baleId || ''}
+                                        onChange={e => setFormData({...formData, baleId: e.target.value})}
+                                        placeholder="@id"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">تاریخ تولد (شمسی)</label>
+                                <div className="flex gap-2" dir="ltr">
                                         <select 
                                             className="flex-1 border-2 border-gray-100 rounded-xl p-2 text-sm outline-none focus:border-blue-500"
                                             value={formData.birthday?.split('/')[2] || ''}
@@ -483,8 +502,8 @@ export default function SalesCRMModule() {
                             </div>
                         </div>
                     </div>
-                </div>
+
             )}
         </div>
     );
-};
+}

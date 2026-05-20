@@ -494,7 +494,8 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
             if (args.length > 1) {
                 // Find the argument that looks like a date (e.g., 1403/02/01 or 1403/2/1)
-                const dateArg = args.find(a => a.includes('/'));
+                // Skip the first argument which is the command itself
+                const dateArg = args.slice(1).find(a => a.includes('/'));
                 if (dateArg) {
                     dateStr = normalizeDateString(toEnglishDigits(dateArg));
                 }

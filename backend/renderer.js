@@ -366,22 +366,22 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                     <td style="font-weight: 900;">${qty}</td>
                                     <td>${Number(weight).toFixed(2)}</td>
                                     ${isInvoice ? `
-                                        <td style="font-family: monospace;">${Number(price).toLocaleString()}</td>
-                                        <td style="font-family: monospace; font-weight: 900; background: #f8fafc;">${(qty * price).toLocaleString()}</td>
+                                        <td style="font-family: monospace; font-size: 13px;">${Number(price).toLocaleString()}</td>
+                                        <td style="font-family: monospace; font-weight: 900; background: #f8fafc; font-size: 14px; color: #1e3a8a;">${(qty * price).toLocaleString()}</td>
                                     ` : ''}
                                 </tr>
                             `;}).join('')}
                             ${isInvoice ? `
                                 <tr class="invoice-total">
-                                    <td colspan="5" style="text-align: left; padding-left: 20px;">مجموع کل فاکتور:</td>
-                                    <td style="font-size: 16px; color: #1e3a8a;">${(record.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0).toLocaleString()} ریال</td>
+                                    <td colspan="5" style="text-align: left; padding-left: 20px; font-size: 14px; font-weight: 900; border-top: 2px solid #1e3a8a;">جمع کل قابل پرداخت:</td>
+                                    <td style="font-size: 20px; color: white; background: #1e3a8a; border: 2px solid #1e3a8a;">${(record.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0).toLocaleString()} ریال</td>
                                 </tr>
                             ` : ''}
                         </tbody>
                     </table>
                 </div>
 
-                ${(isInvoice || record.status === 'خارج شده (بایگانی)') ? '' : `
+                ${(isInvoice || record.status === 'خارج شده (بایگانی)' || record.status === 'خارج شد') ? '' : `
                     <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px;">
                         <div style="text-align: center; flex: 1; min-width: 80px;">
                             <div class="stamp"><div class="stamp-title">ثبت کننده</div><div class="stamp-name">${record.requesterRole || record.requester || '-'}</div></div>

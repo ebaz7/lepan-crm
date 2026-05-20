@@ -385,8 +385,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                             <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono font-bold`}>{Number(deliveredWeight.toFixed(2))}</td>
                                             {(mode === 'PROFORMA' || mode === 'CUSTOMER_INVOICE') && (showPrice || mode === 'CUSTOMER_INVOICE') && (
                                                 <>
-                                                    <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono`}>{formatCurrency(itemPrice)}</td>
-                                                    <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono font-bold`}>{formatCurrency(deliveredWeight * itemPrice)}</td>
+                                                <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900 font-black text-lg' : 'border-black'} p-2 font-mono`}>{formatCurrency(itemPrice)}</td>
+                                                <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900 bg-blue-50 text-blue-900 font-black text-lg' : 'border-black'} p-2 font-mono font-bold`}>{formatCurrency(deliveredWeight * itemPrice)}</td>
                                                 </>
                                             )}
                                         </>
@@ -409,7 +409,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         {(mode === 'PROFORMA' || mode === 'CUSTOMER_INVOICE') && (showPrice || mode === 'CUSTOMER_INVOICE') && (
                                             <>
                                                 <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono`}>-</td>
-                                                <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono bg-blue-100 text-blue-900`}>{formatCurrency(totalAmount)}</td>
+                                                <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900 bg-blue-900 text-white font-black text-xl' : 'border-black bg-blue-100 text-blue-900'} p-2 font-mono`}>{formatCurrency(totalAmount)} ریال</td>
                                             </>
                                         )}
                                     </>
@@ -434,24 +434,24 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             </div>
 
             <div className={`mt-auto pt-4 ${mode === 'CUSTOMER_INVOICE' ? 'border-t-4 border-blue-900' : 'border-t-4 border-black'} grid grid-cols-5 gap-2 text-center items-end`}>
-                {mode === 'CUSTOMER_INVOICE' ? (
+                {(mode === 'CUSTOMER_INVOICE' || permit.status === ExitPermitStatus.EXITED) ? (
                     <>
-                        <div className="col-span-2 flex flex-col items-start justify-between min-h-[120px] p-2 bg-blue-50/10 rounded-lg">
-                             <div className="text-[10px] font-black text-blue-900 mb-2 border-b border-blue-200 w-full pb-1">توضیحات و شرایط فروش:</div>
-                             <div className="text-[10px] text-gray-700 text-right leading-relaxed font-medium">
-                                 ۱. کالا صحیح و سالم و مطابق با سفارش تحویل گردید.<br/>
-                                 ۲. هرگونه مغایرت وزنی یا تعدادی باید در لحظه تحویل به راننده اعلام و صورتجلسه گردد.<br/>
-                                 ۳. امضای این برگ توسط راننده یا تحویل گیرنده به منزله تایید نهایی است.
+                        <div className="col-span-2 flex flex-col items-start justify-between min-h-[140px] p-3 bg-blue-50/20 rounded-xl border border-blue-100 mt-2">
+                             <div className="text-[11px] font-black text-blue-900 mb-2 border-b-2 border-blue-200 w-full pb-1">توضیحات و شرایط قانونی فاکتور:</div>
+                             <div className="text-[11px] text-gray-700 text-right leading-relaxed font-bold">
+                                 ۱. کالا طبق فاکتور صحیح و سالم و مطابق با استانداردهای سفارش تحویل گردید.<br/>
+                                 ۲. هرگونه مغایرت وزنی یا تعدادی باید در لحظه بارگیری و خروج از کارخانه اعلام گردد.<br/>
+                                 ۳. امضا و تایید این سند به منزله تسلیم قطعی کالا و سلب هرگونه ادعای بعدی است.
                              </div>
                         </div>
                         <div className="col-span-1"></div>
-                        <div className="col-span-1 flex flex-col items-center justify-between min-h-[120px] border-r-2 border-blue-900/10">
-                             <div className="text-[10px] font-black text-blue-900 mb-auto">مهر و امضای فروشنده</div>
-                             <div className="mb-6 text-xs font-black text-gray-200 uppercase tracking-widest leading-none border-2 border-dashed border-gray-200 p-4 rounded-full">Seal & Sign</div>
+                        <div className="col-span-1 flex flex-col items-center justify-between min-h-[140px] border-r-2 border-blue-900/10 mt-2">
+                             <div className="text-[11px] font-black text-blue-900 mb-auto">مهر و امضای فروشنده</div>
+                             <div className="mb-8 text-sm font-black text-gray-200 uppercase tracking-[0.2em] leading-none border-4 border-dashed border-gray-100 p-6 rounded-full rotate-[-10deg]">VOUCHER SEAL</div>
                         </div>
-                        <div className="col-span-1 flex flex-col items-center justify-between min-h-[120px] border-r-2 border-blue-900/10">
-                             <div className="text-[10px] font-black text-blue-900 mb-auto">مهر و امضای خریدار</div>
-                             <div className="mb-6 text-xs font-black text-gray-200 uppercase tracking-widest leading-none border-2 border-dashed border-gray-200 p-4 rounded-full">Customer Sign</div>
+                        <div className="col-span-1 flex flex-col items-center justify-between min-h-[140px] border-r-2 border-blue-900/10 mt-2">
+                             <div className="text-[11px] font-black text-blue-900 mb-auto">مهر و امضای تحویل گیرنده</div>
+                             <div className="mb-8 text-sm font-black text-gray-200 uppercase tracking-[0.2em] leading-none border-4 border-dashed border-gray-100 p-6 rounded-full rotate-[10deg]">CONFIRM SIGN</div>
                         </div>
                     </>
                 ) : (
@@ -466,11 +466,11 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                         
                         <div className="flex flex-col items-center justify-between min-h-[80px]">
                             <div className="mb-2 flex items-center justify-center h-full">
-                                {(mode === 'EXIT' || mode === 'PROFORMA') && (permit.status === ExitPermitStatus.EXITED || permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL) ? 
+                                {(mode === 'EXIT' || mode === 'PROFORMA') && permit.status === ExitPermitStatus.PENDING_FACTORY_FINAL ? 
                                     <Stamp 
                                         title="سرپرست انتظامات" 
                                         name={permit.approverSecurity || 'سرپرست انتظامات'} 
-                                        time={(permit.exitTime && permit.status !== ExitPermitStatus.EXITED) ? permit.exitTime : undefined} 
+                                        time={permit.exitTime} 
                                         isSecurity={true}
                                     /> 
                                     : <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء انتظامات</div>
@@ -481,14 +481,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
                         <div className="flex flex-col items-center justify-between min-h-[80px]">
                             <div className="mb-2 flex items-center justify-center h-full">
-                                {(mode === 'EXIT' || mode === 'PROFORMA') && permit.status === ExitPermitStatus.EXITED ? 
-                                    <Stamp 
-                                        title="مدیر کارخانه" 
-                                        name={permit.approverFactoryFinal || 'مدیر کارخانه'} 
-                                        time={permit.exitTime}
-                                    /> 
-                                    : <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء نهایی</div>
-                                }
+                                <div className="border-2 border-dashed border-gray-300 rounded-xl p-2 h-16 w-20 flex items-center justify-center text-gray-300 text-[9px]">امضاء نهایی</div>
                             </div>
                             <div className="w-full border-t-2 border-black pt-1 text-[10px] font-black text-black">تایید نهایی خروج</div>
                         </div>
