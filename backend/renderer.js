@@ -316,100 +316,102 @@ export const generateRecordImage = async (record, type, options = {}) => {
                         </div>
                     </div>
                 ` : `
-                    <div class="meta-section">
-                        <div><h1 style="font-size: 22px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه</h1><p style="font-size: 12px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p></div>
-                        <div style="text-align: left;"><div style="font-size: 16px; font-weight: 900; background: #e5e7eb; padding: 6px 12px; border: 2px solid black; border-radius: 6px;">شماره: ${record.permitNumber}</div><div style="font-size: 12px; font-weight: bold; margin-top: 3px;">تاریخ: ${formatDateSafe(record.date)}</div></div>
+                    <div class="meta-section" style="border-bottom: none; align-items: start;">
+                        <div style="text-align: right; background: #eee; padding: 10px 20px; border: 2px solid black; border-radius: 8px; width: 180px;">
+                            <div style="font-size: 20px; font-weight: 900;">شماره: ${record.permitNumber}</div>
+                            <div style="font-size: 16px; font-weight: 900; margin-top: 5px;">تاریخ: ${formatDateSafe(record.date)}</div>
+                        </div>
+                        <div style="text-align: center; flex: 1;">
+                        </div>
+                        <div style="text-align: left;">
+                            <h1 style="font-size: 26px; font-weight: 900; margin: 0;">مجوز خروج کالا از کارخانه</h1>
+                            <p style="font-size: 14px; font-weight: bold; color: #4b5563; margin: 0;">سیستم مکانیزه مدیریت بار و خروج</p>
+                        </div>
                     </div>
                 `}
 
-                <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; margin-bottom: 15px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-                        <div>
-                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 3px;">${isInvoice ? 'خریدار / گیرنده کالا:' : 'مقصد / تحویل گیرنده:'}</div>
-                            ${isInvoice ? `<div style="font-size: 18px; font-weight: 900; color: #1e3a8a;">${record.recipientName}</div><div style="font-size: 11px; color: #4b5563; margin-top: 5px;">${record.destinationAddress || '-'}</div>` : destsHtml}
+                <div style="margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                        <div style="border: 2px solid #ddd; padding: 10px; border-radius: 8px; background: #fff;">
+                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 5px; font-size: 12px;">${isInvoice ? 'خریدار / گیرنده کالا:' : 'مقصد / تحویل گیرنده:'}</div>
+                            ${isInvoice ? `<div style="font-size: 18px; font-weight: 900; color: #1e3a8a;">${record.recipientName}</div><div style="font-size: 12px; color: #4b5563; margin-top: 5px;">${record.destinationAddress || '-'}</div>` : destsHtml}
                         </div>
-                        <div>
-                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 3px;">مشخصات حمل و راننده:</div>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <div><span style="color: #6b7280; margin-left: 2px;">نام:</span> <b style="font-size: 14px;">${record.driverName || '-'}</b></div>
-                                <div><span style="color: #6b7280; margin-left: 2px;">موبایل:</span> <b style="font-size: 14px; font-family: monospace;">${record.driverPhone || '-'}</b></div>
-                                <div><span style="color: #6b7280; margin-left: 2px;">پلاک:</span> <b dir="ltr" style="display: inline-block; font-size: 14px; border: 1px solid #333; padding: 1px 4px; border-radius: 4px; background: white;">${record.plateNumber || '-'}</b></div>
+                        <div style="border: 2px solid #ddd; padding: 10px; border-radius: 8px; background: #fff;">
+                            <div style="color: #6b7280; font-weight: bold; margin-bottom: 5px; font-size: 12px;">مشخصات راننده:</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div><span style="color: #6b7280; margin-left: 2px;">نام:</span> <b style="font-size: 15px;">${record.driverName || '-'}</b></div>
+                                <div><span style="color: #6b7280; margin-left: 2px;">موبایل:</span> <b style="font-size: 15px; font-family: monospace;">${record.driverPhone || '-'}</b></div>
+                                <div style="grid-column: span 2;"><span style="color: #6b7280; margin-left: 2px;">پلاک:</span> <b dir="ltr" style="display: inline-block; font-size: 16px; border: 2px solid #333; padding: 2px 8px; border-radius: 6px; background: white; font-family: monospace;">${record.plateNumber || '-'}</b></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div style="flex: 1;">
-                    <h3 style="margin-bottom: 5px; font-weight: bold;">${isInvoice ? 'شرح اقلام فاکتور' : 'لیست اقلام و کالاها'}</h3>
-                    <table class="${isInvoice ? 'invoice-table' : ''}">
+                    <h3 style="margin-bottom: 10px; font-weight: 900; font-size: 20px; text-align: left;">${isInvoice ? 'شرح اقلام فاکتور' : 'لیست اقلام و کالاها'}</h3>
+                    <table class="${isInvoice ? 'invoice-table' : ''}" style="width: 100%; border-collapse: collapse; border: 3px solid black;">
                         <thead>
-                            <tr style="font-weight: bold; font-size: 11px;">
-                                <th style="width: 40px;">#</th>
-                                <th>شرح کالا / خدمات</th>
-                                <th style="width: 80px;">تعداد (کارتن)</th>
-                                <th style="width: 100px;">وزن (KG)</th>
-                                ${isInvoice ? `
-                                    <th style="width: 120px;">فی (ریال)</th>
-                                    <th style="width: 150px;">جمع کل</th>
-                                ` : ''}
+                            <tr style="font-weight: 900; font-size: 13px; background: #f3f4f6;">
+                                <th style="width: 40px; border: 2px solid black;">#</th>
+                                <th style="border: 2px solid black;">شرح کالا</th>
+                                <th style="width: 90px; border: 2px solid black;">تعداد درخواستی</th>
+                                <th style="width: 90px; border: 2px solid black; color: #15803d;">تعداد خروجی</th>
+                                <th style="width: 90px; border: 2px solid black;">وزن درخواستی</th>
+                                <th style="width: 90px; border: 2px solid black; color: #15803d;">وزن خروجی</th>
+                                <th style="width: 100px; border: 2px solid black;">فی / قیمت</th>
                             </tr>
                         </thead>
-                        <tbody style="font-size: 12px;">
+                        <tbody style="font-size: 14px;">
                             ${(record.items||[{goodsName: record.goodsName, cartonCount: record.cartonCount, deliveredCartonCount: record.deliveredCartonCount, weight: record.weight, deliveredWeight: record.deliveredWeight, price: record.price}]).map((i, idx) => {
-                                const qty = i.deliveredCartonCount ?? i.cartonCount ?? 0;
-                                const weight = i.deliveredWeight ?? i.weight ?? 0;
-                                const price = i.price || 0;
+                                const reqQty = i.cartonCount || 0;
+                                const delQty = i.deliveredCartonCount ?? i.cartonCount ?? 0;
+                                const reqWeight = i.weight || 0;
+                                const delWeight = i.deliveredWeight ?? i.weight ?? 0;
+                                const price = i.price ? Number(i.price).toLocaleString() : '-';
                                 return `
-                                <tr>
-                                    <td>${idx+1}</td>
-                                    <td style="font-weight: bold; text-align: right; padding-right: 15px;">${i.goodsName}</td>
-                                    <td style="font-weight: 900;">${qty}</td>
-                                    <td>${Number(weight).toFixed(2)}</td>
-                                    ${isInvoice ? `
-                                        <td style="font-family: monospace; font-size: 13px;">${Number(price).toLocaleString()}</td>
-                                        <td style="font-family: monospace; font-weight: 900; background: #f8fafc; font-size: 14px; color: #1e3a8a;">${(qty * price).toLocaleString()}</td>
-                                    ` : ''}
+                                <tr style="height: 40px;">
+                                    <td style="border: 2px solid black;">${idx+1}</td>
+                                    <td style="font-weight: 900; text-align: right; padding-right: 15px; border: 2px solid black;">${i.goodsName}</td>
+                                    <td style="font-weight: bold; border: 2px solid black;">${reqQty}</td>
+                                    <td style="font-weight: bold; border: 2px solid black; color: #15803d; background: #f0fdf4;">${delQty}</td>
+                                    <td style="font-weight: bold; border: 2px solid black;">${reqWeight}</td>
+                                    <td style="font-weight: bold; border: 2px solid black; color: #15803d; background: #f0fdf4;">${delWeight}</td>
+                                    <td style="font-family: monospace; border: 2px solid black;">${price}</td>
                                 </tr>
                             `;}).join('')}
-                            ${isInvoice ? `
-                                <tr class="invoice-total">
-                                    <td colspan="5" style="text-align: left; padding-left: 20px; font-size: 14px; font-weight: 900; border-top: 2px solid #1e3a8a;">جمع کل قابل پرداخت:</td>
-                                    <td style="font-size: 20px; color: white; background: #1e3a8a; border: 2px solid #1e3a8a;">${(record.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0).toLocaleString()} ریال</td>
-                                </tr>
-                            ` : ''}
                         </tbody>
                     </table>
                 </div>
 
                 ${(isInvoice || record.status === 'خارج شده (بایگانی)' || record.status === 'خارج شد') ? '' : `
-                    <div style="margin-top: 30px; border-top: 2px solid #000; padding-top: 15px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px;">
-                        <div style="text-align: center; flex: 1; min-width: 80px;">
-                            <div class="stamp"><div class="stamp-title">ثبت کننده</div><div class="stamp-name">${record.requesterRole || record.requester || '-'}</div></div>
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیرفروش / ثبت سفارش</div>
+                    <div style="margin-top: 30px; border-top: 3px solid #000; padding-top: 20px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div class="stamp" style="width: 100%;"><div class="stamp-title">ثبت کننده</div><div class="stamp-name" style="font-size: 11px;">${record.requester || '-'}</div></div>
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">مدیرفروش / ثبت سفارش</div>
                         </div>
-                        <div style="text-align: center; flex: 1; min-width: 80px;">                
-                            ${record.approverCeo ? `<div class="stamp"><div class="stamp-title">مدیرعامل</div><div class="stamp-name">${record.approverCeo}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیرعامل / تایید فروش</div>
+                        <div style="text-align: center;">                
+                            ${record.approverCeo ? `<div class="stamp" style="width: 100%;"><div class="stamp-title">مدیرعامل</div><div class="stamp-name" style="font-size: 11px;">${record.approverCeo}</div></div>` : '<div style="height: 50px; border: 1px dashed #ccc; border-radius: 8px;"></div>'}
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">مدیرعامل / تایید فروش</div>
                         </div>
-                        <div style="text-align: center; flex: 1; min-width: 80px;">
-                            ${record.approverFactory ? `<div class="stamp"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactory}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیر کارخانه / مجوز ورود و بارگیری</div>
+                        <div style="text-align: center;">
+                            ${record.approverFactory ? `<div class="stamp" style="width: 100%;"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name" style="font-size: 11px;">${record.approverFactory}</div></div>` : '<div style="height: 50px; border: 1px dashed #ccc; border-radius: 8px;"></div>'}
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">مدیر کارخانه / مجوز ورود و بارگیری</div>
                         </div>
-                        <div style="text-align: center; flex: 1; min-width: 80px;">
-                            ${record.approverWarehouse ? `<div class="stamp"><div class="stamp-title">تحویل انبار</div><div class="stamp-name">${record.approverWarehouse}</div></div>` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">سرپرست انبار / انجام بارگیری</div>
+                        <div style="text-align: center;">
+                            ${record.approverWarehouse ? `<div class="stamp" style="width: 100%;"><div class="stamp-title">تحویل انبار</div><div class="stamp-name" style="font-size: 11px;">${record.approverWarehouse}</div></div>` : '<div style="height: 50px; border: 1px dashed #ccc; border-radius: 8px;"></div>'}
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">سرپرست انبار / انجام بارگیری</div>
                         </div>
-                        <div style="text-align: center; flex: 1; min-width: 80px;">
+                        <div style="text-align: center;">
                             ${(record.status === 'در انتظار تایید نهایی مدیر کارخانه' || record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)') ? `
-                                <div class="stamp black"><div class="stamp-title">انتظامات</div><div class="stamp-name">${record.approverSecurity || 'سرپرست انتظامات'}</div></div>
-                            ` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">سرپرست انتظامات / بازرسی و تایید بارگیری</div>
+                                <div class="stamp black" style="width: 100%;"><div class="stamp-title">انتظامات</div><div class="stamp-name" style="font-size: 11px;">${record.approverSecurity || '...'}</div></div>
+                            ` : '<div style="height: 50px; border: 1px dashed #ccc; border-radius: 8px;"></div>'}
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">سرپرست انتظامات / بازرسی و تایید بارگیری</div>
                         </div>
-                        <div style="text-align: center; flex: 1; min-width: 80px;">
+                        <div style="text-align: center;">
                             ${(record.status === 'خارج شد' || record.status === 'خارج شده (بایگانی)') ? `
-                                <div class="stamp black"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name">${record.approverFactoryFinal || '...'}</div>${record.exitTime ? `<div style="font-size: 7px; font-weight: bold;">ساعت: ${record.exitTime}</div>` : ''}</div>
-                            ` : '<div style="height: 40px; border-bottom: 1px dashed #ccc; margin: 0 5px;"></div>'}
-                            <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">مدیر کارخانه / تایید نهایی خروج</div>
+                                <div class="stamp black" style="width: 100%;"><div class="stamp-title">مدیر کارخانه</div><div class="stamp-name" style="font-size: 11px;">${record.approverFactoryFinal || '...'}</div>${record.exitTime ? `<div style="font-size: 7px; font-weight: bold;">ساعت: ${record.exitTime}</div>` : ''}</div>
+                            ` : '<div style="height: 50px; border: 1px dashed #ccc; border-radius: 8px;"></div>'}
+                            <div style="font-size: 8px; font-weight: bold; margin-top: 5px;">مدیر کارخانه / تایید نهایی خروج</div>
                         </div>
                     </div>
                 `}
