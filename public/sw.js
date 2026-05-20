@@ -41,15 +41,18 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      );
-    })
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((name) => {
+            if (name !== CACHE_NAME) {
+              return caches.delete(name);
+            }
+          })
+        );
+      })
+    ])
   );
 });
 
@@ -60,14 +63,16 @@ self.addEventListener('push', (event) => {
     const data = event.data.json();
     const options = {
       body: data.body || 'اعلان جدید',
-      icon: '/manifest.json', // Best would be an actual icon png
-      badge: '/manifest.json',
+      icon: 'https://cdn-icons-png.flaticon.com/512/3135/3135706.png',
+      badge: 'https://cdn-icons-png.flaticon.com/512/3135/3135706.png',
       data: {
         url: data.url || '/'
       },
       vibrate: [200, 100, 200],
       dir: 'rtl',
-      lang: 'fa-IR'
+      lang: 'fa-IR',
+      tag: 'payment-msg',
+      renotify: true
     };
     
     event.waitUntil(
@@ -81,14 +86,23 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  const targetUrl = event.notification.data.url || '/';
+  let targetUrl = event.notification.data.url || '/';
+  
+  // Ensure absolute URL if it doesn't start with http
+  if (!targetUrl.startsWith('http')) {
+    targetUrl = new URL(targetUrl, location.origin).href;
+  }
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       // Try to find an existing window and navigate it
       for (const client of windowClients) {
         if (client.url.includes(location.origin) && 'focus' in client) {
-          return client.focus().then(() => client.navigate(targetUrl));
+          return client.focus().then((fClient) => {
+            if ('navigate' in fClient) {
+              return fClient.navigate(targetUrl);
+            }
+          });
         }
       }
       // If no window found, open a new one
