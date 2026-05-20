@@ -383,7 +383,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         <div className="space-y-3 mt-2">
                             <div className="relative">
                                 <div className="flex justify-between items-center mb-1">
-                                    <label className="text-xs font-bold block">نام گیرنده</label>
+                                    <label className="text-xs font-bold block">نام گیرنده / مشتری</label>
                                     <button 
                                         type="button" 
                                         onClick={() => setShowMergeModal(true)}

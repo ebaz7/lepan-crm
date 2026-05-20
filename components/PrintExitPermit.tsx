@@ -305,7 +305,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                         <div className="border-2 border-blue-900 rounded-xl overflow-hidden shadow-sm">
                             <div className="bg-blue-900 text-white p-1 text-center font-black text-[10px] uppercase tracking-widest">مشخصات مشتری</div>
                             <div className="p-3 bg-blue-50/10 space-y-1">
-                                <div className="text-gray-500 font-bold text-[10px] uppercase mb-1">نام مشتری:</div>
+                                <div className="text-gray-500 font-bold text-[10px] uppercase mb-1">نام گیرنده / مشتری:</div>
                                 <div className="text-lg font-black text-blue-900 leading-tight">{permit.recipientName}</div>
                                 <div className="text-[10px] font-bold text-gray-500">آدرس مقصد: {displayDestinations[0]?.address || '-'}</div>
                                 <div className="text-[10px] font-bold text-gray-500">تلفن همراه: {displayDestinations[0]?.phone || '-'}</div>
@@ -317,7 +317,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                         <div className="bg-gray-100 border-b-2 border-black p-2 text-center font-black text-sm">مشخصات مشتری / متقاضی کالا</div>
                         <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-8 bg-blue-50/10">
                             <div className="flex flex-col">
-                                <span className="text-gray-500 font-bold text-[10px] uppercase">نام مشتری / شرکت:</span>
+                                <span className="text-gray-500 font-bold text-[10px] uppercase">نام گیرنده / مشتری:</span>
                                 <span className="text-xl font-black text-blue-900">{permit.recipientName || displayDestinations[0]?.recipientName}</span>
                             </div>
                             <div className="flex flex-col text-left">
@@ -332,7 +332,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                             {displayDestinations.map((dest, idx) => (
                                 <div key={idx} className="border-b-2 border-gray-200/50 pb-2 last:border-0 last:pb-0">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><span className="font-bold text-gray-500 ml-2">تحویل گیرنده:</span> <span className="font-bold text-lg">{dest.recipientName}</span></div>
+                                        <div><span className="font-bold text-gray-500 ml-2">نام گیرنده:</span> <span className="font-bold text-lg">{dest.recipientName}</span></div>
                                         <div><span className="font-bold text-gray-500 ml-2">شماره تماس:</span> <span className="font-mono dir-ltr">{dest.phone || '-'}</span></div>
                                     </div>
                                     <div className="mt-1"><span className="font-bold text-gray-500 ml-2">آدرس مقصد:</span> <span className="font-medium">{dest.address}</span></div>

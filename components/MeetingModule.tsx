@@ -4,7 +4,7 @@ import PrintMeeting from './print/PrintMeeting';
 import { User, MeetingMinutes, MeetingStatus, MeetingAttendee, MeetingItem, UserRole, SystemSettings, RolePermissions } from '../types';
 import { getMeetings, saveMeeting, updateMeeting, deleteMeeting, getNextMeetingNumber, getSettings, sendMeetingAnnouncement, sendMeetingMinutes, sendMessage, uploadFileChunked } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
-import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare, Lock } from 'lucide-react';
+import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare, Lock, Paperclip, FileText, Image } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 
@@ -471,9 +471,17 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 </div>
 
                                 <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 px-2">
-                                    <div className="flex items-center gap-1.5">
-                                        <CheckSquare size={14} className="text-blue-500" />
-                                        <span>{meeting.items.length} مصوبه</span>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1.5 text-blue-600">
+                                            <CheckSquare size={14} />
+                                            <span>{meeting.items.length} مصوبه</span>
+                                        </div>
+                                        {((meeting.imageAttachments?.length || 0) + (meeting.pdfAttachments?.length || 0)) > 0 && (
+                                            <div className="flex items-center gap-1 text-teal-600">
+                                                <Paperclip size={14} />
+                                                <span>{(meeting.imageAttachments?.length || 0) + (meeting.pdfAttachments?.length || 0)} فایل</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="text-[10px]">توسط: {meeting.createdBy}</div>
                                 </div>
@@ -485,6 +493,34 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         <button onClick={() => setViewMeeting(meeting)} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 rounded-xl transition-colors" title="مشاهده">
                                             <Eye size={18} />
                                         </button>
+                                        {((meeting.imageAttachments?.length || 0) + (meeting.pdfAttachments?.length || 0)) > 0 && (
+                                            <div className="flex gap-1 border-r border-gray-100 dark:border-white/5 mr-1 pr-1">
+                                                {meeting.imageAttachments?.map((att, idx) => (
+                                                    <a 
+                                                        key={`img-${idx}`} 
+                                                        href={att.url} 
+                                                        target="_blank" 
+                                                        rel="noreferrer" 
+                                                        className="p-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-600 rounded-xl transition-colors" 
+                                                        title={`مشاهده تصویر: ${att.fileName}`}
+                                                    >
+                                                        <Image size={18} />
+                                                    </a>
+                                                ))}
+                                                {meeting.pdfAttachments?.map((att, idx) => (
+                                                    <a 
+                                                        key={`pdf-${idx}`} 
+                                                        href={att.url} 
+                                                        target="_blank" 
+                                                        rel="noreferrer" 
+                                                        className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 rounded-xl transition-colors" 
+                                                        title={`دریافت فایل PDF: ${att.fileName}`}
+                                                    >
+                                                        <FileText size={18} />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                         <button onClick={() => setShowPrintModal(meeting)} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 rounded-xl transition-colors" title="دریافت PDF">
                                             <Printer size={18} />
                                         </button>
@@ -1092,7 +1128,26 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                     </button>
                                 )}
                             </div>
-                            <button onClick={() => setViewMeeting(null)} className="px-8 py-3 rounded-2xl text-xs font-black bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-all active:scale-95">بستن پنجره</button>
+                            <div className="flex gap-2">
+                                {((viewMeeting.imageAttachments && viewMeeting.imageAttachments.length > 0) || (viewMeeting.pdfAttachments && viewMeeting.pdfAttachments.length > 0)) && (
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-200 dark:border-amber-900/30">
+                                        <span className="text-[10px] font-black text-amber-700 dark:text-amber-400">فایل‌های پیوست:</span>
+                                        <div className="flex gap-1.5">
+                                            {viewMeeting.imageAttachments?.map((att, i) => (
+                                                <a key={i} href={att.url} target="_blank" rel="noreferrer" className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-blue-600 hover:text-blue-700 transition-colors shadow-sm" title={att.fileName}>
+                                                    <Eye size={14} />
+                                                </a>
+                                            ))}
+                                            {viewMeeting.pdfAttachments?.map((att, i) => (
+                                                <a key={i} href={att.url} target="_blank" rel="noreferrer" className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-red-600 hover:text-red-700 transition-colors shadow-sm" title={att.fileName}>
+                                                    <Printer size={14} />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                <button onClick={() => setViewMeeting(null)} className="px-8 py-3 rounded-2xl text-xs font-black bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-all active:scale-95">بستن پنجره</button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -2679,19 +2679,15 @@ const sendPdf = async (item, type, chatId, sendFn, sendDocFn) => {
 // --- MEETING NOTIFICATIONS ---
 
 export const notifyMeetingAnnouncement = async (meeting, db) => {
+    console.log(`>>> Meeting Announcement triggered for ${meeting.meetingNumber}`);
     const s = db.settings;
-    if (!s) return;
+    if (!s) {
+        console.error("No settings found in DB for meeting announcement");
+        return;
+    }
 
-    const users = db.users || [];
-    const getAttendeeEntry = (attendee) => {
-        const user = users.find(u => u.fullName === attendee.fullName);
-        if (user) {
-            return `[${attendee.fullName}](uid:${user.id})`;
-        }
-        return `${attendee.fullName} (${attendee.role})`;
-    };
-
-    const message = `✨️ اعلان برگزاری جلسه؛ \n\n⚜️ با عرض سلام و احترام، \n\nجلسه تولید روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در ${meeting.location || 'محل دائمی جلسات کارخانه'}، برگزار خواهد شد.\n\nرئیس جلسه؛ \n${meeting.chairman || 'سیّد علی احمدی (مدیر کارخانه)'} \nدبیر جلسه\n${meeting.secretary || 'پریسا مرادی(نت)'}\n\n 🔆 اعضای اصلی ؛\n${meeting.attendees.map(a => getAttendeeEntry(a)).join('\n')}`;
+    const attendeesList = (meeting.attendees || []).map(a => `• ${a.fullName} (${a.role || 'عضو'})`).join('\n');
+    const message = `✨️ اعلان برگزاری جلسه تولید؛\n\n⚜️ با عرض سلام و احترام،\n\nجلسه تولید شماره *${meeting.meetingNumber}* روز ${meeting.date} راس ساعت *${meeting.time || '۱۲:۰۰'}* در ${meeting.location || 'محل دائمی جلسات کارخانه'}، برگزار خواهد شد.\n\nرئیس جلسه:\n${meeting.chairman || 'سیّد علی احمدی'}\nدبیر جلسه:\n${meeting.secretary || 'پریسا مرادی'}\n\n🔆 اعضای حاضر / مدعوین:\n${attendeesList || 'موردی ثبت نشده است'}`;
 
     let announcementImg = null;
     try {
@@ -2699,29 +2695,33 @@ export const notifyMeetingAnnouncement = async (meeting, db) => {
     } catch(e) { console.error("Error generating meeting image", e); }
 
     // Send to Telegram
-    const teleId = s.botMeetingAnnouncementTelegramId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdTele;
+    const teleId = normalizeChannelId(s.botMeetingAnnouncementTelegramId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdTele);
     if (teleId) {
-        if (announcementImg) {
-            import('./telegram.js').then(m => m.sendBotPhoto(teleId, announcementImg, message).catch(e => {})).catch(e => {});
-        } else {
-            import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
-        }
+        console.log(`Sending meeting announcement to Telegram: ${teleId}`);
+        import('./telegram.js').then(m => {
+            if (announcementImg) m.sendBotPhoto(teleId, announcementImg, message).catch(e => console.error("Tele meeting photo fail:", e));
+            else m.sendMessage(teleId, message).catch(e => console.error("Tele meeting msg fail:", e));
+        }).catch(e => console.error("Tele import fail:", e));
+    } else {
+        console.warn("No Telegram ID found for meeting announcement");
     }
 
     // Send to Bale
-    const baleId = s.botMeetingAnnouncementBaleId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdBale;
+    const baleId = normalizeChannelId(s.botMeetingAnnouncementBaleId || s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdBale);
     if (baleId) {
-        if (announcementImg) {
-             import('./bale.js').then(m => m.sendBotPhoto(baleId, announcementImg, message).catch(e => {})).catch(e => {});
-        } else {
-             import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
-        }
+        console.log(`Sending meeting announcement to Bale: ${baleId}`);
+        import('./bale.js').then(m => {
+            if (announcementImg) m.sendBotPhoto(baleId, announcementImg, message).catch(e => console.error("Bale meeting photo fail:", e));
+            else m.sendMessage(baleId, message).catch(e => console.error("Bale meeting msg fail:", e));
+        }).catch(e => console.error("Bale import fail:", e));
+    } else {
+        console.warn("No Bale ID found for meeting announcement");
     }
 
     // Send to WhatsApp (if available)
     const waId = s.botMeetingAnnouncementGroupId || s.botAccountingGroupIdWhatsApp;
     if (waId) {
-        import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
+        import('./whatsapp.js').then(m => m.sendMessage(waId, message).catch(e => console.error("WA meeting fail:", e))).catch(e => console.error("WA import fail:", e));
     }
 };
 

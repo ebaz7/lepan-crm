@@ -38,7 +38,7 @@ const PrintMeeting: React.FC<PrintMeetingProps> = ({ meeting, onClose }) => {
       </div>
       
       {/* Printable Area */}
-      <div id="meeting-print-area" className="w-full max-w-4xl bg-white p-10 font-sans text-black shadow-lg" style={{ direction: 'rtl' }}>
+      <div id="meeting-print-area" className="w-full max-w-4xl bg-white p-10 font-sans text-black shadow-lg printable-content" style={{ direction: 'rtl' }}>
         <div className="border-4 border-gray-900 p-6 relative">
             <h1 className="text-2xl font-black text-center mb-8">صورتجلسه</h1>
 
