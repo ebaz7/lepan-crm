@@ -266,42 +266,54 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
     // Determine which reports to show. If it's a recognized group, show only that module.
     // If it's not a recognized group (e.g. ad-hoc request), show all available for that date.
     
-    const normChatId = normalizeChannelId(chatId);
-    console.log(`[DailyReport] Platform: ${platform}, ChatId: ${chatId} (Norm: ${normChatId})`);
+    const matchesId = (cid, sid) => {
+        if (!sid) return false;
+        const n1 = normalizeChannelId(cid);
+        const n2 = normalizeChannelId(sid);
+        return n1 && n2 && n1 === n2;
+    };
 
-    const isAccounting = 
-        (platform === 'telegram' && (normChatId === normalizeChannelId(settings.botAccountingGroupIdTele) || normChatId === normalizeChannelId(settings.botAccountingGroupId))) ||
-        (platform === 'bale' && normChatId === normalizeChannelId(settings.botAccountingGroupIdBale)) ||
-        (platform === 'whatsapp' && (normChatId === normalizeChannelId(settings.botAccountingGroupIdWhatsApp) || normChatId === normalizeChannelId(settings.botAccountingGroupId)));
+    const g1 = settings.exitPermitFirstGroupConfig || {};
+    const g2 = settings.exitPermitSecondGroupConfig || {};
 
-    const isBijak = 
-        (platform === 'telegram' && normChatId === normalizeChannelId(settings.botBijakGroupId)) ||
-        (platform === 'bale' && normChatId === normalizeChannelId(settings.botBijakGroupIdBale)) ||
-        (platform === 'whatsapp' && normChatId === normalizeChannelId(settings.botBijakGroupIdWhatsApp));
+    const isKnownAccounting = 
+        (platform === 'telegram' && (matchesId(chatId, settings.botAccountingGroupIdTele) || matchesId(chatId, settings.botAccountingGroupId))) ||
+        (platform === 'bale' && matchesId(chatId, settings.botAccountingGroupIdBale)) ||
+        (platform === 'whatsapp' && (matchesId(chatId, settings.botAccountingGroupIdWhatsApp) || matchesId(chatId, settings.botAccountingGroupId)));
 
-    const isLogistics = 
-        (platform === 'telegram' && (normChatId === normalizeChannelId(settings.exitPermitNotificationTelegramId) || normChatId === normalizeChannelId(settings.botSecurityGroupId))) ||
-        (platform === 'bale' && normChatId === normalizeChannelId(settings.exitPermitNotificationBaleId)) ||
-        (platform === 'whatsapp' && normChatId === normalizeChannelId(settings.exitPermitNotificationGroup));
+    const isKnownBijak = 
+        (platform === 'telegram' && matchesId(chatId, settings.botBijakGroupId)) ||
+        (platform === 'bale' && matchesId(chatId, settings.botBijakGroupIdBale)) ||
+        (platform === 'whatsapp' && matchesId(chatId, settings.botBijakGroupIdWhatsApp));
+
+    const isKnownLogistics = 
+        (platform === 'telegram' && (matchesId(chatId, settings.exitPermitNotificationTelegramId) || matchesId(chatId, settings.botSecurityGroupId) || matchesId(chatId, g1.telegramId) || matchesId(chatId, g2.telegramId))) ||
+        (platform === 'bale' && (matchesId(chatId, settings.exitPermitNotificationBaleId) || matchesId(chatId, g1.baleId) || matchesId(chatId, g2.baleId))) ||
+        (platform === 'whatsapp' && (matchesId(chatId, settings.exitPermitNotificationGroup) || matchesId(chatId, g1.groupId) || matchesId(chatId, g2.groupId)));
+
+    const isRecognized = isKnownAccounting || isKnownBijak || isKnownLogistics;
 
     const isGroup = chatId.toString().startsWith('-') || 
                   (platform === 'bale' && (chatId.toString().startsWith('g') || chatId.toString().length > 10)) ||
-                  chatId.toString().includes('@');
+                  chatId.toString().includes('@') ||
+                  isRecognized;
 
     const isPrivate = !isGroup;
 
     // Determine which reports to show based on group context
-    const showPayments = isAccounting || (isPrivate && !isBijak && !isLogistics);
-    const showBijaks = isBijak || (isPrivate && !isAccounting && !isLogistics);
-    const showLogistics = isLogistics || (isPrivate && !isAccounting && !isBijak);
+    // If it's a recognized group, ONLY show that specific module.
+    // If it's a private chat and not recognized as a specific group, show everything.
+    const showPayments = isKnownAccounting || (isPrivate && !isRecognized);
+    const showBijaks = isKnownBijak || (isPrivate && !isRecognized);
+    const showLogistics = isKnownLogistics || (isPrivate && !isRecognized);
     
-    // Fallback: If it's a private chat and not specifically matched, or if it's completely unknown but in PV
-    const showAll = isPrivate && !isAccounting && !isBijak && !isLogistics;
+    const showAll = isPrivate && !isRecognized;
 
-    console.log(`[DailyReport] flags: PM=${showPayments || showAll}, BK=${showBijaks || showAll}, LG=${showLogistics || showAll}, IsGroup=${isGroup}`);
+    console.log(`[DailyReport] Platform: ${platform}, Chat: ${chatId}, Private: ${isPrivate}, Recognized: ${isRecognized}`);
+    console.log(`[DailyReport] Roles: Accounting=${isKnownAccounting}, Bijak=${isKnownBijak}, Logistics=${isKnownLogistics}`);
 
     // If it's a group but UNRECOGNIZED, warn the user
-    if (isGroup && !isAccounting && !isBijak && !isLogistics) {
+    if (isGroup && !isRecognized) {
         return sendFn(chatId, `⚠️ این گروه در تنظیمات بات شناسایی نشد.\n🆔 شناسه چت: \`${chatId}\`\n✅ لطفا این شناسه را در بخش پیکربندی بات برای گروه‌های مربوطه (حسابداری، خروج یا بیجک) وارد کنید.`);
     }
 
@@ -350,7 +362,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                     console.warn(`[DailyReport] No images generated for Payment PDF.`);
                 }
             } catch (e) { console.error("PDF generation failed:", e); }
-        } else if (isAccounting) {
+        } else if (isKnownAccounting) {
             if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} پرداختی ثبت نشده است.`);
         }
     }
@@ -404,7 +416,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                         }
                     }
                 } catch (e) { console.error("Bijak PDF generation failed:", e); }
-            } else if (isBijak) {
+            } else if (isKnownBijak) {
                 if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`);
             }
         }
@@ -446,7 +458,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                         }
                     }
                 } catch (e) { console.error("PDF generation failed:", e); }
-            } else if (isLogistics) {
+            } else if (isKnownLogistics) {
                 if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} مجوزی ثبت نشده است.`);
             }
         }
