@@ -1,18 +1,15 @@
-const CACHE_NAME = 'finance-app-v2';
+const CACHE_NAME = 'finance-app-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/assets/index.css',
-  '/assets/index.js'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // We try to cache available assets but don't fail if some are missing during dev
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => console.log("Some assets not found for caching yet"));
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => console.log("Assets not found yet"));
     })
   );
 });
@@ -24,7 +21,6 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Navigation request strategy: Network First, falling back to Cache
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('/index.html'))
@@ -87,25 +83,28 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   let targetUrl = event.notification.data.url || '/';
-  
-  // Ensure absolute URL if it doesn't start with http
   if (!targetUrl.startsWith('http')) {
-    targetUrl = new URL(targetUrl, location.origin).href;
+    targetUrl = new URL(targetUrl, self.location.origin).href;
   }
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Try to find an existing window and navigate it
+      // 1. Try to find a window already open at this exact URL
       for (const client of windowClients) {
-        if (client.url.includes(location.origin) && 'focus' in client) {
-          return client.focus().then((fClient) => {
-            if ('navigate' in fClient) {
-              return fClient.navigate(targetUrl);
-            }
-          });
+        if (client.url === targetUrl && 'focus' in client) {
+          return client.focus();
         }
       }
-      // If no window found, open a new one
+      // 2. Try to find any window on the same origin and navigate it
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          if ('navigate' in client) {
+            return client.navigate(targetUrl);
+          }
+        }
+      }
+      // 3. Otherwise open new window
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

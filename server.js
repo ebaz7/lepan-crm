@@ -1684,23 +1684,35 @@ app.get('/manifest.json', (req, res) => {
     const db = getDb();
     const settings = db.settings || {};
     const manifest = {
-        name: settings.appName || "Payment & Order System",
-        short_name: settings.appName || "FinanceApp",
+        name: settings.appName || "سامانه مالی و بازرگانی",
+        short_name: settings.appName || "سامانه مالی",
+        description: "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج",
+        id: "com.finance.app.v1",
         start_url: "/",
         display: "standalone",
-        background_color: "#ffffff",
+        background_color: "#f8fafc",
         theme_color: "#2563eb",
         orientation: "portrait",
+        lang: "fa",
+        dir: "rtl",
         icons: [
             {
                 src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
                 sizes: "192x192",
-                type: "image/png"
+                type: "image/png",
+                purpose: "any"
+            },
+            {
+                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                sizes: "192x192",
+                type: "image/png",
+                purpose: "maskable"
             },
             {
                 src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
                 sizes: "512x512",
-                type: "image/png"
+                type: "image/png",
+                purpose: "any"
             }
         ]
     };
