@@ -314,9 +314,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             const lastMsg = messages[messages.length - 1];
             
             // Validate if message is intended for the current user
-            const isPublic = !lastMsg.groupId && !lastMsg.recipient;
+            const isPublic = !lastMsg.groupId && (!lastMsg.recipient || lastMsg.recipient.trim() === '');
             const isGroupForMe = lastMsg.groupId && groups.some(g => g.id === lastMsg.groupId);
-            const isPrivateForMe = lastMsg.recipient === currentUser.username;
+            const isPrivateForMe = lastMsg.recipient && lastMsg.recipient.trim() !== '' && lastMsg.recipient === currentUser.username;
             const isIntendedForMe = isPublic || isGroupForMe || isPrivateForMe;
             
             const channelId = lastMsg.groupId || lastMsg.senderUsername;

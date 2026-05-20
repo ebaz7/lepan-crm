@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { PaymentOrder, OrderStatus, PaymentMethod, SystemSettings } from '../types';
 import { formatCurrency, formatDate, getStatusLabel, numberToPersianWords, formatNumberString, getShamsiDateFromIso } from '../constants';
 import { X, Printer, FileDown, Loader2, CheckCircle, XCircle, Pencil, Share2, Users, Search, RotateCcw, AlertTriangle, FileText, LayoutTemplate, EyeOff, Eye, Settings2, ChevronLeft, ChevronRight, Calendar, MapPin, Layers } from 'lucide-react';
@@ -421,8 +422,8 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   const contentToRender = (printMode === 'bank_form' && canPrintBankForm) ? <DynamicBankFormOverlay /> : receiptContent;
   if (embed) return contentToRender;
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex flex-col items-center justify-start p-2 animate-fade-in safe-pb printing-modal">
+  return createPortal(
+    <div className="printing-modal fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex flex-col items-center justify-start p-2 animate-fade-in safe-pb">
       <div className="w-full max-w-4xl mx-auto z-[210] no-print mb-2 shrink-0">
          <div className="bg-white p-2 rounded-xl shadow-lg flex flex-col gap-2 w-full border border-gray-200">
              <div className="flex items-center justify-between border-b pb-1">
@@ -506,7 +507,8 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       <div className="flex-1 w-full overflow-y-auto flex justify-center pb-10" ref={containerWrapperRef}>
           <div style={{ width: (printMode === 'bank_form' && dynamicTemplate) ? `${dynamicTemplate.width || 210}mm` : '210mm', height: (printMode === 'bank_form' && dynamicTemplate) ? `${dynamicTemplate.height || 297}mm` : '148mm', backgroundColor: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', transform: `scale(${scale})`, transformOrigin: 'top center', marginBottom: `${(1 - scale) * -100}px` }}>{contentToRender}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
