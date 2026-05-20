@@ -190,9 +190,20 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
             }
             @media print {
                 html, body { height: 100vh !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; background: white !important; }
-                #root, .fixed.inset-0:not(.printing-modal) { display: none !important; } /* Hide the app and current modal backdrop */
+                /* Hide all direct children of body except the printing modal */
+                body > *:not(.printing-modal) { display: none !important; }
                 
-                body > * { display: none !important; }
+                /* Ensure modal is visible and positioned correctly */
+                .printing-modal {
+                    display: block !important;
+                    visibility: visible !important;
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    z-index: 9999999 !important;
+                }
                 
                 /* Ensure only the specific printed div is visible and correctly positioned */
                 #${printAreaId} { 
@@ -212,7 +223,6 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
                     overflow: hidden !important;
                 }
                 #${printAreaId} * { visibility: visible !important; }
-                .no-print { display: none !important; }
             }
           `;
       }

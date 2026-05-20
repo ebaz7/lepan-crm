@@ -312,9 +312,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     useEffect(() => {
         if (messages.length > 0) {
             const lastMsg = messages[messages.length - 1];
+            
+            // Validate if message is intended for the current user
+            const isPublic = !lastMsg.groupId && !lastMsg.recipient;
+            const isGroupForMe = lastMsg.groupId && groups.some(g => g.id === lastMsg.groupId);
+            const isPrivateForMe = lastMsg.recipient === currentUser.username;
+            const isIntendedForMe = isPublic || isGroupForMe || isPrivateForMe;
+            
             const channelId = lastMsg.groupId || lastMsg.senderUsername;
             
-            if (lastMsg.senderUsername !== currentUser.username && document.hidden && !mutedChannels.has(channelId)) {
+            if (lastMsg.senderUsername !== currentUser.username && document.hidden && !mutedChannels.has(channelId) && isIntendedForMe) {
                 let title = lastMsg.sender;
                 if (lastMsg.groupId) {
                     const grp = groups.find(g => g.id === lastMsg.groupId);
@@ -323,7 +330,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 sendNotification(title, lastMsg.message || 'پیام جدید');
             }
         }
-    }, [messages.length, mutedChannels]);
+    }, [messages.length, mutedChannels, groups]);
 
     const loadMeta = async () => {
         try {
