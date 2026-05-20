@@ -303,8 +303,9 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                             </div>
                         </div>
                         <div className="border-2 border-blue-900 rounded-xl overflow-hidden shadow-sm">
-                            <div className="bg-blue-900 text-white p-1 text-center font-black text-[10px] uppercase tracking-widest">مشخصات خریدار</div>
+                            <div className="bg-blue-900 text-white p-1 text-center font-black text-[10px] uppercase tracking-widest">مشخصات مشتری</div>
                             <div className="p-3 bg-blue-50/10 space-y-1">
+                                <div className="text-gray-500 font-bold text-[10px] uppercase mb-1">نام مشتری:</div>
                                 <div className="text-lg font-black text-blue-900 leading-tight">{permit.recipientName}</div>
                                 <div className="text-[10px] font-bold text-gray-500">آدرس مقصد: {displayDestinations[0]?.address || '-'}</div>
                                 <div className="text-[10px] font-bold text-gray-500">تلفن همراه: {displayDestinations[0]?.phone || '-'}</div>
@@ -313,11 +314,11 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                      </div>
                 ) : mode === 'PROFORMA' ? (
                     <div className="border-2 border-black rounded-xl overflow-hidden">
-                        <div className="bg-gray-100 border-b-2 border-black p-2 text-center font-black text-sm">مشخصات خریدار / متقاضی کالا</div>
+                        <div className="bg-gray-100 border-b-2 border-black p-2 text-center font-black text-sm">مشخصات مشتری / متقاضی کالا</div>
                         <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-8 bg-blue-50/10">
                             <div className="flex flex-col">
-                                <span className="text-gray-500 font-bold text-[10px] uppercase">نام شخص / شرکت:</span>
-                                <span className="text-xl font-black text-blue-900">{permit.company || permit.recipientName}</span>
+                                <span className="text-gray-500 font-bold text-[10px] uppercase">نام مشتری / شرکت:</span>
+                                <span className="text-xl font-black text-blue-900">{permit.recipientName || displayDestinations[0]?.recipientName}</span>
                             </div>
                             <div className="flex flex-col text-left">
                                 <span className="text-gray-500 font-bold text-[10px] uppercase">وضعیت سند:</span>
@@ -451,7 +452,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                              <div className="mb-8 text-sm font-black text-gray-200 uppercase tracking-[0.2em] leading-none border-4 border-dashed border-gray-100 p-6 rounded-full rotate-[-10deg]">VOUCHER SEAL</div>
                         </div>
                         <div className="col-span-1 flex flex-col items-center justify-between min-h-[140px] border-r-2 border-blue-900/10 mt-2">
-                             <div className="text-[11px] font-black text-blue-900 mb-auto">مهر و امضای تحویل گیرنده</div>
+                             <div className="text-[11px] font-black text-blue-900 mb-auto">مهر و امضای خریدار / مشتری</div>
                              <div className="mb-8 text-sm font-black text-gray-200 uppercase tracking-[0.2em] leading-none border-4 border-dashed border-gray-100 p-6 rounded-full rotate-[10deg]">CONFIRM SIGN</div>
                         </div>
                     </>

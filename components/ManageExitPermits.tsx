@@ -25,7 +25,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [activeTab, setActiveTab] = useState<'CARTABLE' | 'PROFORMA_ARCHIVE' | 'EXIT_ARCHIVE'>('CARTABLE');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewPermit, setViewPermit] = useState<ExitPermit | null>(null);
-    const [viewMode, setViewMode] = useState<'PROFORMA' | 'EXIT'>('PROFORMA');
+    const [viewMode, setViewMode] = useState<'PROFORMA' | 'EXIT' | 'CUSTOMER_INVOICE'>('PROFORMA');
     const [editPermit, setEditPermit] = useState<ExitPermit | null>(null);
     const [warehouseFinalize, setWarehouseFinalize] = useState<ExitPermit | null>(null);
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
