@@ -71,9 +71,10 @@ self.addEventListener('push', (event) => {
       renotify: true
     };
     
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'سامانه بازرگانی', options)
-    );
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'سامانه مالی', options)
+      .catch(err => console.error('Notification show error:', err))
+  );
   } catch (e) {
     console.error('Push handling error:', e);
   }
@@ -89,22 +90,17 @@ self.addEventListener('notificationclick', (event) => {
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // 1. Try to find a window already open at this exact URL
+      // 1. If any window is already open on this same origin, focus it and navigate
       for (const client of windowClients) {
-        if (client.url === targetUrl && 'focus' in client) {
-          return client.focus();
+        if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
+          return client.focus().then((fClient) => {
+            if (fClient.url !== targetUrl && 'navigate' in fClient) {
+              return fClient.navigate(targetUrl);
+            }
+          });
         }
       }
-      // 2. Try to find any window on the same origin and navigate it
-      for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
-          if ('navigate' in client) {
-            return client.navigate(targetUrl);
-          }
-        }
-      }
-      // 3. Otherwise open new window
+      // 2. Otherwise open a new window
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

@@ -2,7 +2,7 @@
   "name": "سامانه مالی و بازرگانی",
   "short_name": "سامانه مالی",
   "description": "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج",
-  "id": "com.finance.app.v1",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
@@ -10,7 +10,6 @@
   "orientation": "portrait",
   "lang": "fa",
   "dir": "rtl",
-  "categories": ["business", "finance"],
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
@@ -30,5 +29,22 @@
       "type": "image/png",
       "purpose": "any"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "سامانه مالی"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "سامانه مالی"
+    }
+  ],
+  "prefer_related_applications": false
 }

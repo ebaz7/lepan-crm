@@ -1683,11 +1683,12 @@ app.get('/api/version', (req, res) => { res.json({ version: '1.3.1' }); });
 app.get('/manifest.json', (req, res) => {
     const db = getDb();
     const settings = db.settings || {};
+    const iconUrl = settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png";
     const manifest = {
         name: settings.appName || "سامانه مالی و بازرگانی",
         short_name: settings.appName || "سامانه مالی",
         description: "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج",
-        id: "com.finance.app.v1",
+        id: "/",
         start_url: "/",
         display: "standalone",
         background_color: "#f8fafc",
@@ -1697,26 +1698,43 @@ app.get('/manifest.json', (req, res) => {
         dir: "rtl",
         icons: [
             {
-                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                src: iconUrl,
                 sizes: "192x192",
                 type: "image/png",
                 purpose: "any"
             },
             {
-                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                src: iconUrl,
                 sizes: "192x192",
                 type: "image/png",
                 purpose: "maskable"
             },
             {
-                src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                src: iconUrl,
                 sizes: "512x512",
                 type: "image/png",
                 purpose: "any"
             }
-        ]
+        ],
+        screenshots: [
+            {
+                src: iconUrl,
+                sizes: "512x512",
+                type: "image/png",
+                form_factor: "wide",
+                label: "سامانه مالی"
+            },
+            {
+                src: iconUrl,
+                sizes: "512x512",
+                type: "image/png",
+                form_factor: "narrow",
+                label: "سامانه مالی"
+            }
+        ],
+        prefer_related_applications: false
     };
-    res.json(manifest);
+    res.type('application/manifest+json').send(manifest);
 });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
