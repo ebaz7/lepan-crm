@@ -321,7 +321,39 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const handleDeleteRecord = async (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (confirm("آیا از حذف این پرونده بازرگانی اطمینان دارید؟")) { await deleteTradeRecord(id); if (selectedRecord?.id === id) setSelectedRecord(null); loadRecords(); } };
     const handleUpdateProforma = async (field: keyof TradeRecord, value: string | number) => { if (!selectedRecord) return; const updatedRecord = { ...selectedRecord, [field]: value }; setSelectedRecord(updatedRecord); await updateTradeRecord(updatedRecord); setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r)); };
     
-    const handleAddItem = async () => { if (!selectedRecord || !newItem.name) return; const weightVal = newItem.weightStr ? deformatNumberString(newItem.weightStr) : 0; const unitPriceVal = newItem.unitPriceStr ? deformatNumberString(newItem.unitPriceStr) : 0; const item: TradeItem = { id: editingItemId || generateUUID(), name: newItem.name, weight: weightVal, unitPrice: unitPriceVal, totalPrice: newItem.totalPrice || (weightVal * unitPriceVal), hsCode: newItem.hsCode }; let updatedItems = []; if (editingItemId) { updatedItems = selectedRecord.items.map(i => i.id === editingItemId ? item : i); } else { updatedItems = [...selectedRecord.items, item]; } const updatedRecord = { ...selectedRecord, items: updatedItems }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r)); setNewItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, hsCode: '', weightStr: '', unitPriceStr: '' }); setEditingItemId(null); };
+    const handleAddItem = async () => { 
+        if (!selectedRecord || !newItem.name) return; 
+        const weightVal = newItem.weightStr ? deformatNumberString(newItem.weightStr) : 0; 
+        
+        // Use unitPriceStr as "FOB Amount" (Total Price) if provided, otherwise use unitPrice * weight
+        const fobVal = newItem.unitPriceStr ? deformatNumberString(newItem.unitPriceStr) : 0;
+        
+        const unitPriceVal = weightVal > 0 ? fobVal / weightVal : 0;
+        const totalVal = fobVal;
+
+        const item: TradeItem = { 
+            id: editingItemId || generateUUID(), 
+            name: newItem.name, 
+            weight: weightVal, 
+            unitPrice: unitPriceVal, 
+            totalPrice: totalVal, 
+            hsCode: newItem.hsCode 
+        }; 
+        
+        let updatedItems = []; 
+        if (editingItemId) { 
+            updatedItems = selectedRecord.items.map(i => i.id === editingItemId ? item : i); 
+        } else { 
+            updatedItems = [...selectedRecord.items, item]; 
+        } 
+        
+        const updatedRecord = { ...selectedRecord, items: updatedItems }; 
+        await updateTradeRecord(updatedRecord); 
+        setSelectedRecord(updatedRecord); 
+        setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r)); 
+        setNewItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, hsCode: '', weightStr: '', unitPriceStr: '' }); 
+        setEditingItemId(null); 
+    };
     const handleEditItem = (item: TradeItem) => { setNewItem({ name: item.name, weight: item.weight, weightStr: formatNumberString(item.weight), unitPrice: item.unitPrice, unitPriceStr: formatNumberString(item.unitPrice), totalPrice: item.totalPrice, hsCode: item.hsCode || '' }); setEditingItemId(item.id); };
     const handleRemoveItem = async (id: string) => { if (!selectedRecord) return; const updatedItems = selectedRecord.items.filter(i => i.id !== id); const updatedRecord = { ...selectedRecord, items: updatedItems }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleAddLicenseTx = async () => { if (!selectedRecord || !newLicenseTx.amount) return; const tx: TradeTransaction = { id: generateUUID(), date: newLicenseTx.date || '', amount: Number(newLicenseTx.amount), bank: newLicenseTx.bank || '', description: newLicenseTx.description || '' }; const currentLicenseData = selectedRecord.licenseData || { transactions: [] }; const updatedTransactions = [...(currentLicenseData.transactions || []), tx]; const updatedRecord = { ...selectedRecord, licenseData: { ...currentLicenseData, transactions: updatedTransactions } }; const totalCost = updatedTransactions.reduce((acc, t) => acc + t.amount, 0); if (!updatedRecord.stages[TradeStage.LICENSES]) updatedRecord.stages[TradeStage.LICENSES] = getStageData(updatedRecord, TradeStage.LICENSES); updatedRecord.stages[TradeStage.LICENSES].costRial = totalCost; updatedRecord.stages[TradeStage.LICENSES].isCompleted = totalCost > 0; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); setNewLicenseTx({ amount: 0, bank: '', date: '', description: 'هزینه ثبت سفارش' }); };
@@ -352,7 +384,73 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const handleDeleteShippingPayment = async (id: string) => { if (!selectedRecord) return; const updatedPayments = (internalShippingForm.payments || []).filter(p => p.id !== id); const updatedData = { ...internalShippingForm, payments: updatedPayments }; setInternalShippingForm(updatedData); const updatedRecord = { ...selectedRecord, internalShippingData: updatedData }; if (!updatedRecord.stages[TradeStage.INTERNAL_SHIPPING]) updatedRecord.stages[TradeStage.INTERNAL_SHIPPING] = getStageData(updatedRecord, TradeStage.INTERNAL_SHIPPING); updatedRecord.stages[TradeStage.INTERNAL_SHIPPING].costRial = updatedPayments.reduce((acc, p) => acc + p.amount, 0); await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleAddAgentPayment = async () => { if (!selectedRecord || !newAgentPayment.amount || !newAgentPayment.agentName) return; const payment: AgentPayment = { id: generateUUID(), agentName: newAgentPayment.agentName, amount: Number(newAgentPayment.amount), bank: newAgentPayment.bank || '', date: newAgentPayment.date || '', part: newAgentPayment.part || '', description: newAgentPayment.description || '' }; const updatedPayments = [...(agentForm.payments || []), payment]; const updatedData = { ...agentForm, payments: updatedPayments }; setAgentForm(updatedData); setNewAgentPayment({ agentName: newAgentPayment.agentName, amount: 0, bank: '', date: '', part: '', description: '' }); const updatedRecord = { ...selectedRecord, agentData: updatedData }; if (!updatedRecord.stages[TradeStage.AGENT_FEES]) updatedRecord.stages[TradeStage.AGENT_FEES] = getStageData(updatedRecord, TradeStage.AGENT_FEES); updatedRecord.stages[TradeStage.AGENT_FEES].costRial = updatedPayments.reduce((acc, p) => acc + p.amount, 0); updatedRecord.stages[TradeStage.AGENT_FEES].isCompleted = updatedPayments.length > 0; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleDeleteAgentPayment = async (id: string) => { if (!selectedRecord) return; const updatedPayments = (agentForm.payments || []).filter(p => p.id !== id); const updatedData = { ...agentForm, payments: updatedPayments }; setAgentForm(updatedData); const updatedRecord = { ...selectedRecord, agentData: updatedData }; if (!updatedRecord.stages[TradeStage.AGENT_FEES]) updatedRecord.stages[TradeStage.AGENT_FEES] = getStageData(updatedRecord, TradeStage.AGENT_FEES); updatedRecord.stages[TradeStage.AGENT_FEES].costRial = updatedPayments.reduce((acc, p) => acc + p.amount, 0); await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
-    const handleAddCurrencyTranche = async () => { if (!selectedRecord || !newCurrencyTranche.amountStr || !newCurrencyTranche.rialAmountStr) return; let updatedTranches = [...(currencyForm.tranches || [])]; const rawAmount = parseFloat(newCurrencyTranche.amountStr); const rawRialAmount = deformatNumberString(newCurrencyTranche.rialAmountStr); const rawCurrencyFee = newCurrencyTranche.currencyFeeStr ? parseFloat(newCurrencyTranche.currencyFeeStr) : 0; const rawReceived = newCurrencyTranche.receivedAmountStr ? parseFloat(newCurrencyTranche.receivedAmountStr) : 0; const trancheData: any = { date: newCurrencyTranche.date || '', amount: rawAmount, currencyType: newCurrencyTranche.currencyType || selectedRecord.mainCurrency || 'EUR', brokerName: newCurrencyTranche.brokerName || '', exchangeName: newCurrencyTranche.exchangeName || '', rate: 0, rialAmount: rawRialAmount, currencyFee: rawCurrencyFee, isDelivered: newCurrencyTranche.isDelivered, deliveryDate: newCurrencyTranche.deliveryDate, returnAmount: newCurrencyTranche.returnAmount ? deformatNumberString(newCurrencyTranche.returnAmount.toString()) : undefined, returnDate: newCurrencyTranche.returnDate, receivedAmount: rawReceived }; if (editingTrancheId) { updatedTranches = updatedTranches.map(t => t.id === editingTrancheId ? { ...t, ...trancheData } : t); } else { updatedTranches.push({ ...trancheData, id: generateUUID() }); } const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const totalRialCost = updatedTranches.reduce((acc, t) => { return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); }, 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); setNewCurrencyTranche({ amount: 0, currencyType: selectedRecord.mainCurrency || 'EUR', date: '', exchangeName: '', brokerName: '', isDelivered: false, returnAmount: '', returnDate: '', receivedAmount: 0, amountStr: '', rialAmountStr: '', receivedAmountStr: '', currencyFeeStr: '' }); setEditingTrancheId(null); };
+    const handleAddCurrencyTranche = async () => { 
+        if (!selectedRecord || !newCurrencyTranche.amountStr || !newCurrencyTranche.rialAmountStr) return; 
+        
+        let updatedTranches = [...(currencyForm.tranches || [])]; 
+        const rawAmount = deformatNumberString(newCurrencyTranche.amountStr); 
+        const rawRialAmount = deformatNumberString(newCurrencyTranche.rialAmountStr); 
+        const rawCurrencyFee = newCurrencyTranche.currencyFeeStr ? deformatNumberString(newCurrencyTranche.currencyFeeStr) : 0; 
+        const rawReceived = newCurrencyTranche.receivedAmountStr ? deformatNumberString(newCurrencyTranche.receivedAmountStr) : 0; 
+        const rawReturnAmount = newCurrencyTranche.returnAmount ? deformatNumberString(newCurrencyTranche.returnAmount.toString()) : undefined;
+
+        const trancheData: any = { 
+            date: newCurrencyTranche.date || '', 
+            amount: rawAmount, 
+            currencyType: newCurrencyTranche.currencyType || selectedRecord.mainCurrency || 'EUR', 
+            brokerName: newCurrencyTranche.brokerName || '', 
+            exchangeName: newCurrencyTranche.exchangeName || '', 
+            rate: 0, 
+            rialAmount: rawRialAmount, 
+            currencyFee: rawCurrencyFee, 
+            isDelivered: newCurrencyTranche.isDelivered, 
+            deliveryDate: newCurrencyTranche.deliveryDate, 
+            returnAmount: rawReturnAmount, 
+            returnDate: newCurrencyTranche.returnDate, 
+            receivedAmount: rawReceived 
+        }; 
+
+        if (editingTrancheId) { 
+            updatedTranches = updatedTranches.map(t => t.id === editingTrancheId ? { ...t, ...trancheData } : t); 
+        } else { 
+            updatedTranches.push({ ...trancheData, id: generateUUID() }); 
+        } 
+
+        const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); 
+        const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); 
+        const totalRialCost = updatedTranches.reduce((acc, t) => { 
+            return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); 
+        }, 0); 
+
+        const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; 
+        setCurrencyForm(updatedForm); 
+
+        const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; 
+        if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); 
+        updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; 
+        updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; 
+
+        await updateTradeRecord(updatedRecord); 
+        setSelectedRecord(updatedRecord); 
+        setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r));
+        
+        setNewCurrencyTranche({ 
+            amount: 0, 
+            currencyType: selectedRecord.mainCurrency || 'EUR', 
+            date: '', 
+            exchangeName: '', 
+            brokerName: '', 
+            isDelivered: false, 
+            returnAmount: '', 
+            returnDate: '', 
+            receivedAmount: 0, 
+            amountStr: '', 
+            rialAmountStr: '', 
+            receivedAmountStr: '', 
+            currencyFeeStr: '' 
+        }); 
+        setEditingTrancheId(null); 
+    };
     const handleEditTranche = (tranche: any) => { setNewCurrencyTranche({ amount: tranche.amount, amountStr: tranche.amount.toString(), currencyType: tranche.currencyType, date: tranche.date, exchangeName: tranche.exchangeName, brokerName: tranche.brokerName, isDelivered: tranche.isDelivered, deliveryDate: tranche.deliveryDate, rate: tranche.rate, rialAmountStr: formatNumberString(tranche.rialAmount || 0), currencyFeeStr: tranche.currencyFee ? tranche.currencyFee.toString() : '', returnAmount: tranche.returnAmount ? formatNumberString(tranche.returnAmount) : '', returnDate: tranche.returnDate, receivedAmount: tranche.receivedAmount, receivedAmountStr: tranche.receivedAmount ? tranche.receivedAmount.toString() : '' }); setEditingTrancheId(tranche.id); };
     const handleCancelEditTranche = () => { setNewCurrencyTranche({ amount: 0, currencyType: selectedRecord?.mainCurrency || 'EUR', date: '', exchangeName: '', brokerName: '', isDelivered: false, returnAmount: '', returnDate: '', receivedAmount: 0, amountStr: '', rialAmountStr: '', receivedAmountStr: '', currencyFeeStr: '' }); setEditingTrancheId(null); };
 
@@ -830,9 +928,11 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 <div className="flex gap-2 items-end mb-4 bg-gray-50 p-3 rounded-lg flex-wrap">
                                     <div className="flex-1 min-w-[150px] space-y-1"><label className="text-xs text-gray-500">شرح کالا</label><input className="w-full border rounded p-2 text-sm" placeholder="نام کالا" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})}/></div>
                                     <div className="w-32 space-y-1"><label className="text-xs text-gray-500">HS Code</label><input className="w-full border rounded p-2 text-sm dir-ltr" placeholder="کد تعرفه" value={newItem.hsCode || ''} onChange={e => setNewItem({...newItem, hsCode: e.target.value})}/></div>
-                                    <div className="w-24 space-y-1"><label className="text-xs text-gray-500">وزن (KG)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr" placeholder="0" value={newItem.weightStr} onChange={e => setNewItem({...newItem, weightStr: e.target.value, weight: parseFloat(e.target.value) || 0})}/></div>
-                                    <div className="w-28 space-y-1"><label className="text-xs text-gray-500">فی (Unit)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr" placeholder="0" value={newItem.unitPriceStr} onChange={e => setNewItem({...newItem, unitPriceStr: e.target.value, unitPrice: parseFloat(e.target.value) || 0})}/></div>
-                                    <div className="w-32 space-y-1"><label className="text-xs text-gray-500">قیمت کل</label><input type="number" step="0.01" className="w-full border rounded p-2 text-sm dir-ltr bg-gray-100" placeholder="Auto" value={newItem.totalPrice || (Number(newItem.weight) * Number(newItem.unitPrice))} readOnly/></div>
+                                    <div className="w-24 space-y-1"><label className="text-xs text-gray-500">وزن (KG)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr" placeholder="0" value={newItem.weightStr} onChange={e => setNewItem({...newItem, weightStr: e.target.value, weight: deformatNumberString(e.target.value) || 0})}/></div>
+                                    <div className="w-32 space-y-1"><label className="text-xs text-gray-500">مبلغ فوب (FOB)</label><input type="text" className="w-full border rounded p-2 text-sm dir-ltr" placeholder="0" value={newItem.unitPriceStr} onChange={e => setNewItem({...newItem, unitPriceStr: e.target.value, unitPrice: deformatNumberString(e.target.value) || 0})}/></div>
+                                    <div className="w-32 space-y-1"><label className="text-xs text-gray-500">فی محاسبه شده</label><div className="w-full border rounded p-2 text-sm dir-ltr bg-gray-100 font-mono text-center h-[38px] flex items-center justify-center">
+                                        {formatNumberString(deformatNumberString(newItem.weightStr || '0') > 0 ? deformatNumberString(newItem.unitPriceStr || '0') / deformatNumberString(newItem.weightStr || '0') : 0)}
+                                    </div></div>
                                     <button onClick={handleAddItem} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 h-[38px] min-w-[40px] flex items-center justify-center">{editingItemId ? <Save size={18}/> : <Plus size={18}/>}</button>
                                     {editingItemId && <button onClick={() => { setEditingItemId(null); setNewItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, hsCode: '', weightStr: '', unitPriceStr: '' }); }} className="bg-gray-200 text-gray-700 p-2 rounded-lg hover:bg-gray-300 h-[38px]"><X size={18}/></button>}
                                 </div>
@@ -1062,8 +1162,9 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div className="flex-1 glass-panel p-6 rounded-xl shadow-sm border space-y-6">
                                 <h3 className="font-bold text-gray-800 border-b pb-2 mb-4">{activeShippingSubTab === 'Commercial Invoice' ? 'سیاهه تجاری (Invoice)' : activeShippingSubTab === 'Packing List' ? 'لیست عدل‌بندی (Packing List)' : activeShippingSubTab}</h3>
                                 {/* ... Document Form ... */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره سند</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={shippingDocForm.documentNumber} onChange={e => setShippingDocForm({...shippingDocForm, documentNumber: e.target.value})} /></div>
+                                    <div className="space-y-1"><label className="text-xs font-bold text-gray-700">پارت / دوره</label><input className="w-full border rounded p-2 text-sm" placeholder="مثلا: پارت اول" value={shippingDocForm.description || ''} onChange={e => setShippingDocForm({...shippingDocForm, description: e.target.value})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">تاریخ سند</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={shippingDocForm.documentDate} onChange={e => setShippingDocForm({...shippingDocForm, documentDate: e.target.value})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">وضعیت</label><select className="w-full border rounded p-2 text-sm" value={shippingDocForm.status} onChange={e => setShippingDocForm({...shippingDocForm, status: e.target.value as DocStatus})}><option value="Draft">پیش‌نویس</option><option value="Final">نهایی</option></select></div>
                                 </div>
@@ -1149,7 +1250,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">هزینه بازرسی (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newInspectionCertificate.amount)} onChange={e => setNewInspectionCertificate({...newInspectionCertificate, amount: deformatNumberString(e.target.value)})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">پارت / توضیحات</label><div className="flex gap-1"><input className="w-full border rounded p-2 text-sm" value={newInspectionCertificate.part} onChange={e => setNewInspectionCertificate({...newInspectionCertificate, part: e.target.value})} /><button onClick={handleAddInspectionCertificate} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Plus size={16}/></button></div></div>
                                 </div>
-                                <div className="overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">شرکت</th><th className="p-3">شماره گواهی</th><th className="p-3">هزینه</th><th className="p-3">پارت</th><th className="p-3">حذف</th></tr></thead><tbody>{inspectionForm.certificates?.map(c => (<tr key={c.id} className="border-b hover:bg-gray-50"><td className="p-3">{c.company}</td><td className="p-3 font-mono">{c.certificateNumber}</td><td className="p-3 font-mono">{formatCurrency(c.amount)}</td><td className="p-3">{c.part}</td><td className="p-3"><button onClick={()=>handleDeleteInspectionCertificate(c.id)} className="text-red-500"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
+                                <div className="overflow-x-auto"><table className="w-full text-sm text-right"><thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">شرکت</th><th className="p-3">شماره گواهی</th><th className="p-3">هزینه</th><th className="p-3">پارت</th><th className="p-3">حذف</th></tr></thead><tbody>{inspectionForm.certificates?.map(c => (<tr key={c.id} className="border-b hover:bg-gray-50"><td className="p-3">{c.company}</td><td className="p-3 font-mono">{c.certificateNumber}</td><td className="p-3 font-mono">{formatCurrency(c.amount)}</td><td className="p-3">{c.part}</td><td className="p-3"><button onClick={()=>handleDeleteInspectionCertificate(c.id)} className="text-red-500"><Trash2 size={16}/></button></td></tr>))}</tbody><tfoot className="bg-blue-50 font-bold"><tr><td colSpan={2} className="p-3 text-center">جمع کل هزینه‌های بازرسی</td><td className="p-3 font-mono text-blue-700">{formatCurrency(inspectionForm.certificates?.reduce((acc, c) => acc + c.amount, 0) || 0)}</td><td colSpan={2}></td></tr></tfoot></table></div>
                             </div>
                             <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800">پرداخت‌های بازرسی</h3>
@@ -1392,6 +1493,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                 // Effective Rate = Total Project Cost (Rial) / Total Proforma Currency (Items + Freight)
                                 const effectiveRate = totalProformaCurrency > 0 ? grandTotalRialProject / totalProformaCurrency : 0;
                                 
+                                // NEW Calculation: Finished Rate of Currency (Purely for Currency Purchase)
+                                const totalPurchasedCurrency = currencyTranches.reduce((sum, t) => sum + t.amount, 0);
+                                const finishedCurrencyRate = totalPurchasedCurrency > 0 ? netCurrencyRialCost / totalPurchasedCurrency : 0;
+
                                 // Freight per KG (Currency) = Total Freight (Currency) / Total Weight
                                 const freightPerKgCurrency = totalWeight > 0 ? totalFreightCurrency / totalWeight : 0;
 
@@ -1432,8 +1537,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </div>
                                                     
                                                     <div className="flex justify-between items-center pt-2 border-t border-gray-300">
-                                                        <span className="text-sm font-bold text-gray-700">نرخ ریالی هر واحد ارز (فی ارز):</span>
-                                                        <span className="text-lg font-black text-rose-700 dir-ltr">{formatCurrency(effectiveRate)}</span>
+                                                        <span className="text-sm font-bold text-gray-700">میانگین موزون نرخ ارز (خرید):</span>
+                                                        <span className="text-lg font-black text-rose-700 dir-ltr">{formatCurrency(finishedCurrencyRate)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center mt-1">
+                                                        <span className="text-xs font-bold text-gray-500">نرخ نهایی ارز (با سربار):</span>
+                                                        <span className="text-sm font-bold text-blue-700 dir-ltr">{formatCurrency(effectiveRate)}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center mt-1">
                                                         <span className="text-xs font-bold text-gray-500">هزینه حمل ارزی هر کیلو:</span>
@@ -1562,7 +1671,20 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     ))
                 ) : (
                     safeRecords
-                        .filter(r => (showArchived ? r.isArchived : !r.isArchived) && ((r.company || 'بدون شرکت') === selectedCompany) && ((r.commodityGroup || 'سایر') === selectedGroup) && (r.goodsName.includes(searchTerm) || r.fileNumber.includes(searchTerm)))
+                        .filter(r => {
+                            const matchSearch = searchTerm.trim() === '' || 
+                                r.goodsName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                r.fileNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                (r.sellerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                (r.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                (r.registrationNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                r.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+                            return (showArchived ? r.isArchived : !r.isArchived) && 
+                                   ((r.company || 'بدون شرکت') === selectedCompany) && 
+                                   ((r.commodityGroup || 'سایر') === selectedGroup) && 
+                                   matchSearch;
+                        })
                         .map(record => (
                             <div key={record.id} onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }} className="glass-panel p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500 relative">
                                 {/* DELETE BUTTON ADDED HERE - Moved to Right to avoid status overlap */}
