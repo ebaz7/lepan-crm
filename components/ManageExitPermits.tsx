@@ -530,14 +530,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     return (
         <div className="space-y-6 pb-20 animate-fade-in">
-             {/* Hidden Render */}
+            {/* Hidden Render */}
              {activeAutoSends.map(p => (
                 <div key={p.id} className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
                     <div id={`print-permit-autosend-noprice-${p.id}`}>
                         <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={false} mode="EXIT" />
                     </div>
                     <div id={`print-permit-autosend-price-${p.id}`}>
-                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="EXIT" />
+                        <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="PROFORMA" />
                     </div>
                     <div id={`print-permit-autosend-customer-${p.id}`}>
                         <PrintExitPermit permit={p} onClose={()=>{}} embed showPrice={true} mode="CUSTOMER_INVOICE" />

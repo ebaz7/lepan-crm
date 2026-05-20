@@ -250,7 +250,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const totalCartonsDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
   const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(2));
   const totalAmount = displayItems.reduce((acc, i) => acc + (Number(i.weight || 0) * (Number(i.price || 0) || Number(permit.price || 0))), 0);
-  const showDeliveryColumns = mode === 'EXIT' && displayItems.some(i => i.deliveredCartonCount !== undefined);
+  const showDeliveryColumns = mode === 'EXIT' || (displayItems.some(i => i.deliveredCartonCount !== undefined && i.deliveredCartonCount !== i.cartonCount));
 
   const currentCompany = (settings?.companies || []).find(c => c.name === permit.company) || (settings?.companies || [])[0];
 
@@ -433,8 +433,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات فاکتور</h3><div className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} rounded-xl p-3 glass-panel text-sm min-h-[40px]`}>{permit.description}</div></div>)}
             </div>
 
-            <div className={`mt-auto pt-4 ${mode === 'CUSTOMER_INVOICE' ? 'border-t-4 border-blue-900' : 'border-t-4 border-black'} grid grid-cols-5 gap-2 text-center items-end`}>
-                {(mode === 'CUSTOMER_INVOICE' || permit.status === ExitPermitStatus.EXITED) ? (
+            <div className={`mt-auto pt-4 ${mode === 'CUSTOMER_INVOICE' || mode === 'PROFORMA' ? 'border-t-4 border-blue-900' : 'border-t-4 border-black'} grid ${mode === 'CUSTOMER_INVOICE' || mode === 'PROFORMA' ? 'grid-cols-5' : 'grid-cols-6'} gap-2 text-center items-end`}>
+                {(mode === 'CUSTOMER_INVOICE' || mode === 'PROFORMA') ? (
                     <>
                         <div className="col-span-2 flex flex-col items-start justify-between min-h-[140px] p-3 bg-blue-50/20 rounded-xl border border-blue-100 mt-2">
                              <div className="text-[11px] font-black text-blue-900 mb-2 border-b-2 border-blue-200 w-full pb-1">توضیحات و شرایط قانونی فاکتور:</div>

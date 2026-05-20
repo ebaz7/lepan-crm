@@ -399,8 +399,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             driverName: type === 'OUT' ? driverName : undefined, 
             plateNumber: type === 'OUT' ? plateNumber : undefined, 
             destination: type === 'OUT' ? destination : undefined,
-            status: type === 'OUT' ? 'APPROVED' : undefined,
-            approvedBy: type === 'OUT' ? currentUser.fullName : undefined
+            status: type === 'OUT' ? 'PENDING' : undefined,
         };
 
         try {
@@ -408,8 +407,8 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             await loadData();
             if(type === 'OUT') {
                 updateNextBijak();
-                setActiveAutoSends(prev => [...prev, { tx, type: 'APPROVED' }]);
-                alert('بیجک ثبت و تایید نهایی شد.');
+                setActiveAutoSends(prev => [...prev, { tx, type: 'CREATED' }]);
+                alert('بیجک ثبت شد و در انتظار تایید مدیریت است.');
                 setRecipientName(''); setDriverName(''); setPlateNumber(''); setDestination('');
             } else {
                 setProformaNumber(''); alert('ورود کالا ثبت شد.');
