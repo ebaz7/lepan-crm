@@ -614,8 +614,8 @@ export const generatePdfBuffer = async (html, options = {}) => {
              finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>${html}</body></html>`;
         }
         
-        await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
-        const pdfOptions = { format: 'A4', printBackground: true, ...options };
+        await page.setContent(finalHtml, { waitUntil: 'networkidle0', timeout: 90000 });
+        const pdfOptions = { format: 'A4', printBackground: true, ...options, timeout: 90000 };
         const pdf = await page.pdf(pdfOptions);
         await page.close();
         return pdf;

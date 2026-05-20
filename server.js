@@ -263,6 +263,24 @@ setupAutoBackup();
 setupDailyReports();
 setTimeout(performAutoBackup, 15000); 
 
+// --- STARTUP CLEANUP: Deduplicate Subscriptions ---
+try {
+    const db = getDb();
+    if (db.subscriptions && db.subscriptions.length > 0) {
+        const initialCount = db.subscriptions.length;
+        const seen = new Set();
+        db.subscriptions = db.subscriptions.filter(s => {
+            if (!s.endpoint || seen.has(s.endpoint)) return false;
+            seen.add(s.endpoint);
+            return true;
+        });
+        if (db.subscriptions.length < initialCount) {
+            console.log(`🧹 Startup Cleanup: Removed ${initialCount - db.subscriptions.length} duplicate subscriptions.`);
+            saveDb(db);
+        }
+    }
+} catch(e) { console.error("Startup Cleanup Err:", e); }
+
 // Shared helpers moved to utils.js
 
 // --- NOTIFICATION HELPER ---
@@ -271,11 +289,19 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
         const db = getDb();
         const subs = db.subscriptions || [];
         
-        console.log(`>>> Broadcasting Notification: "${title}" to ${subs.length} devices.`);
+        // Deduplicate within this broadcast attempt to be absolutely sure
+        const seenEndpoints = new Set();
+        const uniqueSubs = subs.filter(sub => {
+            if (seenEndpoints.has(sub.endpoint)) return false;
+            seenEndpoints.add(sub.endpoint);
+            return true;
+        });
+
+        console.log(`>>> Broadcasting Notification: "${title}" to ${uniqueSubs.length} unique devices (Filtered from ${subs.length}).`);
 
         const payload = JSON.stringify({ title, body, url });
 
-        const sendPromises = subs.filter(sub => {
+        const sendPromises = uniqueSubs.filter(sub => {
             // 1. EXPLICIT EXCLUSION (e.g. Sender)
             if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
 
@@ -298,7 +324,7 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                 if (err.statusCode === 404 || err.statusCode === 410) {
                     console.log(`Removing expired subscription for ${sub.username}`);
                     const db = getDb();
-                    db.subscriptions = db.subscriptions.filter(s => s.endpoint !== sub.endpoint);
+                    db.subscriptions = (db.subscriptions || []).filter(s => s.endpoint !== sub.endpoint);
                     saveDb(db);
                 } else {
                     console.error("Push error:", err);
@@ -386,17 +412,28 @@ app.post('/api/subscribe', (req, res) => {
     if (!db.subscriptions) db.subscriptions = [];
     
     const newSub = req.body;
-    // Prevent duplicates
-    const exists = db.subscriptions.find(s => s.endpoint === newSub.endpoint);
-    if (!exists) {
+    // Prevent duplicates and CLEANUP existing duplicates for this endpoint
+    const idx = db.subscriptions.findIndex(s => s.endpoint === newSub.endpoint);
+    
+    if (idx === -1) {
         db.subscriptions.push(newSub);
-        saveDb(db);
     } else {
-        // Update user info if changed
-        const idx = db.subscriptions.findIndex(s => s.endpoint === newSub.endpoint);
+        // Update user info and keep it fresh
         db.subscriptions[idx] = { ...db.subscriptions[idx], ...newSub };
-        saveDb(db);
     }
+    
+    // Global deduplication check: ensure no two entries have the same endpoint
+    const seen = new Set();
+    const unique = [];
+    for (const s of db.subscriptions) {
+        if (!seen.has(s.endpoint)) {
+            seen.add(s.endpoint);
+            unique.push(s);
+        }
+    }
+    db.subscriptions = unique;
+
+    saveDb(db);
     res.status(201).json({});
 });
 

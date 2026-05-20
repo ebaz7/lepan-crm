@@ -290,6 +290,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
 
             if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalPayments.length} پرداخت...`).catch(()=>{});
             try {
+                console.log(`[DailyReport] Generating Payment PDF for ${finalPayments.length} items...`);
                 const htmlParts = [];
                 for (const p of finalPayments) {
                     try {
@@ -298,13 +299,20 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                             const b64 = imgBuffer.toString('base64');
                             htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
                         }
-                    } catch(e) { }
+                    } catch(e) { console.error(`[DailyReport] Failed to generate image for payment ${p.trackingNumber}:`, e.message); }
                 }
                 if (htmlParts.length > 0) {
+                    console.log(`[DailyReport] HTML composed, calling generatePdfBuffer...`);
                     const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                    console.log(`[DailyReport] PDF buffer ready (${pdfBuffer.length} bytes). Sending...`);
                     if (sendDocFn) {
-                        await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+                        const res = await sendDocFn(chatId, pdfBuffer, `Payment_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `💰 گزارش تصاویر پرداختی‌ها ${dateStr}`);
+                        console.log(`[DailyReport] PDF send result:`, res ? "Success" : "Failed/Empty");
+                    } else {
+                        console.error(`[DailyReport] sendDocFn is not defined for ${platform}`);
                     }
+                } else {
+                    console.warn(`[DailyReport] No images generated for Payment PDF.`);
                 }
             } catch (e) { console.error("PDF generation failed:", e); }
         } else if (isAccounting) {
@@ -341,6 +349,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
 
                 if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
                 try {
+                    console.log(`[DailyReport] Generating Bijak PDF for ${finalBijaks.length} items...`);
                     const htmlParts = [];
                     for (const b of finalBijaks) {
                         try {
@@ -352,7 +361,9 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                         } catch(e) { console.error("Error generating image for bijak", b.id, e); }
                     }
                     if (htmlParts.length > 0) {
+                        console.log(`[DailyReport] Bijak HTML composed, calling generatePdfBuffer...`);
                         const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                        console.log(`[DailyReport] Bijak PDF buffer ready (${pdfBuffer.length} bytes). Sending...`);
                         if (sendDocFn) {
                             await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
                         }
@@ -380,6 +391,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                 if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalExits.length} خروج...`).catch(()=>{});
                 
                 try {
+                    console.log(`[DailyReport] Generating Exit PDF for ${finalExits.length} items...`);
                     const htmlParts = [];
                     for (const p of finalExits) {
                         try {
@@ -391,7 +403,9 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
                         } catch(e) { console.error("Error generating image for permit", p.id, e); }
                     }
                     if (htmlParts.length > 0) {
+                        console.log(`[DailyReport] Exit HTML composed, calling generatePdfBuffer...`);
                         const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                        console.log(`[DailyReport] Exit PDF buffer ready (${pdfBuffer.length} bytes). Sending...`);
                         if (sendDocFn) {
                             await sendDocFn(chatId, pdfBuffer, `Exit_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `🚛 گزارش تصاویر خروج ${dateStr}`);
                         }
