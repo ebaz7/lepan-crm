@@ -557,14 +557,20 @@ function App() {
   return (
     <>
         {toast && toast.show && (
-            <div style={{ zIndex: 9999999 }} className="fixed top-4 md:top-8 left-1/2 transform -translate-x-1/2 glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-start gap-4 min-w-[320px] max-w-[90vw] animate-slide-down backdrop-blur-3xl overflow-hidden" onClick={closeToast}>
-                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-                <div className="bg-blue-500/10 p-2.5 rounded-2xl text-blue-600 dark:text-blue-400 border border-blue-500/20"><Bell size={20} className="animate-pulse" /></div>
-                <div className="flex-1">
-                    <h4 className="font-black text-gray-900 dark:text-gray-100 text-sm mb-0.5 tracking-tight">{toast.title}</h4>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-bold">{toast.message}</p>
+            <div className="fixed inset-0 flex items-center justify-center p-6 z-[9999999] pointer-events-none">
+                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-[2.5rem] p-6 flex items-center gap-5 min-w-[320px] max-w-[95vw] animate-scale-in backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
+                    <div className="absolute top-0 right-0 w-2 h-full bg-blue-500 shadow-[0_0_25px_rgba(59,130,246,0.5)]"></div>
+                    <div className="bg-blue-600 p-4 rounded-[1.5rem] text-white shadow-lg flex-shrink-0 animate-pulse">
+                        <Bell size={28} />
+                    </div>
+                    <div className="flex-1 pr-1 text-right">
+                        <h4 className="font-extrabold text-gray-900 dark:text-white text-lg mb-1 tracking-tight">{toast.title}</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-200 leading-relaxed font-bold">{toast.message}</p>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-2.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95 flex-shrink-0">
+                        <X size={24} />
+                    </button>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><X size={18} /></button>
             </div>
         )}
         {!currentUser ? (
