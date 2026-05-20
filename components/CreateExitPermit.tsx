@@ -223,8 +223,8 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         const base64WithPrice = can2.toDataURL('image/png').split(',')[1];
                         
                         const users = await getUsers();
-                        const captionWithPrice = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n💰 مبلغ: ${newPermit.price}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
-                        const captionNoPrice = `📋 *صدور حواله خروج جدید*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nدر انتظار بررسی و تایید.`;
+                        const captionWithPrice = `📋 *صدور مجوز خروج کارخانه*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n💰 مبلغ: ${newPermit.price}\n\nجهت بررسی و تایید مدیرعامل ارسال شد.`;
+                        const captionNoPrice = `📋 *صدور مجوز خروج کارخانه*\n🏭 شرکت: ${newPermit.company}\n🔢 شماره: ${newPermit.permitNumber}\n👤 گیرنده: ${newPermit.recipientName}\n📦 کالا: ${newPermit.goodsName}\n\nدر انتظار بررسی و تایید.`;
                         
                         const mediaNoPrice = { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${newPermit.permitNumber}.png` };
                         const mediaWithPrice = { data: base64WithPrice, mimeType: 'image/png', filename: `Proforma_${newPermit.permitNumber}.png` };

@@ -339,7 +339,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 }
             }
 
-            let caption = `🚛 *حواله خروج بار*\n${captionTitle}\n\n`;
+            let caption = `🚛 *مجوز خروج کارخانه*\n${captionTitle}\n\n`;
             caption += `🔢 شماره: ${permit.permitNumber}\n`;
             caption += `👤 گیرنده: ${permit.recipientName}\n`;
             caption += `📦 کالا: ${permit.goodsName}\n`;
