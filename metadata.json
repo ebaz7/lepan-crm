@@ -1,7 +1,10 @@
 {
-  "name": "Payment & Order Management System",
-  "description": "A comprehensive payment order and bot management system with approval workflows, formal printing, and multi-platform bot integration.",
+  "name": "سامانه مالی و خروج",
+  "description": "سیستم پیشرفته مدیریت پرداخت‌ها و مجوزهای خروج کالا با یکپارچگی ربات‌های تلگرام و بله",
   "requestFramePermissions": [
     "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

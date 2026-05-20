@@ -1689,15 +1689,17 @@ app.get('/manifest.json', (req, res) => {
     const manifest = {
         name: appName,
         short_name: settings.appName || "سامانه مالی",
-        description: "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج",
+        description: "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج کالا",
         id: "/",
         start_url: "/",
+        scope: "/",
         display: "standalone",
         background_color: "#f8fafc",
         theme_color: "#2563eb",
         orientation: "portrait",
         lang: "fa",
         dir: "rtl",
+        categories: ["finance", "business", "productivity"],
         icons: [
             {
                 src: iconUrl,
@@ -1716,6 +1718,12 @@ app.get('/manifest.json', (req, res) => {
                 sizes: "512x512",
                 type: "image/png",
                 purpose: "any"
+            },
+            {
+                src: iconUrl,
+                sizes: "512x512",
+                type: "image/png",
+                purpose: "maskable"
             }
         ],
         screenshots: [

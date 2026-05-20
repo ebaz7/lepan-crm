@@ -197,6 +197,34 @@ export const generateRecordImage = async (record, type, options = {}) => {
         let htmlData = '';
         let title = '';
 
+        const renderPlate = (plate) => {
+            if (!plate || plate === '-') return '<div style="font-size: 14px; color: #999;">-</div>';
+            
+            // Expected format: 12A34567 where A is persian char
+            const match = plate.match(/^(\d{2})([آابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی])(\d{3})(\d{2})$/);
+            if (!match) return `<div dir="ltr" style="display: inline-block; font-size: 16px; border: 2px solid #333; padding: 2px 8px; border-radius: 6px; background: white; font-family: monospace;">${plate}</div>`;
+
+            const [_, p1, char, p2, city] = match;
+            return `
+                <div style="display: inline-flex; align-items: center; border: 2px solid #000; border-radius: 4px; overflow: hidden; background: #fff; height: 32px; font-family: 'Vazirmatn', sans-serif; direction: ltr;">
+                    <div style="background: #1e40af; width: 14px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px;">
+                        <div style="width: 8px; height: 3px; background: #166534; margin-bottom: 1px;"></div>
+                        <div style="width: 8px; height: 3px; background: white; margin-bottom: 1px;"></div>
+                        <div style="width: 8px; height: 3px; background: #b91c1c; margin-bottom: 1px;"></div>
+                        <div style="color: white; font-size: 4px; font-weight: bold; margin-top: 2px;">IR</div>
+                        <div style="color: white; font-size: 4px; text-decoration: underline;">IRAN</div>
+                    </div>
+                    <div style="padding: 0 6px; font-size: 20px; font-weight: 900; line-height: 1;">${p1}</div>
+                    <div style="font-size: 18px; font-weight: 900; line-height: 1; padding: 0 4px;">${char}</div>
+                    <div style="padding: 0 6px; font-size: 20px; font-weight: 900; line-height: 1;">${p2}</div>
+                    <div style="border-left: 2px solid #000; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 4px; min-width: 24px;">
+                        <div style="font-size: 8px; font-weight: bold; border-bottom: 1px solid #000; width: 100%; text-align: center; margin-bottom: 2px;">ایران</div>
+                        <div style="font-size: 14px; font-weight: 900; line-height: 1;">${city}</div>
+                    </div>
+                </div>
+            `;
+        };
+
         if (type === 'PAYMENT') {
             title = 'دستور پرداخت وجه';
             if (isEdit) title += ' (ویرایش شده)';
@@ -341,7 +369,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                                 <div><span style="color: #6b7280; margin-left: 2px;">نام:</span> <b style="font-size: 15px;">${record.driverName || '-'}</b></div>
                                 <div><span style="color: #6b7280; margin-left: 2px;">موبایل:</span> <b style="font-size: 15px; font-family: monospace;">${record.driverPhone || '-'}</b></div>
-                                <div style="grid-column: span 2;"><span style="color: #6b7280; margin-left: 2px;">پلاک:</span> <b dir="ltr" style="display: inline-block; font-size: 16px; border: 2px solid #333; padding: 2px 8px; border-radius: 6px; background: white; font-family: monospace;">${record.plateNumber || '-'}</b></div>
+                                <div style="grid-column: span 2;"><span style="color: #6b7280; margin-left: 2px;">پلاک:</span> ${renderPlate(record.plateNumber)}</div>
                             </div>
                         </div>
                     </div>
@@ -358,7 +386,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                 <th style="width: 90px; border: 2px solid black; color: #15803d;">تعداد خروجی</th>
                                 <th style="width: 90px; border: 2px solid black;">وزن درخواستی</th>
                                 <th style="width: 90px; border: 2px solid black; color: #15803d;">وزن خروجی</th>
-                                <th style="width: 100px; border: 2px solid black;">فی / قیمت</th>
+                                ${options.forceHidePrices ? '' : '<th style="width: 100px; border: 2px solid black;">فی / قیمت</th>'}
                             </tr>
                         </thead>
                         <tbody style="font-size: 14px;">
@@ -376,7 +404,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                                     <td style="font-weight: bold; border: 2px solid black; color: #15803d; background: #f0fdf4;">${delQty}</td>
                                     <td style="font-weight: bold; border: 2px solid black;">${reqWeight}</td>
                                     <td style="font-weight: bold; border: 2px solid black; color: #15803d; background: #f0fdf4;">${delWeight}</td>
-                                    <td style="font-family: monospace; border: 2px solid black;">${price}</td>
+                                    ${options.forceHidePrices ? '' : `<td style="font-family: monospace; border: 2px solid black;">${price}</td>`}
                                 </tr>
                             `;}).join('')}
                         </tbody>
@@ -507,7 +535,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                         <div><span style="color: #6b7280;">${isBijak ? 'تحویل گیرنده' : 'فرستنده'}:</span> <b>${isBijak ? record.recipientName : (record.supplierName || record.proformaNumber)}</b></div>
                         <div><span style="color: #6b7280;">مقصد/محل:</span> <b>${record.destination || record.location || '-'}</b></div>
                         <div><span style="color: #6b7280;">راننده:</span> <b>${record.driverName || '-'}</b></div>
-                        <div><span style="color: #6b7280;">پلاک:</span> <b style="direction: ltr; display: inline-block;">${record.plateNumber || '-'}</b></div>
+                        <div><span style="color: #6b7280;">پلاک:</span> ${renderPlate(record.plateNumber)}</div>
                     </div>
                 </div>
 
