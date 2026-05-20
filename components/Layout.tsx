@@ -259,6 +259,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const canCreatePayment = perms.canCreatePaymentOrder === true;
   const canViewPayment = perms.canViewPaymentOrders === true;
   const canCreateExit = perms.canCreateExitPermit === true;
+  const canViewInvoices = perms.canViewInvoices === true;
   const canViewExit = perms.canViewExitPermits === true;
   const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true;
   const canSeeTrade = perms.canManageTrade === true;
@@ -276,6 +277,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canCreatePayment) navItems.push({ id: 'create', label: 'ثبت پرداخت', icon: PlusCircle });
   if (canViewPayment) navItems.push({ id: 'manage', label: 'سوابق پرداخت', icon: ListChecks });
   if (canCreateExit) navItems.push({ id: 'create-exit', label: 'ثبت خروج', icon: Truck });
+  if (canViewInvoices) navItems.push({ id: 'manage-invoices', label: 'مدیریت فاکتورها', icon: FileText });
   if (canViewExit) navItems.push({ id: 'manage-exit', label: 'سوابق خروج', icon: ClipboardList });
   if (canManageWarehouse) navItems.push({ id: 'warehouse', label: 'مدیریت انبار', icon: Package });
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });

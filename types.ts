@@ -122,6 +122,7 @@ export interface RolePermissions {
   canManageSettings?: boolean;
   canCreateExitPermit?: boolean;
   canViewExitPermits?: boolean;
+  canViewInvoices?: boolean; // NEW: Access to Invoices Cartable
   canApproveExitCeo?: boolean;
   canApproveExitFactory?: boolean;
   canApproveExitWarehouse?: boolean;

@@ -7,7 +7,7 @@ import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
@@ -18,7 +18,7 @@ import html2canvas from 'html2canvas';
 
 import { isInFinancialYear } from '../utils/dateUtils';
 
-const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any, financialYear?: string }> = ({ currentUser, settings, statusFilter, financialYear }) => {
+const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings, statusFilter?: any, financialYear?: string, mode?: 'INVOICE' | 'EXIT' }> = ({ currentUser, settings, statusFilter, financialYear, mode = 'EXIT' }) => {
     const isMobile = useIsMobile();
     const [permits, setPermits] = useState<ExitPermit[]>([]);
     const [loading, setLoading] = useState(true);
@@ -82,8 +82,23 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    const myCartablePermits = permits.filter(p => isMyTurn(p));
+    const getMyCartableFiltered = () => {
+        return permits.filter(p => {
+            if (!isMyTurn(p)) return false;
+            if (mode === 'INVOICE') return p.status === ExitPermitStatus.PENDING_CEO;
+            return p.status !== ExitPermitStatus.PENDING_CEO;
+        });
+    };
+
+    const myCartablePermits = getMyCartableFiltered();
+    
+    // Proformas: active invoices pending completion
     const proformaArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
+    
+    // Invoices Archive: all permits shown as invoices (maybe all non-rejected ones)
+    const invoiceArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.REJECTED);
+
+    // Exited Archive: only completed factory exits
     const exitArchivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED);
 
     const canSeeProforma = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.CEO || currentUser?.role === UserRole.SALES_MANAGER;
@@ -91,6 +106,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const getDisplayPermits = () => {
         let source: ExitPermit[] = [];
         if (activeTab === 'CARTABLE') source = myCartablePermits;
+        else if (mode === 'INVOICE') source = invoiceArchivePermits; // For mode INVOICE, anything in archive is invoice Archive
         else if (activeTab === 'PROFORMA_ARCHIVE') source = proformaArchivePermits;
         else source = exitArchivePermits;
 
@@ -548,7 +564,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             {/* Header / Tabs */}
             <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center glass-panel p-4 rounded-2xl shadow-sm border border-gray-200">
-                    <h1 className="text-xl font-black text-gray-800 flex items-center gap-2"><Truck className="text-teal-600"/> کارتابل خروج</h1>
+                    <h1 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                        {mode === 'INVOICE' ? <FileText className="text-blue-600"/> : <Truck className="text-teal-600"/>} 
+                        {mode === 'INVOICE' ? 'مدیریت فاکتورها' : 'مدیریت خروج'}
+                    </h1>
                     <button onClick={loadData} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><RefreshCw size={18} className={loading ? 'animate-spin' : ''}/></button>
                 </div>
                 
@@ -558,22 +577,33 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                         className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'CARTABLE' ? 'glass-panel text-blue-700 shadow-md' : 'text-gray-500'}`}
                     >
                         <Bell size={16} className={myCartablePermits.length > 0 ? "animate-pulse text-red-500" : ""}/>
-                        کارتابل من ({myCartablePermits.length})
+                        {mode === 'INVOICE' ? 'کارتابل فاکتورها' : 'کارتابل من'} ({myCartablePermits.length})
                     </button>
-                    {canSeeProforma && (
+                    {mode === 'INVOICE' ? (
                         <button 
                             onClick={() => { setActiveTab('PROFORMA_ARCHIVE'); setViewMode('PROFORMA'); }} 
                             className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA_ARCHIVE' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
                         >
-                            بایگانی پیش‌فاکتورها
+                            بایگانی فاکتورها
                         </button>
+                    ) : (
+                        <>
+                            {canSeeProforma && (
+                                <button 
+                                    onClick={() => { setActiveTab('PROFORMA_ARCHIVE'); setViewMode('PROFORMA'); }} 
+                                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'PROFORMA_ARCHIVE' ? 'glass-panel text-blue-800 shadow-md' : 'text-gray-500'}`}
+                                >
+                                    بایگانی موقت
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => { setActiveTab('EXIT_ARCHIVE'); setViewMode('EXIT'); }} 
+                                className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'EXIT_ARCHIVE' ? 'glass-panel text-green-800 shadow-md' : 'text-gray-500'}`}
+                            >
+                                بایگانی خروج
+                            </button>
+                        </>
                     )}
-                    <button 
-                        onClick={() => { setActiveTab('EXIT_ARCHIVE'); setViewMode('EXIT'); }} 
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'EXIT_ARCHIVE' ? 'glass-panel text-green-800 shadow-md' : 'text-gray-500'}`}
-                    >
-                        بایگانی خروج
-                    </button>
                 </div>
 
                 <div className="relative">
@@ -600,35 +630,34 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             {/* Modals */}
             {viewPermit && (
-                <div className={isMobile ? "fixed inset-0 z-[100] glass-panel overflow-y-auto" : ""}>
-                    <PrintExitPermit 
-                        permit={viewPermit} 
-                        onClose={() => setViewPermit(null)} 
-                        settings={settings}
-                        mode={viewMode}
-                        showPrice={currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === UserRole.ADMIN}
-                        onApprove={
-                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
-                            ? () => handleApprove(viewPermit) 
-                            : undefined
-                        }
-                        onReject={
-                            (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
-                            ? async () => {
-                                const reason = prompt('دلیل رد:'); 
-                                if(reason) { 
-                                    await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
-                                    loadData(); setViewPermit(null); 
-                                } 
-                            } : undefined
-                        }
-                        onEdit={
-                            (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
-                            ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
-                            : undefined
-                        }
-                    />
-                </div>
+                <PrintExitPermit 
+                    permit={viewPermit} 
+                    onClose={() => setViewPermit(null)} 
+                    settings={settings}
+                    mode={viewMode}
+                    onToggleMode={(newMode) => setViewMode(newMode)}
+                    showPrice={currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER || currentUser.role === UserRole.ADMIN}
+                    onApprove={
+                        (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+                        ? () => handleApprove(viewPermit) 
+                        : undefined
+                    }
+                    onReject={
+                        (isMyTurn(viewPermit) || currentUser.role === UserRole.ADMIN) 
+                        ? async () => {
+                            const reason = prompt('دلیل رد:'); 
+                            if(reason) { 
+                                await updateExitPermitStatus(viewPermit.id, ExitPermitStatus.REJECTED, currentUser, { rejectionReason: reason }); 
+                                loadData(); setViewPermit(null); 
+                            } 
+                        } : undefined
+                    }
+                    onEdit={
+                        (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 
+                        ? () => { setEditPermit(viewPermit); setViewPermit(null); } 
+                        : undefined
+                    }
+                />
             )}
 
             {editPermit && (

@@ -198,7 +198,7 @@ function App() {
   useEffect(() => {
     if (isNative) return; 
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'warehouse', 'security', 'purchase'].includes(hash)) {
+    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase'].includes(hash)) {
         setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
     } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
     const handlePopState = (event: PopStateEvent) => { if (event.state && event.state.tab) setActiveTabState(event.state.tab); else setActiveTabState('dashboard'); };
@@ -530,7 +530,14 @@ function App() {
       setActiveTab('manage');
   };
 
-    const handleGoToExitApprovals = () => { setExitPermitStatusFilter('pending'); setActiveTab('manage-exit'); };
+    const handleGoToExitApprovals = () => { 
+      setExitPermitStatusFilter('pending'); 
+      if (currentUser?.role === UserRole.CEO || currentUser?.role === UserRole.SALES_MANAGER) {
+          setActiveTab('manage-invoices'); 
+      } else {
+          setActiveTab('manage-exit'); 
+      }
+    };
   const [warehouseInitialTab, setWarehouseInitialTab] = useState<'dashboard' | 'approvals'>('dashboard');
   const handleGoToWarehouseApprovals = () => { setWarehouseInitialTab('approvals'); setActiveTab('warehouse'); };
   const [purchaseInitialTab, setPurchaseInitialTab] = useState<'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>('REQUESTS');
@@ -601,7 +608,8 @@ function App() {
                 {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                 {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
                 {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} />}
+                {activeTab === 'manage-invoices' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="INVOICE" />}
+                {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="EXIT" />}
                 {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
                 {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
                 {activeTab === 'sales' && <SalesCRMModule />}

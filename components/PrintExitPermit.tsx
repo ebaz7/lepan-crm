@@ -19,9 +19,10 @@ interface Props {
   watermark?: 'DELETED' | 'EDITED' | null; 
   showPrice?: boolean;
   mode?: 'PROFORMA' | 'EXIT' | 'CUSTOMER_INVOICE';
+  onToggleMode?: (mode: 'PROFORMA' | 'EXIT' | 'CUSTOMER_INVOICE') => void;
 }
 
-export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice, mode = 'EXIT' }: Props) {
+export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice, mode = 'EXIT', onToggleMode }: Props) {
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -502,12 +503,29 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
         <div className="bg-white p-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-wrap items-center justify-between gap-3 w-full max-w-5xl no-print mb-6 sticky top-0 z-[10000] border-2 border-blue-100 backdrop-blur-xl bg-white/95">
             <div className="flex items-center gap-3">
                 <button onClick={onClose} className="p-2 hover:bg-red-50 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95"><X size={20}/></button>
-                <div className="h-6 w-px bg-gray-200 mx-1"></div>
-                <div className="flex flex-col">
-                    <span className="font-black text-[12px] text-gray-900 tracking-tight">مشاهده مجوز خروج</span>
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+                <div className="hidden sm:flex flex-col">
+                    <span className="font-black text-[12px] text-gray-900 tracking-tight">مشاهده فرم</span>
                     <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{permit.permitNumber}</span>
                 </div>
             </div>
+
+            {onToggleMode && (
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                    <button 
+                        onClick={() => onToggleMode('PROFORMA')} 
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'PROFORMA' || mode === 'CUSTOMER_INVOICE' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}
+                    >
+                        فاکتور
+                    </button>
+                    <button 
+                        onClick={() => onToggleMode('EXIT')} 
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'EXIT' ? 'bg-white shadow-sm text-amber-600' : 'text-gray-500 hover:bg-gray-200'}`}
+                    >
+                        خروج
+                    </button>
+                </div>
+            )}
 
             <div className="flex items-center gap-2 flex-wrap justify-center">
                 {(onApprove || onReject) && (

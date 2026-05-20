@@ -49,7 +49,8 @@ const PERMISSION_GROUPS = [
         color: 'orange', 
         items: [
             { id: 'canCreateExitPermit', label: 'ثبت درخواست خروج بار (فروش)' },
-            { id: 'canViewExitPermits', label: 'مشاهده کارتابل خروج' },
+            { id: 'canViewInvoices', label: 'مشاهده کارتابل فاکتورها' },
+            { id: 'canViewExitPermits', label: 'مشاهده کارتابل خروج کارخانه' },
             { id: 'canApproveExitCeo', label: 'تایید خروج (مدیرعامل)' },
             { id: 'canApproveExitFactory', label: 'تایید خروج (مدیر کارخانه)' },
             { id: 'canApproveExitWarehouse', label: 'تایید خروج (سرپرست انبار/توزین)' },
