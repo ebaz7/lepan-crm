@@ -249,32 +249,33 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
     // Determine which reports to show. If it's a recognized group, show only that module.
     // If it's not a recognized group (e.g. ad-hoc request), show all available for that date.
     
+    const normChatId = normalizeChannelId(chatId);
+    console.log(`[DailyReport] Platform: ${platform}, ChatId: ${chatId} (Norm: ${normChatId})`);
+
     const isAccounting = 
-        (platform === 'telegram' && (String(chatId) === String(settings.botAccountingGroupIdTele) || String(chatId) === String(settings.botAccountingGroupId))) ||
-        (platform === 'bale' && String(chatId) === String(settings.botAccountingGroupIdBale)) ||
-        (platform === 'whatsapp' && (String(chatId) === String(settings.botAccountingGroupIdWhatsApp) || String(chatId) === String(settings.botAccountingGroupId)));
+        (platform === 'telegram' && (normChatId === normalizeChannelId(settings.botAccountingGroupIdTele) || normChatId === normalizeChannelId(settings.botAccountingGroupId))) ||
+        (platform === 'bale' && normChatId === normalizeChannelId(settings.botAccountingGroupIdBale)) ||
+        (platform === 'whatsapp' && (normChatId === normalizeChannelId(settings.botAccountingGroupIdWhatsApp) || normChatId === normalizeChannelId(settings.botAccountingGroupId)));
 
     const isBijak = 
-        (platform === 'telegram' && String(chatId) === String(settings.botBijakGroupId)) ||
-        (platform === 'bale' && String(chatId) === String(settings.botBijakGroupIdBale)) ||
-        (platform === 'whatsapp' && String(chatId) === String(settings.botBijakGroupIdWhatsApp));
+        (platform === 'telegram' && normChatId === normalizeChannelId(settings.botBijakGroupId)) ||
+        (platform === 'bale' && normChatId === normalizeChannelId(settings.botBijakGroupIdBale)) ||
+        (platform === 'whatsapp' && normChatId === normalizeChannelId(settings.botBijakGroupIdWhatsApp));
 
     const isLogistics = 
-        (platform === 'telegram' && (String(chatId) === String(settings.exitPermitNotificationTelegramId) || String(chatId) === String(settings.botSecurityGroupId))) ||
-        (platform === 'bale' && String(chatId) === String(settings.exitPermitNotificationBaleId)) ||
-        (platform === 'whatsapp' && String(chatId) === String(settings.exitPermitNotificationGroup));
+        (platform === 'telegram' && (normChatId === normalizeChannelId(settings.exitPermitNotificationTelegramId) || normChatId === normalizeChannelId(settings.botSecurityGroupId))) ||
+        (platform === 'bale' && normChatId === normalizeChannelId(settings.exitPermitNotificationBaleId)) ||
+        (platform === 'whatsapp' && normChatId === normalizeChannelId(settings.exitPermitNotificationGroup));
 
     const isUnrecognizedGroup = !isAccounting && !isBijak && !isLogistics;
-
-    if (isUnrecognizedGroup) {
-        // Find if user is admin - ideally we'd check session/user but we'll allow reports if they explicitly requested
-        // However, to keep it clean, if it's unrecognized, we show ALL reports that have data.
-    }
+    console.log(`[DailyReport] detected flags: Accounting=${isAccounting}, Bijak=${isBijak}, Logistics=${isLogistics}, Open=${isUnrecognizedGroup}`);
 
     // 1. PAYMENT REPORT
     if (isAccounting || isUnrecognizedGroup) {
+        console.log(`[DailyReport] checking payments for date ${dateStr}`);
         const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
         if (finalPayments.length > 0) {
+            console.log(`[DailyReport] found ${finalPayments.length} payments`);
             let reportMsg = `💰 *گزارش پرداختی‌های ${dateStr}*\n\n`;
             finalPayments.forEach((p, idx) => {
                 const amount = Number(p.totalAmount || 0).toLocaleString();
@@ -320,48 +321,54 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         if (showBijak) {
             const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
             if (finalBijaks.length > 0) {
-            const grouped = finalBijaks.reduce((acc, b) => {
-                const comp = b.company || 'بدون شرکت';
-                acc[comp] = acc[comp] || [];
-                acc[comp].push(b);
-                return acc;
-            }, {});
-            
-            for (const [comp, bijaks] of Object.entries(grouped)) {
-                reportMsg += `🏢 *شرکت: ${comp}*\n`;
-                bijaks.forEach((b, idx) => {
-                    reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
-                });
-                reportMsg += `------------------\n`;
-            }
-            if (sendFn) await sendFn(chatId, reportMsg);
+                const grouped = finalBijaks.reduce((acc, b) => {
+                    const comp = b.company || 'بدون شرکت';
+                    acc[comp] = acc[comp] || [];
+                    acc[comp].push(b);
+                    return acc;
+                }, {});
+                
+                let reportMsg = `📦 *گزارش بیجک‌های انبار ${dateStr}*\n\n`;
+                for (const [comp, bijaks] of Object.entries(grouped)) {
+                    reportMsg += `🏢 *شرکت: ${comp}*\n`;
+                    bijaks.forEach((b, idx) => {
+                        reportMsg += `  ${idx + 1}. بیجک #${b.number} | گیرنده: ${b.recipientName} | راننده: ${b.driverName || '---'}\n`;
+                    });
+                    reportMsg += `------------------\n`;
+                }
+                
+                if (sendFn) await sendFn(chatId, reportMsg).catch(e => console.error("Error sending Bijak msg:", e));
 
-            if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
-            try {
-                const htmlParts = [];
-                for (const b of finalBijaks) {
-                    try {
-                        const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: true });
-                        if (imgBuffer) {
-                            const b64 = imgBuffer.toString('base64');
-                            htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
-                        }
-                    } catch(e) { }
-                }
-                if (htmlParts.length > 0) {
-                    const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
-                    if (sendDocFn) {
-                        await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+                if (sendFn) sendFn(chatId, `⏳ در حال تولید فایل PDF از تصاویر ${finalBijaks.length} بیجک...`).catch(()=>{});
+                try {
+                    const htmlParts = [];
+                    for (const b of finalBijaks) {
+                        try {
+                            const imgBuffer = await Renderer.generateRecordImage(b, 'BIJAK', { forceHidePrices: true });
+                            if (imgBuffer) {
+                                const b64 = imgBuffer.toString('base64');
+                                htmlParts.push(`<div style="page-break-after: always; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center;"><img src="data:image/png;base64,${b64}" style="max-height: 95vh; max-width: 95vw;" /></div>`);
+                            }
+                        } catch(e) { console.error("Error generating image for bijak", b.id, e); }
                     }
-                }
-            } catch (e) { console.error("PDF generation failed:", e); }
-          }
+                    if (htmlParts.length > 0) {
+                        const pdfBuffer = await Renderer.generatePdfBuffer(htmlParts.join(''));
+                        if (sendDocFn) {
+                            await sendDocFn(chatId, pdfBuffer, `Bijak_Report_${dateStr.replace(/[\/\\]/g,'-')}.pdf`, `📦 گزارش تصاویر بیجک‌ها ${dateStr}`);
+                        }
+                    }
+                } catch (e) { console.error("Bijak PDF generation failed:", e); }
+            } else if (isBijak) {
+                if (sendFn) await sendFn(chatId, `📭 در تاریخ ${dateStr} بیجکی ثبت نشده است.`);
+            }
         }
 
         // 3. EXIT PERMITS REPORT
         if (showLogistics) {
+            console.log(`[DailyReport] checking exit permits for date ${dateStr}`);
             const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
             if (finalExits.length > 0) {
+                console.log(`[DailyReport] found ${finalExits.length} exit permits`);
                 const hidePrice = true; // Logistics groups always hide prices
                 let reportMsg = `🚛 *گزارش مجوزهای خروج ${dateStr}*\n\n`;
                 finalExits.forEach((p, idx) => {

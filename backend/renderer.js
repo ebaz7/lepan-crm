@@ -783,6 +783,7 @@ export const generateMeetingMinutesPDF = async (meeting) => {
     try {
         const browser = await getBrowser();
         const page = await browser.newPage();
+        await page.setViewport({ width: 800, height: 1100, deviceScaleFactor: 2 });
         
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
             <style>
