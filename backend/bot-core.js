@@ -34,7 +34,24 @@ const normalizeChannelId = (id) => {
 
 // Session memory
 export const sessions = {}; 
-const lastSentIds = new Set(); // Simple de-duplication for notifications
+const lastSentIds = new Map(); // Use Map to store { key: timestamp }
+const NOTIFY_DEDUPE_WINDOW = 30000; // 30 seconds
+
+const isDuplicateNotification = (key) => {
+    const now = Date.now();
+    const lastTime = lastSentIds.get(key);
+    if (lastTime && (now - lastTime) < NOTIFY_DEDUPE_WINDOW) {
+        return true;
+    }
+    lastSentIds.set(key, now);
+    // Cleanup old keys occasionally
+    if (lastSentIds.size > 1000) {
+        for (const [k, v] of lastSentIds.entries()) {
+            if (now - v > NOTIFY_DEDUPE_WINDOW * 2) lastSentIds.delete(k);
+        }
+    }
+    return false;
+};
 
 const resolveUser = (db, platform, chatId) => {
     if (platform === 'telegram') return db.users.find(u => u.telegramChatId == chatId);
@@ -267,11 +284,29 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         (platform === 'bale' && normChatId === normalizeChannelId(settings.exitPermitNotificationBaleId)) ||
         (platform === 'whatsapp' && normChatId === normalizeChannelId(settings.exitPermitNotificationGroup));
 
-    const isUnrecognizedGroup = !isAccounting && !isBijak && !isLogistics;
-    console.log(`[DailyReport] detected flags: Accounting=${isAccounting}, Bijak=${isBijak}, Logistics=${isLogistics}, Open=${isUnrecognizedGroup}`);
+    const isGroup = chatId.toString().startsWith('-') || 
+                  (platform === 'bale' && (chatId.toString().startsWith('g') || chatId.toString().length > 10)) ||
+                  chatId.toString().includes('@');
+
+    const isPrivate = !isGroup;
+
+    // Determine which reports to show based on group context
+    const showPayments = isAccounting || (isPrivate && !isBijak && !isLogistics);
+    const showBijaks = isBijak || (isPrivate && !isAccounting && !isLogistics);
+    const showLogistics = isLogistics || (isPrivate && !isAccounting && !isBijak);
+    
+    // Fallback: If it's a private chat and not specifically matched, or if it's completely unknown but in PV
+    const showAll = isPrivate && !isAccounting && !isBijak && !isLogistics;
+
+    console.log(`[DailyReport] flags: PM=${showPayments || showAll}, BK=${showBijaks || showAll}, LG=${showLogistics || showAll}, IsGroup=${isGroup}`);
+
+    // If it's a group but UNRECOGNIZED, warn the user
+    if (isGroup && !isAccounting && !isBijak && !isLogistics) {
+        return sendFn(chatId, `⚠️ این گروه در تنظیمات بات شناسایی نشد.\n🆔 شناسه چت: \`${chatId}\`\n✅ لطفا این شناسه را در بخش پیکربندی بات برای گروه‌های مربوطه (حسابداری، خروج یا بیجک) وارد کنید.`);
+    }
 
     // 1. PAYMENT REPORT
-    if (isAccounting || isUnrecognizedGroup) {
+    if (showPayments || showAll) {
         console.log(`[DailyReport] checking payments for date ${dateStr}`);
         const finalPayments = (db.orders || []).filter(p => matchesDate(p.date));
         if (finalPayments.length > 0) {
@@ -321,12 +356,12 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
     }
 
     // 2. BIJAK / LOGISTICS REPORT
-    if (isBijak || isLogistics || isUnrecognizedGroup) {
+    if (showBijaks || showLogistics || showAll) {
         // If it's logistics group or general request, show Exit Permits report, else if Bijak group show Bijak report
-        const showBijak = isBijak || isUnrecognizedGroup;
-        const showLogistics = isLogistics || isUnrecognizedGroup;
+        const sBijak = showBijaks || showAll;
+        const sLogistics = showLogistics || showAll;
 
-        if (showBijak) {
+        if (sBijak) {
             const finalBijaks = (db.warehouseTransactions || []).filter(t => t.type === 'OUT' && matchesDate(t.date));
             if (finalBijaks.length > 0) {
                 const grouped = finalBijaks.reduce((acc, b) => {
@@ -375,7 +410,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         }
 
         // 3. EXIT PERMITS REPORT
-        if (showLogistics) {
+        if (sLogistics) {
             console.log(`[DailyReport] checking exit permits for date ${dateStr}`);
             const finalExits = (db.exitPermits || []).filter(p => matchesDate(p.date));
             if (finalExits.length > 0) {
@@ -508,7 +543,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             return;
         }
 
-        if (text.startsWith('/daily_report') || text.startsWith('/report') || text.toLowerCase() === 'daily' || text === 'گزارش روزانه') {
+        if (text.startsWith('/daily_report') || text.startsWith('/report') || text.startsWith('/repot') || text.toLowerCase() === 'daily' || text.toLowerCase() === 'repot' || text === 'گزارش روزانه') {
             const args = text.split(' ');
             
             let dateStr = normalizeDateString(toEnglishDigits(new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date())));
@@ -527,6 +562,25 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
         }
 
         // Silent for all other group messages as per user request
+        return;
+    }
+
+    if (text.startsWith('/daily_report') || text.startsWith('/report') || text.startsWith('/repot') || text.toLowerCase() === 'daily' || text.toLowerCase() === 'repot' || text === 'گزارش روزانه') {
+        const toEnglishDigits = (str) => {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+        };
+        const normalizeDateString = (str) => {
+            if (!str) return str;
+            return str.split('/').map(part => part.padStart(2, '0')).join('/');
+        };
+        const args = text.split(' ');
+        let dateStr = normalizeDateString(toEnglishDigits(new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date())));
+        if (args.length > 1) {
+            const dateArg = args.slice(1).find(a => a.includes('/'));
+            if (dateArg) dateStr = normalizeDateString(toEnglishDigits(dateArg));
+        }
+        await runDailyReport(platform, chatId, dateStr, sendFn, sendDocFn);
         return;
     }
 
@@ -1240,6 +1294,10 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
         
+        // Deduplicate the same permit + status notification to avoid "Machine Gun" bursts
+        const dedupeKey = `EXIT_${p.id}_${p.status}_${eventType}`;
+        if (isDuplicateNotification(dedupeKey)) return;
+        
         const imgPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: false });
         const imgNoPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: true });
         
@@ -1429,6 +1487,9 @@ export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, e
     try {
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
+        
+        const dedupeKey = `PAYMENT_${o.id}_${o.status}_${eventType}`;
+        if (isDuplicateNotification(dedupeKey)) return;
         const settings = db.settings || {};
         
         // DEFAULTING TO 'after_submit' based on repeated user request for accounting group behavior
@@ -1504,6 +1565,10 @@ export const notifyWarehouseBijak = async (tx, db, stepName, eventType = 'STEP')
     try {
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
+
+        const dedupeKey = `BIJAK_${tx.id}_${tx.status}_${eventType}`;
+        if (isDuplicateNotification(dedupeKey)) return;
+        
         const settings = db.settings || {};
         
         // Calculate remaining balance for items in this Bijak
@@ -2700,6 +2765,9 @@ const sendPdf = async (item, type, chatId, sendFn, sendDocFn) => {
 // --- MEETING NOTIFICATIONS ---
 
 export const notifyMeetingAnnouncement = async (meeting, db) => {
+    const dedupeKey = `MEETING_ANN_${meeting.id}`;
+    if (isDuplicateNotification(dedupeKey)) return;
+    
     console.log(`>>> Meeting Announcement triggered for ${meeting.meetingNumber}`);
     const s = db.settings;
     if (!s) {
@@ -2747,6 +2815,9 @@ export const notifyMeetingAnnouncement = async (meeting, db) => {
 };
 
 export const notifyMeetingMinutes = async (meeting, db) => {
+    const dedupeKey = `MEETING_MIN_${meeting.id}`;
+    if (isDuplicateNotification(dedupeKey)) return;
+    
     const s = db.settings;
     if (!s) return;
 
@@ -2830,6 +2901,9 @@ export const notifyPurchaseRequestStep = async (p, platform, chatId, sendPhotoFn
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
         
+        const dedupeKey = `PURCHASE_${p.id}_${p.status}_${eventType}`;
+        if (isDuplicateNotification(dedupeKey)) return;
+
         let header = isDelete ? `❌ *حذف شد: درخواست خرید*` : (isEdit ? `✏️ *ویرایش شد: درخواست خرید*` : `🛒 *درخواست خرید*`);
         const caption = `${header}\n🔢 شماره: ${p.requestNumber || '-'}\n📅 تاریخ: ${p.date || '-'}\n👤 درخواست‌کننده: ${p.requester || '-'}\n📦 کالا: ${p.itemName || '-'}\n📂 گروه: ${p.category || '-'} - ${p.subCategory || '-'}\n🔢 مقدار: ${p.quantity} ${p.unit}\n📝 توضیحات: ${p.specifications || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این پیام ویرایشی است*' : ''}`;
         

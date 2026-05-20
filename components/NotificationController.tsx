@@ -74,8 +74,13 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 }
 
                 // 1. Register SW
-                const registration = await navigator.serviceWorker.register('/sw.js');
+                const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
                 await navigator.serviceWorker.ready;
+                
+                // Ensure the SW is updated immediately
+                if (registration.waiting) {
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
 
                 // 2. Get Public Key from Server
                 const { publicKey } = await apiCall<{ publicKey: string }>('/vapid-key');
