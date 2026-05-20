@@ -279,11 +279,14 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             // 1. EXPLICIT EXCLUSION (e.g. Sender)
             if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
 
-            // 2. ALWAYS NOTIFY ADMIN (Unless explicitly excluded above)
+            // 2. PRIVACY FILTER: If targetUsernames is provided, only notify those users.
+            // Even admins shouldn't see private/targeted notifications unless they are in the target list.
+            if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
+
+            // 3. ALWAYS NOTIFY ADMIN for general system notifications (where targetUsernames is not specified)
             if (sub.role === 'admin') return true;
             
-            // 3. TARGET FILTERING
-            if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
+            // 4. TARGET ROLES
             if (targetRoles && !targetRoles.includes(sub.role)) return false;
             
             return true;
