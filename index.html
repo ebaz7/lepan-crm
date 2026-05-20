@@ -15,7 +15,7 @@
     <script>
       // Apply cached settings immediately for better PWA feel
       try {
-        const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+        const settings = JSON.parse(localStorage.getItem('app_data_settings') || '{}');
         if (settings.appName) {
           document.title = settings.appName;
           const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
@@ -24,6 +24,14 @@
         if (settings.pwaIcon) {
           const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
           if (appleIcon) appleIcon.setAttribute('href', settings.pwaIcon);
+          
+          let favicon = document.querySelector('link[rel="icon"]');
+          if (!favicon) {
+            favicon = document.createElement('link');
+            favicon.rel = 'icon';
+            document.head.appendChild(favicon);
+          }
+          favicon.setAttribute('href', settings.pwaIcon);
         }
       } catch (e) {}
     </script>

@@ -1684,8 +1684,10 @@ app.get('/manifest.json', (req, res) => {
     const db = getDb();
     const settings = db.settings || {};
     const iconUrl = settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png";
+    const appName = settings.appName || "سامانه مالی و بازرگانی";
+    
     const manifest = {
-        name: settings.appName || "سامانه مالی و بازرگانی",
+        name: appName,
         short_name: settings.appName || "سامانه مالی",
         description: "سیستم جامع مدیریت پرداخت ها و مجوزهای خروج",
         id: "/",
@@ -1722,19 +1724,20 @@ app.get('/manifest.json', (req, res) => {
                 sizes: "512x512",
                 type: "image/png",
                 form_factor: "wide",
-                label: "سامانه مالی"
+                label: appName
             },
             {
                 src: iconUrl,
                 sizes: "512x512",
                 type: "image/png",
                 form_factor: "narrow",
-                label: "سامانه مالی"
+                label: appName
             }
         ],
         prefer_related_applications: false
     };
-    res.type('application/manifest+json').send(manifest);
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.send(JSON.stringify(manifest));
 });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');

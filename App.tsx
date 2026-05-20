@@ -232,41 +232,17 @@ function App() {
             if (appleTitle) appleTitle.setAttribute('content', settings.appName);
         }
 
-        // Dynamic Manifest
-        const manifest = {
-            name: settings.appName || "Payment & Order System",
-            short_name: settings.appName || "FinanceApp",
-            start_url: "/",
-            display: "standalone",
-            background_color: "#ffffff",
-            theme_color: "#2563eb",
-            orientation: "portrait",
-            icons: [
-                {
-                    src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
-                    sizes: "192x192",
-                    type: "image/png"
-                },
-                {
-                    src: settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
-                    sizes: "512x512",
-                    type: "image/png"
-                }
-            ]
-        };
+        const iconUrl = settings.pwaIcon || "https://cdn-icons-png.flaticon.com/512/3135/3135706.png";
 
-        const stringManifest = JSON.stringify(manifest);
-        const blob = new Blob([stringManifest], {type: 'application/json'});
-        const manifestURL = URL.createObjectURL(blob);
-        
-        let link = document.querySelector('link[rel="manifest"]');
-        if (!link) {
-            link = document.createElement('link');
+        // Favicon update
+        let favicon = document.querySelector('link[rel="icon"]');
+        if (!favicon) {
+            favicon = document.createElement('link');
             // @ts-ignore
-            link.rel = 'manifest';
-            document.head.appendChild(link);
+            favicon.rel = 'icon';
+            document.head.appendChild(favicon);
         }
-        link.setAttribute('href', manifestURL);
+        favicon.setAttribute('href', iconUrl);
 
         // Apple Touch Icon
         let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
@@ -276,7 +252,19 @@ function App() {
             appleIcon.rel = 'apple-touch-icon';
             document.head.appendChild(appleIcon);
         }
-        if (settings.pwaIcon) appleIcon.setAttribute('href', settings.pwaIcon);
+        appleIcon.setAttribute('href', iconUrl);
+
+        // Manifest - Use the server-side generated route
+        let manifestLink = document.querySelector('link[rel="manifest"]');
+        if (!manifestLink) {
+            manifestLink = document.createElement('link');
+            // @ts-ignore
+            manifestLink.rel = 'manifest';
+            document.head.appendChild(manifestLink);
+        }
+        // Force refresh manifest if icon changes by adding dynamic version
+        const iconHash = iconUrl.substring(iconUrl.length - 10);
+        manifestLink.setAttribute('href', `/manifest.json?v=${iconHash}`);
     }
   }, [settings]);
 
