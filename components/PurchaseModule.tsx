@@ -169,6 +169,15 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                    />
                 )}
             </div>
+
+            {/* Subtab Back Trigger */}
+            {activeTab !== 'DASHBOARD' && (
+                <button 
+                    data-subtab-back="true" 
+                    onClick={() => setActiveTab('DASHBOARD')} 
+                    className="hidden"
+                />
+            )}
         </div>
     );
 };

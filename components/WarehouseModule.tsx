@@ -1335,6 +1335,15 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     items={items} 
                 />
             )}
+
+            {/* Subtab Back Trigger for Mobile Back gesture */}
+            {activeTab !== 'dashboard' && (
+                <button 
+                    data-subtab-back="true" 
+                    onClick={() => setActiveTab('dashboard')} 
+                    className="hidden"
+                />
+            )}
         </div>
     );
 };

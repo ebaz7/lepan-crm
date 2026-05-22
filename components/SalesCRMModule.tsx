@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Upload, Download, Gift, Save, X, FileText } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, Download, Gift, Save, X, FileText, UserPlus, GitMerge } from 'lucide-react';
 import { SalesContact, BirthdayGreetingTemplate } from '../types';
 import { apiCall } from '../services/apiService';
 import { getSettings, saveSettings } from '../services/storageService';
@@ -10,6 +10,100 @@ export default function SalesCRMModule() {
     const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'contacts' | 'bot_leads'>('contacts');
     const [template, setTemplate] = useState<BirthdayGreetingTemplate>({ text: 'تولدت مبارک عزیز!', isActive: true });
+
+    // Lead Merge States
+    const [mergingLead, setMergingLead] = useState<any | null>(null);
+    const [mergeMode, setMergeMode] = useState<'new' | 'existing'>('new');
+    const [selectedContactId, setSelectedContactId] = useState<string>('');
+    const [mergeForm, setMergeForm] = useState<{
+        name: string;
+        mobile: string;
+        telegramId: string;
+        baleId: string;
+        birthday: string;
+        accountCode: string;
+    }>({ name: '', mobile: '', telegramId: '', baleId: '', birthday: '', accountCode: '' });
+
+    useEffect(() => {
+        const handleGlobalClose = () => {
+            setMergingLead(null);
+            setIsModalOpen(false);
+        };
+        window.addEventListener('CLOSE_ACTIVE_MODALS', handleGlobalClose);
+        return () => window.removeEventListener('CLOSE_ACTIVE_MODALS', handleGlobalClose);
+    }, []);
+
+    const handleStartMerge = (lead: any) => {
+        const matched = contacts.find(c => {
+            const cleanLeadMob = (lead.mobile || '').replace(/^0/, '').trim();
+            const cleanContMob = (c.mobile || '').replace(/^0/, '').trim();
+            return cleanLeadMob && cleanContMob && (cleanContMob.endsWith(cleanLeadMob) || cleanLeadMob.endsWith(cleanContMob));
+        });
+
+        setMergingLead(lead);
+        if (matched) {
+            setMergeMode('existing');
+            setSelectedContactId(matched.id);
+        } else {
+            setMergeMode('new');
+            setSelectedContactId('');
+        }
+
+        setMergeForm({
+            name: lead.fullName || '',
+            mobile: lead.mobile || '',
+            telegramId: lead.platform === 'telegram' ? (lead.telegramChatId || lead.chatId || '') : '',
+            baleId: lead.platform === 'bale' ? (lead.baleChatId || lead.chatId || '') : '',
+            birthday: lead.birthday || '',
+            accountCode: ''
+        });
+    };
+
+    const handleSaveMerge = async () => {
+        if (!mergeForm.name || !mergeForm.mobile) {
+            alert('نام و شماره موبایل الزامی است.');
+            return;
+        }
+
+        let updatedContacts = [...contacts];
+        if (mergeMode === 'existing') {
+            const targetId = selectedContactId;
+            if (!targetId) {
+                alert('لطفاً یک مخاطب برای ادغام انتخاب کنید.');
+                return;
+            }
+            updatedContacts = contacts.map(c => {
+                if (c.id === targetId) {
+                    return {
+                        ...c,
+                        name: mergeForm.name || c.name,
+                        mobile: mergeForm.mobile || c.mobile,
+                        telegramId: mergeForm.telegramId || c.telegramId,
+                        baleId: mergeForm.baleId || c.baleId,
+                        birthday: mergeForm.birthday || c.birthday,
+                        accountCode: mergeForm.accountCode || c.accountCode
+                    };
+                }
+                return c;
+            });
+            await updateContacts(updatedContacts);
+            alert('اطلاعات لید با موفقیت با مخاطب انتخاب شده ادغام شد.');
+        } else {
+            const newC: SalesContact = {
+                id: Date.now().toString(),
+                name: mergeForm.name,
+                mobile: mergeForm.mobile,
+                telegramId: mergeForm.telegramId,
+                baleId: mergeForm.baleId,
+                birthday: mergeForm.birthday,
+                accountCode: mergeForm.accountCode,
+                sendBirthdayGreeting: true
+            };
+            await updateContacts([...contacts, newC]);
+            alert('لید با موفقیت به عنوان مخاطب جدید ذخیره شد.');
+        }
+        setMergingLead(null);
+    };
     
     const fetchData = async () => {
         getSettings().then(s => {
@@ -390,8 +484,16 @@ export default function SalesCRMModule() {
                                                 {sub.telegramChatId || sub.baleChatId || sub.chatId}
                                             </td>
                                             <td className="p-4">
-                                                <div className="flex justify-center gap-2">
-                                                    <button onClick={() => handleDeleteBotSub(sub.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف لید"><Trash2 size={16}/></button>
+                                                <div className="flex justify-center items-center gap-1.5 flex-wrap">
+                                                    <button 
+                                                        onClick={() => handleStartMerge(sub)} 
+                                                        className="py-1 px-2.5 bg-gradient-to-l from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/10 flex items-center gap-1 transition-all active:scale-95"
+                                                        title="انتقال و ادغام اطلاعات این لید با مخاطبان"
+                                                    >
+                                                        <UserPlus size={13}/>
+                                                        <span>انتقال / ادغام</span>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteBotSub(sub.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="حذف لید"><Trash2 size={15}/></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -528,6 +630,186 @@ export default function SalesCRMModule() {
                         </div>
                     </div>
 
+            )}
+
+            {/* Subtab Back Trigger for Mobile Back Gesture/Button */}
+            {activeTab === 'bot_leads' && (
+                <button 
+                    data-subtab-back="true" 
+                    onClick={() => setActiveTab('contacts')} 
+                    className="hidden"
+                />
+            )}
+
+            {/* Lead Merge & Import Dialog Overlay */}
+            {mergingLead && (
+                <div role="dialog" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in text-right font-sans" dir="rtl">
+                    <div className="glass-panel rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 animate-scale-in">
+                        <div className="bg-gradient-to-l from-blue-700 to-indigo-700 p-5 text-white flex justify-between items-center">
+                            <div>
+                                <h3 className="font-extrabold text-base flex items-center gap-2">
+                                    <GitMerge size={20}/>
+                                    انتقال و ادغام لید به مخاطبین فروش
+                                </h3>
+                                <p className="text-[10px] text-blue-100 mt-1">عضو ربات به جمع مخاطبین فروش اضافه و یا با یکی از مخاطبین فعلی ادغام می‌شود</p>
+                            </div>
+                            <button onClick={() => setMergingLead(null)} className="p-1.5 hover:bg-white/15 text-white rounded-lg transition-all text-xs font-bold">بستن (✕)</button>
+                        </div>
+                        
+                        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                            {/* Lead Profile Preview */}
+                            <div className="bg-blue-50/50 dark:bg-zinc-800/40 p-4 rounded-2xl border border-blue-100/50 dark:border-zinc-800/80 flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 block">پروفایل لید ربات ({mergingLead.platform === 'telegram' ? 'تلگرام' : 'پیام‌رسان بله'})</span>
+                                    <div className="font-extrabold text-sm text-gray-800 dark:text-gray-100">{mergingLead.fullName || 'بدون نام'}</div>
+                                    <div className="text-xs text-gray-500 font-mono select-all">{mergingLead.mobile || 'شماره ثبت نشده'}</div>
+                                </div>
+                                <div className="bg-blue-100/60 text-blue-800 font-bold px-3 py-1.5 rounded-xl text-xs">
+                                    {mergingLead.platform === 'telegram' ? 'Telegram' : 'Bale'} ID: <code className="font-mono text-[10px] select-all">{mergingLead.telegramChatId || mergingLead.baleChatId || mergingLead.chatId}</code>
+                                </div>
+                            </div>
+
+                            {/* Mode selection (Merge Existing vs Create New) */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400">نحوه پردازش و ثبت:</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setMergeMode('new')}
+                                        className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 ${mergeMode === 'new' ? 'border-blue-600 bg-blue-50/20 text-blue-700 font-black' : 'border-gray-100 hover:bg-gray-50 text-gray-500 font-bold'}`}
+                                    >
+                                        <UserPlus size={18}/>
+                                        <span className="text-xs">ثبت به عنوان مخاطب جدید</span>
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setMergeMode('existing')}
+                                        className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 ${mergeMode === 'existing' ? 'border-blue-600 bg-blue-50/20 text-blue-700 font-black' : 'border-gray-100 hover:bg-gray-50 text-gray-500 font-bold'}`}
+                                    >
+                                        <GitMerge size={18}/>
+                                        <span className="text-xs">ادغام با مخاطب فعلی</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Existing Contact Selection Dropdown */}
+                            {mergeMode === 'existing' && (
+                                <div className="space-y-1.5 animate-in fade-in duration-200">
+                                    <label className="block text-xs font-bold text-gray-500">انتخاب مخاطب مقصد برای مرج و ادغام:</label>
+                                    <select 
+                                        className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-3 focus:border-blue-500 outline-none transition-all font-bold text-sm bg-white dark:bg-zinc-900"
+                                        value={selectedContactId}
+                                        onChange={(e) => {
+                                            setSelectedContactId(e.target.value);
+                                            const contact = contacts.find(c => c.id === e.target.value);
+                                            if (contact) {
+                                                setMergeForm(prev => ({
+                                                    ...prev,
+                                                    name: contact.name || prev.name,
+                                                    mobile: contact.mobile || prev.mobile,
+                                                    accountCode: contact.accountCode || prev.accountCode || '',
+                                                    // Only keep lead fields if contact fields are empty, else prioritize contact
+                                                    telegramId: contact.telegramId || prev.telegramId || '',
+                                                    baleId: contact.baleId || prev.baleId || '',
+                                                    birthday: contact.birthday || prev.birthday || ''
+                                                }));
+                                            }
+                                        }}
+                                    >
+                                        <option value="">-- یک مخاطب را انتخاب کنید --</option>
+                                        {contacts.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} ({c.mobile}) {c.accountCode ? `[کد: ${c.accountCode}]` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[10px] text-gray-400 mt-1">با ادغام اطلاعات، فیلدهای خالی مخاطب هدف با مقادیر ربات پر خواهد شد و هیچ اطلاعاتی پاک نمی‌شود.</p>
+                                </div>
+                            )}
+
+                            {/* Merge fields adjustments form */}
+                            <div className="space-y-4 pt-1 border-t border-gray-100 dark:border-zinc-800/80">
+                                <span className="block text-xs font-black text-gray-500">بازنگری فیلدها پیش از ذخیره‌سازی:</span>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">نام مخاطب در پروسه</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-xs bg-white dark:bg-zinc-900"
+                                            value={mergeForm.name}
+                                            onChange={e => setMergeForm({...mergeForm, name: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">شماره موبایل</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-xs bg-white dark:bg-zinc-900 dir-ltr text-right"
+                                            value={mergeForm.mobile}
+                                            onChange={e => setMergeForm({...mergeForm, mobile: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">کد حساب مالی (اختیاری)</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-[11px] bg-white dark:bg-zinc-900 dir-ltr text-right font-mono text-emerald-600"
+                                            value={mergeForm.accountCode}
+                                            onChange={e => setMergeForm({...mergeForm, accountCode: e.target.value})}
+                                            placeholder="مثلا: 103004"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">تاریخ تولد (شمسی)</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-[11px] bg-white dark:bg-zinc-900 dir-ltr text-right font-mono"
+                                            value={mergeForm.birthday}
+                                            placeholder="شمسی مانند: 1370/02/12"
+                                            onChange={e => setMergeForm({...mergeForm, birthday: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">آیدی تلگرام</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-xs bg-white dark:bg-zinc-900"
+                                            value={mergeForm.telegramId}
+                                            onChange={e => setMergeForm({...mergeForm, telegramId: e.target.value})}
+                                            placeholder="@id"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">آیدی بله</label>
+                                        <input 
+                                            className="w-full border-2 border-gray-100 dark:border-zinc-800 rounded-xl p-2.5 focus:border-blue-500 outline-none transition-all font-bold text-xs bg-white dark:bg-zinc-900"
+                                            value={mergeForm.baleId}
+                                            onChange={e => setMergeForm({...mergeForm, baleId: e.target.value})}
+                                            placeholder="@id"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/20 flex gap-3">
+                            <button 
+                                onClick={handleSaveMerge}
+                                className="flex-1 bg-gradient-to-l from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-black text-sm hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg active:scale-95"
+                            >
+                                {mergeMode === 'existing' ? 'ادغام و بروزرسانی پرونده مخاطب' : 'ذخیره به عنوان مخاطب جدید'}
+                            </button>
+                            <button 
+                                onClick={() => setMergingLead(null)}
+                                className="px-5 bg-gray-150 hover:bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 rounded-xl font-bold text-sm"
+                            >
+                                انصراف
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

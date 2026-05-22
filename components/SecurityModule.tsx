@@ -868,6 +868,15 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     </div>
                 )}
             </div>
+
+            {/* Subtab Back Trigger */}
+            {activeTab !== 'logs' && (
+                <button 
+                    data-subtab-back="true" 
+                    onClick={() => setActiveTab('logs')} 
+                    className="hidden"
+                />
+            )}
         </div>
     );
 };

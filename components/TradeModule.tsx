@@ -1732,6 +1732,14 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     </div>
                 </div>
             )}
+            {/* Subtab Back Trigger */}
+            {viewMode === 'details' ? (
+                <button data-subtab-back="true" onClick={() => { setViewMode('dashboard'); setSelectedRecord(null); }} className="hidden" />
+            ) : (
+                viewMode !== 'dashboard' && (
+                    <button data-subtab-back="true" onClick={() => setViewMode('dashboard')} className="hidden" />
+                )
+            )}
         </div>
     );
 };

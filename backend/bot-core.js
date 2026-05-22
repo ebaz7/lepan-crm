@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import xlsx from 'xlsx';
 import * as Renderer from './renderer.js';
 import * as dbManager from './db-manager.js';
 import * as utils from './utils.js';
@@ -68,6 +69,31 @@ const getAvailableYears = (list) => {
     const sorted = Array.from(years).sort().reverse();
     if (sorted.length === 0) return ['1403'];
     return sorted;
+};
+
+const generateExcelBuffer = (columns, rows, sheetName = "Report") => {
+    const wsData = [columns, ...rows];
+    const wb = xlsx.utils.book_new();
+    const ws = xlsx.utils.aoa_to_sheet(wsData);
+    
+    // Set column widths so content is not truncated
+    const maxCols = columns.length;
+    const colWidths = [];
+    for (let c = 0; c < maxCols; c++) {
+        let maxLen = columns[c] ? columns[c].toString().length : 0;
+        for (let r = 0; r < wsData.length; r++) {
+            if (wsData[r] && wsData[r][c] !== undefined && wsData[r][c] !== null) {
+                const len = wsData[r][c].toString().length;
+                if (len > maxLen) maxLen = len;
+            }
+        }
+        colWidths.push({ wch: Math.max(maxLen + 3, 10) });
+    }
+    ws['!cols'] = colWidths;
+    
+    xlsx.utils.book_append_sheet(wb, ws, sheetName);
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return buffer;
 };
 
 // --- KEYBOARDS ---
@@ -1077,10 +1103,14 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 return sendFn(chatId, "⚠️ هیچ اطلاعات مانده حسابی در سیستم بارگذاری نشده است. ابتدا فایل اکسل مانده حساب را در نرم‌افزار بارگذاری نمایید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
             }
 
-            const found = balances.filter(b => 
-                (b.accountCode || '').includes(query) || 
-                (b.name || '').includes(query)
-            );
+            const terms = query.split(/\s+/).filter(Boolean);
+            const found = balances.filter(b => {
+                return terms.every(term => {
+                    const normTerm = term.toLowerCase();
+                    return (b.accountCode || '').toLowerCase().includes(normTerm) || 
+                           (b.name || '').toLowerCase().includes(normTerm);
+                });
+            });
 
             if (found.length === 0) {
                 return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد:`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });

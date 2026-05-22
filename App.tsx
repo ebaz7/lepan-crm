@@ -39,6 +39,14 @@ function App() {
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
 
+  const activeTabRef = useRef(activeTab);
+  const tabHistoryRef = useRef(tabHistory);
+
+  useEffect(() => {
+      activeTabRef.current = activeTab;
+      tabHistoryRef.current = tabHistory;
+  }, [activeTab, tabHistory]);
+
   const changeTab = (tab: string, addToHistory = true) => {
       setActiveTabState(tab);
       if (addToHistory && tab !== tabHistory[tabHistory.length - 1]) {
@@ -116,13 +124,41 @@ function App() {
         let backListener: any;
         try {
             CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-                if (tabHistory.length > 1) {
-                    const newHistory = [...tabHistory];
+                // 1. Check if any modal is open in the DOM
+                const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"]');
+                if (activeModals.length > 0) {
+                    const lastModal = activeModals[activeModals.length - 1];
+                    const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn') || 
+                                     Array.from(lastModal.querySelectorAll('button')).find(btn => {
+                                         const txt = btn.textContent || '';
+                                         return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+                                     });
+                    if (closeBtn) {
+                        (closeBtn as HTMLElement).click();
+                    } else {
+                        window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+                    }
+                    return;
+                }
+
+                // 2. Check if a sub-tab/sub-view back selector is in the DOM
+                const subTabBtn = document.querySelector('[data-subtab-back="true"]');
+                if (subTabBtn) {
+                    (subTabBtn as HTMLElement).click();
+                    return;
+                }
+
+                // Standard Tab History Stack using our updated refs
+                const currentHistory = tabHistoryRef.current;
+                const currentTab = activeTabRef.current;
+
+                if (currentHistory.length > 1) {
+                    const newHistory = [...currentHistory];
                     newHistory.pop(); // remove current
                     const prevTab = newHistory[newHistory.length - 1];
                     setTabHistory(newHistory);
                     setActiveTab(prevTab, false);
-                } else if (activeTab !== 'dashboard') {
+                } else if (currentTab !== 'dashboard') {
                     setActiveTab('dashboard');
                 } else if (!canGoBack) {
                     CapacitorApp.exitApp();
@@ -202,7 +238,45 @@ function App() {
     if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase'].includes(hash)) {
         setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
     } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
-    const handlePopState = (event: PopStateEvent) => { if (event.state && event.state.tab) setActiveTabState(event.state.tab); else setActiveTabState('dashboard'); };
+
+    const handlePopState = (event: PopStateEvent) => {
+        // 1. If any modal is active in DOM, close it instead of shifting tab!
+        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"]');
+        if (activeModals.length > 0) {
+            const lastModal = activeModals[activeModals.length - 1];
+            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn') || 
+                             Array.from(lastModal.querySelectorAll('button')).find(btn => {
+                                 const txt = btn.textContent || '';
+                                 return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+                             });
+            if (closeBtn) {
+                (closeBtn as HTMLElement).click();
+            } else {
+                window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+            }
+            // Restore URL to current tab to neutralize browser's navigation pop
+            const currentTab = activeTabRef.current;
+            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
+            return;
+        }
+
+        // 2. If a subtab back button (e.g., records details, bot leads subtab) is in DOM, click it instead!
+        const subTabBtn = document.querySelector('[data-subtab-back="true"]');
+        if (subTabBtn) {
+            (subTabBtn as HTMLElement).click();
+            // Restore URL to current tab to neutralize browser's navigation pop
+            const currentTab = activeTabRef.current;
+            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
+            return;
+        }
+
+        if (event.state && event.state.tab) {
+            setActiveTabState(event.state.tab);
+        } else {
+            setActiveTabState('dashboard');
+        }
+    };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
