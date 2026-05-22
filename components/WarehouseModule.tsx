@@ -674,6 +674,17 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             )}
 
             <div className={`bg-white dark:bg-gray-900 p-2 flex gap-1.5 border-b overflow-x-auto no-print scrollbar-hide shrink-0 sticky top-0 z-[35] backdrop-blur-md bg-opacity-90 ${isMobile ? 'px-4 py-3' : 'p-2'}`}>
+                {activeTab !== 'dashboard' && (
+                    <button 
+                        onClick={() => setActiveTab('dashboard')}
+                        data-subtab-back="true"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-200 shrink-0 transition-all hover:scale-105 active:scale-95 border border-transparent hover:border-gray-300"
+                        title="بازگشت به پیشخوان انبار"
+                    >
+                        <ArrowLeftRight size={18} className="rotate-180" />
+                        {!isMobile && <span className="text-xs">بازگشت</span>}
+                    </button>
+                )}
                 {[
                     { id: 'dashboard', label: 'داشبورد', color: 'blue' },
                     { id: 'items', label: 'تعریف کالا', color: 'blue' },

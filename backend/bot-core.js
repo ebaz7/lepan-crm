@@ -17,6 +17,36 @@ const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
 const getTehranDateString = utils.getTehranDateString;
 
+const getRolePermissions = (userRole, settings, userObject) => {
+    if (userRole === 'admin') {
+        return {
+            canViewCustomerBalances: true,
+            canImportCustomerBalances: true
+        };
+    }
+    const perms = {
+        canViewCustomerBalances: false,
+        canImportCustomerBalances: false
+    };
+    switch (userRole) {
+        case 'ceo':
+        case 'financial':
+            perms.canViewCustomerBalances = true;
+            perms.canImportCustomerBalances = true;
+            break;
+        case 'manager':
+        case 'sales_manager':
+            perms.canViewCustomerBalances = true;
+            break;
+    }
+    if (settings && settings.customRoles && settings.customRoles[userRole]) {
+        const r = settings.customRoles[userRole];
+        if (r.canViewCustomerBalances !== undefined) perms.canViewCustomerBalances = !!r.canViewCustomerBalances;
+        if (r.canImportCustomerBalances !== undefined) perms.canImportCustomerBalances = !!r.canImportCustomerBalances;
+    }
+    return perms;
+};
+
 const normalizeChannelId = (id) => {
     if (!id) return id;
     id = id.toString().trim();
@@ -112,8 +142,8 @@ const KEYBOARDS = {
             [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
+            [{ text: '💰 گزارشات مالی و مانده حساب', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
-            [{ text: '💰 استعلام مانده حساب مشتری', callback_data: 'SALES_CUSTOMER_BALANCES' }],
             [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
             [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
@@ -159,6 +189,7 @@ const KEYBOARDS = {
             [{ text: '📊 خلاصه وضعیت امروز', callback_data: 'RPT_DAILY' }],
             [{ text: '🗓 عملکرد ماه جاری', callback_data: 'RPT_MONTHLY' }],
             [{ text: '⏳ وضعیت کارتابل‌ها (مانده)', callback_data: 'RPT_PENDING' }],
+            [{ text: '💰 استعلام مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ] 
     },
@@ -1100,7 +1131,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             const balances = db.customerBalances || [];
             if (balances.length === 0) {
                 session.state = 'IDLE';
-                return sendFn(chatId, "⚠️ هیچ اطلاعات مانده حسابی در سیستم بارگذاری نشده است. ابتدا فایل اکسل مانده حساب را در نرم‌افزار بارگذاری نمایید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
+                return sendFn(chatId, "⚠️ هیچ اطلاعات مانده حسابی در سیستم بارگذاری نشده است. ابتدا فایل اکسل مانده حساب را در نرم‌افزار بارگذاری نمایید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
             }
 
             const terms = query.split(/\s+/).filter(Boolean);
@@ -1113,21 +1144,64 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             });
 
             if (found.length === 0) {
-                return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد:`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
+                return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد (نام یا کد):`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف و بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
             }
 
-            session.state = 'IDLE';
-            let resMsg = `✅ تعداد ${found.length} مورد یافت شد:\n\n`;
-            found.slice(0, 15).forEach(rec => {
+            if (found.length === 1) {
+                session.state = 'IDLE';
+                const rec = found[0];
                 const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
-                resMsg += `👤 *${rec.name}*\n🔢 کد: \`${rec.accountCode}\`\n💰 مانده: *${balanceStr}* ریال (${rec.type})\n📅 بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n`;
-            });
-
-            if (found.length > 15) {
-                resMsg += `⚠️ ... و ${found.length - 15} مورد دیگر. لطفا جستجو را دقیق‌تر انجام دهید.`;
+                const updateStr = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
+                
+                let msg = `👤 *مشخصات مشتری*\n\n`;
+                msg += `👤 *نام:* ${rec.name}\n`;
+                msg += `🔢 *کد حسابداری:* \`${rec.accountCode}\`\n`;
+                msg += `💰 *مانده حساب:* *${balanceStr}* ریال (${rec.type})\n`;
+                msg += `📅 *آخرین بروزرسانی:* ${updateStr}\n\n`;
+                
+                const statements = db.customerStatements || [];
+                const hasStatement = statements.some(s => s.accountCode === rec.accountCode);
+                
+                const kb = [
+                    [
+                        { text: '📄 دانلود آخرین صورتحساب تفصیلی (Excel/PDF)', callback_data: `SALES_BAL_STMT_DOWNLOAD_${rec.accountCode}` }
+                    ],
+                    [
+                        { text: '📥 دانلود فرم تاییدیه حساب (PDF)', callback_data: `SALES_BAL_MAKE_CONFIRMATION_${rec.accountCode}` }
+                    ],
+                    [
+                        { text: '🔍 جستجوی مجدد', callback_data: 'SALES_BAL_SPECIFIC_SEARCH' },
+                        { text: '🔙 منوی قبلی', callback_data: 'SALES_CUSTOMER_BALANCES' }
+                    ]
+                ];
+                
+                if (!hasStatement) {
+                    kb.shift();
+                }
+                
+                return sendFn(chatId, msg, { reply_markup: { inline_keyboard: kb } });
             }
 
-            return sendFn(chatId, resMsg, { reply_markup: { inline_keyboard: [[{ text: '🔍 جستجوی مجدد', callback_data: 'SALES_CUSTOMER_BALANCES' }], [{ text: '🔙 بازگشت به منو اصلی فروش', callback_data: 'MENU_SALES' }]] } });
+            // Multiple matches
+            session.state = 'IDLE';
+            let resMsg = `🔍 نتایج جستجو برای عبارت "${query}" (${found.length} مورد یافت شد):\n`;
+            resMsg += `لطفاً مشتری مد نظر خود را جهت استعلام انتخاب نمایید:`;
+            
+            const buttons = found.slice(0, 10).map(rec => [{
+                text: `👤 ${rec.name} (${rec.accountCode})`,
+                callback_data: `SALES_BAL_VIEW_${rec.accountCode}`
+            }]);
+            
+            if (found.length > 10) {
+                resMsg += `\n\n⚠️ تعداد کل یافت شده‌ها ${found.length} مورد است. برای مشاهده مابقی، لطفاً جستجوی دقیق‌تری انجام دهید.`;
+            }
+            
+            buttons.push([
+                { text: '🔍 جستجوی مجدد', callback_data: 'SALES_BAL_SPECIFIC_SEARCH' },
+                { text: '🔙 بازگشت به منو', callback_data: 'SALES_CUSTOMER_BALANCES' }
+            ]);
+            
+            return sendFn(chatId, resMsg, { reply_markup: { inline_keyboard: buttons } });
         }
         
         if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
@@ -2232,6 +2306,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
         if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
         if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
+        if (data === 'SALES_FIN_REPORTS') {
+            const inline_keyboard = [
+                [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
+                [{ text: '🏢 لیست بدهکاری/بستانکاری کلی', callback_data: 'RPT_BALANCES_SUMMARY' }],
+                [{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]
+            ];
+            return sendFn(chatId, "💰 گزارشات مالی فروش:", { reply_markup: { inline_keyboard } });
+        }
         if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
     }
 
@@ -2378,12 +2460,194 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_CUSTOMER_BALANCES') {
         const perms = settings ? getRolePermissions(user?.role, settings, user) : {};
-        const isAuthorized = user && (user.role === 'admin' || user.role === 'financial' || perms.canViewCustomerBalances === true);
+        const isAuthorized = user && (['admin', 'financial', 'ceo', 'manager'].includes(user.role) || perms.canViewCustomerBalances === true);
         if (!isAuthorized) {
             return sendFn(chatId, "⚠️ شما دسترسی به بخش مانده حساب مشتریان را ندارید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
         }
+        
+        session.state = 'IDLE';
+        
+        const inline_keyboard = [
+            [
+                { text: '🔴 دانلود بدهکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS' },
+                { text: '🟢 دانلود بستانکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS' }
+            ],
+            [
+                { text: '📊 دانلود بدهکاران (Excel)', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' },
+                { text: '📈 دانلود بستانکاران (Excel)', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX' }
+            ],
+            [
+                { text: '🔍 جستجوی مشتری (خاص)', callback_data: 'SALES_BAL_SPECIFIC_SEARCH' }
+            ],
+            [
+                { text: '🔙 بازگشت به منوی فروش', callback_data: 'MENU_SALES' }
+            ]
+        ];
+        
+        return sendFn(chatId, "💰 *منوی استعلام مانده حساب مشتریان*\n\nلطفاً یکی از گزینه‌های زیر را جهت عملکرد سیستم انتخاب نمایید:", { reply_markup: { inline_keyboard } });
+    }
+
+    if (data === 'SALES_BAL_SPECIFIC_SEARCH') {
         session.state = 'FIN_WAIT_CUSTOMER_BALANCE_SEARCH';
-        return sendFn(chatId, "🔍 لطفاً نام مشتری یا کد حسابداری وی را جهت استعلام وارد نمایید:", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
+        return sendFn(chatId, "🔍 لطفاً نام مشتری یا کد حسابداری وی را جهت استعلام وارد نمایید:", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
+    }
+
+    if (data === 'SALES_BAL_DOWNLOAD_DEBTORS' || data === 'SALES_BAL_DOWNLOAD_CREDITORS') {
+        const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS';
+        const rawList = db.customerBalances || [];
+        const filtered = rawList.filter(b => isDebtors ? (b.type === 'بدهکار' || Number(b.balance) > 0) : (b.type === 'بستانکار' || Number(b.balance) < 0));
+        
+        if (filtered.length === 0) {
+            return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
+        }
+        
+        sendFn(chatId, "⏳ در حال تولید فایل PDF گزارش... لطفاً شکیبا باشید.");
+        
+        const title = isDebtors ? 'گزارش مشتریان بدهکار (طلبکار از آنها)' : 'گزارش مشتریان بستانکار (بدهکار به آنها)';
+        const columns = ['کد حسابداری', 'نام مشتری', 'مانده حساب (ریال)', 'نوع'];
+        const rows = filtered.map(b => [
+            b.accountCode || '',
+            b.name || '',
+            Number(b.balance || 0).toLocaleString('fa-IR'),
+            b.type || (Number(b.balance || 0) > 0 ? 'بدهکار' : 'بستانکار')
+        ]);
+        
+        try {
+            const pdfBuffer = await Renderer.generateReportPDF(title, columns, rows);
+            const filename = `Report_${isDebtors ? 'Debtors' : 'Creditors'}_${Date.now()}.pdf`;
+            await sendDocFn(chatId, pdfBuffer, filename, `📄 ${title}\nتعداد مشتریان: ${filtered.length}\n📅 تاریخ گزارش: ${toShamsiFull(new Date())}`);
+        } catch (err) {
+            console.error(err);
+            sendFn(chatId, "❌ متاسفانه در تولید فایل گزارش خطایی رخ داد.");
+        }
+        return;
+    }
+
+    if (data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' || data === 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX') {
+        const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX';
+        const rawList = db.customerBalances || [];
+        const filtered = rawList.filter(b => isDebtors ? (b.type === 'بدهکار' || Number(b.balance) > 0) : (b.type === 'بستانکار' || Number(b.balance) < 0));
+        
+        if (filtered.length === 0) {
+            return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
+        }
+        
+        sendFn(chatId, "⏳ در حال تولید فایل اکسل گزارش... لطفاً منتظر بمانید.");
+        
+        const columns = ['کد حسابداری', 'نام مشتری', 'مانده حساب (ریال)', 'نوع'];
+        const rows = filtered.map(b => [
+            b.accountCode || '',
+            b.name || '',
+            Number(b.balance || 0),
+            b.type || (Number(b.balance || 0) > 0 ? 'بدهکار' : 'بستانکار')
+        ]);
+        
+        try {
+            const buffer = generateExcelBuffer(columns, rows, isDebtors ? "Debtors" : "Creditors");
+            const filename = `Report_${isDebtors ? 'Debtors' : 'Creditors'}_${Date.now()}.xlsx`;
+            await sendDocFn(chatId, buffer, filename, `📊 گزارش اکسل ${isDebtors ? 'مشتریان بدهکار' : 'مشتریان بستانکار'}`);
+        } catch (err) {
+            console.error(err);
+            sendFn(chatId, "❌ خطا در تولید یا ارسال فایل اکسل.");
+        }
+        return;
+    }
+
+    if (data.startsWith('SALES_BAL_VIEW_')) {
+        const code = data.replace('SALES_BAL_VIEW_', '');
+        const rawList = db.customerBalances || [];
+        const rec = rawList.find(b => b.accountCode === code);
+        
+        if (!rec) {
+            return sendFn(chatId, "❌ مشتری یافت نشد.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
+        }
+        
+        const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
+        const updateStr = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
+        
+        let msg = `👤 *مشخصات مشتری*\n\n`;
+        msg += `👤 *نام:* ${rec.name}\n`;
+        msg += `🔢 *کد حسابداری:* \`${rec.accountCode}\`\n`;
+        msg += `💰 *مانده حساب:* *${balanceStr}* ریال (${rec.type})\n`;
+        msg += `📅 *آخرین بروزرسانی:* ${updateStr}\n\n`;
+        
+        const statements = db.customerStatements || [];
+        const hasStatement = statements.some(s => s.accountCode === code);
+        
+        const kb = [
+            [
+                { text: '📄 دانلود آخرین صورتحساب تفصیلی (Excel/PDF)', callback_data: `SALES_BAL_STMT_DOWNLOAD_${code}` }
+            ],
+            [
+                { text: '📥 دانلود فرم تاییدیه حساب (PDF)', callback_data: `SALES_BAL_MAKE_CONFIRMATION_${code}` }
+            ],
+            [
+                { text: '🔍 جستجوی مجدد', callback_data: 'SALES_BAL_SPECIFIC_SEARCH' },
+                { text: '🔙 منوی قبلی', callback_data: 'SALES_CUSTOMER_BALANCES' }
+            ]
+        ];
+        
+        if (!hasStatement) {
+            kb.shift();
+        }
+        
+        return sendFn(chatId, msg, { reply_markup: { inline_keyboard: kb } });
+    }
+
+    if (data.startsWith('SALES_BAL_STMT_DOWNLOAD_')) {
+        const code = data.replace('SALES_BAL_STMT_DOWNLOAD_', '');
+        const statements = db.customerStatements || [];
+        const matched = statements
+            .filter(s => s.accountCode === code)
+            .sort((a, b) => b.uploadedAt - a.uploadedAt);
+            
+        if (matched.length > 0) {
+            const stmt = matched[0];
+            try {
+                await sendFn(chatId, `🔄 در حال دریافت آخرین صورتحساب پیوست مالی شما با شناسه \`${stmt.id}\`... منتظر بمانید.`);
+                const fileBuffer = Buffer.from(stmt.fileData, 'base64');
+                await sendDocFn(chatId, fileBuffer, stmt.fileName, `📄 صورتحساب تفصیلی تفکیک شده حسابداری: ${stmt.fileName}`);
+                return;
+            } catch (e) {
+                console.error("Statement sendDocFn error: ", e);
+                return sendFn(chatId, `❌ خطایی در ارسال فایل صورتحساب رخ داد.`);
+            }
+        } else {
+            return sendFn(chatId, `⚠️ صورتحساب بارگذاری‌شده‌ای برای کد حسابداری شما یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: `SALES_BAL_VIEW_${code}` }]] } });
+        }
+    }
+
+    if (data.startsWith('SALES_BAL_MAKE_CONFIRMATION_')) {
+        const code = data.replace('SALES_BAL_MAKE_CONFIRMATION_', '');
+        const rawList = db.customerBalances || [];
+        const rec = rawList.find(b => b.accountCode === code);
+        
+        if (!rec) {
+            return sendFn(chatId, "❌ مشتری یافت نشد.");
+        }
+        
+        sendFn(chatId, "⏳ در حال تولید تاییدیه حساب... لطفاً کمی صبر کنید.");
+        
+        const title = 'فرم رسمی تاییدیه مانده حساب';
+        const columns = ['ردیف', 'مشخصه حساب', 'جزئیات ثبتی'];
+        const rows = [
+            ['۱', 'نام کامل مشتری / شرکت', rec.name || ''],
+            ['۲', 'شناسه / کد حسابداری', rec.accountCode || ''],
+            ['۳', 'نوع طلب/بدهی شرکت', rec.type || (Number(rec.balance || 0) > 0 ? 'بدهکار' : 'بستانکار')],
+            ['۴', 'مبلغ کل مانده به ریال', Number(rec.balance || 0).toLocaleString('fa-IR')],
+            ['۵', 'مبنای ثبت تاریخی', toShamsiFull(new Date(rec.updatedAt || Date.now()))],
+            ['۶', 'تاریخ رسمی استعلام سیستم', toShamsiFull(new Date())]
+        ];
+        
+        try {
+            const pdfBuffer = await Renderer.generateReportPDF(title, columns, rows);
+            const filename = `Confirmation_${code}_${Date.now()}.pdf`;
+            await sendDocFn(chatId, pdfBuffer, filename, `📥 فرم رسمی تاییدیه حساب صادر شده از طرف شرکت جهت استعلام مانده حساب مشتری گرامی.`);
+        } catch (err) {
+            console.error(err);
+            sendFn(chatId, "❌ متاسفانه خطایی در ساخت تاییدیه حساب پیش آمد.");
+        }
+        return;
     }
 
     if (data === 'SALES_GROUPS') {

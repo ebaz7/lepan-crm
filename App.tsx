@@ -109,11 +109,15 @@ function App() {
       try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
   };
   
-  const setActiveTab = (tab: string, addToHistory = true) => { 
+    const setActiveTab = (tab: string, addToHistory = true) => { 
       setActiveTabState(tab); 
       if (addToHistory) {
           safePushState({ tab }, '', `#${tab}`); 
-          if (tab !== tabHistory[tabHistory.length - 1]) {
+          // If we're going to a main module from anything other than dashboard, 
+          // reset history to keep navigation hierarchical if requested by user style
+          if (['warehouse', 'trade', 'balances', 'users', 'settings', 'purchase'].includes(tab)) {
+              setTabHistory(['dashboard', tab]);
+          } else if (tab !== tabHistory[tabHistory.length - 1]) {
               setTabHistory(prev => [...prev.slice(-9), tab]);
           }
       }
@@ -124,14 +128,17 @@ function App() {
         let backListener: any;
         try {
             CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-                // 1. Check if any modal is open in the DOM
-                const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"]');
+                // 1. Check if any modal or dialog-like element is open in the DOM
+                const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
                 if (activeModals.length > 0) {
                     const lastModal = activeModals[activeModals.length - 1];
-                    const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn') || 
+                    const closeBtn = (lastModal.querySelector('button[onClick]') as HTMLElement) || 
+                                     (lastModal.querySelector('.modal-close-btn') as HTMLElement) || 
+                                     (lastModal.querySelector('[aria-label="بستن"]') as HTMLElement) || 
+                                     (lastModal.querySelector('[data-close-modal="true"]') as HTMLElement) ||
                                      Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                         const txt = btn.textContent || '';
-                                         return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+                                         const txt = (btn.textContent || '').trim();
+                                         return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
                                      });
                     if (closeBtn) {
                         (closeBtn as HTMLElement).click();
@@ -175,6 +182,10 @@ function App() {
                 }
             });
         } catch(e) { console.error("Push Listener Error", e); }
+
+        return () => {
+            if (backListener) backListener.remove();
+        };
     }
   }, []);
 
@@ -241,13 +252,13 @@ function App() {
 
     const handlePopState = (event: PopStateEvent) => {
         // 1. If any modal is active in DOM, close it instead of shifting tab!
-        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"]');
+        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed');
         if (activeModals.length > 0) {
             const lastModal = activeModals[activeModals.length - 1];
-            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn') || 
+            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"]') || 
                              Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                 const txt = btn.textContent || '';
-                                 return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+                                 const txt = (btn.textContent || '').trim();
+                                 return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
                              });
             if (closeBtn) {
                 (closeBtn as HTMLElement).click();
@@ -535,30 +546,14 @@ function App() {
           }
       };
       let listener: any;
-      let backListener: any;
       
       if (Capacitor.isNativePlatform()) {
           CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; });
-          
-          CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-            if (tabHistory.length > 1) {
-                const newHistory = [...tabHistory];
-                newHistory.pop(); // remove current
-                const prevTab = newHistory[newHistory.length - 1];
-                setTabHistory(newHistory);
-                changeTab(prevTab, false);
-            } else if (activeTab !== 'dashboard') {
-                changeTab('dashboard');
-            } else if (!canGoBack) {
-                CapacitorApp.exitApp();
-            }
-          }).then(l => { backListener = l; });
       }
       return () => { 
         if (listener) listener.remove(); 
-        if (backListener) backListener.remove();
       };
-  }, [currentUser, activeTab]);
+  }, [currentUser]);
 
   useEffect(() => { 
       if (currentUser) { 

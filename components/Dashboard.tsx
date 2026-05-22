@@ -628,13 +628,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* Announce Modal */}
         {showAnnounceModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                <div className="glass-panel rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+            <div role="dialog" aria-label="ثبت اعلان" className="glass-panel rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
                     <div className="p-4 border-b flex justify-between items-center bg-blue-50/50">
                         <div className="flex items-center gap-2 text-blue-800">
                             <Activity size={20} />
                             <h3 className="font-bold">ثبت {announceType === 'task' ? 'تسک' : 'اعلامیه'} جدید</h3>
                         </div>
-                        <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors"><XCircle size={20}/></button>
+                        <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors" data-close-modal="true" aria-label="بستن"><XCircle size={20}/></button>
                     </div>
                     <div className="p-4 flex flex-col gap-4">
                         <div className="flex bg-gray-100 p-1 rounded-xl">
