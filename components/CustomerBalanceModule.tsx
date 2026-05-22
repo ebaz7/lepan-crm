@@ -1,0 +1,796 @@
+import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
+import { Upload, Download, Search, FileSpreadsheet, UserCheck, Trash2, Wallet, Plus, Loader2, Landmark, TrendingDown, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
+
+interface CustomerBalance {
+  id: string;
+  accountCode: string;
+  name: string;
+  balance: number;
+  type: 'بدهکار' | 'بستانکار';
+  updatedAt: string;
+}
+
+interface ChatCodeMap {
+  chatId: string;
+  platform: 'telegram' | 'bale';
+  accountCode: string;
+  updatedAt?: number;
+}
+
+interface CustomerStatement {
+  id: string;
+  accountCode: string;
+  fileName: string;
+  fileType: string;
+  uploadedAt: number;
+}
+
+export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ currentUser }) => {
+  const [balances, setBalances] = useState<CustomerBalance[]>([]);
+  const [chatCodes, setChatCodes] = useState<ChatCodeMap[]>([]);
+  const [statements, setStatements] = useState<CustomerStatement[]>([]);
+  const [lastUploadTime, setLastUploadTime] = useState<number | null>(null);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'debit' | 'credit'>('all');
+  const [activeSubTab, setActiveSubTab] = useState<'balances' | 'mappings'>('balances');
+  const [loading, setLoading] = useState(false);
+  const [pdfLoadingDebtors, setPdfLoadingDebtors] = useState(false);
+  const [pdfLoadingCreditors, setPdfLoadingCreditors] = useState(false);
+
+  // Manual Mapping Form
+  const [mapChatId, setMapChatId] = useState('');
+  const [mapPlatform, setMapPlatform] = useState<'telegram' | 'bale'>('telegram');
+  const [mapAccountCode, setMapAccountCode] = useState('');
+
+  // Statement Upload Modals
+  const [stmtModalCode, setStmtModalCode] = useState<string | null>(null);
+  const [stmtUploadLoading, setStmtUploadLoading] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const resBal = await fetch('/api/customer-balances');
+      if (resBal.ok) {
+        const data = await resBal.json();
+        setBalances(data.balances || []);
+        setLastUploadTime(data.lastXlsxUploadAt || null);
+      }
+      const resMap = await fetch('/api/customer-balances/chat-codes');
+      if (resMap.ok) {
+        const data = await resMap.json();
+        setChatCodes(data);
+      }
+      const resStmts = await fetch('/api/customer-balances/statements/all');
+      if (resStmts.ok) {
+        const data = await resStmts.json();
+        setStatements(data);
+      }
+    } catch (error) {
+      console.error('Error fetching customer balance data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const parsedRows = XLSX.utils.sheet_to_json(ws) as any[];
+
+        if (parsedRows.length === 0) {
+          alert('فایل اکسل تهی است یا خوانده نشد.');
+          return;
+        }
+
+        const validRecords: any[] = [];
+        for (const row of parsedRows) {
+          // Robust column extraction logic mappings
+          const accountCode = String(
+            row['کد تفصیلی'] || 
+            row['کد حساب'] || 
+            row['کد حسابداری'] || 
+            row['AccountCode'] || 
+            row['کد کل'] || 
+            row['کد'] || 
+            ''
+          ).trim();
+
+          const name = String(
+            row['نام شخص'] || 
+            row['نام مشتری'] || 
+            row['نام حساب'] || 
+            row['CustomerName'] || 
+            row['Name'] || 
+            row['نام تفصیلی'] || 
+            ''
+          ).trim();
+
+          // Standard distinct Debit vs Credit columns check
+          const debitVal = Number(row['بدهکار'] || row['Debit'] || 0);
+          const creditVal = Number(row['بستانکار'] || row['Credit'] || 0);
+
+          let balance = 0;
+          let type: 'بدهکار' | 'بستانکار' = 'بدهکار';
+
+          if (debitVal > 0) {
+            balance = debitVal;
+            type = 'بدهکار';
+          } else if (creditVal > 0) {
+            balance = creditVal;
+            type = 'بستانکار';
+          } else {
+            // Check fallback single column
+            balance = Number(row['مانده'] || row['مانده حساب'] || row['Balance'] || 0);
+            const typeStr = String(
+              row['تشخیص'] || 
+              row['وضعیت'] || 
+              row['نوع'] || 
+              row['Type'] || 
+              row['ماهیت'] || 
+              'بدهکار'
+            ).trim();
+
+            if (typeStr.includes('بست') || typeStr.includes('بستانکار') || typeStr.includes('CR') || typeStr.includes('Credit')) {
+              type = 'بستانکار';
+            } else {
+              type = 'بدهکار';
+            }
+          }
+
+          if (accountCode && name) {
+            validRecords.push({
+              accountCode,
+              name,
+              balance,
+              type
+            });
+          }
+        }
+
+        if (validRecords.length === 0) {
+          alert('کد حسابداری یا نام مشتری معتبری در فایل یافت نشد. لطفاً عناوین ستون‌ها را بررسی کنید.');
+          return;
+        }
+
+        if (!confirm(`آیا تمایل دارید مانده حساب تعداد ${validRecords.length} مشتری را بروزرسانی کنید؟`)) return;
+
+        setLoading(true);
+        const postRes = await fetch('/api/customer-balances/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: validRecords })
+        });
+
+        if (postRes.ok) {
+          alert('مانده حساب مشتریان با موفقیت بروزرسانی شد.');
+          fetchData();
+        } else {
+          alert('خطا در بروزرسانی مانده حساب‌ها.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('خطا در پردازش فایل اکسل.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleManualMapSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mapChatId || !mapAccountCode) {
+      alert('لطفاً شناسه چت و کد حسابداری را وارد کنید.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/customer-balances/chat-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: mapChatId.trim(),
+          platform: mapPlatform,
+          accountCode: mapAccountCode.trim()
+        })
+      });
+
+      if (res.ok) {
+        alert('پیوند چت با موفقیت ایجاد دگرگون شد.');
+        setMapChatId('');
+        setMapAccountCode('');
+        fetchData();
+      } else {
+        alert('خطایی رخ داد.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMap = async (chatId: string, platform: 'telegram' | 'bale') => {
+    if (!confirm('آیا از حذف این پیوند حساب اطمینان دارید؟')) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/customer-balances/chat-code/${chatId}/${platform}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert('پیوند با موفقیت حذف شد.');
+        fetchData();
+      } else {
+        alert('خطا در حذف پیوند.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatementUpload = async (e: React.ChangeEvent<HTMLInputElement>, accountCode: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setStmtUploadLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const result = evt.target?.result as string;
+        const base64Data = result.split(',')[1];
+        const ext = file.name.split('.').pop() || '';
+
+        const response = await fetch('/api/customer-balances/statement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountCode,
+            fileName: file.name,
+            fileType: ext,
+            fileData: base64Data
+          })
+        });
+
+        if (response.ok) {
+          alert('صورتحساب با موفقیت آپلود شد.');
+          fetchData();
+        } else {
+          alert('خطا در آپلود صورتحساب.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('خطا در خواندن فایل.');
+      } finally {
+        setStmtUploadLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleDeleteStatement = async (id: string) => {
+    if (!confirm('آیا از حذف این صورتحساب اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/customer-balances/statement/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert('صورتحساب با موفقیت حذف شد.');
+        fetchData();
+      } else {
+        alert('خطا در حذف صورتحساب.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const downloadPDFReport = async (type: 'debtors' | 'creditors') => {
+    if (type === 'debtors') setPdfLoadingDebtors(true);
+    else setPdfLoadingCreditors(true);
+
+    try {
+      const url = `/api/customer-balances/reports/${type}/pdf`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (error) {
+      console.error(error);
+      alert('خطا در تولید و دانلود فایل گزارش PDF.');
+    } finally {
+      if (type === 'debtors') setPdfLoadingDebtors(false);
+      else setPdfLoadingCreditors(false);
+    }
+  };
+
+  // Calculations
+  const totalDebtors = balances
+    .filter(b => b.type === 'بدهکار')
+    .reduce((sum, b) => sum + b.balance, 0);
+
+  const totalCreditors = balances
+    .filter(b => b.type === 'بستانکار')
+    .reduce((sum, b) => sum + b.balance, 0);
+
+  const filteredBalances = balances.filter(b => {
+    const matchesSearch = 
+      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.accountCode.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (filterType === 'all') return matchesSearch;
+    if (filterType === 'debit') return matchesSearch && b.type === 'بدهکار';
+    if (filterType === 'credit') return matchesSearch && b.type === 'بستانکار';
+    return matchesSearch;
+  });
+
+  return (
+    <div className="p-4 md:p-6 text-right max-w-7xl mx-auto" dir="rtl">
+      {/* Header Panel */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white dark:bg-zinc-900 duration-200 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
+        <div>
+          <h1 className="text-2xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <Wallet className="text-emerald-500 w-7 h-7" />
+            مانده حساب مشتریان
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            مدیریت کامل و دائم مانده حساب‌ها، ورود اطلاعات حسابداری و دانلود گزارشات بدهکاران و بستانکاران
+          </p>
+          {lastUploadTime && (
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-450 font-bold mt-2 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40 inline-flex items-center gap-1">
+              <span>📅 مبنای محاسبه گزارش مکتوب (آخرین آپلود اکسل):</span>
+              <span className="font-mono">{new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date(lastUploadTime))}</span>
+            </p>
+          )}
+        </div>
+        
+        <div className="flex gap-2">
+          <button onClick={fetchData} className="p-2 border border-gray-100 dark:border-zinc-800 rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-600 dark:text-gray-300 transition-all">
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          
+          {currentUser?.rolePermissions?.canImportCustomerBalances !== false && (
+            <label className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm cursor-pointer shadow-lg shadow-emerald-700/10">
+              <Upload className="w-4 h-4" />
+              واردات اکسل تفصیلی
+              <input type="file" accept=".xlsx, .xls" onChange={handleExcelImport} className="hidden" />
+            </label>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بدهکار (طلب شرکت)</span>
+            <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
+              {totalDebtors.toLocaleString()} <span className="text-xs font-medium text-gray-500">ریال</span>
+            </span>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl text-emerald-600">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بستانکار (بدهی شرکت)</span>
+            <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
+              {totalCreditors.toLocaleString()} <span className="text-xs font-medium text-gray-500">ریال</span>
+            </span>
+          </div>
+          <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl text-rose-600">
+            <TrendingDown className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-bold text-gray-400 block mb-1">کل حساب‌های تفصیلی</span>
+            <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
+              {balances.length} <span className="text-xs font-medium text-gray-500">سرفصل</span>
+            </span>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-xl text-blue-600">
+            <Landmark className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* PDF Generation Controls Panel */}
+      <div className="bg-gradient-to-l from-emerald-50 to-teal-50 dark:from-zinc-900 dark:to-zinc-855 border border-emerald-100 dark:border-zinc-800 p-5 rounded-2xl mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h4 className="text-sm font-black text-emerald-900 dark:text-emerald-400 flex items-center gap-1.5">
+            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+            تولید و دریافت گزارشات تفکیکی
+          </h4>
+          <p className="text-xs text-emerald-800/80 dark:text-zinc-400 mt-1">
+            صرفاً دریافت خروجی PDF تفکیک‌شده و مرتب شده بر اساس بیشترین به کمترین طلب یا بدهی
+          </p>
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => downloadPDFReport('debtors')}
+            disabled={pdfLoadingDebtors}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-zinc-900 dark:bg-emerald-600 hover:bg-zinc-800 dark:hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm"
+          >
+            {pdfLoadingDebtors ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            گزارش بدهکاران (PDF)
+          </button>
+          
+          <button
+            onClick={() => downloadPDFReport('creditors')}
+            disabled={pdfLoadingCreditors}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-zinc-900 dark:bg-emerald-600 hover:bg-zinc-800 dark:hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm"
+          >
+            {pdfLoadingCreditors ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            گزارش بستانکاران (PDF)
+          </button>
+        </div>
+      </div>
+
+      {/* Navigation Sub Tabs */}
+      <div className="flex gap-4 border-b border-gray-200 dark:border-zinc-800 mb-6">
+        <button
+          onClick={() => setActiveSubTab('balances')}
+          className={`pb-3 font-bold text-sm border-b-2 px-3 transition-all ${
+            activeSubTab === 'balances'
+              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          لیست مانده حساب‌ها ({filteredBalances.length})
+        </button>
+        <button
+          onClick={() => setActiveSubTab('mappings')}
+          className={`pb-3 font-bold text-sm border-b-2 px-3 transition-all ${
+            activeSubTab === 'mappings'
+              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          پیوند کد حسابداری به چت ربات ({chatCodes.length})
+        </button>
+      </div>
+
+      {activeSubTab === 'balances' && (
+        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
+          {/* Controls Bar */}
+          <div className="p-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900 flex flex-col md:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full md:w-80">
+              <Search className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="جستجو در نام تفصیلی یا کد..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full text-xs text-right pr-9 pl-3 py-2.5 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 duration-150 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <div className="flex gap-2 w-full md:w-auto">
+              {(['all', 'debit', 'credit'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setFilterType(t)}
+                  className={`flex-1 md:flex-initial text-xs font-bold px-4 py-2 rounded-xl border transition-all ${
+                    filterType === t
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300'
+                  }`}
+                >
+                  {t === 'all' ? 'همه' : t === 'debit' ? 'بدهکاران (طلب)' : 'بستانکاران'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* List Content */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-right border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-zinc-800">
+                  <th className="py-3 px-4 font-bold">کد حسابداری</th>
+                  <th className="py-3 px-4 font-bold">نام حساب تفصیلی / مشتری</th>
+                  <th className="py-3 px-4 font-bold text-left">مانده حساب (ریال)</th>
+                  <th className="py-3 px-4 font-bold text-center">تشخیص</th>
+                  <th className="py-3 px-4 font-bold text-center">صورتحساب‌ها (ملحق شده)</th>
+                  <th className="py-3 px-4 font-bold text-center">آخرین بروزرسانی</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-gray-400 hover:text-gray-500">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500" />
+                      <span className="block mt-2 text-xs font-bold">در حال بارگذاری اطلاعات...</span>
+                    </td>
+                  </tr>
+                ) : filteredBalances.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-gray-400">
+                      <AlertCircle className="w-8 h-8 mx-auto text-zinc-300 mb-2" />
+                      <span className="block text-xs font-bold text-gray-500">موردی یافت نشد. اکسل را وارد کنید.</span>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBalances.map((item) => (
+                    <tr key={item.id || item.accountCode} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30 transition-all font-medium text-gray-700 dark:text-gray-300">
+                      <td className="py-3 px-4 select-all font-mono">
+                        <code>{item.accountCode}</code>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-zinc-100">
+                        {item.name}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-left text-zinc-900 dark:text-zinc-100">
+                        {item.balance.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-block px-2 py-1 rounded-md font-bold text-[10px] ${
+                          item.type === 'بدهکار' 
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' 
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400'
+                        }`}>
+                          {item.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => setStmtModalCode(item.accountCode)}
+                          className="inline-flex items-center gap-1 bg-gradient-to-l from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 dark:from-zinc-800 dark:to-zinc-800 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-zinc-700 px-2.5 py-1.5 rounded-xl transition-all font-bold text-[10px]"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          <span>{statements.filter(s => s.accountCode === item.accountCode).length} صورتحساب</span>
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-center text-gray-400">
+                        {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('fa-IR') : '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'mappings' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Create Mapping Form Card */}
+          <div className="lg:col-span-1 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl shadow-sm h-fit">
+            <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-1.5">
+              <Plus className="w-5 h-5 text-emerald-500" />
+              ثبت دستی پیوند جدید
+            </h3>
+            
+            <form onSubmit={handleManualMapSubmit} className="space-y-4 text-right">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1.5">پلتفرم رباتیک</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMapPlatform('telegram')}
+                    className={`p-2 rounded-xl text-xs font-bold border transition-all ${
+                      mapPlatform === 'telegram'
+                        ? 'border-blue-500 bg-blue-50/50 text-blue-700 dark:bg-zinc-800'
+                        : 'border-gray-200 dark:border-zinc-800 text-gray-500'
+                    }`}
+                  >
+                    تلگرام
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapPlatform('bale')}
+                    className={`p-2 rounded-xl text-xs font-bold border transition-all ${
+                      mapPlatform === 'bale'
+                        ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700 dark:bg-zinc-800'
+                        : 'border-gray-200 dark:border-zinc-800 text-gray-500'
+                    }`}
+                  >
+                    بله
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1.5">شناسه چت چت (Chat ID)</label>
+                <input
+                  type="text"
+                  placeholder="مثال: 12948194"
+                  value={mapChatId}
+                  onChange={(e) => setMapChatId(e.target.value)}
+                  className="w-full text-xs text-left font-mono px-3 py-2.5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1.5">کد حسابداری تفصیلی</label>
+                <input
+                  type="text"
+                  placeholder="کد کامل تفصیلی مشتری در سیستم مالی"
+                  value={mapAccountCode}
+                  onChange={(e) => setMapAccountCode(e.target.value)}
+                  className="w-full text-xs text-left font-mono px-3 py-2.5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 dark:bg-emerald-600 hover:bg-zinc-800 dark:hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm shadow-zinc-100"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+                پیوند دهی چت به حساب تفصیلی
+              </button>
+            </form>
+          </div>
+
+          {/* List existing mapping */}
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+            <h3 className="text-sm font-black text-gray-800 dark:text-gray-100 mb-4">
+              پیوندهای فعال (شناسه چت ربات به کدهای مالی)
+            </h3>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-zinc-900 text-gray-400 border-b border-gray-100 dark:border-zinc-800">
+                    <th className="py-2.5 px-3 font-bold">پلتفرم</th>
+                    <th className="py-2.5 px-3 font-bold">شناسه چت ربات (Chat ID)</th>
+                    <th className="py-2.5 px-3 font-bold text-center">کد حساب تفصیلی</th>
+                    <th className="py-2.5 px-3 font-bold text-center">عملیات ثبت شده</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && chatCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-emerald-500" />
+                      </td>
+                    </tr>
+                  ) : chatCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center text-gray-400 font-bold">
+                        هیچ پیوند ثبتی در پایگاه‌داده هنوز ایجاد نشده است.
+                      </td>
+                    </tr>
+                  ) : (
+                    chatCodes.map((map) => (
+                      <tr key={`${map.chatId}-${map.platform}`} className="border-b border-gray-50 dark:border-zinc-800 font-medium text-gray-600 dark:text-gray-300">
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[9px] ${
+                            map.platform === 'telegram'
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400'
+                              : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400'
+                          }`}>
+                            {map.platform === 'telegram' ? 'تلگرام' : 'پیام‌رسان بله'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono">{map.chatId}</td>
+                        <td className="py-2.5 px-3 font-mono text-center font-bold text-gray-800 dark:text-white">{map.accountCode}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => handleDeleteMap(map.chatId, map.platform)}
+                            className="p-1 px-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Statements Dialog Overlay */}
+      {stmtModalCode && (() => {
+        const customerName = balances.find(b => b.accountCode === stmtModalCode)?.name || 'سرفصل نامشخص';
+        const customerStmts = statements.filter(s => s.accountCode === stmtModalCode);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/80 backdrop-blur-xs duration-200">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-right" dir="rtl">
+              <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-zinc-800 mb-4">
+                <div>
+                  <h3 className="text-base font-black text-gray-900 dark:text-gray-100">
+                    📂 صورتحساب‌های پیوست مالی
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">مشاهده و بارگذاری اسناد کمکی مربوط به {customerName}</p>
+                </div>
+                <button 
+                  onClick={() => setStmtModalCode(null)} 
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg transition-all text-xs font-bold"
+                >
+                  بستن (✕)
+                </button>
+              </div>
+
+              {/* Upload statement section */}
+              {currentUser?.rolePermissions?.canImportCustomerBalances !== false && (
+                <div className="mb-4 bg-emerald-50/50 dark:bg-zinc-800/40 p-4 rounded-2xl border border-emerald-100/50 dark:border-zinc-800 flex flex-col items-center justify-center gap-2">
+                  <span className="text-xs text-slate-500 font-bold">می‌توانید فایل‌های سند (PDF, Excel) را آپلود کنید:</span>
+                  <label className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-4 rounded-xl cursor-pointer transition-all shadow-md">
+                    {stmtUploadLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    <span>آپلود سند پیوست</span>
+                    <input type="file" accept=".pdf,.xlsx,.xls" onChange={(e) => handleStatementUpload(e, stmtModalCode)} className="hidden" disabled={stmtUploadLoading} />
+                  </label>
+                </div>
+              )}
+
+              {/* List Files */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <span className="block text-xs font-bold text-gray-400 mb-2">لیست فایل‌های صادر شده برای این مشتری ({customerStmts.length})</span>
+                {customerStmts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 border border-dashed border-gray-100 dark:border-zinc-800 rounded-2xl">
+                    <FileSpreadsheet className="w-8 h-8 mx-auto text-gray-300 mb-1" />
+                    <span className="text-xs">هیچ صورتحسابی برای این مشتری آپلود نشده است.</span>
+                  </div>
+                ) : (
+                  customerStmts.map((st) => (
+                    <div key={st.id} className="flex justify-between items-center bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-2xl border border-gray-100/30 dark:border-zinc-800/20 text-xs">
+                      <div className="flex flex-col text-right">
+                        <span className="font-bold text-gray-800 dark:text-zinc-200 line-clamp-1 select-all">{st.fileName}</span>
+                        <span className="text-[10px] text-gray-400 mt-1 font-mono">
+                          {new Date(st.uploadedAt).toLocaleDateString('fa-IR')} • پسوند {st.fileType.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        <a 
+                          href={`/api/customer-balances/statement-download/${st.id}`}
+                          download={st.fileName}
+                          className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 rounded-lg transition-all font-bold"
+                          title="دانلود فایل"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                        {currentUser?.rolePermissions?.canImportCustomerBalances !== false && (
+                          <button
+                            onClick={() => handleDeleteStatement(st.id)}
+                            className="p-1.5 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-700 dark:text-rose-450 rounded-lg transition-all font-bold"
+                            title="حذف فایل"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};

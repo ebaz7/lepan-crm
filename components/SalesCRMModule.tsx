@@ -79,6 +79,7 @@ export default function SalesCRMModule() {
                 data.forEach((row: any) => {
                     const mobile = String(row['موبایل'] || row['Mobile'] || '').trim();
                     const name = String(row['نام'] || row['Name'] || '').trim();
+                    const accountCode = String(row['کد تفصیلی'] || row['کد حساب'] || row['کد حسابداری'] || row['AccountCode'] || row['کد'] || '').trim();
                     if (mobile && name) {
                         newContacts.push({
                             id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
@@ -87,6 +88,7 @@ export default function SalesCRMModule() {
                             telegramId: String(row['تلگرام'] || row['Telegram'] || ''),
                             baleId: String(row['بله'] || row['Bale'] || ''),
                             birthday: String(row['تاریخ تولد'] || row['Birthday'] || ''),
+                            accountCode: accountCode || undefined,
                             sendBirthdayGreeting: true
                         });
                     }
@@ -104,12 +106,12 @@ export default function SalesCRMModule() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingContact, setEditingContact] = useState<SalesContact | null>(null);
-    const [formData, setFormData] = useState<Partial<SalesContact>>({ name: '', mobile: '', birthday: '', telegramId: '', baleId: '' });
+    const [formData, setFormData] = useState<Partial<SalesContact>>({ name: '', mobile: '', birthday: '', telegramId: '', baleId: '', accountCode: '' });
 
     // Handler to open modal for new contact
     const handleAddManualContact = () => {
         setEditingContact(null);
-        setFormData({ name: '', mobile: '', birthday: '', sendBirthdayGreeting: true });
+        setFormData({ name: '', mobile: '', birthday: '', telegramId: '', baleId: '', accountCode: '', sendBirthdayGreeting: true });
         setIsModalOpen(true);
     };
 
@@ -127,7 +129,7 @@ export default function SalesCRMModule() {
         }
 
         if (editingContact) {
-            updateContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData, telegramId: formData.telegramId, baleId: formData.baleId } as SalesContact : c));
+            updateContacts(contacts.map(c => c.id === editingContact.id ? { ...editingContact, ...formData, telegramId: formData.telegramId, baleId: formData.baleId, accountCode: formData.accountCode } as SalesContact : c));
         } else {
             const newContact: SalesContact = {
                 id: Date.now().toString(),
@@ -267,7 +269,16 @@ export default function SalesCRMModule() {
                                      <Upload size={18}/> ایمپورت اکسل
                                      <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleFileUpload} />
                                 </label>
-                                <button onClick={downloadSample} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> نمونه اکسل</button>
+                                <button onClick={() => {
+                                    const sampleData = [
+                                        { 'نام': 'علی محمدی', 'موبایل': '09121234567', 'تلگرام': '', 'بله': '', 'تاریخ تولد': '1370/05/20', 'کد حساب تفصیلی': '102001' },
+                                        { 'نام': 'رضا علوی', 'موبایل': '09191234567', 'تلگرام': 'reza_alavi', 'بله': 'reza_bale', 'تاریخ تولد': '1365/10/12', 'کد حساب تفصیلی': '102002' }
+                                    ];
+                                    const ws = XLSX.utils.json_to_sheet(sampleData);
+                                    const wb = XLSX.utils.book_new();
+                                    XLSX.utils.book_append_sheet(wb, ws, "Contacts");
+                                    XLSX.writeFile(wb, "Sample_Contacts.xlsx");
+                                }} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> نمونه اکسل</button>
                                 <button onClick={exportContacts} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-100 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 border"><Download size={18}/> اکسپورت</button>
                                 <button onClick={handleAddManualContact} className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100"><Plus size={18}/> افزودن دستی</button>
                             </div>
@@ -279,6 +290,7 @@ export default function SalesCRMModule() {
                                     <tr className="border-b bg-gray-50 text-gray-500">
                                         <th className="p-4 font-bold text-right">نام مشتری</th>
                                         <th className="p-4 font-bold text-center">شماره موبایل</th>
+                                        <th className="p-4 font-bold text-center">کد حساب مالی</th>
                                         <th className="p-4 font-bold text-center">تاریخ تولد</th>
                                         <th className="p-4 font-bold text-center">تبریک تولد</th>
                                         <th className="p-4 font-bold text-center">عملیات</th>
@@ -296,6 +308,9 @@ export default function SalesCRMModule() {
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-center font-mono">{c.mobile}</td>
+                                                <td className="p-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                                    {c.accountCode ? <span className="bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-1 rounded-lg text-xs"><code>{c.accountCode}</code></span> : <span className="text-gray-300 text-xs">-</span>}
+                                                </td>
                                                 <td className="p-4 text-center">{c.birthday || '-'}</td>
                                                 <td className="p-4 text-center">
                                                     {c.sendBirthdayGreeting ? 
@@ -324,6 +339,7 @@ export default function SalesCRMModule() {
                                     <div>
                                         <div className="font-bold text-gray-800">{c.name}</div>
                                         <div className="text-xs text-gray-500 font-mono mt-1">{c.mobile}</div>
+                                        {c.accountCode && <div className="text-xs text-emerald-600 font-bold mt-1">کد حسابدار: {c.accountCode}</div>}
                                         {c.birthday && <div className="text-[10px] text-gray-400 mt-1">تولد: {c.birthday}</div>}
                                     </div>
                                     <div className="flex gap-1">
@@ -413,6 +429,15 @@ export default function SalesCRMModule() {
                                     value={formData.mobile}
                                     onChange={e => setFormData({...formData, mobile: e.target.value})}
                                     placeholder="۰۹۱۲..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">کد تفصیلی حسابداری (جهت دریافت راحت مانده در ربات)</label>
+                                <input 
+                                    className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-blue-500 outline-none transition-all dir-ltr text-left font-mono font-bold"
+                                    value={formData.accountCode || ''}
+                                    onChange={e => setFormData({...formData, accountCode: e.target.value})}
+                                    placeholder="مثلا: 104008"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">

@@ -21,6 +21,7 @@ import SalesCRMModule from './components/SalesCRMModule';
 import ProductsModule from './components/ProductsModule';
 import { Tickets } from './components/Tickets';
 import KnowledgeBaseModule from './components/KnowledgeBaseModule';
+import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
@@ -606,6 +607,7 @@ function App() {
                 {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="EXIT" />}
                 {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
                 {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
+                {activeTab === 'balances' && <CustomerBalanceModule currentUser={currentUser} />}
                 {activeTab === 'sales' && <SalesCRMModule />}
                 {activeTab === 'products' && <ProductsModule />}
                 {activeTab === 'tickets' && <Tickets />}

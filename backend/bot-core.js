@@ -87,6 +87,7 @@ const KEYBOARDS = {
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
             [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
+            [{ text: '💰 استعلام مانده حساب مشتری', callback_data: 'SALES_CUSTOMER_BALANCES' }],
             [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
             [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
@@ -755,6 +756,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
                 [{ text: '📞 ارتباط با بخش فروش (تیکت)', callback_data: 'GUEST_CONTACT' }],
+                [{ text: '💰 استعلام مانده حساب من', callback_data: 'GUEST_BALANCE_REQUEST' }],
                 [{ text: '🔍 پیگیری درخواست', callback_data: 'GUEST_TRACK' }],
                 [{ text: '🏢 اطلاعات شرکت', callback_data: 'GUEST_COMPANY_INFO' }]
             ];
@@ -1035,6 +1037,67 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             return sendFn(chatId, `✅ سفارش شما برای محصول *${selectedProduct?.name}* ثبت شد و در اسرع وقت بررسی می‌گردد.\nکد پیگیری: \`${orderDoc.id.split('-')[0]}\``, {
                 reply_markup: { inline_keyboard: [[{ text: '🏠 منوی اصلی', callback_data: 'GUEST_MAIN' }]] }
             });
+        }
+
+        if (session.state === 'GUEST_SUBMIT_ACCOUNT_CODE') {
+            const code = text.trim();
+            if (!code) {
+                return sendFn(chatId, "⚠️ لطفاً یک کد حسابداری معتبر ارسال کنید:");
+            }
+            if (!db.customerChatCodes) db.customerChatCodes = [];
+            db.customerChatCodes = db.customerChatCodes.filter(c => !(c.chatId === String(chatId) && c.platform === platform));
+            db.customerChatCodes.push({
+                chatId: String(chatId),
+                platform: platform,
+                accountCode: code,
+                updatedAt: Date.now()
+            });
+            saveDb(db);
+            session.state = 'IDLE';
+
+            const rec = (db.customerBalances || []).find(b => b.accountCode === code);
+            if (rec) {
+                const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
+                const successMsg = `✅ *ارتباط با حسابداری برقرار شد!*\n\n👤 *مشتری:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما:* ${balanceStr} ریال (${rec.type})\n📅 آخرین بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n💬 مانده حساب شما ذخیره شد و در پرسش‌های بعدی با زدن دکمه مربوطه مستقیماً نشان داده خواهد شد.`;
+                return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+            } else {
+                const successMsg = `✅ *پیوند حساب برقرار شد!*\n🔢 کد حسابداری شما \`${code}\` با موفقیت در ربات ذخیره گردید.\n\n⚠️ اما در حال حاضر رکوردی با این کد در فایل مانده حساب‌های سیستم یافت نشد. به محض بارگذاری اطلاعات جدید توسط مدیر مالی، مانده حساب شما نمایش داده خواهد شد.`;
+                return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+            }
+        }
+
+        if (session.state === 'FIN_WAIT_CUSTOMER_BALANCE_SEARCH') {
+            const query = text.trim();
+            if (!query) {
+                return sendFn(chatId, "⚠️ لطفا یک عبارت معتبر برای جستجو وارد کنید:");
+            }
+            const balances = db.customerBalances || [];
+            if (balances.length === 0) {
+                session.state = 'IDLE';
+                return sendFn(chatId, "⚠️ هیچ اطلاعات مانده حسابی در سیستم بارگذاری نشده است. ابتدا فایل اکسل مانده حساب را در نرم‌افزار بارگذاری نمایید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
+            }
+
+            const found = balances.filter(b => 
+                (b.accountCode || '').includes(query) || 
+                (b.name || '').includes(query)
+            );
+
+            if (found.length === 0) {
+                return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد:`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
+            }
+
+            session.state = 'IDLE';
+            let resMsg = `✅ تعداد ${found.length} مورد یافت شد:\n\n`;
+            found.slice(0, 15).forEach(rec => {
+                const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
+                resMsg += `👤 *${rec.name}*\n🔢 کد: \`${rec.accountCode}\`\n💰 مانده: *${balanceStr}* ریال (${rec.type})\n📅 بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n`;
+            });
+
+            if (found.length > 15) {
+                resMsg += `⚠️ ... و ${found.length - 15} مورد دیگر. لطفا جستجو را دقیق‌تر انجام دهید.`;
+            }
+
+            return sendFn(chatId, resMsg, { reply_markup: { inline_keyboard: [[{ text: '🔍 جستجوی مجدد', callback_data: 'SALES_CUSTOMER_BALANCES' }], [{ text: '🔙 بازگشت به منو اصلی فروش', callback_data: 'MENU_SALES' }]] } });
         }
         
         if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
@@ -1808,6 +1871,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 [{ text: '📦 لیست محصولات و قیمت', callback_data: 'GUEST_PRODUCTS' }],
                 [{ text: '🛒 ثبت سفارش خرید', callback_data: 'GUEST_ORDER' }],
                 [{ text: '🎫 ثبت تیکت / ارتباط با پشتیبانی', callback_data: 'GUEST_CONTACT_FLOW' }],
+                [{ text: '💰 استعلام مانده حساب من', callback_data: 'GUEST_BALANCE_REQUEST' }],
                 [{ text: '🔍 پیگیری تیکت یا سفارش', callback_data: 'GUEST_TRACK' }],
                 [{ text: '🏢 اطلاعات شرکت و حساب‌ها', callback_data: 'GUEST_COMPANY_INFO' }]
             ];
@@ -1823,6 +1887,115 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     inline_keyboard: guestMenu
                 }
             });
+        }
+
+        if (data === 'GUEST_BALANCE_REQUEST') {
+            let code = null;
+            let source = 'direct';
+            const mapped = (db.customerChatCodes || []).find(c => c.chatId === String(userId) && c.platform === platform);
+            if (mapped) {
+                code = mapped.accountCode;
+            } else {
+                // Try searching in settings.salesContacts
+                const salesContacts = (db.settings && db.settings.salesContacts) || [];
+                // Find contact by platform ID match
+                let matchedContact = salesContacts.find(c => 
+                    (platform === 'telegram' && c.telegramId && String(c.telegramId).replace('@','').toLowerCase() === String(userId).toLowerCase()) ||
+                    (platform === 'bale' && c.baleId && String(c.baleId).replace('@','').toLowerCase() === String(userId).toLowerCase())
+                );
+                
+                // If not found, look at botSubscribers to get their phone number, then match with salesContacts
+                if (!matchedContact) {
+                    const sub = (db.botSubscribers || []).find(s => s.chatId === String(userId) && s.platform === platform);
+                    if (sub && sub.mobile) {
+                        const cleanedSubMobile = String(sub.mobile).replace(/\D/g, '').slice(-10);
+                        matchedContact = salesContacts.find(c => {
+                            const cleanedCMobile = String(c.mobile).replace(/\D/g, '').slice(-10);
+                            return cleanedCMobile && cleanedCMobile === cleanedSubMobile;
+                        });
+                    }
+                }
+                
+                if (matchedContact && matchedContact.accountCode) {
+                    code = matchedContact.accountCode;
+                    source = 'crm';
+                    
+                    // Automatically persist the mapped code into customerChatCodes to make it faster next time!
+                    if (!db.customerChatCodes) db.customerChatCodes = [];
+                    db.customerChatCodes.push({
+                        chatId: String(userId),
+                        platform: platform,
+                        accountCode: code,
+                        updatedAt: Date.now()
+                    });
+                    saveDb(db);
+                }
+            }
+
+            if (code) {
+                const rec = (db.customerBalances || []).find(b => b.accountCode === code);
+                
+                // Fetch statements for this accountCode
+                const statements = db.customerStatements || [];
+                const matchedStatements = statements.filter(s => s.accountCode === code);
+                
+                const inline_keyboard = [];
+                if (matchedStatements.length > 0) {
+                    // Button to receive the latest statement file!
+                    inline_keyboard.push([{ text: '📄 دریافت آخرین صورتحساب پیوست مالی', callback_data: `GUEST_STMT_${code}` }]);
+                }
+                inline_keyboard.push([{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]);
+
+                if (rec) {
+                    const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
+                    
+                    // Show last upload Shamsi time if we have lastXlsxUploadAt
+                    let displayTime = 'نامشخص';
+                    if (db.lastXlsxUploadAt) {
+                        try {
+                            displayTime = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date(db.lastXlsxUploadAt));
+                        } catch(err) {
+                            displayTime = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
+                        }
+                    } else {
+                        displayTime = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
+                    }
+
+                    const msg = `👤 *مشتری گرامی:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما:* ${balanceStr} ریال (${rec.type})\n📅 زمان دریافت گزارش سیستم: ${displayTime}\n\n💬 در صورت هرگونه مغایرت، لطفاً به پشتیبانی یا واحد مالی اطلاع دهید.`;
+                    return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
+                } else {
+                    const msg = `⚠️ *توجه!*\nکد حسابداری شما \`${code}\` است، اما رکوردی با این کد در فایل تفسیری مانده حساب‌های سیستم ثبت نگردیده است.\n\n💬 لطفا به پشتیبانی پیام دهید تا موضوع بررسی شود.`;
+                    return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
+                }
+            } else {
+                session.state = 'GUEST_SUBMIT_ACCOUNT_CODE';
+                const msg = `⚠️ *توجه!*\nشما هنوز کد حسابداری خود را ثبت نکرده‌اید.\n\n💬 لطفا ابتدا به پشتیبانی ما پیام دهید و *«کد حسابداری»* خود را دریافت نمایید.\n\nپس از دریافت، کد حسابداری اختصاصی خود را (تنها به صورت عدد انگلیسی یا کاراکتر کد) در پاسخ به این پیام ارسال نمایید تا پیوند حساب شما برقرار شود.`;
+                return sendFn(userId, msg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+            }
+        }
+
+        if (data.startsWith('GUEST_STMT_')) {
+            const code = data.replace('GUEST_STMT_', '');
+            const statements = db.customerStatements || [];
+            // Sort by uploadedAt desc to get the latest
+            const matched = statements
+                .filter(s => s.accountCode === code)
+                .sort((a, b) => b.uploadedAt - a.uploadedAt);
+                
+            if (matched.length > 0) {
+                const stmt = matched[0];
+                try {
+                    await sendFn(userId, `🔄 در حال دریافت آخرین صورتحساب پیوست مالی شما با شناسه \`${stmt.id}\`... منتظر بمانید.`);
+                    const fileBuffer = Buffer.from(stmt.fileData, 'base64');
+                    await sendDocFn(chatId, fileBuffer, stmt.fileName, `📄 صورتحساب تفصیلی تفکیک شده حسابداری: ${stmt.fileName}`);
+                    return;
+                } catch (e) {
+                    console.error("Statement sendDocFn error: ", e);
+                    return sendFn(userId, `❌ خطایی در ارسال فایل صورتحساب رخ داد. لطفاً با پشتیبانی تماس بگیرید.`);
+                }
+            } else {
+                return sendFn(userId, `⚠️ صورتحساب بارگذاری‌شده‌ای برای کد حسابداری شما یافت نشد.`);
+            }
         }
 
         if (data === 'GUEST_PRODUCTS') {
@@ -2171,6 +2344,16 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_SEARCH') {
         session.state = 'SALES_WAIT_SEARCH_QUERY';
         return sendFn(chatId, "🔎 نام کالا یا کد کالا را وارد کنید:", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
+    }
+
+    if (data === 'SALES_CUSTOMER_BALANCES') {
+        const perms = settings ? getRolePermissions(user?.role, settings, user) : {};
+        const isAuthorized = user && (user.role === 'admin' || user.role === 'financial' || perms.canViewCustomerBalances === true);
+        if (!isAuthorized) {
+            return sendFn(chatId, "⚠️ شما دسترسی به بخش مانده حساب مشتریان را ندارید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
+        }
+        session.state = 'FIN_WAIT_CUSTOMER_BALANCE_SEARCH';
+        return sendFn(chatId, "🔍 لطفاً نام مشتری یا کد حسابداری وی را جهت استعلام وارد نمایید:", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SALES' }]] } });
     }
 
     if (data === 'SALES_GROUPS') {

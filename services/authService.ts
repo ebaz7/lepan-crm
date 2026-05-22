@@ -51,7 +51,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             canCreateExitPermit: true, canViewExitPermits: true, canApproveExitCeo: true, canApproveExitFactory: true, canApproveExitWarehouse: true, canApproveExitSecurity: true, canViewExitArchive: true, canEditExitArchive: true,
             canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
             canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
-            canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true
+            canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true,
+            canViewCustomerBalances: true, canImportCustomerBalances: true
         };
     }
 
@@ -66,7 +67,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
         canCreateExitPermit: false, canViewExitPermits: false, canApproveExitCeo: false, canApproveExitFactory: false, canApproveExitWarehouse: false, canApproveExitSecurity: false, canViewExitArchive: false, canEditExitArchive: false,
         canManageWarehouse: false, canViewWarehouseReports: false, canApproveBijak: false,
         canViewSecurity: false, canCreateSecurityLog: false, canApproveSecuritySupervisor: false,
-        canViewNotifications: false, canCreateNotifications: false, canCreateAnnouncements: false
+        canViewNotifications: false, canCreateNotifications: false, canCreateAnnouncements: false,
+        canViewCustomerBalances: false, canImportCustomerBalances: false
     };
 
     // Apply System Defaults (Hardcoded Logic)
@@ -80,12 +82,16 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canManageTrade = true;
             perms.canApproveBijak = true;
             perms.canViewSecurity = true;
+            perms.canViewCustomerBalances = true;
+            perms.canImportCustomerBalances = true;
             break;
 
         case UserRole.FINANCIAL:
             perms.canCreatePaymentOrder = true;
             perms.canViewPaymentOrders = true;
             perms.canApproveFinancial = true;
+            perms.canViewCustomerBalances = true;
+            perms.canImportCustomerBalances = true;
             break;
 
         case UserRole.MANAGER:
@@ -93,12 +99,14 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             perms.canViewPaymentOrders = true;
             perms.canApproveManager = true;
             perms.canViewExitPermits = true; 
+            perms.canViewCustomerBalances = true;
             break;
 
         case UserRole.SALES_MANAGER:
             perms.canCreatePaymentOrder = true;
             perms.canCreateExitPermit = true; // Can create exit request
             perms.canViewExitPermits = true; // Can view status
+            perms.canViewCustomerBalances = true;
             break;
 
         case UserRole.FACTORY_MANAGER:

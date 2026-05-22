@@ -145,6 +145,8 @@ export interface RolePermissions {
   canViewNotifications?: boolean;
   canCreateNotifications?: boolean;
   canCreateAnnouncements?: boolean;
+  canViewCustomerBalances?: boolean;
+  canImportCustomerBalances?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -356,6 +358,7 @@ export interface SalesContact {
     baleId?: string;
     birthday?: string; // Gregorian YYYY-MM-DD
     sendBirthdayGreeting: boolean;
+    accountCode?: string;
 }
 
 

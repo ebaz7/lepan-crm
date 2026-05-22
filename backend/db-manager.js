@@ -30,6 +30,8 @@ export const getDb = () => {
             tasks: [],
             subscriptions: [],
             botSubscribers: [],
+            customerBalances: [],
+            customerChatCodes: [],
             fiscalYears: {},
             sequences: {},
             notes: []
@@ -42,7 +44,7 @@ export const getDb = () => {
                 MEMORY_DB_CACHE = { ...defaultDb, ...data };
                 
                 // Ensure arrays exist
-                const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords', 'notes'];
+                const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords', 'notes', 'customerBalances', 'customerChatCodes'];
                 arrays.forEach(arr => {
                     if (!Array.isArray(MEMORY_DB_CACHE[arr])) MEMORY_DB_CACHE[arr] = [];
                 });

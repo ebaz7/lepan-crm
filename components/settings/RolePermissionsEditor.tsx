@@ -94,6 +94,16 @@ const PERMISSION_GROUPS = [
         ] 
     },
     { 
+        id: 'balances', 
+        title: 'ماژول مانده حساب مشتریان', 
+        icon: Landmark, 
+        color: 'emerald', 
+        items: [
+            { id: 'canViewCustomerBalances', label: 'مشاهده لیست مانده حساب‌های مالی مشتریان' },
+            { id: 'canImportCustomerBalances', label: 'بارگذاری/واردات فایل اکسل تفصیلی مانده حساب‌ها' }
+        ] 
+    },
+    { 
         id: 'general', 
         title: 'عمومی و مدیریتی', 
         icon: Lock, 

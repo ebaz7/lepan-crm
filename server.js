@@ -1139,6 +1139,194 @@ app.delete('/api/bot-subscribers/:id', (req, res) => {
     res.json({ success: true });
 });
 
+// --- CUSTOMER BALANCES API ---
+app.get('/api/customer-balances', (req, res) => {
+    const db = getDb();
+    res.json({
+        balances: db.customerBalances || [],
+        lastXlsxUploadAt: db.lastXlsxUploadAt || null
+    });
+});
+
+app.post('/api/customer-balances/bulk', (req, res) => {
+    const db = getDb();
+    let records = req.body;
+    if (records && !Array.isArray(records) && Array.isArray(records.records)) {
+        records = records.records;
+    }
+    if (Array.isArray(records)) {
+        db.customerBalances = records.map(r => ({
+            id: r.id || Date.now().toString() + Math.random().toString(36).substring(2, 7),
+            accountCode: String(r.accountCode || '').trim(),
+            name: String(r.name || r.customerName || '').trim(),
+            balance: Number(r.balance || 0),
+            type: String(r.type || 'تسویه').trim(), // 'بدهکار' | 'بستانکار' | 'تسویه'
+            updatedAt: Date.now()
+        })).filter(r => r.name || r.accountCode); // Keep valid items
+        db.lastXlsxUploadAt = Date.now();
+        saveDb(db);
+        res.json({ success: true, count: db.customerBalances.length, lastXlsxUploadAt: db.lastXlsxUploadAt });
+    } else {
+        res.status(400).json({ error: "Invalid data format (must be array or have records array)" });
+    }
+});
+
+app.get('/api/customer-balances/chat-codes', (req, res) => {
+    res.json(getDb().customerChatCodes || []);
+});
+
+app.post('/api/customer-balances/chat-code', (req, res) => {
+    const db = getDb();
+    const { chatId, platform, accountCode } = req.body;
+    if (!chatId || !platform || !accountCode) {
+        return res.status(400).json({ error: "chatId, platform, and accountCode are required" });
+    }
+    if (!db.customerChatCodes) db.customerChatCodes = [];
+    
+    // Check if accountCode exists in balance database or list to map correctly
+    db.customerChatCodes = db.customerChatCodes.filter(c => !(c.chatId === String(chatId) && c.platform === String(platform)));
+    db.customerChatCodes.push({
+        chatId: String(chatId),
+        platform: String(platform),
+        accountCode: String(accountCode).trim(),
+        updatedAt: Date.now()
+    });
+    saveDb(db);
+    res.json({ success: true, count: db.customerChatCodes.length });
+});
+
+app.delete('/api/customer-balances/chat-code/:chatId/:platform', (req, res) => {
+    const db = getDb();
+    if (!db.customerChatCodes) db.customerChatCodes = [];
+    const beforeCount = db.customerChatCodes.length;
+    db.customerChatCodes = db.customerChatCodes.filter(c => !(c.chatId === String(req.params.chatId) && c.platform === String(req.params.platform)));
+    saveDb(db);
+    res.json({ success: true, deleted: beforeCount - db.customerChatCodes.length });
+});
+
+// --- CUSTOMER STATEMENT STATEMENTS API ---
+app.get('/api/customer-balances/statements/:accountCode', (req, res) => {
+    const db = getDb();
+    const list = db.customerStatements || [];
+    if (req.params.accountCode === 'all') {
+        res.json(list);
+    } else {
+        res.json(list.filter(s => s.accountCode === req.params.accountCode));
+    }
+});
+
+app.post('/api/customer-balances/statement', (req, res) => {
+    const db = getDb();
+    const { accountCode, fileName, fileType, fileData } = req.body;
+    if (!accountCode || !fileName || !fileData) {
+        return res.status(400).json({ error: "Missing required fields: accountCode, fileName, and fileData" });
+    }
+    if (!db.customerStatements) db.customerStatements = [];
+    
+    const statement = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
+        accountCode: String(accountCode).trim(),
+        fileName: String(fileName).trim(),
+        fileType: String(fileType || 'pdf').toLowerCase(),
+        fileData: String(fileData), // Base64 representation
+        uploadedAt: Date.now()
+    };
+    db.customerStatements.push(statement);
+    saveDb(db);
+    res.json({ success: true, statementId: statement.id });
+});
+
+app.delete('/api/customer-balances/statement/:id', (req, res) => {
+    const db = getDb();
+    if (!db.customerStatements) db.customerStatements = [];
+    const beforeCount = db.customerStatements.length;
+    db.customerStatements = db.customerStatements.filter(s => s.id !== req.params.id);
+    saveDb(db);
+    res.json({ success: true, deleted: beforeCount - db.customerStatements.length });
+});
+
+app.get('/api/customer-balances/statement-download/:id', (req, res) => {
+    const db = getDb();
+    const statement = (db.customerStatements || []).find(s => s.id === req.params.id);
+    if (!statement) {
+        return res.status(404).send("Statement not found");
+    }
+    const buffer = Buffer.from(statement.fileData, 'base64');
+    let contentType = 'application/octet-stream';
+    if (statement.fileType === 'pdf') {
+        contentType = 'application/pdf';
+    } else if (statement.fileType === 'xlsx') {
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else if (statement.fileType === 'xls') {
+        contentType = 'application/vnd.ms-excel';
+    }
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(statement.fileName)}"`);
+    res.send(buffer);
+});
+
+// PDF Report: Debtors (بدهکاران) sorted from highest to lowest balance
+app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
+    try {
+        const db = getDb();
+        const list = (db.customerBalances || [])
+            .filter(b => b.type === 'بدهکار' || b.type?.includes('بدهکار'))
+            .sort((a, b) => b.balance - a.balance);
+
+        const lastUpload = db.lastXlsxUploadAt ? new Date(db.lastXlsxUploadAt) : null;
+        const uploadStr = lastUpload ? new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(lastUpload) : 'ثبت نشده';
+
+        const title = `گزارش بدهکاران - مبنای اکسل: ${uploadStr}`;
+        const columns = ['کد حسابداری', 'نام مشتری', 'مانده بدهکار (ریال)', 'تشخیص'];
+        const formatNumber = (num) => Number(num).toLocaleString('fa-IR');
+        const rows = list.map(item => [
+            item.accountCode,
+            item.name,
+            formatNumber(item.balance),
+            'بدهکار'
+        ]);
+
+        const pdf = await Renderer.generateReportPDF(title, columns, rows);
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'attachment; filename="Debtors_Report.pdf"');
+        res.send(pdf);
+    } catch (e) {
+        console.error("Debtors PDF Export Error:", e);
+        res.status(500).send("Error generating PDF: " + e.message);
+    }
+});
+
+// PDF Report: Creditors (بستانکاران) sorted from highest to lowest balance
+app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
+    try {
+        const db = getDb();
+        const list = (db.customerBalances || [])
+            .filter(b => b.type === 'بستانکار' || b.type?.includes('بستانکار'))
+            .sort((a, b) => b.balance - a.balance);
+
+        const lastUpload = db.lastXlsxUploadAt ? new Date(db.lastXlsxUploadAt) : null;
+        const uploadStr = lastUpload ? new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(lastUpload) : 'ثبت نشده';
+
+        const title = `گزارش بستانکاران - مبنای اکسل: ${uploadStr}`;
+        const columns = ['کد حسابداری', 'نام مشتری', 'مانده بستانکار (ریال)', 'تشخیص'];
+        const formatNumber = (num) => Number(num).toLocaleString('fa-IR');
+        const rows = list.map(item => [
+            item.accountCode,
+            item.name,
+            formatNumber(item.balance),
+            'بستانکار'
+        ]);
+
+        const pdf = await Renderer.generateReportPDF(title, columns, rows);
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', 'attachment; filename="Creditors_Report.pdf"');
+        res.send(pdf);
+    } catch (e) {
+        console.error("Creditors PDF Export Error:", e);
+        res.status(500).send("Error generating PDF: " + e.message);
+    }
+});
+
 app.post('/api/users', (req, res) => { 
     const db = getDb(); 
     db.users.push(req.body); 
