@@ -12,6 +12,7 @@ import {
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
     Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
 import { downloadAndOpenFile } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
@@ -42,53 +43,68 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(propDuration || 0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [audioSource, setAudioSource] = useState('');
     
     // Generate random waveform bars (stable per instance)
     const waveform = useMemo(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 60) + 20), []);
 
     useEffect(() => {
-        let absoluteUrl = url;
-        // Fix for Desktop: Ensure URL is absolute if it's a relative path from server
-        if (!url.startsWith('http') && !url.startsWith('blob')) {
-            // Remove leading slash if present to avoid double slash, then add base
-            const cleanPath = url.startsWith('/') ? url : `/${url}`;
-            absoluteUrl = `${window.location.origin}${cleanPath}`;
+        let absoluteUrl = url.startsWith('blob:') || url.startsWith('data:') ? url : resolveImageUrl(url);
+        // Capacitor hack: if on Android and using localhost, we might need to ensure it's fully qualified
+        if (Capacitor.getPlatform() === 'android' && absoluteUrl.startsWith('/')) {
+            absoluteUrl = window.location.origin + absoluteUrl;
         }
-        
-        const audio = new Audio();
-        audio.src = absoluteUrl;
-        audioRef.current = audio;
-        
-        audio.onloadedmetadata = () => {
-            const d = audio.duration;
-            if (d && d !== Infinity && !isNaN(d)) {
-                setDuration(d);
-            }
-        };
-        audio.ontimeupdate = () => {
-            if (audio.duration && audio.duration !== Infinity) {
-                setProgress((audio.currentTime / audio.duration) * 100);
-            } else if (duration > 0) {
-                 setProgress((audio.currentTime / duration) * 100);
-            }
-        };
-        audio.onended = () => { setPlaying(false); setProgress(0); };
-        
-        return () => {
-            audio.pause();
-            audio.src = '';
-        };
-    }, [url, duration]);
+        setAudioSource(absoluteUrl);
+    }, [url]);
+
+    const onLoadedMetadata = () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        const d = audio.duration;
+        if (d && d !== Infinity && !isNaN(d)) {
+            setDuration(d);
+        }
+    };
+
+    const onTimeUpdate = () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (audio.duration && audio.duration !== Infinity) {
+            setProgress((audio.currentTime / audio.duration) * 100);
+        } else if (duration > 0) {
+             setProgress((audio.currentTime / duration) * 100);
+        }
+    };
+
+    const onEnded = () => { 
+        setPlaying(false); 
+        setProgress(0); 
+    };
+    
+    const onError = (e: any) => {
+        console.error("Audio Playback Error:", e);
+    };
 
     const togglePlay = () => {
         if (!audioRef.current) return;
-        if (playing) audioRef.current.pause();
-        else audioRef.current.play();
-        setPlaying(!playing);
+        if (playing) {
+            audioRef.current.pause();
+            setPlaying(false);
+        } else {
+            audioRef.current.play().then(() => {
+                setPlaying(true);
+            }).catch(err => {
+                console.error("Play failed", err);
+                // On Android, sometimes play() fails if not fully loaded
+                setTimeout(() => {
+                   audioRef.current?.play().then(() => setPlaying(true)).catch(console.error);
+                }, 200);
+            });
+        }
     };
 
     const formatTime = (time: number) => {
-        if (isNaN(time)) return '0:00';
+        if (isNaN(time) || time === Infinity) return '0:00';
         const mins = Math.floor(time / 60);
         const secs = Math.floor(time % 60);
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -96,6 +112,16 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
     return (
         <div className="flex items-center gap-3 flex-1 px-1">
+            <audio 
+                ref={audioRef}
+                src={audioSource}
+                onLoadedMetadata={onLoadedMetadata}
+                onTimeUpdate={onTimeUpdate}
+                onEnded={onEnded}
+                onError={onError}
+                preload="metadata"
+                className="hidden"
+            />
             <button 
                 onClick={togglePlay}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 shadow-sm ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}

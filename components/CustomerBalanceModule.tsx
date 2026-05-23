@@ -541,35 +541,48 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
               </tbody>
             </table>
             
-            {/* Mobile Cards */}
-            <div className="md:hidden space-y-3 p-4">
+            {/* Mobile Cards - Enhanced UI */}
+            <div className="md:hidden space-y-4 p-4">
               {loading ? (
-                <div className="py-10 text-center text-gray-400">
-                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500" />
+                <div className="py-10 text-center text-gray-400 font-bold flex flex-col items-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                  <span>در حال بارگذاری لیست...</span>
                 </div>
               ) : filteredBalances.length === 0 ? (
-                <div className="py-10 text-center text-gray-400">
-                  موردی یافت نشد.
+                <div className="py-10 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed">
+                  موردی با این مشخصات یافت نشد.
                 </div>
               ) : (
                 filteredBalances.map((item) => (
-                  <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right">
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="font-bold text-gray-900 dark:text-zinc-100">{item.name}</span>
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] ${
-                          item.type === 'بدهکار' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                  <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform">
+                    <div className={`absolute top-0 left-0 w-1.5 h-full ${item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                    
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex flex-col">
+                            <span className="font-black text-gray-900 dark:text-zinc-100 text-lg leading-tight mb-1">{item.name}</span>
+                            <span className="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-zinc-700 px-2 py-0.5 rounded-md self-start">{item.accountCode}</span>
+                        </div>
+                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
+                          item.type === 'بدهکار' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                         }`}>
                           {item.type}
                         </span>
                     </div>
-                    <div className="text-xs text-gray-500 mb-3 font-mono">{item.accountCode}</div>
-                    <div className="flex justify-between items-center text-sm font-bold">
-                        <span className="text-zinc-900 dark:text-zinc-100">{item.balance.toLocaleString()} ریال</span>
+                    
+                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50 dark:border-zinc-700/50">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-400 font-bold mb-1">مانده خالص</span>
+                            <span className={`text-xl font-black ${item.type === 'بدهکار' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                {item.balance.toLocaleString()} <span className="text-[10px] font-medium opacity-70">ریال</span>
+                            </span>
+                        </div>
+                        
                         <button
                           onClick={() => setStmtModalCode(item.accountCode)}
-                          className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-xs"
+                          className="bg-zinc-900 dark:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-zinc-900/10 active:opacity-80"
                         >
-                          صورتحساب‌ها
+                          <FileSpreadsheet size={16} />
+                          صورتحساب
                         </button>
                     </div>
                   </div>
@@ -727,6 +740,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                   <p className="text-xs text-gray-400 mt-1">مشاهده و بارگذاری اسناد کمکی مربوط به {customerName}</p>
                 </div>
                 <button 
+                  data-subtab-back="true"
                   onClick={() => setStmtModalCode(null)} 
                   className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg transition-all text-xs font-bold"
                 >

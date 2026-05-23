@@ -118,8 +118,9 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
         reader.onerror = reject;
         reader.onload = () => {
             const result = reader.result as string;
-            // FileReader result has 'data:mime/type;base64,...' prefix. We might only need the base64 part, but Capacitor handles the full data string format correctly.
-            resolve(result);
+            // Strip the 'data:...base64,' prefix to get only the raw base64 data
+            const base64Data = result.split(',')[1];
+            resolve(base64Data);
         };
         reader.readAsDataURL(blob);
     });

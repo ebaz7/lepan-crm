@@ -661,46 +661,53 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Mobile Bottom Navigation - Attractive Float Pill */}
-      <div 
-        className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl 
-        ${activeTab !== 'dashboard' ? 'hidden translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100 scale-100'}`}
-      >
-          {bottomVisibleItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
+      <AnimatePresence>
+        {activeTab === 'dashboard' && (
+          <motion.div 
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="md:hidden fixed z-[90] bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl"
+          >
+              {bottomVisibleItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                      <button 
+                          key={item.id}
+                          onClick={() => setActiveTab(item.id)} 
+                          className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
+                      >
+                          <div className={`p-2 rounded-2xl transition-all duration-300 ${isActive ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
+                              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'animate-pulse-subtle' : ''}/>
+                              {item.id === 'chat' && unreadChatCount > 0 && (
+                                <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
+                              )}
+                          </div>
+                          <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>{item.label}</span>
+                          {isActive && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                      </button>
+                  );
+              })}
+              
+              {hasMore && (
                   <button 
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)} 
-                      className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
+                      onClick={() => setShowMobileMenu(true)} 
+                      className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
                   >
-                      <div className={`p-2 rounded-2xl transition-all duration-300 ${isActive ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
-                          <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'animate-pulse-subtle' : ''}/>
-                          {item.id === 'chat' && unreadChatCount > 0 && (
+                      <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
+                          <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
+                          {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
                             <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
                           )}
                       </div>
-                      <span className={`text-[9px] font-black tracking-tight transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 scale-75 h-0 overflow-hidden'}`}>{item.label}</span>
-                      {isActive && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                      <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600' : 'text-gray-500'}`}>بیشتر</span>
                   </button>
-              );
-          })}
-          
-          {hasMore && (
-              <button 
-                  onClick={() => setShowMobileMenu(true)} 
-                  className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
-              >
-                  <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
-                      <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
-                      {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
-                        <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
-                      )}
-                  </div>
-                  <span className={`text-[9px] font-black tracking-tight transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'opacity-100' : 'opacity-0 scale-75 h-0 overflow-hidden'}`}>بیشتر</span>
-              </button>
-          )}
-      </div>
+              )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0">
       {/* Mobile Header */}

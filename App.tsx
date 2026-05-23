@@ -47,11 +47,90 @@ function App() {
       tabHistoryRef.current = tabHistory;
   }, [activeTab, tabHistory]);
 
-  const changeTab = (tab: string, addToHistory = true) => {
+  const setActiveTab = (tab: string, addToHistory = true) => {
+      if (tab === activeTabRef.current) return;
+      
       setActiveTabState(tab);
-      if (addToHistory && tab !== tabHistory[tabHistory.length - 1]) {
-          setTabHistory(prev => [...prev.slice(-9), tab]); // Keep last 10 steps
+      if (addToHistory) {
+          setTabHistory(prev => {
+              if (prev[prev.length - 1] === tab) return prev;
+              return [...prev.slice(-14), tab]; // Keep last 15
+          });
+          
+          // Browser history support
+          const hash = `#${tab}`;
+          if (window.location.hash !== hash) {
+              try {
+                  window.history.pushState({ tab }, '', hash);
+              } catch (e) {
+                  window.location.hash = hash;
+              }
+          }
       }
+  };
+
+  const goBackGlobal = () => {
+      // 1. Check for Active Modals/Dialogs first
+      const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
+      if (activeModals.length > 0) {
+          const lastModal = activeModals[activeModals.length - 1];
+          const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"], [data-close-announcement="true"]') as HTMLElement;
+          if (closeBtn) {
+              closeBtn.click();
+          } else {
+              // Brute force click the first button that looks like a close/cancel
+              const fallbackBtn = Array.from(lastModal.querySelectorAll('button')).find(btn => {
+                  const txt = (btn.textContent || '').trim();
+                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+              }) as HTMLElement;
+              if (fallbackBtn) fallbackBtn.click();
+              else setActiveTabState(activeTabRef.current); // Force re-render to hopefully close state-driven modals
+          }
+          return true;
+      }
+
+      // 2. Check for Sub-view back buttons (e.g. data-subtab-back="true")
+      const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
+      const subTabBtn = subTabBtns.find(el => {
+         const style = window.getComputedStyle(el);
+         return style.display !== 'none' && style.visibility !== 'hidden';
+      }) || subTabBtns[subTabBtns.length - 1];
+
+      if (subTabBtn) {
+          subTabBtn.click();
+          return true;
+      }
+
+      // 3. Main Tab History Back
+      if (tabHistoryRef.current.length > 1) {
+          setTabHistory(prev => {
+              const newHist = [...prev];
+              newHist.pop();
+              const prevTab = newHist[newHist.length - 1];
+              setActiveTabState(prevTab);
+              try {
+                  window.history.replaceState({ tab: prevTab }, '', `#${prevTab}`);
+              } catch (e) {}
+              return newHist;
+          });
+          return true;
+      }
+
+      // 4. Return to dashboard if lost
+      if (activeTabRef.current !== 'dashboard') {
+          setActiveTab('dashboard');
+          return true;
+      }
+
+      return false; // Let native behavior handle exit if at dashboard root
+  };
+
+  const safePushState = (state: any, title: string, url: string) => {
+    try { window.history.pushState(state, title, url); } catch (e) { window.location.hash = url; }
+  };
+  
+  const safeReplaceState = (state: any, title: string, url: string) => {
+    try { window.history.replaceState(state, title, url); } catch (e) { window.location.hash = url; }
   };
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -105,80 +184,13 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
-  const safePushState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.pushState(state, title, url); else window.history.pushState(state, title); } catch (e) { try { window.history.pushState(state, title); } catch(e2) {} } 
-  };
-  const safeReplaceState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
-  };
-  
-  const setActiveTab = (tab: string, addToHistory = true) => { 
-      setActiveTabState(tab); 
-      if (addToHistory) {
-          safePushState({ tab }, '', `#${tab}`); 
-          // Functional update to avoid closure staleness
-          setTabHistory(prev => {
-              if (tab === prev[prev.length - 1]) return prev;
-              return [...prev.slice(-9), tab];
-          });
-      }
-  };
-
   useEffect(() => {
     if (isNative) {
         let backListener: any;
         try {
             CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-                // 1. Check if any modal or dialog-like element is open in the DOM
-                const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
-                if (activeModals.length > 0) {
-                    const lastModal = activeModals[activeModals.length - 1];
-                    const closeBtn = (lastModal.querySelector('button[onClick]') as HTMLElement) || 
-                                     (lastModal.querySelector('.modal-close-btn') as HTMLElement) || 
-                                     (lastModal.querySelector('[aria-label="بستن"]') as HTMLElement) || 
-                                     (lastModal.querySelector('[data-close-modal="true"]') as HTMLElement) ||
-                                     Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                         const txt = (btn.textContent || '').trim();
-                                         return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
-                                     });
-                    if (closeBtn) {
-                        (closeBtn as HTMLElement).click();
-                    } else {
-                        window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
-                    }
-                    return;
-                }
-
-                // 2. Check for sub-tab/sub-view back selector
-                const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
-                const visibleSubTabBtn = subTabBtns.find(el => {
-                   const style = window.getComputedStyle(el);
-                   return style.display !== 'none' && style.visibility !== 'hidden';
-                });
-                if (visibleSubTabBtn) {
-                    visibleSubTabBtn.click();
-                    return;
-                }
-
-                // Standard Tab History Stack using our updated refs
-                const currentHistory = tabHistoryRef.current;
-                const currentTab = activeTabRef.current;
-
-                if (currentHistory.length > 1) {
-                    setTabHistory(prev => {
-                        if (prev.length <= 1) return prev;
-                        const newHistory = [...prev];
-                        newHistory.pop();
-                        const prevTab = newHistory[newHistory.length - 1];
-                        setActiveTabState(prevTab);
-                        safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
-                        return newHistory;
-                    });
-                } else if (currentTab !== 'dashboard') {
-                    setActiveTab('dashboard');
-                } else if (!canGoBack) {
+                const handled = goBackGlobal();
+                if (!handled && !canGoBack && activeTabRef.current === 'dashboard') {
                     CapacitorApp.exitApp();
                 }
             }).then(l => { backListener = l; });
@@ -286,48 +298,9 @@ function App() {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-        // 1. If any modal is active in DOM, close it instead of shifting tab!
-        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
-        if (activeModals.length > 0) {
-            const lastModal = activeModals[activeModals.length - 1];
-            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"], [data-close-announcement="true"]') || 
-                             Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                 const txt = (btn.textContent || '').trim();
-                                 return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
-                             });
-            if (closeBtn) {
-                (closeBtn as HTMLElement).click();
-            } else {
-                window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
-            }
-            
-            // Push state back to prevent browser from leaving 
-            const currentTab = activeTabRef.current;
-            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
-            // If we're at the very beginning of history, don't let it back out next time either
-            if (window.history.length <= 2) {
-                safePushState({ tab: currentTab, forced: true }, '', `#${currentTab}`);
-            }
-            return;
-        }
-
-        // 2. If a subtab back button (e.g., records details, bot leads subtab) is in DOM, click it instead!
-        const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
-        const visibleSubTabBtn = subTabBtns.find(el => {
-           const style = window.getComputedStyle(el);
-           return style.display !== 'none' && style.visibility !== 'hidden';
-        });
-        if (visibleSubTabBtn) {
-            visibleSubTabBtn.click();
-            const currentTab = activeTabRef.current;
-            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
-            return;
-        }
-
-        if (event.state && event.state.tab) {
-            setActiveTabState(event.state.tab);
-        } else {
-            setActiveTabState('dashboard');
+        const handled = goBackGlobal();
+        if (!handled && event.state?.tab) {
+            setActiveTab(event.state.tab, false);
         }
     };
 
