@@ -913,6 +913,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (هوش مصنوعی)</label>
                                             <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
                                         </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">کلید سرور Firebase FCM (نوتیفیکیشن اندروید)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.fcmServerKey || ''} onChange={e => setSettings({...settings, fcmServerKey: e.target.value})} placeholder="AAAA..." type="password"/>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -9,7 +9,9 @@ let DEFAULT_SERVER_URL = 'https://ais-pre-yaoimdy2j5d5rzt6mmmkq2-97484218589.us-
 export const getServerHost = () => {
     const stored = localStorage.getItem('app_server_host');
     if (stored) return stored.trim().replace(/\/$/, '');
-    if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
+    if (Capacitor.isNativePlatform()) {
+        if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
+    }
     return '';
 };
 

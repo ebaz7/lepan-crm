@@ -269,6 +269,7 @@ export interface SystemSettings {
   googleCalendarId?: string;
   whatsappNumber?: string;
   geminiApiKey?: string;
+  fcmServerKey?: string;
   deepseekApiKey?: string;
   botAiSource?: 'gemini' | 'deepseek' | 'hybrid';
   botAiEnabled?: boolean;
