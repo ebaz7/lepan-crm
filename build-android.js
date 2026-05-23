@@ -20,47 +20,95 @@ try {
     execSync('npx cap sync android', { stdio: 'inherit' });
     console.log('✅ Capacitor assets synchronized.\n');
 
-    // Auto-create local.properties if missing or invalid
+    // Auto-create/validate local.properties
     const localPropertiesPath = join(gradleDir, 'local.properties');
     let requiresWrite = !existsSync(localPropertiesPath);
-    
+    let sdkPath = '';
+
+    // Define candidates
+    if (isWindows) {
+        const userSpecificSdk = 'C:\\Users\\Factorythird\\AppData\\Local\\Android\\Sdk';
+        const defaultWinSdk = join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Local', 'Android', 'Sdk');
+        
+        const candidates = [
+            userSpecificSdk,
+            defaultWinSdk,
+            'C:\\Android\\Sdk',
+            process.env.ANDROID_HOME,
+            process.env.ANDROID_SDK_ROOT
+        ];
+
+        for (const candidate of candidates) {
+            if (candidate && existsSync(candidate)) {
+                sdkPath = candidate;
+                break;
+            }
+        }
+        
+        // If we didn't find them, but the user says it's at userSpecificSdk, fallback to using it
+        if (!sdkPath) {
+            sdkPath = userSpecificSdk;
+        }
+    } else if (process.platform === 'darwin') {
+        const candidates = [
+            join(process.env.HOME || '/', 'Library', 'Android', 'sdk'),
+            process.env.ANDROID_HOME,
+            process.env.ANDROID_SDK_ROOT
+        ];
+        for (const candidate of candidates) {
+            if (candidate && existsSync(candidate)) {
+                sdkPath = candidate;
+                break;
+            }
+        }
+    } else {
+        const candidates = [
+            join(process.env.HOME || '/', 'Android', 'Sdk'),
+            process.env.ANDROID_HOME,
+            process.env.ANDROID_SDK_ROOT
+        ];
+        for (const candidate of candidates) {
+            if (candidate && existsSync(candidate)) {
+                sdkPath = candidate;
+                break;
+            }
+        }
+    }
+
     if (existsSync(localPropertiesPath)) {
         const content = readFileSync(localPropertiesPath, 'utf8');
-        if (!content.includes('sdk.dir')) {
+        const lines = content.split(/\r?\n/);
+        const sdkLine = lines.find(line => line.trim().startsWith('sdk.dir'));
+        if (sdkLine) {
+            const currentVal = sdkLine.split('=')[1]?.trim() || '';
+            const unescapedVal = currentVal.replace(/\\:/g, ':').replace(/\\\\/g, '\\');
+            
+            // If the configured sdk.dir doesn't exist on disk, we need to rewrite/update it!
+            if (!unescapedVal || !existsSync(unescapedVal)) {
+                console.log(`⚠️ Existing sdk.dir in local.properties (${unescapedVal}) is invalid or non-existent.`);
+                requiresWrite = true;
+            } else {
+                console.log(`✅ Valid Android SDK already configured in local.properties: ${unescapedVal}`);
+                sdkPath = unescapedVal;
+                requiresWrite = false;
+            }
+        } else {
             requiresWrite = true;
         }
     }
 
     if (requiresWrite) {
-        console.log('🔍 local.properties file needs configuration. System will attempt to locate Android SDK...');
-        let sdkPath = '';
-        if (isWindows) {
-            const userSpecificSdk = 'C:\\Users\\Factorythird\\AppData\\Local\\Android\\Sdk';
-            const defaultWinSdk = join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Local', 'Android', 'Sdk');
-            if (existsSync(userSpecificSdk)) {
-                sdkPath = userSpecificSdk;
-            } else if (existsSync(defaultWinSdk)) {
-                sdkPath = defaultWinSdk;
-            }
-        } else if (process.platform === 'darwin') {
-            const defaultMacSdk = join(process.env.HOME || '/', 'Library', 'Android', 'sdk');
-            if (existsSync(defaultMacSdk)) {
-                sdkPath = defaultMacSdk;
-            }
-        } else {
-            const defaultLinuxSdk = join(process.env.HOME || '/', 'Android', 'Sdk');
-            if (existsSync(defaultLinuxSdk)) {
-                sdkPath = defaultLinuxSdk;
-            }
-        }
-
         if (sdkPath) {
-            console.log(`✨ Found Android SDK at: ${sdkPath}`);
-            const formattedPath = sdkPath.replace(/\\/g, '\\\\');
+            console.log(`✨ Selected Android SDK path for construction: ${sdkPath}`);
+            // Use forward slashes to solve any double path separator issues cleanly in properties file
+            const formattedPath = sdkPath.replace(/\\/g, '/');
             writeFileSync(localPropertiesPath, `sdk.dir=${formattedPath}\n`);
-            console.log('✅ Created android/local.properties file automatically.\n');
+            console.log(`✅ Updated android/local.properties securely with 'sdk.dir=${formattedPath}'\n`);
         } else {
-            console.log('⚠️ Could not auto-detect default SDK location. You will need to configure ANDROID_HOME environment variable or build with Android Studio.\n');
+            console.log('⚠️ Could not locate a valid, existing Android SDK directory on your system.');
+            console.log('But we will configure C:/Users/Factorythird/AppData/Local/Android/Sdk as a manual fallback.\n');
+            sdkPath = 'C:\\Users\\Factorythird\\AppData\\Local\\Android\\Sdk';
+            writeFileSync(localPropertiesPath, `sdk.dir=C:/Users/Factorythird/AppData/Local/Android/Sdk\n`);
         }
     }
 
@@ -80,8 +128,22 @@ try {
 
     console.log(`🚀 Executing: ${gradleCmd} inside ./android`);
     
+    // Set explicit environment variables (ANDROID_HOME & ANDROID_SDK_ROOT) for execution subprocess
+    const extraEnv = {};
+    if (sdkPath) {
+        extraEnv.ANDROID_HOME = sdkPath;
+        extraEnv.ANDROID_SDK_ROOT = sdkPath;
+    }
+    
     // Execute gradle assembleDebug
-    execSync(gradleCmd, { cwd: gradleDir, stdio: 'inherit' });
+    execSync(gradleCmd, { 
+        cwd: gradleDir, 
+        stdio: 'inherit',
+        env: {
+            ...process.env,
+            ...extraEnv
+        }
+    });
     console.log('✅ Gradle compilation finished.\n');
 
     // 4. Locating and copying APK to root
