@@ -2505,7 +2505,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS' || data === 'SALES_BAL_DOWNLOAD_CREDITORS') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS';
         const rawList = db.customerBalances || [];
-        const filtered = rawList.filter(b => isDebtors ? (b.type === 'بدهکار' || Number(b.balance) > 0) : (b.type === 'بستانکار' || Number(b.balance) < 0));
+        const filtered = rawList.filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار');
         
         if (filtered.length === 0) {
             return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
@@ -2536,7 +2536,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' || data === 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX';
         const rawList = db.customerBalances || [];
-        const filtered = rawList.filter(b => isDebtors ? (b.type === 'بدهکار' || Number(b.balance) > 0) : (b.type === 'بستانکار' || Number(b.balance) < 0));
+        const filtered = rawList.filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار');
         
         if (filtered.length === 0) {
             return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
