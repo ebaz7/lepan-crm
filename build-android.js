@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { existsSync, copyFileSync, mkdirSync } from 'fs';
+import { existsSync, copyFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 console.log('====================================================');
@@ -7,6 +7,9 @@ console.log('   🤖 Android APK Build & Setup (Node.js Core) 🤖  ');
 console.log('====================================================\n');
 
 try {
+    const isWindows = process.platform === 'win32';
+    const gradleDir = join(process.cwd(), 'android');
+
     // 1. Build Web Assets
     console.log('📦 Step 1/4: Building Web Application (React + Vite)...');
     execSync('npm run build', { stdio: 'inherit' });
@@ -17,11 +20,41 @@ try {
     execSync('npx cap sync android', { stdio: 'inherit' });
     console.log('✅ Capacitor assets synchronized.\n');
 
+    // Auto-create local.properties if missing
+    const localPropertiesPath = join(gradleDir, 'local.properties');
+    if (!existsSync(localPropertiesPath)) {
+        console.log('🔍 local.properties file not found. System will attempt to locate Android SDK...');
+        let sdkPath = '';
+        if (isWindows) {
+            const defaultWinSdk = join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Local', 'Android', 'Sdk');
+            if (existsSync(defaultWinSdk)) {
+                sdkPath = defaultWinSdk;
+            }
+        } else if (process.platform === 'darwin') {
+            const defaultMacSdk = join(process.env.HOME || '/', 'Library', 'Android', 'sdk');
+            if (existsSync(defaultMacSdk)) {
+                sdkPath = defaultMacSdk;
+            }
+        } else {
+            const defaultLinuxSdk = join(process.env.HOME || '/', 'Android', 'Sdk');
+            if (existsSync(defaultLinuxSdk)) {
+                sdkPath = defaultLinuxSdk;
+            }
+        }
+
+        if (sdkPath) {
+            console.log(`✨ Found Android SDK at: ${sdkPath}`);
+            const formattedPath = sdkPath.replace(/\\/g, '\\\\');
+            writeFileSync(localPropertiesPath, `sdk.dir=${formattedPath}\n`);
+            console.log('✅ Created android/local.properties file automatically.\n');
+        } else {
+            console.log('⚠️ Could not auto-detect default SDK location. You will need to configure ANDROID_HOME environment variable or build with Android Studio.\n');
+        }
+    }
+
     // 3. Assemble APK via Gradle
     console.log('⚙️  Step 3/4: Building Android APK using Gradle... (This may take a moment)');
     
-    const isWindows = process.platform === 'win32';
-    const gradleDir = join(process.cwd(), 'android');
     const gradlewName = isWindows ? 'gradlew.bat' : 'gradlew';
     const gradlewPath = join(gradleDir, gradlewName);
 
