@@ -187,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       
       if (notifEnabled) { 
           setNotifEnabled(false); 
-          setNotificationPermissionPreference(false); 
+          setNotificationPreference(false); 
           return;
       } 
 
@@ -550,43 +550,79 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Mobile Bottom Navigation */}
-      <div className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out ${activeTab !== 'chat' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
+      <div className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out ${activeTab !== 'chat' ? 'bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-950/90 backdrop-blur-3xl border-t border-gray-200/50 dark:border-white/10 flex justify-around items-center pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] px-2 shadow-[0_-8px_30px_rgb(0,0,0,0.08)]' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
           {activeTab !== 'chat' && (
              <>
                 <button 
                     onClick={() => setActiveTab('dashboard')} 
-                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'dashboard' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'dashboard' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
                 >
-                    <LayoutDashboard size={22} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
-                    <span className="text-[9px] font-bold mt-0.5">داشبورد</span>
+                    <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                        <LayoutDashboard size={20} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
+                    </div>
+                    <span className="text-[10px] font-bold">داشبورد</span>
+                    {activeTab === 'dashboard' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
                 </button>
-
-                {canManageWarehouse && (
-                    <button 
-                        onClick={() => setActiveTab('warehouse')} 
-                        className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'warehouse' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
-                    >
-                        <Package size={22} strokeWidth={activeTab === 'warehouse' ? 2.5 : 2} />
-                        <span className="text-[9px] font-bold mt-0.5">انبار</span>
-                    </button>
-                )}
 
                 {canSeeTrade && (
                     <button 
                         onClick={() => setActiveTab('trade')} 
-                        className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'trade' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'trade' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
                     >
-                        <Container size={22} strokeWidth={activeTab === 'trade' ? 2.5 : 2} />
-                        <span className="text-[9px] font-bold mt-0.5">بازرگانی</span>
+                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'trade' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                            <Container size={20} strokeWidth={activeTab === 'trade' ? 2.5 : 2} />
+                        </div>
+                        <span className="text-[10px] font-bold">بازرگانی</span>
+                        {activeTab === 'trade' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
                     </button>
                 )}
+
+                {canCreatePayment && (
+                    <button 
+                        onClick={() => setActiveTab('create')} 
+                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'create' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
+                    >
+                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'create' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                            <PlusCircle size={20} strokeWidth={activeTab === 'create' ? 2.5 : 2} />
+                        </div>
+                        <span className="text-[10px] font-bold">ثبت</span>
+                        {activeTab === 'create' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                    </button>
+                )}
+
+                {canManageWarehouse && (
+                    <button 
+                        onClick={() => setActiveTab('warehouse')} 
+                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'warehouse' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
+                    >
+                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'warehouse' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                            <Package size={20} strokeWidth={activeTab === 'warehouse' ? 2.5 : 2} />
+                        </div>
+                        <span className="text-[10px] font-bold">انبار</span>
+                        {activeTab === 'warehouse' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                    </button>
+                )}
+
+                <button 
+                    onClick={() => setActiveTab('chat')} 
+                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'chat' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
+                >
+                    <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                        <MessageSquare size={20} strokeWidth={activeTab === 'chat' ? 2.5 : 2} />
+                        {unreadChatCount > 0 && <span className="absolute -top-0.5 right-1/4 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 animate-pulse"></span>}
+                    </div>
+                    <span className="text-[10px] font-bold">گفتگو</span>
+                    {activeTab === 'chat' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                </button>
                 
                 <button 
                     onClick={() => setShowMobileMenu(true)} 
-                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
                 >
-                    <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
-                    <span className="text-[9px] font-bold mt-0.5">منو</span>
+                    <div className="p-1.5">
+                        <Menu size={20} strokeWidth={showMobileMenu ? 2.5 : 2} />
+                    </div>
+                    <span className="text-[10px] font-bold">بیشتر</span>
                 </button>
              </>
           )}

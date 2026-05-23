@@ -4,6 +4,7 @@ import { getSettings, saveSettings, uploadFile } from '../services/storageServic
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
 import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
 import { apiCall } from '../services/apiService';
+import { Capacitor } from '@capacitor/core';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
 import { generateUUID } from '../constants';

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, Download, Search, FileSpreadsheet, UserCheck, Trash2, Wallet, Plus, Loader2, Landmark, TrendingDown, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
 import { downloadAndOpenFile } from '../services/fileService';
+import { apiCall } from '../services/apiService';
 
 interface CustomerBalance {
   id: string;

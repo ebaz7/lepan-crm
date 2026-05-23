@@ -93,14 +93,22 @@ export const saveBlobAndOpenFile = async (blob: Blob, fileName: string) => {
             alert('خطا در ذخیره و باز کردن فایل.');
         }
     } else {
+        // Web environment
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
+        a.style.display = 'none';
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        
+        // Use a small delay before clicking and revoking to ensure some browsers don't cancel it
+        setTimeout(() => {
+            a.click();
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }, 1000);
+        }, 100);
     }
 };
 

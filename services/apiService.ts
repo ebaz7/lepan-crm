@@ -20,9 +20,18 @@ export const resolveImageUrl = (url: string | null | undefined): string => {
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
         return url;
     }
-    const host = getServerHost() || DEFAULT_SERVER_URL;
+    const host = getServerHost();
     const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-    return `${host}${cleanUrl}`;
+    
+    // On web, if no host is configured, we use relative paths to current origin.
+    // On native, getServerHost() will return either stored host or DEFAULT_SERVER_URL.
+    if (!host && !Capacitor.isNativePlatform()) {
+        return cleanUrl;
+    }
+    
+    // Fallback for native or if host is set
+    const effectiveHost = host || DEFAULT_SERVER_URL;
+    return `${effectiveHost}${cleanUrl}`;
 };
 
 export const setServerHost = (url: string) => {

@@ -936,7 +936,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <button onClick={handleAddItem} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 h-[38px] min-w-[40px] flex items-center justify-center">{editingItemId ? <Save size={18}/> : <Plus size={18}/>}</button>
                                     {editingItemId && <button onClick={() => { setEditingItemId(null); setNewItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, hsCode: '', weightStr: '', unitPriceStr: '' }); }} className="bg-gray-200 text-gray-700 p-2 rounded-lg hover:bg-gray-300 h-[38px]"><X size={18}/></button>}
                                 </div>
-                                <div className="overflow-x-auto">
+                                <div className="hidden lg:block overflow-x-auto">
                                     <table className="w-full text-sm text-right">
                                         <thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">شرح</th><th className="p-3">HS Code</th><th className="p-3">وزن</th><th className="p-3">فی</th><th className="p-3">قیمت کل</th><th className="p-3">عملیات</th></tr></thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -953,7 +953,9 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </td>
                                                 </tr>
                                             ))}
-                                            <tr className="bg-blue-50 font-bold">
+                                        </tbody>
+                                        <tfoot className="bg-blue-50 font-bold">
+                                            <tr>
                                                 <td className="p-3">جمع کل</td>
                                                 <td></td>
                                                 <td className="p-3 font-mono">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.weight,0))}</td>
@@ -961,8 +963,36 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                 <td className="p-3 font-mono text-blue-700">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.totalPrice,0))} {selectedRecord.mainCurrency}</td>
                                                 <td></td>
                                             </tr>
-                                        </tbody>
+                                        </tfoot>
                                     </table>
+                                </div>
+
+                                {/* Mobile Items View */}
+                                <div className="lg:hidden space-y-3">
+                                    {selectedRecord.items.map((item) => (
+                                        <div key={item.id} className={`glass-panel p-4 rounded-xl border border-gray-100 shadow-sm relative ${editingItemId === item.id ? 'border-blue-400 ring-2 ring-blue-100' : ''}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="font-bold text-gray-800">{item.name}</div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleEditItem(item)} className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Edit size={16}/></button>
+                                                    <button onClick={() => handleRemoveItem(item.id)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">HS Code:</span> <span className="font-mono font-bold">{item.hsCode || '-'}</span></div>
+                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">وزن:</span> <span className="font-mono font-bold">{formatNumberString(item.weight)} KG</span></div>
+                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">فی ارزی:</span> <span className="font-mono font-bold text-blue-600">{formatNumberString(item.unitPrice)}</span></div>
+                                                <div className="bg-blue-50 p-2 rounded-lg border border-blue-100"><span className="text-blue-500 block mb-0.5">قیمت کل:</span> <span className="font-mono font-bold text-blue-700 text-sm">{formatNumberString(item.totalPrice)} {selectedRecord.mainCurrency}</span></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="bg-blue-600 text-white p-4 rounded-xl shadow-lg shadow-blue-600/20 flex justify-between items-center">
+                                        <div className="text-xs font-bold opacity-80 uppercase tracking-wider">Total Summary</div>
+                                        <div className="text-right">
+                                            <div className="text-[10px] opacity-70">جمع کل پروفرما ({selectedRecord.mainCurrency})</div>
+                                            <div className="text-lg font-black">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.totalPrice,0))}</div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-gray-200">
                                     <label className="text-xs font-bold text-gray-700 block mb-1">هزینه حمل کل (Freight)</label>
@@ -1560,7 +1590,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                                         <div className="glass-panel p-6 rounded-xl shadow-sm border mt-6">
                                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><PieChart size={20} className="text-green-600"/> قیمت تمام شده به تفکیک کالا</h3>
-                                            <div className="overflow-x-auto">
+                                            <div className="hidden lg:block overflow-x-auto">
                                                 <table className="w-full text-sm text-right">
                                                     <thead className="bg-gray-100 text-gray-700">
                                                         <tr>
@@ -1605,6 +1635,50 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </tbody>
                                                 </table>
                                             </div>
+
+                                            {/* Mobile Final Cost Cards */}
+                                            <div className="lg:hidden space-y-4">
+                                                {selectedRecord.items.map((item, idx) => {
+                                                    const itemFreightShareCurrency = item.weight * freightPerKgCurrency;
+                                                    const itemAdjustedTotalPriceCurrency = item.totalPrice + itemFreightShareCurrency;
+                                                    const itemFinalCostRial = itemAdjustedTotalPriceCurrency * effectiveRate;
+                                                    const itemFinalCostPerKg = item.weight > 0 ? itemFinalCostRial / item.weight : 0;
+                                                    const itemAdjustedUnitPriceCurrency = item.weight > 0 ? itemAdjustedTotalPriceCurrency / item.weight : 0;
+
+                                                    return (
+                                                        <div key={item.id} className="glass-panel p-4 rounded-xl border border-gray-100 shadow-sm">
+                                                            <div className="flex justify-between items-center mb-3">
+                                                                <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{idx + 1}</span>
+                                                                <div className="font-bold text-gray-800 text-right pr-2 truncate">{item.name}</div>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <span className="text-gray-500 block mb-1">وزن:</span>
+                                                                    <span className="font-mono font-bold text-gray-800">{formatNumberString(item.weight)} KG</span>
+                                                                </div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <span className="text-gray-500 block mb-1">فی پایه (ارزی):</span>
+                                                                    <span className="font-mono font-bold text-gray-800">{formatNumberString(item.unitPrice)}</span>
+                                                                </div>
+                                                                <div className="bg-blue-50 p-2 rounded-lg col-span-2 border border-blue-100">
+                                                                    <span className="text-blue-500 block mb-1">فی نهایی با حمل (ارزی):</span>
+                                                                    <span className="font-mono font-bold text-blue-700 text-sm">{formatNumberString(itemAdjustedUnitPriceCurrency)} {selectedRecord.mainCurrency}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-2">
+                                                                <div className="flex justify-between items-center bg-rose-50 p-2.5 rounded-lg border border-rose-100">
+                                                                    <span className="text-rose-600 font-bold">قیمت تمام شده:</span>
+                                                                    <span className="font-mono font-black text-rose-700">{formatCurrency(itemFinalCostRial)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center bg-gray-100 p-2.5 rounded-lg border border-gray-200">
+                                                                    <span className="text-gray-600 font-bold">فی تمام شده (هر کیلو):</span>
+                                                                    <span className="font-mono font-black text-gray-800">{formatCurrency(itemFinalCostPerKg)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </>
                                 );
@@ -1624,10 +1698,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Container className="text-blue-600" /> پرونده‌های بازرگانی
                     </h1>
-                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
-                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1 shrink-0"><Home size={14}/> خانه</button>
-                        {selectedCompany && <><ChevronRight size={14} className="shrink-0"/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600 shrink-0">{selectedCompany}</button></>}
-                        {selectedGroup && <><ChevronRight size={14} className="shrink-0"/> <span className="shrink-0">{selectedGroup}</span></>}
+                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-2 no-scrollbar scroll-smooth">
+                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1 shrink-0 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full transition-colors active:scale-95"><Home size={14}/> خانه</button>
+                        {selectedCompany && <><ChevronLeft size={14} className="shrink-0 text-gray-400"/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600 shrink-0 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full transition-colors active:scale-95">{selectedCompany}</button></>}
+                        {selectedGroup && <><ChevronLeft size={14} className="shrink-0 text-gray-400"/> <span className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold">{selectedGroup}</span></>}
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">

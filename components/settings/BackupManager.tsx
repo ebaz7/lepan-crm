@@ -1,8 +1,9 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff, RefreshCw, FolderOpen, FileArchive, Save } from 'lucide-react';
-import { apiCall, LS_KEYS, getServerHost } from '../../services/apiService';
-import { saveBlobAndOpenFile } from '../../services/fileService';
+import { apiCall, LS_KEYS, getServerHost, resolveImageUrl } from '../../services/apiService';
+import { saveBlobAndOpenFile, downloadAndOpenFile } from '../../services/fileService';
+import { Capacitor } from '@capacitor/core';
 
 const BackupManager: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -196,9 +197,17 @@ const BackupManager: React.FC = () => {
     };
 
     const handleDownloadAutoBackup = (filename: string) => {
-        const baseUrl = getServerHost() || '';
-        const url = `${baseUrl}/api/backups/download/${filename}`;
-        window.open(url, '_blank');
+        const path = `/api/backups/download/${filename}`;
+        
+        if (Capacitor.isNativePlatform()) {
+            const url = resolveImageUrl(path);
+            downloadAndOpenFile(url, filename);
+        } else {
+            // For Web: use relative path if no host set (standard behavior)
+            const host = getServerHost();
+            const url = host ? `${host}${path}` : path;
+            window.open(url, '_blank');
+        }
     };
 
     return (
