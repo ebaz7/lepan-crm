@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { existsSync, copyFileSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 console.log('====================================================');
@@ -20,14 +20,26 @@ try {
     execSync('npx cap sync android', { stdio: 'inherit' });
     console.log('✅ Capacitor assets synchronized.\n');
 
-    // Auto-create local.properties if missing
+    // Auto-create local.properties if missing or invalid
     const localPropertiesPath = join(gradleDir, 'local.properties');
-    if (!existsSync(localPropertiesPath)) {
-        console.log('🔍 local.properties file not found. System will attempt to locate Android SDK...');
+    let requiresWrite = !existsSync(localPropertiesPath);
+    
+    if (existsSync(localPropertiesPath)) {
+        const content = readFileSync(localPropertiesPath, 'utf8');
+        if (!content.includes('sdk.dir')) {
+            requiresWrite = true;
+        }
+    }
+
+    if (requiresWrite) {
+        console.log('🔍 local.properties file needs configuration. System will attempt to locate Android SDK...');
         let sdkPath = '';
         if (isWindows) {
+            const userSpecificSdk = 'C:\\Users\\Factorythird\\AppData\\Local\\Android\\Sdk';
             const defaultWinSdk = join(process.env.USERPROFILE || 'C:\\', 'AppData', 'Local', 'Android', 'Sdk');
-            if (existsSync(defaultWinSdk)) {
+            if (existsSync(userSpecificSdk)) {
+                sdkPath = userSpecificSdk;
+            } else if (existsSync(defaultWinSdk)) {
                 sdkPath = defaultWinSdk;
             }
         } else if (process.platform === 'darwin') {
