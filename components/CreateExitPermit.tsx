@@ -351,9 +351,9 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">تعداد (کارتن)</label>
                                     <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.cartonCount === 0 ? '' : item.cartonCount} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].cartonCount = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
-                                <div className="w-full md:w-28">
+                                <div className="w-full md:w-36">
                                     <label className="text-[10px] font-bold text-gray-500 block mb-1 text-center">وزن تقریبی (KG)</label>
-                                    <input type="number" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight === 0 ? '' : item.weight} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].weight = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
+                                    <input type="number" step="0.001" className="w-full border rounded-lg p-2 text-center font-bold bg-gray-50 focus:glass-panel transition-colors outline-none" value={item.weight === 0 ? '' : item.weight} onFocus={e => e.target.select()} onChange={e => { const n = [...items]; n[idx].weight = e.target.value === '' ? 0 : +e.target.value; setItems(n); }} />
                                 </div>
                                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
                                     <div className="w-full md:w-32">

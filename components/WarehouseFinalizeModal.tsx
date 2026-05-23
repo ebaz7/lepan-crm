@@ -73,7 +73,7 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
           <div className="glass-panel rounded-xl border border-gray-200/50 dark:border-white/10 shadow-sm overflow-x-auto w-full max-w-full block mb-6" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full min-w-[700px] text-sm text-center">
               <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-700 font-bold whitespace-nowrap">
-                <tr><th className="p-3 w-10">#</th><th className="p-3 text-right">شرح کالا</th><th className="p-3 w-24 bg-blue-50 text-blue-800 border-l border-white">عدد/کارتن (درخواست)</th><th className="p-3 w-24 bg-green-50 text-green-800">کارتن خروجی</th><th className="p-3 w-24 bg-blue-50 text-blue-800 border-l border-white">وزن درخواستی</th><th className="p-3 w-24 bg-green-50 text-green-800">وزن خروجی</th><th className="p-3 w-10"></th></tr>
+                <tr><th className="p-3 w-10">#</th><th className="p-3 text-right">شرح کالا</th><th className="p-3 w-24 bg-blue-50 text-blue-800 border-l border-white">عدد/کارتن (درخواست)</th><th className="p-3 w-24 bg-green-50 text-green-800">کارتن خروجی</th><th className="p-3 w-32 bg-blue-50 text-blue-800 border-l border-white">وزن درخواستی</th><th className="p-3 w-32 bg-green-50 text-green-800">وزن خروجی</th><th className="p-3 w-10"></th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map((item, idx) => (
@@ -82,8 +82,8 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
                     <td className="p-3"><input className="w-full border rounded-lg p-2 text-sm font-bold" value={item.goodsName} onChange={e => handleUpdateItem(idx, 'goodsName', e.target.value)} placeholder="نام کالا"/></td>
                     <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.cartonCount}</td>
                     <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredCartonCount || ''} onChange={e => handleUpdateItem(idx, 'deliveredCartonCount', e.target.value === '' ? 0 : Number(e.target.value))}/></td>
-                    <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{item.weight}</td>
-                    <td className="p-3 bg-green-50/30"><input type="number" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel" value={item.deliveredWeight || ''} onChange={e => handleUpdateItem(idx, 'deliveredWeight', e.target.value === '' ? 0 : Number(e.target.value))}/></td>
+                    <td className="p-3 bg-blue-50/30 font-mono text-gray-500 border-l border-gray-100">{Number(item.weight || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
+                    <td className="p-3 bg-green-50/30"><input type="number" step="0.001" className="w-full border rounded-lg p-2 text-center font-mono font-bold text-green-700 outline-none glass-panel text-lg" value={item.deliveredWeight || ''} onChange={e => handleUpdateItem(idx, 'deliveredWeight', e.target.value === '' ? 0 : Number(e.target.value))}/></td>
                     <td className="p-3 text-center"><button onClick={() => handleRemoveItem(idx)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={18}/></button></td>
                   </tr>
                 ))}
@@ -93,8 +93,8 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
                   <td colSpan={2} className="p-3 text-left pl-6 font-bold text-gray-600 flex items-center justify-between"><button onClick={handleAddItem} className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-blue-100 font-bold border border-blue-200"><Plus size={14}/> افزودن کالا</button><span className="flex items-center gap-2"><Calculator size={16}/> جمع کل:</span></td>
                   <td className="p-3 font-bold text-gray-500 font-mono text-lg bg-blue-50/30 border-l border-gray-200">{totalRequestedCount}</td>
                   <td className="p-3 font-black text-green-700 font-mono text-lg bg-green-50/30 border-l border-gray-200">{totalDeliveredCount}</td>
-                  <td className="p-3 font-bold text-gray-500 font-mono text-lg bg-blue-50/30 border-l border-gray-200">{totalRequestedWeight}</td>
-                  <td className="p-3 font-black text-green-700 font-mono text-lg bg-green-50/30">{totalDeliveredWeight}</td>
+                  <td className="p-3 font-bold text-gray-500 font-mono text-lg bg-blue-50/30 border-l border-gray-200">{Number(totalRequestedWeight.toFixed(3))}</td>
+                  <td className="p-3 font-black text-green-700 font-mono text-xl bg-green-50/30">{Number(totalDeliveredWeight.toFixed(3))}</td>
                   <td></td>
                 </tr>
               </tfoot>

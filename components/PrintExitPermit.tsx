@@ -150,8 +150,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
           caption += `\n📦 *اقلام:*`;
           if(permit.items && permit.items.length > 0) {
               permit.items.forEach((item, idx) => {
-                  const qty = item.cartonCount || 0;
-                  const w = item.weight || 0;
+                  const qty = item.deliveredCartonCount ?? item.cartonCount ?? 0;
+                  const w = Number(Number(item.deliveredWeight ?? item.weight ?? 0).toFixed(3));
                   caption += `\n${idx+1}. ${item.goodsName}\n   ▫️ تعداد: ${qty} کارتن | وزن: ${w} kg`;
               });
           } else {
@@ -162,7 +162,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
           caption += `\n----------------\n`;
           caption += `📊 *جمع کل:*\n`;
           caption += `تعداد: ${permit.cartonCount || 0} کارتن\n`;
-          caption += `وزن: ${permit.weight || 0} کیلوگرم`;
+          caption += `وزن: ${Number(Number(permit.weight || 0).toFixed(3))} کیلوگرم`;
 
           if (sharePlatform === 'whatsapp') {
              await apiCall('/send-whatsapp', 'POST', {
@@ -247,9 +247,9 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const displayDestinations = permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: 'legacy', recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }];
   
   const totalCartonsReq = displayItems.reduce((acc, i) => acc + (Number(i.cartonCount) || 0), 0);
-  const totalWeightReq = Number(displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0).toFixed(2));
+  const totalWeightReq = Number(displayItems.reduce((acc, i) => acc + (Number(i.weight) || 0), 0).toFixed(3));
   const totalCartonsDel = displayItems.reduce((acc, i) => acc + (Number(i.deliveredCartonCount ?? i.cartonCount) || 0), 0);
-  const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(2));
+  const totalWeightDel = Number(displayItems.reduce((acc, i) => acc + (Number(i.deliveredWeight ?? i.weight) || 0), 0).toFixed(3));
   const totalAmount = displayItems.reduce((acc, i) => acc + (Number(i.weight || 0) * (Number(i.price || 0) || Number(permit.price || 0))), 0);
   const showDeliveryColumns = mode === 'EXIT' || (displayItems.some(i => i.deliveredCartonCount !== undefined && i.deliveredCartonCount !== i.cartonCount));
 
@@ -378,13 +378,13 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         <>
                                             <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{item.cartonCount}</td>
                                             <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{item.deliveredCartonCount ?? item.cartonCount}</td>
-                                            <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{Number(Number(item.weight).toFixed(2))}</td>
-                                            <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{Number(Number(item.deliveredWeight ?? item.weight).toFixed(2))}</td>
+                                            <td className="border-2 border-black p-2 font-mono text-gray-400 bg-gray-50/50">{Number(Number(item.weight).toFixed(3))}</td>
+                                            <td className="border-2 border-black p-2 font-mono font-bold bg-green-50/30">{Number(Number(item.deliveredWeight ?? item.weight).toFixed(3))}</td>
                                         </>
                                     ) : (
                                         <>
                                             <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono font-bold`}>{item.cartonCount}</td>
-                                            <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono font-bold`}>{Number(deliveredWeight.toFixed(2))}</td>
+                                            <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} p-2 font-mono font-bold`}>{Number(deliveredWeight.toFixed(3))}</td>
                                             {(mode === 'PROFORMA' || mode === 'CUSTOMER_INVOICE') && (showPrice || mode === 'CUSTOMER_INVOICE') && (
                                                 <>
                                                 <td className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900 font-black text-lg' : 'border-black'} p-2 font-mono`}>{formatCurrency(itemPrice)}</td>
