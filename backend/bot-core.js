@@ -1493,15 +1493,27 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
 
         const isLogisticsGroup = (id) => {
             if (!id) return false;
+            const s = settings;
             const logisticsIds = [
-                settings.botSecurityGroupId,
-                settings.botBijakGroupId,
-                settings.botBijakGroupIdBale,
-                settings.botBijakGroupIdWhatsApp,
-                settings.exitPermitNotificationTelegramId,
-                settings.exitPermitNotificationBaleId
-            ].filter(Boolean);
-            return logisticsIds.includes(String(id));
+                s.botSecurityGroupId,
+                s.botBijakGroupId,
+                s.botBijakGroupIdBale,
+                s.botBijakGroupIdWhatsApp,
+                s.exitPermitNotificationTelegramId,
+                s.exitPermitNotificationBaleId,
+                s.exitPermitNotificationGroup,
+                s.defaultWarehouseGroup,
+                s.exitPermitFirstGroupConfig?.groupId,
+                s.exitPermitFirstGroupConfig?.telegramId,
+                s.exitPermitFirstGroupConfig?.baleId,
+                s.exitPermitSecondGroupConfig?.groupId,
+                s.exitPermitSecondGroupConfig?.telegramId,
+                s.exitPermitSecondGroupConfig?.baleId
+            ].filter(Boolean).map(x => String(x));
+            
+            const strId = String(id);
+            // Also detect by ID pattern (Telegram groups start with -)
+            return logisticsIds.includes(strId) || strId.startsWith('-') || strId.includes('@g.us');
         };
 
         const generateCaption = (targetGroupId) => {
@@ -1509,6 +1521,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             let goodsList = '';
             if (p.items && p.items.length > 0) {
                 goodsList = p.items.map((it, idx) => {
+                    // Force hide price if it's a logistics group or as per general rule for factory groups
                     const priceTxt = (!hidePrice && it.price) ? ` (فی: ${Number(it.price).toLocaleString()} ریال)` : '';
                     return `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)${priceTxt}`;
                 }).join('\n');

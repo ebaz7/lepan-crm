@@ -358,9 +358,17 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             let caption = `🚛 *مجوز خروج کارخانه*\n${captionTitle}\n\n`;
             caption += `🔢 شماره: ${permit.permitNumber}\n`;
             caption += `👤 گیرنده: ${permit.recipientName}\n`;
-            caption += `📦 کالا: ${permit.goodsName}\n`;
             
-            // NOTE: price is omitted here as per user request to hide it in bot/groups.
+            if (permit.items && permit.items.length > 0) {
+                caption += `📦 *اقلام:* \n`;
+                permit.items.forEach((it, idx) => {
+                    const q = it.deliveredCartonCount ?? it.cartonCount ?? 0;
+                    const w = it.deliveredWeight ?? it.weight ?? 0;
+                    caption += `${idx + 1}. ${it.goodsName} (${q} عدد | ${Number(Number(w).toFixed(3))} kg)\n`;
+                });
+            } else {
+                caption += `📦 کالا: ${permit.goodsName}\n`;
+            }
             
             if (permit.plateNumber) {
                 caption += `🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}\n`;
@@ -388,17 +396,23 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 }
             }
             
-            // Explicitly send WITH PRICE to CEO, SALES_MANAGER, ADMIN
+            // Explicitly send WITH PRICE to CEO, SALES_MANAGER, ADMIN (unless they are groups)
             const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
-            const managerCaption = caption + `\n💰 مبلغ: ${permit.price}`;
+            const priceInfo = `\n💰 مبلغ: ${Number(permit.price || 0).toLocaleString()} ریال`;
+            
             for (const m of managers) {
                 const tgId = (m as any).telegramId || (m as any).telegramChatId;
                 const blId = (m as any).baleId || (m as any).baleChatId;
+                const isGroup = (id: string) => id && (id.startsWith('-') || id.includes('@g.us'));
+                
+                const managerCaption = caption + (isGroup(String(tgId || blId || m.phoneNumber)) ? '' : priceInfo);
+                const managerImg = isGroup(String(tgId || blId || m.phoneNumber)) ? base64NoPrice : base64WithPrice;
+
                 if (m.phoneNumber) {
-                    await apiCall('/send-whatsapp', 'POST', { number: m.phoneNumber, message: managerCaption, mediaData: { data: base64WithPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                    await apiCall('/send-whatsapp', 'POST', { number: m.phoneNumber, message: managerCaption, mediaData: { data: managerImg, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
                 }
-                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
-                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption: managerCaption, mediaData: { data: base64WithPrice, filename: `Permit_${permit.permitNumber}.png` } });
+                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption: managerCaption, mediaData: { data: managerImg, filename: `Permit_${permit.permitNumber}.png` } });
+                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption: managerCaption, mediaData: { data: managerImg, filename: `Permit_${permit.permitNumber}.png` } });
             }
         } catch (e) { console.error("Notif Error", e); }
     };
