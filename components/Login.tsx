@@ -342,6 +342,62 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                           )}
                       </div>
                   )}
+
+                  {/* Direct Server URL Setting (Highly visible for mobile only before login) */}
+                  {isNative && (
+                    <div className="space-y-2 bg-blue-50/50 dark:bg-blue-900/10 p-3.5 rounded-2xl border border-blue-100/70 dark:border-blue-900/30">
+                        <div className="flex justify-between items-center mr-1">
+                            <label className="text-xs font-black text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                                <Server size={14} className="text-blue-500"/>
+                                آدرس سرور (اتصال)
+                            </label>
+                            <span className="text-[10px] text-gray-500 font-mono">
+                                {testStatus === 'testing' ? 'در حال تست...' : testStatus === 'success' ? 'متصل' : ''}
+                            </span>
+                        </div>
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                value={serverUrl} 
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setServerUrl(val);
+                                    let cleanUrl = val.trim();
+                                    if (cleanUrl) {
+                                        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+                                            setServerHost(`http://${cleanUrl}`);
+                                        } else {
+                                            setServerHost(cleanUrl);
+                                        }
+                                    } else {
+                                        localStorage.removeItem('app_server_host');
+                                    }
+                                }} 
+                                className="w-full border border-blue-200 dark:border-blue-800/80 rounded-xl px-4 py-3 pl-14 text-left dir-ltr font-mono font-bold text-xs text-blue-900 bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-400" 
+                                placeholder="192.168.1.50:3000"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                            />
+                            <button
+                                type="button"
+                                onClick={testConnection}
+                                className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-colors"
+                            >
+                                {testStatus === 'testing' ? <Loader2 size={12} className="animate-spin" /> : 'تست'}
+                            </button>
+                        </div>
+                        {testStatus === 'success' && (
+                            <div className="text-[11px] text-green-700 font-medium mr-1 flex items-center gap-1">
+                                <CheckCircle2 size={12}/> اتصال موفقیت‌آمیز بود.
+                            </div>
+                        )}
+                        {testStatus === 'failed' && (
+                            <div className="text-[11px] text-red-600 font-medium mr-1 leading-4">
+                                ⚠️ {testMessage}
+                            </div>
+                        )}
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-gray-700 block mr-1">نام کاربری</label>
