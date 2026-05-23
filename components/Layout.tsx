@@ -6,7 +6,7 @@ import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
-import { apiCall } from '../services/apiService';
+import { apiCall, resolveImageUrl } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 
 interface LayoutProps {
@@ -367,7 +367,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={20}/></button>
                     <div className="relative group cursor-pointer mb-3" onClick={() => avatarInputRef.current?.click()}>
                         <div className="w-24 h-24 rounded-full bg-white/20 border-4 border-white/30 overflow-hidden shadow-lg">
-                            {currentUser.avatar ? <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" /> : <UserIcon size={48} className="w-full h-full p-4 text-white" />}
+                            {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="Profile" className="w-full h-full object-cover" /> : <UserIcon size={48} className="w-full h-full p-4 text-white" />}
                         </div>
                         <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             {uploadingAvatar ? <Loader2 size={24} className="animate-spin text-white"/> : <Camera size={24} className="text-white"/>}
@@ -404,7 +404,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           <div className="p-6 border-b border-gray-200/50 dark:border-white/10 flex items-center justify-between gap-3">
               <div className={`flex items-center gap-3 overflow-hidden ${!isSidebarOpen && 'hidden'}`}>
                   <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-600/20"><FileText className="w-5 h-5" /></div>
-                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">سیستم مالی</h1><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">پنل کاربری</span></div>
+                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">{settings?.appName || 'سیستم مالی'}</h1><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">پنل کاربری</span></div>
               </div>
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700/60 rounded-xl transition-colors mx-auto">
                  <Menu size={20}/>
@@ -413,7 +413,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           
           <div className={`p-4 bg-white/50 dark:bg-gray-800/20 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-gray-100/50 dark:border-white/5 relative group cursor-pointer hover:glass-panel hover:shadow-sm transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden shrink-0 text-white shadow-md">
-                 {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover"/> : <span className="font-bold">{currentUser.fullName.charAt(0)}</span>}
+                 {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="" className="w-full h-full object-cover"/> : <span className="font-bold">{currentUser.fullName.charAt(0)}</span>}
               </div>
               {isSidebarOpen && (
                  <div className="overflow-hidden flex-1">
@@ -610,7 +610,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                     className="flex items-center gap-3 transition-all active:scale-95"
                 >
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xl border-2 border-white/50 rotate-3 transition-transform hover:rotate-0">
-                        {currentUser.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover rounded-2xl"/> : currentUser.fullName.charAt(0)}
+                        {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="" className="w-full h-full object-cover rounded-2xl"/> : currentUser.fullName.charAt(0)}
                     </div>
                 </button>
                 ) : (

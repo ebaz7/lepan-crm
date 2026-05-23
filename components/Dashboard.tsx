@@ -36,12 +36,33 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   const [bankReportTab, setBankReportTab] = useState<'summary' | 'timeline'>('summary');
   
   // Data for additional counts
-  const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
-  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>([]);
-  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>([]);
+  const [exitPermits, setExitPermits] = useState<ExitPermit[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_exit_permits');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
+  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_wh_tx');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
+  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_purchase_reqs');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
 
   // Personal Notes State
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<Note[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_notes');
+        const allNotes = item ? JSON.parse(item) : [];
+        return currentUser?.id ? allNotes.filter((n: Note) => n.userId === currentUser.id && !n.isPrivate) : [];
+    } catch { return []; }
+  });
   
   useEffect(() => {
     if (currentUser?.id) {
@@ -72,7 +93,12 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         }
     }, [rawOrders]);
 
-    const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
+    const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_announcements');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [announceText, setAnnounceText] = useState('');
     const [announceTarget, setAnnounceTarget] = useState('');

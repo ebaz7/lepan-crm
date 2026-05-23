@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, Download, Search, FileSpreadsheet, UserCheck, Trash2, Wallet, Plus, Loader2, Landmark, TrendingDown, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
+import { downloadAndOpenFile } from '../services/fileService';
 
 interface CustomerBalance {
   id: string;
@@ -51,22 +52,15 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const fetchData = async () => {
     setLoading(true);
     try {
-      const resBal = await fetch('/api/customer-balances');
-      if (resBal.ok) {
-        const data = await resBal.json();
-        setBalances(data.balances || []);
-        setLastUploadTime(data.lastXlsxUploadAt || null);
-      }
-      const resMap = await fetch('/api/customer-balances/chat-codes');
-      if (resMap.ok) {
-        const data = await resMap.json();
-        setChatCodes(data);
-      }
-      const resStmts = await fetch('/api/customer-balances/statements/all');
-      if (resStmts.ok) {
-        const data = await resStmts.json();
-        setStatements(data);
-      }
+      const dataBal = await apiCall<any>('/customer-balances');
+      setBalances(dataBal.balances || []);
+      setLastUploadTime(dataBal.lastXlsxUploadAt || null);
+      
+      const dataMap = await apiCall<any>('/customer-balances/chat-codes');
+      setChatCodes(dataMap);
+      
+      const dataStmts = await apiCall<any>('/customer-balances/statements/all');
+      setStatements(dataStmts);
     } catch (error) {
       console.error('Error fetching customer balance data:', error);
     } finally {
@@ -183,18 +177,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         if (!confirm(`آیا تمایل دارید مانده حساب تعداد ${validRecords.length} مشتری را بروزرسانی کنید؟`)) return;
 
         setLoading(true);
-        const postRes = await fetch('/api/customer-balances/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records: validRecords })
-        });
-
-        if (postRes.ok) {
-          alert('مانده حساب مشتریان با موفقیت بروزرسانی شد.');
-          fetchData();
-        } else {
-          alert('خطا در بروزرسانی مانده حساب‌ها.');
-        }
+        const postRes = await apiCall<any>('/customer-balances/bulk', 'POST', { records: validRecords });
+        alert('مانده حساب مشتریان با موفقیت بروزرسانی شد.');
+        fetchData();
       } catch (err) {
         console.error(err);
         alert('خطا در پردازش فایل اکسل.');
@@ -214,24 +199,16 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     setLoading(true);
     try {
-      const res = await fetch('/api/customer-balances/chat-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: mapChatId.trim(),
-          platform: mapPlatform,
-          accountCode: mapAccountCode.trim()
-        })
+      await apiCall<any>('/customer-balances/chat-code', 'POST', {
+        chatId: mapChatId.trim(),
+        platform: mapPlatform,
+        accountCode: mapAccountCode.trim()
       });
 
-      if (res.ok) {
-        alert('پیوند چت با موفقیت ایجاد دگرگون شد.');
-        setMapChatId('');
-        setMapAccountCode('');
-        fetchData();
-      } else {
-        alert('خطایی رخ داد.');
-      }
+      alert('پیوند چت با موفقیت ایجاد دگرگون شد.');
+      setMapChatId('');
+      setMapAccountCode('');
+      fetchData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -244,15 +221,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/customer-balances/chat-code/${chatId}/${platform}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        alert('پیوند با موفقیت حذف شد.');
-        fetchData();
-      } else {
-        alert('خطا در حذف پیوند.');
-      }
+      await apiCall<any>(`/customer-balances/chat-code/${chatId}/${platform}`, 'DELETE');
+      alert('پیوند با موفقیت حذف شد.');
+      fetchData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -272,23 +243,15 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         const base64Data = result.split(',')[1];
         const ext = file.name.split('.').pop() || '';
 
-        const response = await fetch('/api/customer-balances/statement', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accountCode,
-            fileName: file.name,
-            fileType: ext,
-            fileData: base64Data
-          })
+        await apiCall<any>('/customer-balances/statement', 'POST', {
+          accountCode,
+          fileName: file.name,
+          fileType: ext,
+          fileData: base64Data
         });
 
-        if (response.ok) {
-          alert('صورتحساب با موفقیت آپلود شد.');
-          fetchData();
-        } else {
-          alert('خطا در آپلود صورتحساب.');
-        }
+        alert('صورتحساب با موفقیت آپلود شد.');
+        fetchData();
       } catch (err) {
         console.error(err);
         alert('خطا در خواندن فایل.');
@@ -303,15 +266,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const handleDeleteStatement = async (id: string) => {
     if (!confirm('آیا از حذف این صورتحساب اطمینان دارید؟')) return;
     try {
-      const res = await fetch(`/api/customer-balances/statement/${id}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        alert('صورتحساب با موفقیت حذف شد.');
-        fetchData();
-      } else {
-        alert('خطا در حذف صورتحساب.');
-      }
+      await apiCall<any>(`/customer-balances/statement/${id}`, 'DELETE');
+      alert('صورتحساب با موفقیت حذف شد.');
+      fetchData();
     } catch (err) {
       console.error(err);
     }
@@ -323,17 +280,8 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     try {
       const url = `/api/customer-balances/reports/${type}/pdf`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to generate PDF');
-      
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const fileName = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
+      await downloadAndOpenFile(url, fileName, undefined, false);
     } catch (error) {
       console.error(error);
       alert('خطا در تولید و دانلود فایل گزارش PDF.');
@@ -779,14 +727,13 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                         </span>
                       </div>
                       <div className="flex gap-1">
-                        <a 
-                          href={`/api/customer-balances/statement-download/${st.id}`}
-                          download={st.fileName}
-                          className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 rounded-lg transition-all font-bold"
+                        <button 
+                          onClick={() => downloadAndOpenFile(`/api/customer-balances/statement-download/${st.id}`, st.fileName, undefined, true)}
+                          className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 rounded-lg transition-all font-bold cursor-pointer"
                           title="دانلود فایل"
                         >
                           <Download className="w-3.5 h-3.5" />
-                        </a>
+                        </button>
                         {currentUser?.rolePermissions?.canImportCustomerBalances !== false && (
                           <button
                             onClick={() => handleDeleteStatement(st.id)}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CustomerTicket } from '../types';
 import { Check, X, Send, Search, UserIcon } from 'lucide-react';
+import { apiCall } from '../services/apiService';
 
 export const Tickets: React.FC = () => {
   const [tickets, setTickets] = useState<CustomerTicket[]>([]);
@@ -9,8 +10,13 @@ export const Tickets: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<CustomerTicket | null>(null);
   const [replyText, setReplyText] = useState('');
 
-  const fetchTickets = () => {
-      fetch('/api/tickets').then(r=>r.json()).then(d=>{setTickets(d);setLoading(false);});
+  const fetchTickets = async () => {
+    try {
+      const d = await apiCall<CustomerTicket[]>('/tickets');
+      setTickets(d);
+    } catch(e) {} finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -20,12 +26,7 @@ export const Tickets: React.FC = () => {
   const handleReply = async () => {
     if (!replyText.trim() || !selectedTicket) return;
     try {
-      const res = await fetch(`/api/tickets/${selectedTicket.id}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: replyText, senderName: 'پشتیبانی فروش' })
-      });
-      const data = await res.json();
+      const data = await apiCall<CustomerTicket>(`/tickets/${selectedTicket.id}/reply`, 'POST', { text: replyText, senderName: 'پشتیبانی فروش' });
       setSelectedTicket(data);
       setTickets(tickets.map(t => t.id === data.id ? data : t));
       setReplyText('');
@@ -34,12 +35,7 @@ export const Tickets: React.FC = () => {
 
   const handleStatus = async (id: string, status: 'OPEN' | 'CLOSED') => {
     try {
-      const res = await fetch(`/api/tickets/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      const data = await res.json();
+      const data = await apiCall<CustomerTicket>(`/tickets/${id}/status`, 'PUT', { status });
       setTickets(tickets.map(t => t.id === data.id ? data : t));
       if (selectedTicket?.id === data.id) setSelectedTicket(data);
     } catch(e) {}

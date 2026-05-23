@@ -3,6 +3,7 @@ import { Package, Plus, Search, Edit2, Trash2, Tag, DollarSign, Filter, RefreshC
 import { apiCall } from '../services/apiService';
 import { formatCurrency, parsePersianDate } from '../constants';
 import * as XLSX from 'xlsx';
+import { saveBlobAndOpenFile } from '../services/fileService';
 
 interface Product {
     id: string;
@@ -109,7 +110,10 @@ const ProductsModule: React.FC = () => {
         const ws = XLSX.utils.json_to_sheet(sampleData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Products");
-        XLSX.writeFile(wb, "Sample_Products.xlsx");
+        
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveBlobAndOpenFile(blob, "Sample_Products.xlsx");
     };
 
     useEffect(() => { fetchData(); }, []);

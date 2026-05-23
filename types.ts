@@ -239,6 +239,7 @@ export interface KnowledgeBaseItem {
 }
 
 export interface SystemSettings {
+  appName?: string;
   currentTrackingNumber: number;
   currentExitPermitNumber: number;
   companyNames: string[];

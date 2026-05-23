@@ -48,6 +48,7 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
   const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
+      appName: 'سیستم من',
       currentTrackingNumber: 1000, 
       currentExitPermitNumber: 1000, 
       companyNames: [], 
