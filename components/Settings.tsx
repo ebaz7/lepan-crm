@@ -573,6 +573,81 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     <div><label className="text-sm font-bold text-gray-700 block mb-1">شروع شماره مجوز خروج</label><input type="number" className="w-full border rounded-lg p-2 dir-ltr text-left" value={settings.currentExitPermitNumber} onChange={(e) => setSettings({...settings, currentExitPermitNumber: Number(e.target.value)})} /></div>
                                 </div>
                             </div>
+                            
+                            <div className="space-y-4">
+                                <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Smartphone size={20}/> اولویت نمایش در نوار پایین موبایل</h3>
+                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-[10px] text-blue-700 leading-relaxed">
+                                    ترتیب موارد را در اینجا مشخص کنید. ۵ مورد اول (با رعایت دسترسی کاربر) در نوار پایین نمایش داده می‌شوند و مابقی در منوی "بیشتر".
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                                    {(settings.mobileNavOrder?.length ? settings.mobileNavOrder : ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings']).map((itemId, idx) => {
+                                        const navLabel = {
+                                            dashboard: 'داشبورد',
+                                            create: 'ثبت پرداخت',
+                                            manage: 'سوابق پرداخت',
+                                            'create-exit': 'ثبت خروج',
+                                            'manage-invoices': 'مدیریت فاکتورها',
+                                            'manage-exit': 'سوابق خروج',
+                                            warehouse: 'مدیریت انبار',
+                                            security: 'انتظامات',
+                                            meetings: 'جلسات تولید',
+                                            purchase: 'درخواست خرید',
+                                            chat: 'گفتگو',
+                                            knowledge: 'اطلاعات و یادداشت ها',
+                                            trade: 'بازرگانی',
+                                            balances: 'مانده حساب مشتریان',
+                                            products: 'کالاها',
+                                            sales: 'مشتریان',
+                                            tickets: 'تیکت‌ها',
+                                            users: 'کاربران',
+                                            settings: 'تنظیمات'
+                                        }[itemId] || itemId;
+
+                                        return (
+                                            <div key={itemId} className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-bold text-gray-400 w-4">{idx + 1}</span>
+                                                    <span className="text-xs font-bold text-gray-700">{navLabel}</span>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(settings.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx > 0) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx-1];
+                                                                order[idx-1] = temp;
+                                                                setSettings({...settings, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === 0}
+                                                    >
+                                                        <RefreshCcw size={14} className="rotate-90"/>
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(settings.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx < order.length - 1) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx+1];
+                                                                order[idx+1] = temp;
+                                                                setSettings({...settings, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === (settings.mobileNavOrder?.length || 19) - 1}
+                                                    >
+                                                        <RefreshCcw size={14} className="-rotate-90"/>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
                     

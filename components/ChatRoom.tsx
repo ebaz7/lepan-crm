@@ -437,7 +437,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
         if (type === 'task_group') return null;
-        const relevant = messages.filter(m => {
+        const relevant = displayMessages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
             if (type === 'group') return m.groupId === channelId;
@@ -1113,6 +1113,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#1c1c1e]">
+                    {localSharedData && !activeChannel && (
+                        <div className="m-3 p-4 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl animate-bounce-subtle flex flex-col gap-2 border border-white/20">
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-black text-sm flex items-center gap-2">
+                                    <Share2 size={16} />
+                                    محتوای پیوست آماده اشتراک‌گذاری
+                                </h4>
+                                <button onClick={() => setLocalSharedData(null)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <p className="text-[10px] opacity-90 font-bold leading-relaxed line-clamp-2 bg-black/10 p-2 rounded-xl">
+                                {localSharedData.fileUrl ? `📎 فایل: ${localSharedData.fileUrl.split('/').pop()}` : localSharedData.text}
+                            </p>
+                            <div className="bg-white text-blue-700 py-1.5 rounded-xl text-center text-[10px] font-black shadow-inner">
+                                یک گفتگو را برای ارسال انتخاب کنید
+                            </div>
+                        </div>
+                    )}
                     {getSortedChannels().length === 0 && !searchTerm && (
                         <div className="flex flex-col items-center justify-center h-40 text-gray-400 p-10 text-center">
                             <MessageCircle size={32} className="mb-2 opacity-20" />

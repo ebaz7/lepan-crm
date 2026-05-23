@@ -188,6 +188,19 @@ function App() {
             });
         } catch(e) { console.error("Push Listener Error", e); }
 
+        // --- ANDROID SHARE INTENT SUPPORT ---
+        try {
+            CapacitorApp.addListener('appRestoredResult', (data: any) => {
+                if (data.pluginId === 'Share' || data.pluginId === 'App') {
+                    const result = data.data;
+                    if (result && (result.url || result.text)) {
+                         setSharedData({ fileUrl: result.url, text: result.text, title: result.title });
+                         setActiveTab('chat');
+                    }
+                }
+            });
+        } catch (e) { console.error("Share Intent Error", e); }
+
         return () => {
             if (backListener) backListener.remove();
         };
@@ -313,6 +326,23 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const handleUrlOpen = (data: any) => {
+        try {
+            const url = new URL(data.url);
+            const params = new URLSearchParams(url.search);
+            const sUrl = params.get('sharedFileUrl');
+            const sText = params.get('sharedText');
+            if (sUrl || sText) {
+                setSharedData({ fileUrl: sUrl || undefined, text: sText || undefined });
+                setActiveTab('chat');
+            }
+        } catch (e) {}
+    };
+
+    if (isNative) {
+        CapacitorApp.addListener('appUrlOpen', handleUrlOpen);
+    }
+
     const params = new URLSearchParams(window.location.search);
     const sharedFileUrl = params.get('sharedFileUrl');
     const sharedText = params.get('sharedText');
@@ -706,14 +736,16 @@ function App() {
                 </div>
             )}
 
-            <div className={`relative ${activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'h-full'}`}>
+            <div className="flex-1 relative flex flex-col min-h-0">
                 {loading && (
                     <div className="fixed top-20 right-4 z-[999] bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 shadow-lg flex items-center gap-2 animate-fade-in">
                         <Loader2 size={16} className="animate-spin text-blue-600" />
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">در حال بروزرسانی دیتابیس...</span>
                     </div>
                 )}
-                {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />}
+                <div className={activeTab === 'dashboard' ? 'block h-full' : 'hidden'}>
+                    <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />
+                </div>
                 {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                 {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
                 {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
@@ -731,7 +763,8 @@ function App() {
                 {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                 {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
                 {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} />}
-                {activeTab === 'chat' && (
+                
+                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}
@@ -739,7 +772,7 @@ function App() {
                         sharedData={sharedData}
                         onClearSharedData={() => setSharedData(null)}
                     />
-                )} 
+                </div> 
             </div>
             </Layout>
         )}

@@ -44,7 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   // Mobile Drawer State
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   // PWA & Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
@@ -55,12 +55,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   const [showProfileModal, setShowProfileModal] = useState(false);
   
   // Local Profile Form State
-  const [profileForm, setProfileForm] = useState({
+  const [profileForm, setProfileForm] = useState<{
+      password?: string;
+      confirmPassword?: string;
+      telegramChatId: string;
+      phoneNumber: string;
+      receiveNotifications: boolean;
+      mobileNavOrder: string[];
+  }>({
       password: '',
       confirmPassword: '',
       telegramChatId: '',
       phoneNumber: '',
-      receiveNotifications: true
+      receiveNotifications: true,
+      mobileNavOrder: []
   });
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -77,7 +85,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
             confirmPassword: '',
             telegramChatId: currentUser.telegramChatId || '',
             phoneNumber: currentUser.phoneNumber || '',
-            receiveNotifications: currentUser.receiveNotifications !== false 
+            receiveNotifications: currentUser.receiveNotifications !== false,
+            mobileNavOrder: currentUser.mobileNavOrder || []
         });
     }
   }, [showProfileModal, currentUser]);
@@ -224,6 +233,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       updates.telegramChatId = profileForm.telegramChatId;
       updates.phoneNumber = profileForm.phoneNumber;
       updates.receiveNotifications = profileForm.receiveNotifications;
+      updates.mobileNavOrder = profileForm.mobileNavOrder;
       try { await updateUser({ ...currentUser, ...updates }); alert('اطلاعات با موفقیت بروزرسانی شد.'); setProfileForm(prev => ({...prev, password: '', confirmPassword: ''})); setShowProfileModal(false); window.location.reload(); } catch (err) { alert('خطا در بروزرسانی اطلاعات'); } 
   };
 
@@ -282,6 +292,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   }
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
+
+  // Dynamic Navigation Logic
+  const mobileNavOrder_val = currentUser.mobileNavOrder || settings?.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'];
+
+  const allAvailableItems = navItems.filter(item => {
+      // Dashboard is usually always there if possible
+      if (item.id === 'dashboard') return true;
+      return true; // navItems is already filtered by perms
+  });
+
+  const sortedItems = [...allAvailableItems].sort((a, b) => {
+      const idxA = mobileNavOrder_val.indexOf(a.id);
+      const idxB = mobileNavOrder_val.indexOf(b.id);
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+  });
+
+  // Max 5 items in bottom bar (including "More" if needed)
+  const limit = 5;
+  const hasMore = sortedItems.length > limit;
+  const bottomVisibleItems = hasMore ? sortedItems.slice(0, limit - 1) : sortedItems;
+  const menuItems = hasMore ? sortedItems.slice(limit - 1) : [];
 
   const NotificationDropdown = () => ( 
     <div role="dialog" aria-label="اعلان‌ها" className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 glass-panel rounded-xl shadow-2xl border border-gray-200/50 dark:border-white/10 text-gray-800 dark:text-gray-200 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">
@@ -367,6 +401,78 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                         </div>
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-500">شماره موبایل (واتساپ)</label><input type="tel" value={profileForm.phoneNumber} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="98912..."/></div>
                         
+                        <div className="space-y-4 pt-4 border-t">
+                            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2"><Smartphone size={16}/> اولویت نوار پایین موبایل</h4>
+                            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-[10px] text-blue-700 leading-relaxed mb-2">
+                                ترتیب آیکون‌ها در نوار پایین گوشی را می‌توانید شخصی‌سازی کنید.
+                            </div>
+                            <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                                {(profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings']).map((itemId, idx) => {
+                                    const navLabel = {
+                                        dashboard: 'داشبورد',
+                                        create: 'ثبت پرداخت',
+                                        manage: 'سوابق پرداخت',
+                                        'create-exit': 'ثبت خروج',
+                                        'manage-invoices': 'مدیریت فاکتورها',
+                                        'manage-exit': 'سوابق خروج',
+                                        warehouse: 'مدیریت انبار',
+                                        security: 'انتظامات',
+                                        meetings: 'جلسات تولید',
+                                        purchase: 'درخواست خرید',
+                                        chat: 'گفتگو',
+                                        knowledge: 'اطلاعات و یادداشت ها',
+                                        trade: 'بازرگانی',
+                                        balances: 'مانده حساب مشتریان',
+                                        products: 'کالاها',
+                                        sales: 'مشتریان',
+                                        tickets: 'تیکت‌ها',
+                                        users: 'کاربران',
+                                        settings: 'تنظیمات'
+                                    }[itemId] || itemId;
+
+                                    return (
+                                        <div key={itemId} className="flex items-center justify-between bg-white p-1.5 rounded-lg border border-gray-100 shadow-sm">
+                                            <span className="text-[10px] font-bold text-gray-700 truncate">{navLabel}</span>
+                                            <div className="flex gap-1">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(profileForm.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx > 0) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx-1];
+                                                                order[idx-1] = temp;
+                                                                setProfileForm({...profileForm, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === 0}
+                                                    >
+                                                        <RefreshCw size={12} className="rotate-90"/>
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(profileForm.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx < order.length - 1) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx+1];
+                                                                order[idx+1] = temp;
+                                                                setProfileForm({...profileForm, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === (profileForm.mobileNavOrder?.length || 19) - 1}
+                                                    >
+                                                        <RefreshCw size={12} className="-rotate-90"/>
+                                                    </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {canSeeNotifications && (
                             <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 p-3 rounded-lg">
                                 <input type="checkbox" checked={profileForm.receiveNotifications} onChange={e => setProfileForm({...profileForm, receiveNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
@@ -549,82 +655,45 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           </div>
       )}
 
-      {/* Mobile Bottom Navigation */}
-      <div className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out ${activeTab !== 'chat' ? 'bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-950/90 backdrop-blur-3xl border-t border-gray-200/50 dark:border-white/10 flex justify-around items-center pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] px-2 shadow-[0_-8px_30px_rgb(0,0,0,0.08)]' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
-          {activeTab !== 'chat' && (
-             <>
-                <button 
-                    onClick={() => setActiveTab('dashboard')} 
-                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'dashboard' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                >
-                    <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                        <LayoutDashboard size={20} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
-                    </div>
-                    <span className="text-[10px] font-bold">داشبورد</span>
-                    {activeTab === 'dashboard' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                </button>
-
-                {canSeeTrade && (
-                    <button 
-                        onClick={() => setActiveTab('trade')} 
-                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'trade' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                    >
-                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'trade' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                            <Container size={20} strokeWidth={activeTab === 'trade' ? 2.5 : 2} />
-                        </div>
-                        <span className="text-[10px] font-bold">بازرگانی</span>
-                        {activeTab === 'trade' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                    </button>
-                )}
-
-                {canCreatePayment && (
-                    <button 
-                        onClick={() => setActiveTab('create')} 
-                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'create' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                    >
-                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'create' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                            <PlusCircle size={20} strokeWidth={activeTab === 'create' ? 2.5 : 2} />
-                        </div>
-                        <span className="text-[10px] font-bold">ثبت</span>
-                        {activeTab === 'create' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                    </button>
-                )}
-
-                {canManageWarehouse && (
-                    <button 
-                        onClick={() => setActiveTab('warehouse')} 
-                        className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'warehouse' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                    >
-                        <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'warehouse' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                            <Package size={20} strokeWidth={activeTab === 'warehouse' ? 2.5 : 2} />
-                        </div>
-                        <span className="text-[10px] font-bold">انبار</span>
-                        {activeTab === 'warehouse' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                    </button>
-                )}
-
-                <button 
-                    onClick={() => setActiveTab('chat')} 
-                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${activeTab === 'chat' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                >
-                    <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                        <MessageSquare size={20} strokeWidth={activeTab === 'chat' ? 2.5 : 2} />
-                        {unreadChatCount > 0 && <span className="absolute -top-0.5 right-1/4 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 animate-pulse"></span>}
-                    </div>
-                    <span className="text-[10px] font-bold">گفتگو</span>
-                    {activeTab === 'chat' && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                </button>
-                
-                <button 
-                    onClick={() => setShowMobileMenu(true)} 
-                    className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'}`}
-                >
-                    <div className="p-1.5">
-                        <Menu size={20} strokeWidth={showMobileMenu ? 2.5 : 2} />
-                    </div>
-                    <span className="text-[10px] font-bold">بیشتر</span>
-                </button>
-             </>
+      {/* Mobile Bottom Navigation - Attractive Float Pill */}
+      <div 
+        className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl 
+        ${activeTab !== 'dashboard' ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100 scale-100'}`}
+      >
+          {bottomVisibleItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                  <button 
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)} 
+                      className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
+                  >
+                      <div className={`p-2 rounded-2xl transition-all duration-300 ${isActive ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
+                          <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'animate-pulse-subtle' : ''}/>
+                          {item.id === 'chat' && unreadChatCount > 0 && (
+                            <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
+                          )}
+                      </div>
+                      <span className={`text-[9px] font-black tracking-tight transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 scale-75 h-0 overflow-hidden'}`}>{item.label}</span>
+                      {isActive && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
+                  </button>
+              );
+          })}
+          
+          {hasMore && (
+              <button 
+                  onClick={() => setShowMobileMenu(true)} 
+                  className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
+              >
+                  <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
+                      <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
+                      {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
+                        <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
+                      )}
+                  </div>
+                  <span className={`text-[9px] font-black tracking-tight transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'opacity-100' : 'opacity-0 scale-75 h-0 overflow-hidden'}`}>بیشتر</span>
+              </button>
           )}
       </div>
 
