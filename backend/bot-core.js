@@ -1142,7 +1142,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                     return (b.accountCode || '').toLowerCase().includes(normTerm) || 
                            (b.name || '').toLowerCase().includes(normTerm);
                 });
-            });
+            }).sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
 
             if (found.length === 0) {
                 return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد (نام یا کد):`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف و بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
@@ -2505,7 +2505,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS' || data === 'SALES_BAL_DOWNLOAD_CREDITORS') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS';
         const rawList = db.customerBalances || [];
-        const filtered = rawList.filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار');
+        const filtered = rawList
+            .filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار')
+            .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
         
         if (filtered.length === 0) {
             return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
@@ -2536,7 +2538,9 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' || data === 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX';
         const rawList = db.customerBalances || [];
-        const filtered = rawList.filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار');
+        const filtered = rawList
+            .filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار')
+            .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
         
         if (filtered.length === 0) {
             return sendFn(chatId, `⚠️ هیچ رکوردی برای لیست ${isDebtors ? "بدهکاران" : "بستانکاران"} یافت نشد.`, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
