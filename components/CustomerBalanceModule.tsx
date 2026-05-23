@@ -474,9 +474,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             </div>
           </div>
 
-          {/* List Content */}
+          {/* List Content - Mobile Optimized */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-right border-collapse text-xs">
+            <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-zinc-800">
                   <th className="py-3 px-4 font-bold">کد حسابداری</th>
@@ -540,6 +540,42 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                 )}
               </tbody>
             </table>
+            
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3 p-4">
+              {loading ? (
+                <div className="py-10 text-center text-gray-400">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500" />
+                </div>
+              ) : filteredBalances.length === 0 ? (
+                <div className="py-10 text-center text-gray-400">
+                  موردی یافت نشد.
+                </div>
+              ) : (
+                filteredBalances.map((item) => (
+                  <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right">
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-gray-900 dark:text-zinc-100">{item.name}</span>
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] ${
+                          item.type === 'بدهکار' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {item.type}
+                        </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mb-3 font-mono">{item.accountCode}</div>
+                    <div className="flex justify-between items-center text-sm font-bold">
+                        <span className="text-zinc-900 dark:text-zinc-100">{item.balance.toLocaleString()} ریال</span>
+                        <button
+                          onClick={() => setStmtModalCode(item.accountCode)}
+                          className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-xs"
+                        >
+                          صورتحساب‌ها
+                        </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

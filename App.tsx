@@ -118,11 +118,11 @@ function App() {
       setActiveTabState(tab); 
       if (addToHistory) {
           safePushState({ tab }, '', `#${tab}`); 
-          // If we're going to a main module from anything other than dashboard, 
-          // push state but keep history manageable
-          if (tab !== tabHistory[tabHistory.length - 1]) {
-              setTabHistory(prev => [...prev.slice(-9), tab]);
-          }
+          // Functional update to avoid closure staleness
+          setTabHistory(prev => {
+              if (tab === prev[prev.length - 1]) return prev;
+              return [...prev.slice(-9), tab];
+          });
       }
   };
 
@@ -152,9 +152,13 @@ function App() {
                 }
 
                 // 2. Check for sub-tab/sub-view back selector
-                const subTabBtn = document.querySelector('[data-subtab-back="true"]');
-                if (subTabBtn) {
-                    (subTabBtn as HTMLElement).click();
+                const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
+                const visibleSubTabBtn = subTabBtns.find(el => {
+                   const style = window.getComputedStyle(el);
+                   return style.display !== 'none' && style.visibility !== 'hidden';
+                });
+                if (visibleSubTabBtn) {
+                    visibleSubTabBtn.click();
                     return;
                 }
 
@@ -163,14 +167,15 @@ function App() {
                 const currentTab = activeTabRef.current;
 
                 if (currentHistory.length > 1) {
-                    const newHistory = [...currentHistory];
-                    newHistory.pop(); // remove current
-                    const prevTab = newHistory[newHistory.length - 1];
-                    setTabHistory(newHistory);
-                    requestAnimationFrame(() => {
-                        setActiveTabState(prevTab); // Use state only to avoid loop
+                    setTabHistory(prev => {
+                        if (prev.length <= 1) return prev;
+                        const newHistory = [...prev];
+                        newHistory.pop();
+                        const prevTab = newHistory[newHistory.length - 1];
+                        setActiveTabState(prevTab);
+                        safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
+                        return newHistory;
                     });
-                    safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
                 } else if (currentTab !== 'dashboard') {
                     setActiveTab('dashboard');
                 } else if (!canGoBack) {
@@ -307,9 +312,13 @@ function App() {
         }
 
         // 2. If a subtab back button (e.g., records details, bot leads subtab) is in DOM, click it instead!
-        const subTabBtn = document.querySelector('[data-subtab-back="true"]');
-        if (subTabBtn) {
-            (subTabBtn as HTMLElement).click();
+        const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
+        const visibleSubTabBtn = subTabBtns.find(el => {
+           const style = window.getComputedStyle(el);
+           return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+        if (visibleSubTabBtn) {
+            visibleSubTabBtn.click();
             const currentTab = activeTabRef.current;
             safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
             return;

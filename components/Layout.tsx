@@ -663,7 +663,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       {/* Mobile Bottom Navigation - Attractive Float Pill */}
       <div 
         className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl 
-        ${activeTab !== 'dashboard' ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100 scale-100'}`}
+        ${activeTab !== 'dashboard' ? 'hidden translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100 scale-100'}`}
       >
           {bottomVisibleItems.map((item) => {
               const Icon = item.icon;
