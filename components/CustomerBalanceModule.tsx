@@ -98,60 +98,74 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
         const validRecords: any[] = [];
         for (const row of parsedRows) {
+          const keys = Object.keys(row);
+          if (keys.length === 0) continue;
+
           // Robust column extraction logic mappings
-          const accountCode = String(
+          const accountCodeRow = 
             row['کد تفصیلی'] || 
             row['کد حساب'] || 
             row['کد حسابداری'] || 
+            row['کد'] || 
             row['AccountCode'] || 
             row['کد کل'] || 
-            row['کد'] || 
-            ''
-          ).trim();
+            row['کد معین'] ||
+            row['کد حساب تفصیلی'] ||
+            row['Code'] ||
+            row['کد مشتری'];
 
-          const name = String(
+          const accountCode = String(accountCodeRow || row[keys[0]] || '').trim();
+
+          const nameRow = 
+            row['عنوان'] || 
             row['نام شخص'] || 
             row['نام مشتری'] || 
             row['نام حساب'] || 
             row['CustomerName'] || 
             row['Name'] || 
-            row['نام تفصیلی'] || 
-            ''
-          ).trim();
+            row['نام تفصیلی'] ||
+            row['نام خانوادگی'] ||
+            row['مشتری'];
+
+          const name = String(nameRow || row[keys[1]] || '').trim();
+
+          // Skipping header if mistakenly parsed as data
+          if (name === 'عنوان' || accountCode === 'کد تفصیلی' || accountCode === 'کد') continue;
 
           // Standard distinct Debit vs Credit columns check
-          const debitVal = Number(row['بدهکار'] || row['Debit'] || 0);
-          const creditVal = Number(row['بستانکار'] || row['Credit'] || 0);
+          const debitVal = Number(String(row['بدهکار'] || row['Debit'] || row[keys[2]] || 0).replace(/,/g, ''));
+          const creditVal = Number(String(row['بستانکار'] || row['Credit'] || row[keys[3]] || 0).replace(/,/g, ''));
+          const rawBalance = Number(String(row['مانده'] || row['مانده حساب'] || row['Balance'] || row[keys[5]] || 0).replace(/,/g, ''));
+          const typeStr = String(row['تشخیص'] || row['وضعیت'] || row['نوع'] || row[keys[4]] || '').trim();
 
           let balance = 0;
           let type: 'بدهکار' | 'بستانکار' = 'بدهکار';
 
-          if (debitVal > 0) {
-            balance = debitVal;
-            type = 'بدهکار';
-          } else if (creditVal > 0) {
-            balance = creditVal;
-            type = 'بستانکار';
-          } else {
-            // Check fallback single column
-            balance = Number(row['مانده'] || row['مانده حساب'] || row['Balance'] || 0);
-            const typeStr = String(
-              row['تشخیص'] || 
-              row['وضعیت'] || 
-              row['نوع'] || 
-              row['Type'] || 
-              row['ماهیت'] || 
-              'بدهکار'
-            ).trim();
-
-            if (typeStr.includes('بست') || typeStr.includes('بستانکار') || typeStr.includes('CR') || typeStr.includes('Credit')) {
+          if (rawBalance > 0) {
+            balance = rawBalance;
+            if (typeStr.includes('بست') || typeStr.includes('بستانکار') || typeStr === 'بس' || typeStr.includes('CR') || typeStr.includes('Credit')) {
               type = 'بستانکار';
             } else {
               type = 'بدهکار';
             }
+          } else if (debitVal > 0 && creditVal === 0) {
+            balance = debitVal;
+            type = 'بدهکار';
+          } else if (creditVal > 0 && debitVal === 0) {
+            balance = creditVal;
+            type = 'بستانکار';
+          } else if (debitVal > 0 || creditVal > 0) {
+            // Net balance logic if both have values
+            if (debitVal >= creditVal) {
+              balance = debitVal - creditVal;
+              type = 'بدهکار';
+            } else {
+              balance = creditVal - debitVal;
+              type = 'بستانکار';
+            }
           }
 
-          if (accountCode && name) {
+          if (accountCode && name && accountCode !== 'undefined' && name !== 'undefined') {
             validRecords.push({
               accountCode,
               name,

@@ -142,7 +142,7 @@ const KEYBOARDS = {
             [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
-            [{ text: '💰 گزارشات مالی و مانده حساب', callback_data: 'SALES_FIN_REPORTS' }],
+            [{ text: '💰 گزارشات مالی', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
             [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
             [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
@@ -188,8 +188,9 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '📊 خلاصه وضعیت امروز', callback_data: 'RPT_DAILY' }],
             [{ text: '🗓 عملکرد ماه جاری', callback_data: 'RPT_MONTHLY' }],
+            [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
             [{ text: '⏳ وضعیت کارتابل‌ها (مانده)', callback_data: 'RPT_PENDING' }],
-            [{ text: '💰 استعلام مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
+            [{ text: '💰 گزارشات مالی (دیگر)', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ] 
     },
@@ -2297,7 +2298,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     // --- NAVIGATION ---
-    if (data.startsWith('MENU_')) {
+    if (data.startsWith('MENU_') || data === 'SALES_FIN_REPORTS') {
         if (isGroup) return; // Silent in groups
         session.state = 'IDLE';
         if (data === 'MENU_MAIN') return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN });
@@ -2305,16 +2306,25 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
         if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
         if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
-        if (data === 'MENU_SALES') return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
+        
+        if (data === 'MENU_SALES') {
+            session.lastFinMenu = 'MENU_SALES';
+            return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
+        }
+        
         if (data === 'SALES_FIN_REPORTS') {
             const inline_keyboard = [
                 [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
                 [{ text: '🏢 لیست بدهکاری/بستانکاری کلی', callback_data: 'RPT_BALANCES_SUMMARY' }],
-                [{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]
+                [{ text: '🔙 بازگشت', callback_data: session.lastFinMenu || 'MENU_MAIN' }]
             ];
-            return sendFn(chatId, "💰 گزارشات مالی فروش:", { reply_markup: { inline_keyboard } });
+            return sendFn(chatId, "💰 گزارشات مالی:", { reply_markup: { inline_keyboard } });
         }
-        if (data === 'MENU_REPORTS') return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+        
+        if (data === 'MENU_REPORTS') {
+            session.lastFinMenu = 'MENU_REPORTS';
+            return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+        }
     }
 
     // Knowledge Base logic
@@ -2480,7 +2490,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 { text: '🔍 جستجوی مشتری (خاص)', callback_data: 'SALES_BAL_SPECIFIC_SEARCH' }
             ],
             [
-                { text: '🔙 بازگشت به منوی فروش', callback_data: 'MENU_SALES' }
+                { text: '🔙 بازگشت', callback_data: session.lastFinMenu === 'MENU_REPORTS' ? 'MENU_REPORTS' : (session.lastFinMenu || 'MENU_SALES') }
             ]
         ];
         

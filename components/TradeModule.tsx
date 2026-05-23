@@ -777,7 +777,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 {/* Header */}
                 <div className="glass-panel border-b p-4 flex justify-between items-center shadow-sm z-10">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setViewMode('dashboard')} className="p-2 hover:bg-gray-100 rounded-full"><ArrowRight /></button>
+                        <button data-subtab-back="true" onClick={() => setViewMode('dashboard')} className="p-2 hover:bg-gray-100 rounded-full"><ArrowRight /></button>
                         <div>
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 {selectedRecord.goodsName}

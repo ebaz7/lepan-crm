@@ -245,17 +245,28 @@ function App() {
 
   useEffect(() => {
     if (isNative) return; 
+    
+    // Ensure we have a base history entry
+    if (window.history.length <= 1) {
+        safeReplaceState({ tab: 'dashboard' }, '', '#dashboard');
+        // Push once so we can "pop" to dashboard without leaving
+        safePushState({ tab: 'dashboard', root: true }, '', '#dashboard');
+    }
+
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase'].includes(hash)) {
-        setActiveTabState(hash); safeReplaceState({ tab: hash }, '', `#${hash}`);
-    } else { safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); }
+    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances'].includes(hash)) {
+        setActiveTabState(hash); 
+        safeReplaceState({ tab: hash }, '', `#${hash}`);
+    } else { 
+        safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); 
+    }
 
     const handlePopState = (event: PopStateEvent) => {
         // 1. If any modal is active in DOM, close it instead of shifting tab!
-        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed');
+        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
         if (activeModals.length > 0) {
             const lastModal = activeModals[activeModals.length - 1];
-            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"]') || 
+            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"], [data-close-announcement="true"]') || 
                              Array.from(lastModal.querySelectorAll('button')).find(btn => {
                                  const txt = (btn.textContent || '').trim();
                                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
@@ -265,9 +276,14 @@ function App() {
             } else {
                 window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
             }
-            // Restore URL to current tab to neutralize browser's navigation pop
+            
+            // Push state back to prevent browser from leaving 
             const currentTab = activeTabRef.current;
             safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
+            // If we're at the very beginning of history, don't let it back out next time either
+            if (window.history.length <= 2) {
+                safePushState({ tab: currentTab, forced: true }, '', `#${currentTab}`);
+            }
             return;
         }
 
@@ -275,7 +291,6 @@ function App() {
         const subTabBtn = document.querySelector('[data-subtab-back="true"]');
         if (subTabBtn) {
             (subTabBtn as HTMLElement).click();
-            // Restore URL to current tab to neutralize browser's navigation pop
             const currentTab = activeTabRef.current;
             safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
             return;

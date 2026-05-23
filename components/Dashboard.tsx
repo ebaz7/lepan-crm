@@ -634,7 +634,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             <Activity size={20} />
                             <h3 className="font-bold">ثبت {announceType === 'task' ? 'تسک' : 'اعلامیه'} جدید</h3>
                         </div>
-                        <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors" data-close-modal="true" aria-label="بستن"><XCircle size={20}/></button>
+                        <button onClick={() => setShowAnnounceModal(false)} className="text-gray-400 hover:text-red-500 transition-colors" data-close-modal="true" data-close-announcement="true" aria-label="بستن"><XCircle size={20}/></button>
                     </div>
                     <div className="p-4 flex flex-col gap-4">
                         <div className="flex bg-gray-100 p-1 rounded-xl">
