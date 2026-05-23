@@ -7,6 +7,7 @@ import { logout, hasPermission, getRolePermissions, updateUser } from '../servic
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { apiCall, resolveImageUrl } from '../services/apiService';
+import { DEFAULT_MOBILE_NAV_ORDER } from '../constants';
 import { Capacitor } from '@capacitor/core';
 
 interface LayoutProps {
@@ -294,7 +295,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
   // Dynamic Navigation Logic
-  const mobileNavOrder_val = currentUser.mobileNavOrder || settings?.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'];
+  const mobileNavOrder_val = currentUser.mobileNavOrder || settings?.mobileNavOrder || DEFAULT_MOBILE_NAV_ORDER;
 
   const allAvailableItems = navItems.filter(item => {
       // Dashboard is usually always there if possible
@@ -407,7 +408,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                                 ترتیب آیکون‌ها در نوار پایین گوشی را می‌توانید شخصی‌سازی کنید.
                             </div>
                             <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
-                                {(profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings']).map((itemId, idx) => {
+                                {(profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : DEFAULT_MOBILE_NAV_ORDER).map((itemId, idx) => {
                                     const navLabel = {
                                         dashboard: 'داشبورد',
                                         create: 'ثبت پرداخت',
@@ -437,7 +438,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                                                     <button 
                                                         type="button"
                                                         onClick={() => {
-                                                            const order = [...(profileForm.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            const defaultOrder = DEFAULT_MOBILE_NAV_ORDER;
+                                                            const currentOrder = profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : defaultOrder;
+                                                            const order = [...currentOrder];
                                                             if (idx > 0) {
                                                                 const temp = order[idx];
                                                                 order[idx] = order[idx-1];
@@ -453,7 +456,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                                                     <button 
                                                         type="button"
                                                         onClick={() => {
-                                                            const order = [...(profileForm.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            const defaultOrder = DEFAULT_MOBILE_NAV_ORDER;
+                                                            const currentOrder = profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : defaultOrder;
+                                                            const order = [...currentOrder];
                                                             if (idx < order.length - 1) {
                                                                 const temp = order[idx];
                                                                 order[idx] = order[idx+1];

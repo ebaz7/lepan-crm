@@ -114,15 +114,13 @@ function App() {
       try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
   };
   
-    const setActiveTab = (tab: string, addToHistory = true) => { 
+  const setActiveTab = (tab: string, addToHistory = true) => { 
       setActiveTabState(tab); 
       if (addToHistory) {
           safePushState({ tab }, '', `#${tab}`); 
           // If we're going to a main module from anything other than dashboard, 
-          // reset history to keep navigation hierarchical if requested by user style
-          if (['warehouse', 'trade', 'balances', 'users', 'settings', 'purchase'].includes(tab)) {
-              setTabHistory(['dashboard', tab]);
-          } else if (tab !== tabHistory[tabHistory.length - 1]) {
+          // push state but keep history manageable
+          if (tab !== tabHistory[tabHistory.length - 1]) {
               setTabHistory(prev => [...prev.slice(-9), tab]);
           }
       }
@@ -153,7 +151,7 @@ function App() {
                     return;
                 }
 
-                // 2. Check if a sub-tab/sub-view back selector is in the DOM
+                // 2. Check for sub-tab/sub-view back selector
                 const subTabBtn = document.querySelector('[data-subtab-back="true"]');
                 if (subTabBtn) {
                     (subTabBtn as HTMLElement).click();
@@ -169,7 +167,10 @@ function App() {
                     newHistory.pop(); // remove current
                     const prevTab = newHistory[newHistory.length - 1];
                     setTabHistory(newHistory);
-                    setActiveTab(prevTab, false);
+                    requestAnimationFrame(() => {
+                        setActiveTabState(prevTab); // Use state only to avoid loop
+                    });
+                    safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
                 } else if (currentTab !== 'dashboard') {
                     setActiveTab('dashboard');
                 } else if (!canGoBack) {

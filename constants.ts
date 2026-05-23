@@ -34,6 +34,8 @@ export const deformatNumberString = (value: string): number => {
   return parseFloat(normalized) || 0;
 };
 
+export const DEFAULT_MOBILE_NAV_ORDER = ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'];
+
 export const INITIAL_ORDERS: PaymentOrder[] = [];
 
 export const getStatusLabel = (status: OrderStatus) => {
