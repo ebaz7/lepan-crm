@@ -519,7 +519,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* PAYMENT DASHBOARD - ONLY IF ACCESS IS GRANTED */}
         {hasPaymentAccess && (
             <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     {statusWidgets.map((widget) => (
                         <div key={widget.key} onClick={() => handleWidgetClick(widget.key === OrderStatus.APPROVED_CEO ? 'pending_all' : widget.key as any)} className={`glass-panel p-4 rounded-2xl border ${widget.border} shadow-sm transition-all relative overflow-hidden group cursor-pointer hover:shadow-md`}>
                             <div className={`absolute top-0 right-0 w-1.5 h-full ${widget.barColor}`}></div>

@@ -1619,36 +1619,35 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     // Default Dashboard View
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Container className="text-blue-600" /> پرونده‌های بازرگانی
                     </h1>
-                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2">
-                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1"><Home size={14}/> خانه</button>
-                        {selectedCompany && <><ChevronRight size={14}/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600">{selectedCompany}</button></>}
-                        {selectedGroup && <><ChevronRight size={14}/> <span>{selectedGroup}</span></>}
+                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
+                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1 shrink-0"><Home size={14}/> خانه</button>
+                        {selectedCompany && <><ChevronRight size={14} className="shrink-0"/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600 shrink-0">{selectedCompany}</button></>}
+                        {selectedGroup && <><ChevronRight size={14} className="shrink-0"/> <span className="shrink-0">{selectedGroup}</span></>}
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <div className="relative">
-                        <input className="border rounded-xl pl-8 pr-3 py-2 text-sm w-48 focus:w-64 transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                    <div className="relative flex-1 sm:flex-none min-w-[120px]">
+                        <input className="w-full border rounded-xl pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
                     </div>
-                    {/* ADDED BUTTON HERE */}
                     <button 
                         onClick={() => setShowArchived(!showArchived)} 
-                        className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'glass-panel text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                        className={`p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'glass-panel text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                        title={showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}
                     >
                         <Archive size={20} />
-                        {showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}
+                        <span className="hidden sm:inline">{showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}</span>
                     </button>
-                    {/* END ADDED BUTTON */}
-                    <button onClick={() => setViewMode('reports')} className="glass-panel border border-gray-300 text-gray-700 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors">
-                        <FileSpreadsheet size={20} /> گزارشات
+                    <button onClick={() => setViewMode('reports')} className="glass-panel border border-gray-300 text-gray-700 p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors" title="گزارشات">
+                        <FileSpreadsheet size={20} /> <span className="hidden sm:inline">گزارشات</span>
                     </button>
-                    <button onClick={() => setShowNewModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors shadow-lg shadow-blue-600/20">
-                        <Plus size={20} /> ثبت پرونده جدید
+                    <button onClick={() => setShowNewModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 font-bold transition-colors shadow-lg shadow-blue-600/20" title="ثبت پرونده جدید">
+                        <Plus size={20} /> <span className="hidden sm:inline">جدید</span>
                     </button>
                 </div>
             </div>

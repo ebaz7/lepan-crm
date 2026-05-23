@@ -187,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       
       if (notifEnabled) { 
           setNotifEnabled(false); 
-          setNotificationPreference(false); 
+          setNotificationPermissionPreference(false); 
           return;
       } 
 
@@ -210,19 +210,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       } catch (err) {
           console.error("Notification toggle error:", err);
           if(!Capacitor.isNativePlatform()) alert("خطا در فعال‌سازی نوتیفیکیشن");
-      }
-  };
-
-  const handleInstallClick = () => { 
-      if (isIOS) {
-          setShowIOSPrompt(true);
-      } else if (deferredPrompt) { 
-          deferredPrompt.prompt(); 
-          deferredPrompt.userChoice.then((choiceResult: any) => { 
-              if (choiceResult.outcome === 'accepted') { setDeferredPrompt(null); } 
-          }); 
-      } else {
-          alert('دستگاه شما از نصب خودکار پشتیبانی نمی‌کند یا برنامه قبلاً نصب شده است.');
       }
   };
 
@@ -296,10 +283,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
-  // Mobile Specific Nav Items (Bottom Bar) dynamically built based on permissions
-  let bottomNavItems = navItems.slice(0, 4);
-  let showMoreButton = true;
-
   const NotificationDropdown = () => ( 
     <div role="dialog" aria-label="اعلان‌ها" className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 glass-panel rounded-xl shadow-2xl border border-gray-200/50 dark:border-white/10 text-gray-800 dark:text-gray-200 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">
         <div className="bg-blue-50 p-3 flex justify-between items-center border-b border-blue-100 shrink-0">
@@ -356,7 +339,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           <div className="blob blob-3"></div>
       </div>
       
-      {/* ... (Update Banner, iOS Prompt, Profile Modal code preserved) ... */}
       {isUpdateAvailable && (<div className="fixed top-0 left-0 right-0 bg-blue-600 text-white z-[9999] p-3 text-center shadow-lg animate-slide-down flex justify-center items-center gap-4"><div className="flex items-center gap-2"><RefreshCw size={20} className="animate-spin"/><span className="font-bold text-sm">نسخه جدید نرم‌افزار در دسترس است!</span></div><button onClick={handleReload} className="glass-panel text-blue-600 px-4 py-1 rounded-full text-xs font-bold hover:bg-blue-50 transition-colors shadow-sm">بروزرسانی (رفرش)</button></div>)}
       
       {/* Profile Modal */}
@@ -490,11 +472,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
           </div>
       </aside>
       
-      {/* Mobile Drawer (Refined Glass Design) */}
+      {/* Mobile Drawer */}
       {showMobileMenu && (
-          <div className="fixed inset-0 z-[60] md:hidden animate-fade-in flex justify-end">
+          <div className="fixed inset-0 z-[100] md:hidden animate-fade-in flex justify-end">
               <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
-              <div className="relative w-72 bg-white/80 backdrop-blur-2xl h-full shadow-2xl flex flex-col transform transition-transform border-l border-white/50 animate-slide-in-right">
+              <div className="relative w-72 bg-white/90 backdrop-blur-2xl h-full shadow-2xl flex flex-col transform transition-transform border-l border-white/50 animate-slide-in-right">
                   {/* Header */}
                   <div className="p-6 border-b border-white/40 flex justify-between items-center bg-white/40">
                       <div className="flex items-center gap-3">
@@ -568,36 +550,46 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
       )}
 
       {/* Mobile Bottom Navigation */}
-      <div className={`md:hidden fixed z-50 transition-all duration-300 ease-in-out ${activeTab === 'dashboard' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
-         {activeTab === 'dashboard' && (
+      <div className={`md:hidden fixed z-[90] transition-all duration-300 ease-in-out ${activeTab !== 'chat' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
+          {activeTab !== 'chat' && (
              <>
-                {bottomNavItems.map((item) => { 
-                    const Icon = item.icon; 
-                    const isActive = activeTab === item.id;
-                    return (
-                        <button 
-                            key={item.id} 
-                            onClick={() => setActiveTab(item.id)} 
-                            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${isActive ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                            <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                            <span className="text-[9px] font-bold mt-0.5">{item.label}</span>
-                        </button>
-                    ); 
-                })}
+                <button 
+                    onClick={() => setActiveTab('dashboard')} 
+                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'dashboard' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                    <LayoutDashboard size={22} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
+                    <span className="text-[9px] font-bold mt-0.5">داشبورد</span>
+                </button>
+
+                {canManageWarehouse && (
+                    <button 
+                        onClick={() => setActiveTab('warehouse')} 
+                        className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'warehouse' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                    >
+                        <Package size={22} strokeWidth={activeTab === 'warehouse' ? 2.5 : 2} />
+                        <span className="text-[9px] font-bold mt-0.5">انبار</span>
+                    </button>
+                )}
+
+                {canSeeTrade && (
+                    <button 
+                        onClick={() => setActiveTab('trade')} 
+                        className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${activeTab === 'trade' ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
+                    >
+                        <Container size={22} strokeWidth={activeTab === 'trade' ? 2.5 : 2} />
+                        <span className="text-[9px] font-bold mt-0.5">بازرگانی</span>
+                    </button>
+                )}
                 
-                {/* Menu Button */}
-                {showMoreButton && (
                 <button 
                     onClick={() => setShowMobileMenu(true)} 
-                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400'}`}
                 >
                     <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
-                    <span className="text-[9px] font-bold mt-0.5">موارد بیشتر</span>
+                    <span className="text-[9px] font-bold mt-0.5">منو</span>
                 </button>
-                )}
              </>
-         )}
+          )}
       </div>
 
       <main className="flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0">
@@ -699,4 +691,5 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
     </div>
   );
 };
+
 export default Layout;

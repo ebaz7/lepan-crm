@@ -86,6 +86,33 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [restoring, setRestoring] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [tempServerHost, setTempServerHost] = useState(localStorage.getItem('app_server_host') || '');
+  
+  const handleTestConnection = async () => {
+      setTestingConnection(true);
+      try {
+          // Use the temp host value if it exists, otherwise it falls back to current runtime BASE_URL
+          const hostToTest = tempServerHost.trim().replace(/\/$/, '');
+          const originalHost = localStorage.getItem('app_server_host');
+          
+          if (hostToTest) localStorage.setItem('app_server_host', hostToTest);
+          
+          const result = await apiCall<{status: string}>('/users'); 
+          if(result) {
+              alert('✅ اتصال با موفقیت برقرار شد. سرور پاسخگو است.');
+              if (hostToTest) localStorage.setItem('app_server_host', hostToTest);
+          } else {
+              throw new Error("No data returned");
+          }
+      } catch (e: any) {
+          alert(`❌ خطا در اتصال: ${e.message || 'سرور یافت نشد'}`);
+          // Revert if it failed and we changed it
+          // localStorage.removeItem('app_server_host'); 
+      } finally {
+          setTestingConnection(false);
+      }
+  };
   
   // Designer State
   const [showDesigner, setShowDesigner] = useState(false);
@@ -493,6 +520,46 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     <button type="button" onClick={handleTestNotification} className="w-full px-4 py-2 rounded-lg border bg-blue-50 border-blue-200 text-blue-700 flex items-center justify-center gap-2 transition-colors hover:bg-blue-100">
                                         <Send size={18}/> <span>ارسال پیام تست</span>
                                     </button>
+                                </div>
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><WifiOff size={20}/> تنظیمات اتصال به سرور (مخصوص اندروید)</h3>
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-[10px] text-blue-700 leading-relaxed">
+                                        اگر در اپلیکیشن اندروید با خطای اتصال مواجه هستید، آدرس کامل سرور را در اینجا وارد کنید. 
+                                        مثال: https://your-server.aistudio.google
+                                    </div>
+                                    <div className="flex flex-col md:flex-row gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">آدرس میزبان (Host)</label>
+                                            <input 
+                                                type="text" 
+                                                value={tempServerHost} 
+                                                onChange={e => setTempServerHost(e.target.value)}
+                                                className="w-full border rounded-lg p-2 text-sm dir-ltr text-left" 
+                                                placeholder="https://..."
+                                            />
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={handleTestConnection}
+                                            disabled={testingConnection}
+                                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold text-sm h-10 mt-auto hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {testingConnection ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18}/>}
+                                            {testingConnection ? 'در حال تست...' : 'تست اتصال'}
+                                        </button>
+                                    </div>
+                                    {tempServerHost && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                localStorage.setItem('app_server_host', tempServerHost.trim().replace(/\/$/, ''));
+                                                alert('آدرس سرور ذخیره شد. برنامه را دوباره باز کنید.');
+                                            }}
+                                            className="text-[10px] text-blue-600 font-bold hover:underline"
+                                        >
+                                            ذخیره آدرس دائمی
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div className="space-y-4">
@@ -1517,8 +1584,27 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         </div>
                     )}
 
-                    <div className="flex justify-end pt-4 border-t sticky bottom-0 glass-panel p-4 shadow-inner md:shadow-none md:static">
-                        <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70">
+                    <div className="flex justify-end pt-4 border-t sticky bottom-0 glass-panel p-4 shadow-inner md:shadow-none md:static gap-2">
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                try {
+                                    // Use absolute path for import in onClick to avoid scope issues or just use the already imported one if possible
+                                    // Since getServerHost is not imported, let's just use it if we can or import it at the top
+                                    const { getServerHost } = await import('../services/apiService');
+                                    const host = getServerHost() || (Capacitor.isNativePlatform() ? 'N/A' : '/');
+                                    alert(`در حال بررسی اتصال به: ${host}`);
+                                    await apiCall('/users');
+                                    alert('اتصال با موفقیت برقرار شد ✅');
+                                } catch (e) {
+                                    alert('خطا در اتصال به سرور ❌\nلطفا آدرس سرور را در بخش اتصالات (API) بررسی کنید.');
+                                }
+                            }}
+                            className="bg-blue-100 text-blue-700 px-4 py-3 rounded-xl text-xs font-black hover:bg-blue-200 transition-colors border border-blue-200"
+                        >
+                            تست اتصال به سرور
+                        </button>
+                        <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70 flex-1 md:flex-none justify-center">
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} ذخیره تنظیمات
                         </button>
                     </div>

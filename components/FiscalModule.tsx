@@ -255,8 +255,8 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
                         </div>
                         <button onClick={handleSaveCompanyConfig} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-sm"><Save size={16}/> ذخیره تغییرات</button>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-right glass-panel rounded-xl border overflow-hidden">
+                    <div className="overflow-x-auto -mx-6 px-6">
+                        <table className="w-full text-sm text-right glass-panel rounded-xl border overflow-hidden min-w-[600px]">
                             <thead className="bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 text-gray-600">
                                 <tr>
                                     <th className="p-3 border-b">نام شرکت</th>
