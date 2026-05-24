@@ -596,9 +596,16 @@ function App() {
      // Safe guard against non-array input
      if (Array.isArray(newList)) {
          const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
+         const NOTIFICATION_HISTORY_KEY = 'notification_history';
+         const history = JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || '[]');
+         
          newEvents.forEach(newItem => {
             const status = newItem.status;
             const isAdmin = user.role === UserRole.ADMIN;
+            const notificationId = `${newItem.trackingNumber}_${status}_${newItem.updatedAt}`;
+            
+            if (history.includes(notificationId)) return;
+            
             if (isAdmin) {
                  const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
                  if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
@@ -608,7 +615,12 @@ function App() {
             else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
             else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
             else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
+            
+            history.push(notificationId);
          });
+         
+         if (history.length > 50) history.splice(0, history.length - 50);
+         localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
      }
 
      if (Array.isArray(announcementsList)) {
