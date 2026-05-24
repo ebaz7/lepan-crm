@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 
 interface LayoutProps {
   children: React.ReactNode;
+  onBack: () => boolean;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   currentUser: User;
@@ -28,7 +29,7 @@ interface LayoutProps {
   unreadChatCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
@@ -724,13 +725,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 </button>
                 ) : (
                 <button 
-                    onClick={() => {
-                        if (activeTab === 'chat') {
-                            window.dispatchEvent(new CustomEvent('GO_BACK_CHAT'));
-                        } else {
-                            setActiveTab('dashboard');
-                        }
-                    }} 
+                    onClick={onBack} 
                     className="flex items-center justify-center w-10 h-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 active:scale-95 transition-all"
                 >
                     <ChevronRight size={24} />

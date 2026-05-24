@@ -712,6 +712,7 @@ function App() {
             <Login onLogin={handleLogin} />
         ) : (
             <Layout 
+            onBack={goBackGlobal}
             activeTab={activeTab} 
             setActiveTab={(t) => { setActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); if(t!=='purchase') setPurchaseInitialTab('REQUESTS'); }} 
             currentUser={currentUser} 

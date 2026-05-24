@@ -1373,9 +1373,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 <div className="mb-1">
                                                     {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                         <img 
-                                                            src={msg.attachment.url} 
+                                                            src={resolveImageUrl(msg.attachment.url)} 
                                                             className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
-                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(resolveImageUrl(msg.attachment!.url)); }}
                                                         />
                                                     ) : (
                                                         <button 
@@ -1407,7 +1407,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                             </div>
                                                             <div className="overflow-hidden flex-1">
                                                                 <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600">{isDownloading[msg.id] ? 'در حال آماده‌سازی...' : 'دانلود فایل'}</div>
+                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
                                                             </div>
                                                         </button>
                                                     )}
