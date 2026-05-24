@@ -695,15 +695,15 @@ function App() {
   return (
     <>
         {toast && toast.show && (
-            <div className="fixed inset-x-4 top-4 z-[9999999] flex justify-center pointer-events-none w-auto">
-                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-center gap-4 min-w-[320px] max-w-[95vw] animate-slide-down backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
-                    <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]"></div>
-                    <div className="bg-gradient-to-tr from-blue-500 to-indigo-600 p-3 rounded-2xl text-white shadow-lg flex-shrink-0 animate-pulse">
-                        <Bell size={24} />
+            <div className="fixed inset-x-0 top-6 z-[9999999] flex justify-center pointer-events-none w-full px-4">
+                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-2xl p-3 flex items-center gap-3 min-w-[280px] max-w-sm animate-slide-down backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
+                    <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                    <div className="bg-gradient-to-tr from-blue-500 to-indigo-600 p-2 rounded-xl text-white shadow-lg flex-shrink-0">
+                        <Bell size={18} />
                     </div>
-                    <div className="flex-1 pr-1 text-right">
-                        <h4 className="font-black text-gray-900 dark:text-white text-sm mb-0.5 tracking-tight">{toast.title}</h4>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed font-bold">{toast.message}</p>
+                    <div className="flex-1 text-right">
+                        <h4 className="font-bold text-gray-900 dark:text-white text-xs mb-0.5 tracking-tight">{toast.title}</h4>
+                        <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-tight font-medium">{toast.message}</p>
                     </div>
                 </div>
             </div>

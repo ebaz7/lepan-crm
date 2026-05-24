@@ -725,10 +725,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
                 ) : (
                 <button 
                     onClick={() => {
-                        if (window.history.length > 2) {
-                            window.history.back();
+                        if (activeTab === 'chat') {
+                            window.dispatchEvent(new CustomEvent('GO_BACK_CHAT'));
                         } else {
-                            window.dispatchEvent(new CustomEvent('GO_BACK'));
+                            setActiveTab('dashboard');
                         }
                     }} 
                     className="flex items-center justify-center w-10 h-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 active:scale-95 transition-all"

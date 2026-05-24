@@ -365,6 +365,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     }, [activeChannel]);
 
+    useEffect(() => {
+        const handleClose = () => setActiveChannel(null);
+        window.addEventListener('GO_BACK_CHAT', handleClose);
+        return () => window.removeEventListener('GO_BACK_CHAT', handleClose);
+    }, []);
+
     // Handle Document Visibility for Notifications
     useEffect(() => {
         const handleVisibilityChange = () => {
