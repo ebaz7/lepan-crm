@@ -62,7 +62,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-6 left-6 right-6 glass-panel border border-white/50 dark:border-white/10 flex justify-around items-center py-2 rounded-[2.5rem] z-50 shadow-2xl backdrop-blur-3xl px-2">
+      <nav className="bottom-nav-bar fixed bottom-6 left-6 right-6 glass-panel border border-white/50 dark:border-white/10 flex justify-around items-center py-2 rounded-[2.5rem] z-50 shadow-2xl backdrop-blur-3xl px-2">
         {(['dashboard', 'create', 'manage', 'settings'] as const).map((id) => {
           const isActive = activeTab === id;
           const config = {

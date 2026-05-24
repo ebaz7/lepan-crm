@@ -23,11 +23,16 @@ import * as XLSX from 'xlsx';
 import PrintPurchaseRequest from './PrintPurchaseRequest';
 import PrintPartDataSheet from './PrintPartDataSheet';
 import { generatePdf } from '../utils/pdfGenerator';
+import { getRolePermissions } from '../services/authService';
 
 const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'DASHBOARD' }) => {
     const isMobile = useIsMobile();
     const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>(initialTab);
     const [loading, setLoading] = useState(false);
+    
+    const perms = React.useMemo(() => {
+        return getRolePermissions(currentUser.role, settings || null, currentUser);
+    }, [currentUser, settings]);
     
     // Requests State
     const [requests, setRequests] = useState<PurchaseRequest[]>([]);
@@ -96,8 +101,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 
     const hasPurchasePerm = (perm: string) => {
         if (currentUser.role === UserRole.ADMIN) return true;
-        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
-        return !!(rolePerms as any)[perm];
+        return !!(perms as any)[perm];
     };
 
     // Components for each tab will go here
@@ -205,6 +209,10 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 
 // --- DASHBOARD TAB ---
 const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: any) => {
+    const perms = React.useMemo(() => {
+        return getRolePermissions(currentUser.role, settings || null, currentUser);
+    }, [currentUser, settings]);
+
     const stats = [
         { label: 'کل درخواست‌ها', count: requests.length, color: 'indigo', icon: ShoppingCart, tab: 'REQUESTS' },
         { label: 'در انتظار تایید', count: requests.filter((r: any) => r.status.includes('PENDING')).length, color: 'amber', icon: ClipboardCheck, tab: 'REQUESTS' },
@@ -278,6 +286,10 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
 
 // --- REQUESTS TAB ---
 const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, isArchive, settings }: any) => {
+    const perms = React.useMemo(() => {
+        return getRolePermissions(currentUser.role, settings || null, currentUser);
+    }, [currentUser, settings]);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [viewingRequest, setViewingRequest] = useState<PurchaseRequest | null>(null);
@@ -321,10 +333,13 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, is
 };
 
 const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseRequest, currentUser: User, onClick: () => void, settings?: SystemSettings }) => {
+    const perms = React.useMemo(() => {
+        return getRolePermissions(currentUser.role, settings || null, currentUser);
+    }, [currentUser, settings]);
+
     const hasPurchasePerm = (perm: string) => {
         if (currentUser.role === UserRole.ADMIN) return true;
-        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
-        return !!(rolePerms as any)[perm];
+        return !!(perms as any)[perm];
     };
 
     const isMyTurn = (r: PurchaseRequest) => {
@@ -793,6 +808,10 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
 
 // --- PARTS TAB ---
 const PartsTab = ({ parts, currentUser, onPartUpdate, settings }: any) => {
+    const perms = React.useMemo(() => {
+        return getRolePermissions(currentUser.role, settings || null, currentUser);
+    }, [currentUser, settings]);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [showDataSheet, setShowDataSheet] = useState<PartMasterData | null>(null);

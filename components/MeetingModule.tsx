@@ -71,6 +71,10 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         }
     };
 
+    useEffect(() => {
+        loadData();
+    }, []);
+
     const handleOpenCreateModal = async () => {
         const nextNum = await getNextMeetingNumber();
         const shamsi = getCurrentShamsiDate();

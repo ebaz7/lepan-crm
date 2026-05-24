@@ -2841,9 +2841,16 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
             if (!canApprove) return sendFn(userId, "⛔ شما دسترسی لازم برای این مرحله را ندارید.");
 
-            if (order.status === 'در انتظار بررسی مالی') order.status = 'تایید مالی / در انتظار مدیریت';
-            else if (order.status === 'تایید مالی / در انتظار مدیریت') order.status = 'تایید مدیریت / در انتظار مدیرعامل';
-            else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') order.status = 'تایید نهایی';
+            if (order.status === 'در انتظار بررسی مالی') {
+                order.status = 'تایید مالی / در انتظار مدیریت';
+                order.approverFinancial = user.fullName;
+            } else if (order.status === 'تایید مالی / در انتظار مدیریت') {
+                order.status = 'تایید مدیریت / در انتظار مدیرعامل';
+                order.approverManager = user.fullName;
+            } else if (order.status === 'تایید مدیریت / در انتظار مدیرعامل') {
+                order.status = 'تایید نهایی';
+                order.approverCeo = user.fullName;
+            }
             
             saveDb(db);
             sendFn(chatId, `✅ سند #${order.trackingNumber} تایید شد.`);
@@ -2865,6 +2872,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             if (!canReject) return sendFn(userId, "⛔ شما دسترسی لازم برای رد این مرحله را ندارید.");
 
             order.status = 'رد شده';
+            order.rejectedBy = user.fullName;
+            order.rejectionReason = 'رد شده از طریق ربات پیام‌رسان';
             saveDb(db);
             sendFn(chatId, `❌ سند #${order.trackingNumber} رد شد.`);
             

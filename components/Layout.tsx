@@ -35,6 +35,17 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
 
   useEffect(() => {
+    const handleGlobalClose = () => {
+        setShowNotifDropdown(false);
+        setShowMobileMenu(false);
+        setShowProfileModal(false);
+        setShowIOSPrompt(false);
+    };
+    window.addEventListener('CLOSE_ACTIVE_MODALS', handleGlobalClose);
+    return () => window.removeEventListener('CLOSE_ACTIVE_MODALS', handleGlobalClose);
+  }, []);
+
+  useEffect(() => {
     if (propSettings) {
         setSettings(propSettings);
     }
@@ -669,7 +680,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="md:hidden fixed z-[90] bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl"
+            className="bottom-nav-bar md:hidden fixed z-[90] bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl"
           >
               {bottomVisibleItems.map((item) => {
                   const Icon = item.icon;

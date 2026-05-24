@@ -93,7 +93,7 @@ function App() {
       
       // 2. Modals check
       const activeModals = Array.from(
-          document.querySelectorAll('.fixed.inset-0:not(.pointer-events-none):not(.invisible):not(.opacity-0), [role="dialog"], .notification-dropdown-container, .glass-panel.fixed:not(.pointer-events-none), .modal-active')
+          document.querySelectorAll('.fixed.inset-0:not(.pointer-events-none):not(.invisible):not(.opacity-0), [role="dialog"], .notification-dropdown-container, .glass-panel.fixed:not(.pointer-events-none):not(.bottom-nav-bar), .modal-active')
       ).filter(el => {
           const style = window.getComputedStyle(el);
           return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && !el.classList.contains('pointer-events-none');
