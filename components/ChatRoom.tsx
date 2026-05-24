@@ -13,10 +13,6 @@ import {
     Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
 } from 'lucide-react';
 import { sendNotification } from '../services/notificationService';
-import { resolveImageUrl } from '../services/apiService';
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 
 interface ChatRoomProps { 
     currentUser: User | null; 
@@ -127,61 +123,6 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     );
 };
 
-const downloadFileSecure = async (url: string, fileName: string, onProgress?: (p: number) => void) => {
-    try {
-        const fetchUrl = resolveImageUrl(url);
-        
-        if (Capacitor.isNativePlatform()) {
-            // Check if already downloaded
-            try {
-                const stat = await Filesystem.stat({ path: fileName, directory: Directory.Documents });
-                if (stat) {
-                    alert('این فایل قبلاً دانلود شده است (موجود در پوشه Documents دستگاه)');
-                    if (onProgress) onProgress(100);
-                    return;
-                }
-            } catch (e) {
-                // File does not exist, proceed to download
-            }
-        }
-
-        // Simulating some progress anyway to make UX better
-        if (onProgress) {
-            onProgress(10);
-            await new Promise(r => setTimeout(r, 200));
-            onProgress(40);
-        }
-
-        if (Capacitor.isNativePlatform()) {
-            const response = await fetch(fetchUrl);
-            const blob = await response.blob();
-            
-            if (onProgress) onProgress(80);
-            
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = async () => {
-                const base64data = reader.result as string;
-                
-                await Filesystem.writeFile({
-                    path: fileName,
-                    data: base64data,
-                    directory: Directory.Documents
-                });
-                if (onProgress) onProgress(100);
-                
-                alert('فایل با موفقیت دانلود و در پوشه Documents ذخیره شد.');
-            };
-        } else {
-            if (onProgress) onProgress(100);
-            window.open(fetchUrl, '_blank');
-        }
-    } catch (err) {
-        console.error('Download error:', err);
-        alert('خطا در دانلود فایل');
-    }
-};
-
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
@@ -196,30 +137,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return [...safeMessages, ...filteredPending].sort((a, b) => a.timestamp - b.timestamp);
     }, [messages, pendingMessages]);
 
-    const [users, setUsers] = useState<User[]>(() => {
-        try {
-            const item = localStorage.getItem('app_data_users');
-            return item ? JSON.parse(item) : [];
-        } catch { return []; }
-    });
-    const [groups, setGroups] = useState<ChatGroup[]>(() => {
-        try {
-            const item = localStorage.getItem('app_data_groups');
-            return item ? JSON.parse(item) : [];
-        } catch { return []; }
-    });
-    const [tasks, setTasks] = useState<GroupTask[]>(() => {
-        try {
-            const item = localStorage.getItem('app_data_tasks');
-            return item ? JSON.parse(item) : [];
-        } catch { return []; }
-    });
-    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
-        try {
-            const item = localStorage.getItem('app_data_task_groups');
-            return item ? JSON.parse(item) : [];
-        } catch { return []; }
-    });
+    const [users, setUsers] = useState<User[]>([]);
+    const [groups, setGroups] = useState<ChatGroup[]>([]);
+    const [tasks, setTasks] = useState<GroupTask[]>([]);
+    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
     
     // --- UI State ---
     const [activeTab, setActiveTab] = useState<TabType>('CHATS');
@@ -535,7 +456,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true, lastMsg: null, unread: 0 });
         
         users.forEach(u => {
-            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: resolveImageUrl(u.avatar), isOnline: false, lastMsg: null, unread: 0 });
+            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar || null, isOnline: false, lastMsg: null, unread: 0 });
         });
         
         groups.forEach(g => {
@@ -579,7 +500,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 if (last || term) {
                     list.push({
                         type: 'private', id: u.username, name: u.fullName,
-                        avatar: resolveImageUrl(u.avatar), isOnline, lastSeen: u.lastSeen,
+                        avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
                         lastMsg: last, unread: getUnreadCount(u.username, 'private')
                     });
                 }
@@ -591,7 +512,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                      if (!list.find(i => i.id === u.username)) {
                          list.push({
                             type: 'private', id: u.username, name: u.fullName,
-                            avatar: resolveImageUrl(u.avatar), isOnline: false,
+                            avatar: u.avatar || null, isOnline: false,
                             lastMsg: null, unread: 0
                          });
                      }
@@ -1180,7 +1101,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-white/5 relative group ${activeChannel?.id === item.id ? 'bg-blue-50/50 dark:bg-blue-500/10' : ''}`}>
                             <div className="relative">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : item.type === 'task_group' ? 'bg-gradient-to-br from-purple-400 to-purple-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
-                                    {item.avatar ? <img src={resolveImageUrl(item.avatar)} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
+                                    {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
                                 </div>
                                 {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>}
                             </div>
@@ -1393,10 +1314,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
                                                                 setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
                                                                 
-                                                                await downloadFileSecure(msg.attachment!.url, msg.attachment!.fileName, (p) => {
-                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: p }));
-                                                                });
-
+                                                                // Simulate meaningful progress for better UX
+                                                                const steps = [10, 35, 60, 85, 100];
+                                                                for (const s of steps) {
+                                                                    await new Promise(r => setTimeout(r, 200));
+                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: s }));
+                                                                }
+                                                                
+                                                                window.open(msg.attachment!.url, '_blank');
+                                                                
                                                                 setTimeout(() => {
                                                                     setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
                                                                     setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
@@ -1600,12 +1526,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {showImageViewer && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
                     <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
-                    <div className="absolute top-4 right-4 flex gap-4 z-50">
-                        <button onClick={(e) => { 
-                            e.stopPropagation(); 
-                            downloadFileSecure(showImageViewer, 'image_' + Date.now() + '.jpg'); 
-                        }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><DownloadCloud/></button>
-                        <button onClick={(e) => { e.stopPropagation(); setShowImageViewer(null); }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
+                    <div className="absolute top-4 right-4 flex gap-4">
+                        <a href={showImageViewer} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
+                        <button onClick={() => setShowImageViewer(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
                     </div>
                 </div>
             )}
@@ -1631,7 +1554,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             {getAllChannelsForForward().map((item: ChannelItem) => (
                                 <div key={item.id} onClick={() => handleForward(item.id, item.type)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
                                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
-                                        {item.avatar ? <img src={resolveImageUrl(item.avatar)} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
+                                        {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
                                     </div>
                                     <div className="font-bold text-sm tracking-tight">{item.name} <span className="text-xs text-gray-400 font-normal mr-2">({item.type === 'private' ? 'شخصی' : item.type === 'public' ? 'عمومی' : 'گروه'})</span></div>
                                 </div>
@@ -1701,7 +1624,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="relative group/avatar">
                                 <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md overflow-hidden">
-                                    {showGroupInfo.avatar ? <img src={resolveImageUrl(showGroupInfo.avatar)} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
+                                    {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
                                 </div>
                                 {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
                                     <button 
@@ -1779,7 +1702,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         <div key={username} className="flex items-center justify-between group/member p-2 hover:bg-gray-50 rounded-xl transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold overflow-hidden">
-                                                    {u?.avatar ? <img src={resolveImageUrl(u.avatar)} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
+                                                    {u?.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-bold text-gray-800">{u?.fullName || username} {isMe && '(شما)'}</span>
@@ -1853,7 +1776,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setShowContactInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="w-24 h-24 rounded-full bg-white/20 p-1 mb-3">
                                 <div className="w-full h-full rounded-full glass-panel flex items-center justify-center text-blue-600 text-4xl font-black shadow-inner overflow-hidden">
-                                    {showContactInfo.avatar ? <img src={resolveImageUrl(showContactInfo.avatar)} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
+                                    {showContactInfo.avatar ? <img src={showContactInfo.avatar} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
                                 </div>
                             </div>
                             <h3 className="text-xl font-black">{showContactInfo.fullName}</h3>

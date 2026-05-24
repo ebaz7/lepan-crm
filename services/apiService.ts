@@ -15,16 +15,6 @@ export const getServerHost = () => {
     return '';
 };
 
-export const resolveImageUrl = (url: string | null | undefined): string => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-        return url;
-    }
-    const host = getServerHost() || DEFAULT_SERVER_URL;
-    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-    return `${host}${cleanUrl}`;
-};
-
 export const setServerHost = (url: string) => {
     const cleanUrl = url.trim().replace(/\/$/, '');
     localStorage.setItem('app_server_host', cleanUrl);
@@ -46,11 +36,7 @@ export const LS_KEYS = {
     TRADE: 'app_data_trade',
     WH_ITEMS: 'app_data_wh_items',
     WH_TX: 'app_data_wh_tx',
-    NOTES: 'app_data_notes',
-    EXIT_PERMITS: 'app_data_exit_permits',
-    PURCHASE_REQS: 'app_data_purchase_reqs',
-    ANNOUNCEMENTS: 'app_data_announcements',
-    TASK_GROUPS: 'app_data_task_groups'
+    NOTES: 'app_data_notes'
 };
 
 // Exported so App.tsx can use it for instant load
@@ -121,12 +107,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
                     else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
                     else if (endpoint === '/notes') localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(data));
-                    else if (endpoint === '/exit-permits') localStorage.setItem(LS_KEYS.EXIT_PERMITS, JSON.stringify(data));
-                    else if (endpoint === '/purchase-requests') localStorage.setItem(LS_KEYS.PURCHASE_REQS, JSON.stringify(data));
-                    else if (endpoint === '/announcements') localStorage.setItem(LS_KEYS.ANNOUNCEMENTS, JSON.stringify(data));
-                    else if (endpoint === '/groups') localStorage.setItem(LS_KEYS.GROUPS, JSON.stringify(data));
-                    else if (endpoint === '/task-groups') localStorage.setItem(LS_KEYS.TASK_GROUPS, JSON.stringify(data));
-                    else if (endpoint === '/tasks') localStorage.setItem(LS_KEYS.TASKS, JSON.stringify(data));
                 } catch (cacheError) {
                     console.warn("Cache write failed (storage full?)", cacheError);
                 }
@@ -173,12 +153,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             if (endpoint === '/chat') return getLocalData<any>(LS_KEYS.CHAT, []);
             if (endpoint === '/users') return getLocalData<any>(LS_KEYS.USERS, MOCK_USERS);
             if (endpoint === '/notes') return getLocalData<any>(LS_KEYS.NOTES, []);
-            if (endpoint === '/exit-permits') return getLocalData<any>(LS_KEYS.EXIT_PERMITS, []);
-            if (endpoint === '/purchase-requests') return getLocalData<any>(LS_KEYS.PURCHASE_REQS, []);
-            if (endpoint === '/announcements') return getLocalData<any>(LS_KEYS.ANNOUNCEMENTS, []);
-            if (endpoint === '/groups') return getLocalData<any>(LS_KEYS.GROUPS, []);
-            if (endpoint === '/task-groups') return getLocalData<any>(LS_KEYS.TASK_GROUPS, []);
-            if (endpoint === '/tasks') return getLocalData<any>(LS_KEYS.TASKS, []);
         }
         
         throw error;

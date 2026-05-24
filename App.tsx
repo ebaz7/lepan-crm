@@ -77,12 +77,8 @@ function App() {
           document.documentElement.classList.remove('dark');
       }
   };
-  const [orders, setOrders] = useState<PaymentOrder[]>(() => {
-    try { const item = localStorage.getItem('app_data_orders'); return item ? JSON.parse(item) : []; } catch { return []; }
-  });
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    try { const item = localStorage.getItem('app_data_chat'); return item ? JSON.parse(item) : []; } catch { return []; }
-  }); 
+  const [orders, setOrders] = useState<PaymentOrder[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [manageOrdersInitialTab, setManageOrdersInitialTab] = useState<'current' | 'archive'>('current');
