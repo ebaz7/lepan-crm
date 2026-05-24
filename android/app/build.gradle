@@ -34,7 +34,6 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$rootProject.ext.androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$rootProject.ext.androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core:$rootProject.ext.androidxCoreVersion"
-    implementation "androidx.core:core-splashscreen:1.0.1"
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
     testImplementation "junit:junit:$rootProject.ext.junitVersion"

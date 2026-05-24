@@ -4,14 +4,12 @@ import { INITIAL_ORDERS } from '../constants';
 import { Capacitor } from '@capacitor/core';
 
 // تنظیمات آدرس سرور
-let DEFAULT_SERVER_URL = 'https://ais-pre-yaoimdy2j5d5rzt6mmmkq2-97484218589.us-east1.run.app'; 
+let DEFAULT_SERVER_URL = ''; 
 
 export const getServerHost = () => {
     const stored = localStorage.getItem('app_server_host');
     if (stored) return stored.trim().replace(/\/$/, '');
-    if (Capacitor.isNativePlatform()) {
-        if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
-    }
+    if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
     return '';
 };
 

@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit",
     "start": "node server.js",
     "mobile": "npm run build && npx cap sync android && npx cap open android",
-    "build:apk": "node build-android.js",
+    "build:apk": "npm run build && npx cap sync android && echo 'Android project synced. Now build APK in Android Studio.'",
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
     "postinstall": "npx puppeteer browsers install chrome"

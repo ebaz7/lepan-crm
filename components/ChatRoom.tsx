@@ -15,11 +15,9 @@ import {
 import { sendNotification } from '../services/notificationService';
 
 interface ChatRoomProps { 
-    currentUser: User | null; 
+    currentUser: User; 
     preloadedMessages: ChatMessage[]; 
     onRefresh: () => void; 
-    sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
-    onClearSharedData?: () => void;
 }
 
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
@@ -123,7 +121,7 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     );
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
@@ -165,22 +163,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Input & Recording ---
     const [inputText, setInputText] = useState('');
-    const [localSharedData, setLocalSharedData] = useState<{ fileUrl?: string; text?: string; title?: string } | null>(null);
-
-    useEffect(() => {
-        if (sharedData) {
-            setLocalSharedData({
-                fileUrl: sharedData.fileUrl,
-                text: sharedData.text,
-                title: sharedData.title
-            });
-            if (sharedData.text) {
-                setInputText(sharedData.text);
-            }
-            if (onClearSharedData) onClearSharedData();
-        }
-    }, [sharedData]);
-
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -547,7 +529,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Actions ---
     const handleSendMessage = async () => {
-        if ((!inputText.trim() && !localSharedData?.fileUrl) || isUploading) return;
+        if ((!inputText.trim()) || isUploading) return;
 
         if (editingMessageId) {
             const msgToUpdate = displayMessages.find(m => m.id === editingMessageId);
@@ -571,11 +553,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             message: inputText,
             timestamp: Date.now(),
             recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
-            groupId: (activeChannel?.type === 'group' || activeChannel?.type === 'task_group') ? activeChannel.id! : undefined,
-            attachment: localSharedData?.fileUrl ? {
-                fileName: localSharedData.fileUrl.split('/').pop() || 'فایل به اشتراک گذاشته شده',
-                url: localSharedData.fileUrl
-            } : undefined,
+            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
             replyTo: replyingTo ? {
                 id: replyingTo.id,
                 sender: replyingTo.sender,
@@ -587,7 +565,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
         // Optimistic UI Update using pendingMessages
         setPendingMessages(prev => [...prev, newMsg]);
-        setLocalSharedData(null);
         setInputText('');
         setReplyingTo(null);
         setTimeout(scrollToBottom, 50);
@@ -1391,19 +1368,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         {/* Input Area */}
                         <div className="shrink-0 sticky bottom-0 bg-white/90 dark:bg-[#0b141a]/90 backdrop-blur-md glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-[calc(12px+env(safe-area-inset-bottom))] md:pb-2">
                             {/* Reply/Edit Preview */}
-                            {localSharedData && (
-                                <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up bg-blue-50/90 dark:bg-blue-950/90">
-                                    <div className="flex items-center gap-2 border-r-4 border-orange-500 pr-2">
-                                        <Paperclip size={18} className="text-orange-500"/>
-                                        <div className="flex flex-col text-xs">
-                                            <span className="font-bold text-orange-600">فایل پیوست آماده‌ی ارسال</span>
-                                            <span className="text-gray-500 truncate max-w-[200px]">{localSharedData.fileUrl ? localSharedData.fileUrl.split('/').pop() : localSharedData.text}</span>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => { setLocalSharedData(null); }}><X size={18} className="text-gray-400 hover:text-red-500"/></button>
-                                </div>
-                            )}
-
                             {(replyingTo || editingMessageId) && (
                                 <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
                                     <div className="flex items-center gap-2 border-r-4 border-blue-500 pr-2">
@@ -1446,7 +1410,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 />
                             </div>
 
-                            {inputText.trim() || isUploading || localSharedData?.fileUrl ? (
+                            {inputText.trim() || isUploading ? (
                                 <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
                                     {isUploading ? <Loader2 size={24} className="animate-spin"/> : <Send size={24} className={document.dir==='rtl' ? 'rotate-180' : ''}/>}
                                 </button>

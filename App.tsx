@@ -89,7 +89,6 @@ function App() {
   const toastTimeoutRef = useRef<any>(null);
 
   const [backgroundJobs, setBackgroundJobs] = useState<{order: PaymentOrder, type: 'create' | 'approve'}[]>([]);
-  const [sharedData, setSharedData] = useState<{ fileUrl?: string; text?: string; title?: string } | null>(null);
   const processingJobRef = useRef(false);
 
   const isSyncingRef = useRef(false);
@@ -306,31 +305,6 @@ function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sharedFileUrl = params.get('sharedFileUrl');
-    const sharedText = params.get('sharedText');
-    const sharedTitle = params.get('sharedTitle');
-
-    if (sharedFileUrl || sharedText || sharedTitle) {
-      setSharedData({
-        fileUrl: sharedFileUrl || undefined,
-        text: sharedText || undefined,
-        title: sharedTitle || undefined,
-      });
-      // Switch to the chat tab
-      setActiveTab('chat');
-      
-      // Clean up URL query parameters so refresh doesn't trigger again
-      try {
-        const urlWithoutParams = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
-        window.history.replaceState({ path: urlWithoutParams }, '', urlWithoutParams);
-      } catch (e) {
-        console.error("Failed to clean query parameters", e);
-      }
-    }
   }, []);
 
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
@@ -732,8 +706,6 @@ function App() {
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}
                         onRefresh={() => loadData(true)} 
-                        sharedData={sharedData}
-                        onClearSharedData={() => setSharedData(null)}
                     />
                 )} 
             </div>
