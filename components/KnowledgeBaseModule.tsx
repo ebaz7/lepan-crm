@@ -4,7 +4,6 @@ import { BookOpen, Copy, Share2, Check, ExternalLink, Plus, X, Edit2, Trash2, Us
 import { getRolePermissions } from '../services/authService';
 import { saveSettings, getNotes, saveNote, updateNote, deleteNote } from '../services/storageService';
 import { sendNotification } from '../services/notificationService';
-import { saveBlobAndOpenFile } from '../services/fileService';
 
 // --- Modals for better focus handling ---
 
@@ -537,8 +536,13 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
     };
 
     const downloadAsTxt = (text: string, filename: string) => {
+        const element = document.createElement("a");
         const file = new Blob([text], {type: 'text/plain;charset=utf-8'});
-        saveBlobAndOpenFile(file, `${filename}.txt`);
+        element.href = URL.createObjectURL(file);
+        element.download = `${filename}.txt`;
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
     };
 
     const downloadAsPdf = (company: any) => {

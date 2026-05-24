@@ -747,9 +747,9 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <input className="w-full border rounded-xl p-3 bg-gray-50 font-mono text-left dir-ltr" value={editMetadataForm.fileNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, fileNumber: e.target.value})} />
                                 </div>
                                 <div><label className="block text-sm font-bold text-gray-700 mb-1">نام کالا (شرح کلی)</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.goodsName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, goodsName: e.target.value})} /></div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.sellerName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, sellerName: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.mainCurrency || ''} onChange={e => setEditMetadataForm({...editMetadataForm, mainCurrency: e.target.value})}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div></div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.commodityGroup || ''} onChange={e => setEditMetadataForm({...editMetadataForm, commodityGroup: e.target.value})}><option value="">انتخاب...</option>{commodityGroups.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.company || ''} onChange={e => setEditMetadataForm({...editMetadataForm, company: e.target.value})}><option value="">انتخاب...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div></div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">شماره ثبت سفارش</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.registrationNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, registrationNumber: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">بانک عامل</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.operatingBank || ''} onChange={e => setEditMetadataForm({...editMetadataForm, operatingBank: e.target.value})}><option value="">انتخاب...</option>{operatingBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.sellerName || ''} onChange={e => setEditMetadataForm({...editMetadataForm, sellerName: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.mainCurrency || ''} onChange={e => setEditMetadataForm({...editMetadataForm, mainCurrency: e.target.value})}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.commodityGroup || ''} onChange={e => setEditMetadataForm({...editMetadataForm, commodityGroup: e.target.value})}><option value="">انتخاب...</option>{commodityGroups.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><label className="block text-sm font-bold text-gray-700 mb-1">شرکت</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.company || ''} onChange={e => setEditMetadataForm({...editMetadataForm, company: e.target.value})}><option value="">انتخاب...</option>{availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}</select></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-gray-700 mb-1">شماره ثبت سفارش</label><input className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.registrationNumber || ''} onChange={e => setEditMetadataForm({...editMetadataForm, registrationNumber: e.target.value})} /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">بانک عامل</label><select className="w-full border rounded-xl p-3 glass-panel" value={editMetadataForm.operatingBank || ''} onChange={e => setEditMetadataForm({...editMetadataForm, operatingBank: e.target.value})}><option value="">انتخاب...</option>{operatingBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div></div>
                                 <button onClick={saveMetadata} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 mt-4">ذخیره تغییرات</button>
                             </div>
                         </div>
@@ -764,8 +764,8 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div className="space-y-4">
                                 <label className="flex items-center gap-2"><input type="checkbox" checked={stageFormData.isCompleted} onChange={e => setStageFormData({...stageFormData, isCompleted: e.target.checked})} className="w-5 h-5"/> <span className="font-bold">مرحله تکمیل شده است</span></label>
                                 {editingStage === TradeStage.ALLOCATION_QUEUE && (<div className="bg-amber-50 p-3 rounded border border-amber-200 space-y-2"><div><label className="text-xs font-bold block">تاریخ ورود به صف</label><input type="text" className="w-full border rounded p-2 text-sm" placeholder="1403/01/01" value={stageFormData.queueDate || ''} onChange={e => setStageFormData({...stageFormData, queueDate: e.target.value})} /></div>{stageFormData.queueDate && <div className="text-xs text-amber-700 font-bold">مدت انتظار: {calculateDaysDiff(stageFormData.queueDate)} روز</div>}</div>)}
-                                {editingStage === TradeStage.ALLOCATION_APPROVED && (<div className="bg-green-50 p-3 rounded border border-green-200 space-y-2"><div><label className="text-xs font-bold block">شماره فیش/تخصیص</label><input type="text" className="w-full border rounded p-2 text-sm" value={stageFormData.allocationCode || ''} onChange={e => setStageFormData({...stageFormData, allocationCode: e.target.value})} /></div><div className="grid grid-cols-1 md:grid-cols-2 gap-2"><div><label className="text-xs font-bold block">تاریخ تخصیص</label><input type="text" className="w-full border rounded p-2 text-sm" placeholder="1403/01/01" value={stageFormData.allocationDate || ''} onChange={e => setStageFormData({...stageFormData, allocationDate: e.target.value})} /></div><div><label className="text-xs font-bold block">مهلت انقضا</label><input type="text" className="w-full border rounded p-2 text-sm" placeholder="1403/02/01" value={stageFormData.allocationExpiry || ''} onChange={e => setStageFormData({...stageFormData, allocationExpiry: e.target.value})} /></div></div></div>)}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold block">هزینه ریالی</label><input type="text" className="w-full border rounded p-2 text-sm" value={formatNumberString(stageFormData.costRial)} onChange={e => setStageFormData({...stageFormData, costRial: deformatNumberString(e.target.value)})} /></div><div><label className="text-xs font-bold block">هزینه ارزی</label><input type="text" className="w-full border rounded p-2 text-sm" value={formatNumberString(stageFormData.costCurrency)} onChange={e => setStageFormData({...stageFormData, costCurrency: deformatNumberString(e.target.value)})} /></div></div>
+                                {editingStage === TradeStage.ALLOCATION_APPROVED && (<div className="bg-green-50 p-3 rounded border border-green-200 space-y-2"><div><label className="text-xs font-bold block">شماره فیش/تخصیص</label><input type="text" className="w-full border rounded p-2 text-sm" value={stageFormData.allocationCode || ''} onChange={e => setStageFormData({...stageFormData, allocationCode: e.target.value})} /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold block">تاریخ تخصیص</label><input type="text" className="w-full border rounded p-2 text-sm" placeholder="1403/01/01" value={stageFormData.allocationDate || ''} onChange={e => setStageFormData({...stageFormData, allocationDate: e.target.value})} /></div><div><label className="text-xs font-bold block">مهلت انقضا</label><input type="text" className="w-full border rounded p-2 text-sm" placeholder="1403/02/01" value={stageFormData.allocationExpiry || ''} onChange={e => setStageFormData({...stageFormData, allocationExpiry: e.target.value})} /></div></div></div>)}
+                                <div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold block">هزینه ریالی</label><input type="text" className="w-full border rounded p-2 text-sm" value={formatNumberString(stageFormData.costRial)} onChange={e => setStageFormData({...stageFormData, costRial: deformatNumberString(e.target.value)})} /></div><div><label className="text-xs font-bold block">هزینه ارزی</label><input type="text" className="w-full border rounded p-2 text-sm" value={formatNumberString(stageFormData.costCurrency)} onChange={e => setStageFormData({...stageFormData, costCurrency: deformatNumberString(e.target.value)})} /></div></div>
                                 <div><label className="text-xs font-bold block">توضیحات</label><textarea className="w-full border rounded p-2 text-sm h-24" value={stageFormData.description || ''} onChange={e => setStageFormData({...stageFormData, description: e.target.value})} /></div>
                                 <div><label className="text-xs font-bold block mb-1">فایل‌های ضمیمه</label><div className="flex items-center gap-2 mb-2"><input type="file" ref={fileInputRef} className="hidden" onChange={handleStageFileChange} /><button onClick={() => fileInputRef.current?.click()} disabled={uploadingStageFile} className="bg-gray-100 border px-3 py-1 rounded text-xs hover:bg-gray-200">{uploadingStageFile ? 'در حال آپلود...' : 'افزودن فایل'}</button></div><div className="space-y-1">{stageFormData.attachments?.map((att, i) => (<div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded text-xs"><a href={att.url} target="_blank" className="text-blue-600 truncate max-w-[200px]">{att.fileName}</a><button onClick={() => setStageFormData({...stageFormData, attachments: stageFormData.attachments?.filter((_, idx) => idx !== i)})} className="text-red-500"><X size={14}/></button></div>))}</div></div>
                                 <button onClick={handleSaveStage} className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700">ذخیره تغییرات</button>
@@ -936,7 +936,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <button onClick={handleAddItem} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 h-[38px] min-w-[40px] flex items-center justify-center">{editingItemId ? <Save size={18}/> : <Plus size={18}/>}</button>
                                     {editingItemId && <button onClick={() => { setEditingItemId(null); setNewItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, hsCode: '', weightStr: '', unitPriceStr: '' }); }} className="bg-gray-200 text-gray-700 p-2 rounded-lg hover:bg-gray-300 h-[38px]"><X size={18}/></button>}
                                 </div>
-                                <div className="hidden lg:block overflow-x-auto">
+                                <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-right">
                                         <thead className="bg-gray-100 text-gray-700"><tr><th className="p-3">شرح</th><th className="p-3">HS Code</th><th className="p-3">وزن</th><th className="p-3">فی</th><th className="p-3">قیمت کل</th><th className="p-3">عملیات</th></tr></thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -953,9 +953,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </td>
                                                 </tr>
                                             ))}
-                                        </tbody>
-                                        <tfoot className="bg-blue-50 font-bold">
-                                            <tr>
+                                            <tr className="bg-blue-50 font-bold">
                                                 <td className="p-3">جمع کل</td>
                                                 <td></td>
                                                 <td className="p-3 font-mono">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.weight,0))}</td>
@@ -963,36 +961,8 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                 <td className="p-3 font-mono text-blue-700">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.totalPrice,0))} {selectedRecord.mainCurrency}</td>
                                                 <td></td>
                                             </tr>
-                                        </tfoot>
+                                        </tbody>
                                     </table>
-                                </div>
-
-                                {/* Mobile Items View */}
-                                <div className="lg:hidden space-y-3">
-                                    {selectedRecord.items.map((item) => (
-                                        <div key={item.id} className={`glass-panel p-4 rounded-xl border border-gray-100 shadow-sm relative ${editingItemId === item.id ? 'border-blue-400 ring-2 ring-blue-100' : ''}`}>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="font-bold text-gray-800">{item.name}</div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => handleEditItem(item)} className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Edit size={16}/></button>
-                                                    <button onClick={() => handleRemoveItem(item.id)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 size={16}/></button>
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">HS Code:</span> <span className="font-mono font-bold">{item.hsCode || '-'}</span></div>
-                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">وزن:</span> <span className="font-mono font-bold">{formatNumberString(item.weight)} KG</span></div>
-                                                <div className="bg-gray-50 p-2 rounded-lg"><span className="text-gray-500 block mb-0.5">فی ارزی:</span> <span className="font-mono font-bold text-blue-600">{formatNumberString(item.unitPrice)}</span></div>
-                                                <div className="bg-blue-50 p-2 rounded-lg border border-blue-100"><span className="text-blue-500 block mb-0.5">قیمت کل:</span> <span className="font-mono font-bold text-blue-700 text-sm">{formatNumberString(item.totalPrice)} {selectedRecord.mainCurrency}</span></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <div className="bg-blue-600 text-white p-4 rounded-xl shadow-lg shadow-blue-600/20 flex justify-between items-center">
-                                        <div className="text-xs font-bold opacity-80 uppercase tracking-wider">Total Summary</div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] opacity-70">جمع کل پروفرما ({selectedRecord.mainCurrency})</div>
-                                            <div className="text-lg font-black">{formatNumberString(selectedRecord.items.reduce((a,b)=>a+b.totalPrice,0))}</div>
-                                        </div>
-                                    </div>
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-gray-200">
                                     <label className="text-xs font-bold text-gray-700 block mb-1">هزینه حمل کل (Freight)</label>
@@ -1590,7 +1560,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                                         <div className="glass-panel p-6 rounded-xl shadow-sm border mt-6">
                                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><PieChart size={20} className="text-green-600"/> قیمت تمام شده به تفکیک کالا</h3>
-                                            <div className="hidden lg:block overflow-x-auto">
+                                            <div className="overflow-x-auto">
                                                 <table className="w-full text-sm text-right">
                                                     <thead className="bg-gray-100 text-gray-700">
                                                         <tr>
@@ -1635,50 +1605,6 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </tbody>
                                                 </table>
                                             </div>
-
-                                            {/* Mobile Final Cost Cards */}
-                                            <div className="lg:hidden space-y-4">
-                                                {selectedRecord.items.map((item, idx) => {
-                                                    const itemFreightShareCurrency = item.weight * freightPerKgCurrency;
-                                                    const itemAdjustedTotalPriceCurrency = item.totalPrice + itemFreightShareCurrency;
-                                                    const itemFinalCostRial = itemAdjustedTotalPriceCurrency * effectiveRate;
-                                                    const itemFinalCostPerKg = item.weight > 0 ? itemFinalCostRial / item.weight : 0;
-                                                    const itemAdjustedUnitPriceCurrency = item.weight > 0 ? itemAdjustedTotalPriceCurrency / item.weight : 0;
-
-                                                    return (
-                                                        <div key={item.id} className="glass-panel p-4 rounded-xl border border-gray-100 shadow-sm">
-                                                            <div className="flex justify-between items-center mb-3">
-                                                                <span className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{idx + 1}</span>
-                                                                <div className="font-bold text-gray-800 text-right pr-2 truncate">{item.name}</div>
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
-                                                                <div className="bg-gray-50 p-2 rounded-lg">
-                                                                    <span className="text-gray-500 block mb-1">وزن:</span>
-                                                                    <span className="font-mono font-bold text-gray-800">{formatNumberString(item.weight)} KG</span>
-                                                                </div>
-                                                                <div className="bg-gray-50 p-2 rounded-lg">
-                                                                    <span className="text-gray-500 block mb-1">فی پایه (ارزی):</span>
-                                                                    <span className="font-mono font-bold text-gray-800">{formatNumberString(item.unitPrice)}</span>
-                                                                </div>
-                                                                <div className="bg-blue-50 p-2 rounded-lg col-span-2 border border-blue-100">
-                                                                    <span className="text-blue-500 block mb-1">فی نهایی با حمل (ارزی):</span>
-                                                                    <span className="font-mono font-bold text-blue-700 text-sm">{formatNumberString(itemAdjustedUnitPriceCurrency)} {selectedRecord.mainCurrency}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-2">
-                                                                <div className="flex justify-between items-center bg-rose-50 p-2.5 rounded-lg border border-rose-100">
-                                                                    <span className="text-rose-600 font-bold">قیمت تمام شده:</span>
-                                                                    <span className="font-mono font-black text-rose-700">{formatCurrency(itemFinalCostRial)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between items-center bg-gray-100 p-2.5 rounded-lg border border-gray-200">
-                                                                    <span className="text-gray-600 font-bold">فی تمام شده (هر کیلو):</span>
-                                                                    <span className="font-mono font-black text-gray-800">{formatCurrency(itemFinalCostPerKg)}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
                                         </div>
                                     </>
                                 );
@@ -1693,35 +1619,36 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     // Default Dashboard View
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Container className="text-blue-600" /> پرونده‌های بازرگانی
                     </h1>
-                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-2 no-scrollbar scroll-smooth">
-                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1 shrink-0 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full transition-colors active:scale-95"><Home size={14}/> خانه</button>
-                        {selectedCompany && <><ChevronLeft size={14} className="shrink-0 text-gray-400"/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600 shrink-0 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full transition-colors active:scale-95">{selectedCompany}</button></>}
-                        {selectedGroup && <><ChevronLeft size={14} className="shrink-0 text-gray-400"/> <span className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold">{selectedGroup}</span></>}
+                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                        <button onClick={goRoot} className="hover:text-blue-600 flex items-center gap-1"><Home size={14}/> خانه</button>
+                        {selectedCompany && <><ChevronRight size={14}/> <button onClick={() => goCompany(selectedCompany)} className="hover:text-blue-600">{selectedCompany}</button></>}
+                        {selectedGroup && <><ChevronRight size={14}/> <span>{selectedGroup}</span></>}
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
-                    <div className="relative flex-1 sm:flex-none min-w-[120px]">
-                        <input className="w-full border rounded-xl pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <div className="flex gap-3">
+                    <div className="relative">
+                        <input className="border rounded-xl pl-8 pr-3 py-2 text-sm w-48 focus:w-64 transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
                     </div>
+                    {/* ADDED BUTTON HERE */}
                     <button 
                         onClick={() => setShowArchived(!showArchived)} 
-                        className={`p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'glass-panel text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-                        title={showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}
+                        className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors border ${showArchived ? 'bg-amber-100 text-amber-700 border-amber-200' : 'glass-panel text-gray-600 border-gray-300 hover:bg-gray-50'}`}
                     >
                         <Archive size={20} />
-                        <span className="hidden sm:inline">{showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}</span>
+                        {showArchived ? 'نمایش جاری' : 'نمایش بایگانی'}
                     </button>
-                    <button onClick={() => setViewMode('reports')} className="glass-panel border border-gray-300 text-gray-700 p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors" title="گزارشات">
-                        <FileSpreadsheet size={20} /> <span className="hidden sm:inline">گزارشات</span>
+                    {/* END ADDED BUTTON */}
+                    <button onClick={() => setViewMode('reports')} className="glass-panel border border-gray-300 text-gray-700 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-gray-50 font-bold transition-colors">
+                        <FileSpreadsheet size={20} /> گزارشات
                     </button>
-                    <button onClick={() => setShowNewModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 font-bold transition-colors shadow-lg shadow-blue-600/20" title="ثبت پرونده جدید">
-                        <Plus size={20} /> <span className="hidden sm:inline">جدید</span>
+                    <button onClick={() => setShowNewModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors shadow-lg shadow-blue-600/20">
+                        <Plus size={20} /> ثبت پرونده جدید
                     </button>
                 </div>
             </div>
@@ -1795,7 +1722,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">شماره پرونده</label><input className="w-full border rounded-xl p-3 bg-gray-50 font-mono text-left dir-ltr" value={newFileNumber} onChange={e => setNewFileNumber(e.target.value)} placeholder="File No..." /></div>
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">نام کالا (شرح کلی)</label><input className="w-full border rounded-xl p-3" value={newGoodsName} onChange={e => setNewGoodsName(e.target.value)} placeholder="مثال: قطعات یدکی..." /></div>
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">فروشنده</label><input className="w-full border rounded-xl p-3" value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Seller Name..." /></div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div><label className="block text-sm font-bold text-gray-700 mb-1">گروه کالایی</label><input list="commodity-groups" className="w-full border rounded-xl p-3" value={newCommodityGroup} onChange={e => setNewCommodityGroup(e.target.value)} placeholder="انتخاب..." /><datalist id="commodity-groups">{commodityGroups.map(g => <option key={g} value={g} />)}</datalist></div>
                                 <div><label className="block text-sm font-bold text-gray-700 mb-1">ارز پایه</label><select className="w-full border rounded-xl p-3 glass-panel" value={newMainCurrency} onChange={e => setNewMainCurrency(e.target.value)}>{CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}</select></div>
                             </div>

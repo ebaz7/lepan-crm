@@ -17,21 +17,12 @@ export const getServerHost = () => {
 
 export const resolveImageUrl = (url: string | null | undefined): string => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
         return url;
     }
-    const host = getServerHost();
+    const host = getServerHost() || DEFAULT_SERVER_URL;
     const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-    
-    // On web, if no host is configured, we use relative paths to current origin.
-    // On native, getServerHost() will return either stored host or DEFAULT_SERVER_URL.
-    if (!host && !Capacitor.isNativePlatform()) {
-        return cleanUrl;
-    }
-    
-    // Fallback for native or if host is set
-    const effectiveHost = host || DEFAULT_SERVER_URL;
-    return `${effectiveHost}${cleanUrl}`;
+    return `${host}${cleanUrl}`;
 };
 
 export const setServerHost = (url: string) => {
@@ -127,9 +118,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/settings') localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(data));
                     else if (endpoint === '/chat') localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(data));
                     else if (endpoint === '/trade') localStorage.setItem(LS_KEYS.TRADE, JSON.stringify(data));
-                    else if (endpoint === '/customer-balances') localStorage.setItem('app_data_balances', JSON.stringify(data));
-                    else if (endpoint === '/customer-balances/chat-codes') localStorage.setItem('app_data_balances_mappings', JSON.stringify(data));
-                    else if (endpoint === '/customer-balances/statements/all') localStorage.setItem('app_data_balances_statements', JSON.stringify(data));
                     else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
                     else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
                     else if (endpoint === '/notes') localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(data));
@@ -179,9 +167,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         if (method === 'GET') {
             if (endpoint === '/orders') return getLocalData<any>(LS_KEYS.ORDERS, INITIAL_ORDERS);
             if (endpoint === '/trade') return getLocalData<any>(LS_KEYS.TRADE, []);
-            if (endpoint === '/customer-balances') return getLocalData<any>('app_data_balances', { balances: [] });
-            if (endpoint === '/customer-balances/chat-codes') return getLocalData<any>('app_data_balances_mappings', []);
-            if (endpoint === '/customer-balances/statements/all') return getLocalData<any>('app_data_balances_statements', []);
             if (endpoint === '/warehouse/items') return getLocalData<any>(LS_KEYS.WH_ITEMS, []);
             if (endpoint === '/warehouse/transactions') return getLocalData<any>(LS_KEYS.WH_TX, []);
             if (endpoint === '/settings') return getLocalData<any>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 });

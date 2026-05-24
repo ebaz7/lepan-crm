@@ -34,24 +34,7 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   if (Capacitor.isNativePlatform()) {
       try {
           const result = await PushNotifications.requestPermissions();
-          const localResult = await LocalNotifications.requestPermissions();
-          
-          if (Capacitor.getPlatform() === 'android') {
-              try {
-                  await LocalNotifications.createChannel({
-                      id: 'default',
-                      name: 'Default',
-                      description: 'General Notifications',
-                      importance: 5,
-                      visibility: 1,
-                      vibration: true,
-                  });
-              } catch (e) {
-                  console.error('Create channel failed', e);
-              }
-          }
-
-          if (result.receive === 'granted' || localResult.display === 'granted') {
+          if (result.receive === 'granted') {
               await PushNotifications.register();
               return true;
           }
@@ -99,7 +82,7 @@ export const subscribeToPushNotifications = async () => {
 
         // 4. Send Subscription to Server
         // We also send user info to allow targeting
-        const userStr = localStorage.getItem('app_current_user');
+        const userStr = localStorage.getItem('currentUser');
         const user = userStr ? JSON.parse(userStr) : null;
 
         await apiCall('/subscribe', 'POST', {
@@ -125,15 +108,16 @@ export const sendNotification = async (title: string, body: string) => {
                   {
                       title: title,
                       body: body,
-                      id: Math.floor(Math.random() * 2147483647),
-                      schedule: { at: new Date(Date.now() + 50) },
-                      extra: null,
-                      channelId: 'fcm_default_channel',
-                      sound: 'default'
+                      id: new Date().getTime(),
+                      schedule: { at: new Date(Date.now() + 100) },
+                      sound: 'beep.wav',
+                      smallIcon: 'ic_stat_icon_config_sample', 
+                      actionTypeId: "",
+                      extra: null
                   }
               ]
           });
-      } catch (e) { console.error('LocalNotifications error', e); }
+      } catch (e) {}
       return;
   }
 

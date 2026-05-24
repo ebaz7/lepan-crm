@@ -104,7 +104,7 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
                                             {items.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
                                         </select>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:w-48">
+                                    <div className="grid grid-cols-2 gap-3 md:w-48">
                                         <div className="space-y-1">
                                             <label className="text-[9px] font-black text-gray-400 text-center block">تعداد</label>
                                             <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-xl p-2.5 text-sm font-bold text-center bg-gray-50 dark:bg-gray-800" placeholder="0" type="number" value={item.quantity === 0 ? '' : item.quantity} onFocus={e => e.target.select()} onChange={e => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))} />
@@ -174,25 +174,6 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [viewBijak, setViewBijak] = useState<WarehouseTransaction | null>(null);
     const [editingBijak, setEditingBijak] = useState<WarehouseTransaction | null>(null); 
     const [editingReceipt, setEditingReceipt] = useState<WarehouseTransaction | null>(null); 
-    
-    useEffect(() => {
-        if (viewBijak || editingBijak || editingReceipt) {
-            const handleBack = () => {
-                if (viewBijak) setViewBijak(null);
-                if (editingBijak) setEditingBijak(null);
-                if (editingReceipt) setEditingReceipt(null);
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else if (activeTab !== 'dashboard') {
-            const handleBack = () => {
-                setActiveTab('dashboard');
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else {
-            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-        }
-        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
-    }, [viewBijak, editingBijak, editingReceipt, activeTab]);
     
     // Reports State
     const [archiveFilterCompany, setArchiveFilterCompany] = useState('');
@@ -992,7 +973,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                                 {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
                                             </select>
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full md:w-auto">
+                                        <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
                                                 <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity === 0 ? '' : row.quantity} onFocus={e => e.target.select()} onChange={e=>updateTxItem(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}/>
@@ -1063,7 +1044,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             </div>
                         </div>
 
-                        <div className="bg-white dark:bg-gray-900/60 p-6 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-xl mb-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="bg-white dark:bg-gray-900/60 p-6 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-xl mb-8 grid grid-cols-2 md:grid-cols-4 gap-6">
                             <div className="col-span-2 md:col-span-1 space-y-1.5">
                                 <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-wide">تحویل گیرنده نهایی</label>
                                 <input className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 text-sm font-bold bg-gray-50 dark:bg-gray-800 focus:bg-white transition-all shadow-inner outline-none focus:border-rose-500" placeholder="نام خریدار یا انبار مقصد" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/>
@@ -1094,7 +1075,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                                                 {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
                                             </select>
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full md:w-auto">
+                                        <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                                             <div className="space-y-1.5 flex flex-col">
                                                 <label className="text-[10px] font-black text-gray-400 text-center">تعداد</label>
                                                 <input type="number" className="w-full border-2 border-gray-100 dark:border-white/5 rounded-2xl p-3.5 bg-white dark:bg-gray-800 font-black text-center dir-ltr" value={row.quantity === 0 ? '' : row.quantity} onFocus={e => e.target.select()} onChange={e=>updateTxItem(idx, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}/>

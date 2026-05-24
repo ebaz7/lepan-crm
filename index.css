@@ -163,17 +163,6 @@ body {
 }
 
 @layer utilities {
-  .animate-slide-down {
-    animation: slide-down 0.4s cubic-bezier(0, 0, 0.2, 1) forwards;
-  }
-}
-
-@keyframes slide-down {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@layer utilities {
   .glass-panel {
     background: var(--glass-bg);
     backdrop-filter: blur(32px) saturate(210%);

@@ -84,21 +84,6 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : null;
 
     useEffect(() => { loadData(); }, [financialYear]);
-
-    useEffect(() => {
-        if (showModal || showPrintModal || showShiftModal || viewCartableItem) {
-            const handleBack = () => {
-                if (showModal) setShowModal(false);
-                if (showPrintModal) setShowPrintModal(false);
-                if (showShiftModal) setShowShiftModal(false);
-                if (viewCartableItem) setViewCartableItem(null);
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else {
-            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-        }
-        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
-    }, [showModal, showPrintModal, showShiftModal, viewCartableItem]);
     
     // Reset subTab when changing main tabs or date
     useEffect(() => {

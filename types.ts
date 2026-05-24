@@ -27,7 +27,6 @@ export interface User {
   canManageTrade?: boolean;
   canManageSales?: boolean;
   receiveNotifications?: boolean;
-  mobileNavOrder?: string[];
   lastSeen?: number; // New: For online status
 }
 
@@ -320,7 +319,6 @@ export interface SystemSettings {
   defaultMeetingAttendees?: string[];
   defaultMeetingAttendeesData?: { username: string; role: string }[];
   meetingRoles?: string[];
-  mobileNavOrder?: string[];
   
   // CRM / SALES
   salesContacts?: SalesContact[];
@@ -331,6 +329,7 @@ export interface SystemSettings {
   miniAppCarEstimatorUrl?: string;
   miniAppMobilePriceUrl?: string;
   purchaseRolePermissions?: Record<string, PurchaseRolePermissions>;
+  appName?: string;
 }
 
 export interface PurchaseRolePermissions {

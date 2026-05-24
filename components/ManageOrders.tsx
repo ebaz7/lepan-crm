@@ -44,19 +44,6 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   
   const [currentStatusFilter, setCurrentStatusFilter] = useState<any>(statusFilter || null);
 
-  useEffect(() => {
-      if (viewOrder || editingOrder) {
-          const handleBack = () => {
-              if (viewOrder) setViewOrder(null);
-              if (editingOrder) setEditingOrder(null);
-          };
-          window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-      } else {
-          window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-      }
-      return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
-  }, [viewOrder, editingOrder]);
-
   // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {

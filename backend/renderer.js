@@ -759,17 +759,17 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         let tbody = '';
         rows.forEach((r, idx) => {
             const isEven = idx % 2 === 1;
-            tbody += `<tr class="${isEven ? 'bg-gray-50/80' : 'bg-white'} border-b border-gray-100/80 hover:bg-gray-100/30 transition-colors">`;
+            tbody += `<tr class="${isEven ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100">`;
             r.forEach((cell, cellIdx) => {
-                let cellStyleClass = "p-3.5 text-xs text-gray-700 text-center font-bold border-l border-gray-100/50 last:border-l-0";
+                let cellStyleClass = "p-3.5 text-xs text-gray-700 text-center font-medium";
                 if (cellIdx === 1) {
-                    cellStyleClass = "p-3.5 text-sm font-black text-gray-900 text-right pr-6 border-l border-gray-100/50";
+                    cellStyleClass = "p-3.5 text-xs font-black text-gray-900 text-right pr-6";
                 } else if (cellIdx === 2) {
-                    cellStyleClass = `p-3.5 text-sm font-black font-mono ${isDebtor ? 'text-red-700' : 'text-emerald-700'} text-center border-l border-gray-100/50`;
+                    cellStyleClass = `p-3.5 text-xs font-black font-mono ${isDebtor ? 'text-red-600' : 'text-emerald-600'} text-center`;
                 }
                 
                 if (cellIdx === 3) {
-                    tbody += `<td class="p-3.5 text-center"><span class="px-3 py-1 text-[10px] font-black rounded-lg ${isDebtor ? 'bg-red-50 text-red-800 border border-red-200/50' : 'bg-emerald-50 text-emerald-800 border border-emerald-200/50'}">${cell}</span></td>`;
+                    tbody += `<td class="p-3.5 text-center"><span class="px-2.5 py-1 text-[10px] font-black rounded-full ${isDebtor ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${cell}</span></td>`;
                 } else {
                     tbody += `<td class="${cellStyleClass}">${cell}</td>`;
                 }
@@ -786,48 +786,51 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         ${fontFaceRule}
         body { 
             font-family: 'Vazirmatn', sans-serif !important; 
-            background: #ffffff; 
-            padding: 0;
-            margin: 0;
+            background: #fafafc; 
+            padding: 20px;
         }
     </style>
 </head>
-<body class="p-0">
-    <div class="max-w-[100%] mx-auto bg-white overflow-hidden p-10">
+<body class="p-10">
+    <div class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
         
-        <div class="flex justify-between items-end border-b-4 ${isDebtor ? 'border-red-700' : 'border-emerald-700'} pb-6 mb-8">
-            <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-8 ${isDebtor ? 'bg-red-700' : 'bg-emerald-700'} rounded-full"></div>
-                    <h1 class="text-3xl font-black text-gray-900 tracking-tight">${title}</h1>
+        <!-- Header Banner -->
+        <div class="relative bg-gradient-to-r ${isDebtor ? 'from-rose-600 via-red-600 to-amber-500' : 'from-teal-600 via-emerald-600 to-cyan-500'} p-8 text-white min-h-[160px]">
+            <div class="absolute inset-x-0 inset-y-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+            <div class="relative flex justify-between items-start">
+                <div class="space-y-2">
+                    <span class="px-3 py-1 bg-white/20 rounded-full text-[11px] font-black tracking-wider uppercase">گزارش مالی دوره‌ای</span>
+                    <h1 class="text-3xl font-black tracking-tight mt-1 drop-shadow-sm">${title}</h1>
+                    <p class="text-xs text-white/90 font-medium font-bold">پایش هوشمند بدهکاران و بستانکاران بر مبنای آخرین فایل بارگذاری شده</p>
                 </div>
-                <p class="text-sm text-gray-500 font-bold pr-5 italic">گزارش وضعیت تراز تفصیلی مشتریان - بخش حسابداری و مدیریت مالی</p>
-            </div>
-            <div class="text-left space-y-1">
-                <div class="inline-block bg-gray-900 text-white px-4 py-1.5 rounded-lg text-xs font-black mb-2">${new Date().toLocaleDateString('fa-IR')}</div>
-                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})} | سیستم گزارشات هوشمند</div>
+                <div class="text-left bg-white/10 backdrop-blur-md border border-white/20 p-3.5 rounded-2xl space-y-1">
+                    <div class="text-xs font-black">تاریخ انتشار: ${new Date().toLocaleDateString('fa-IR')}</div>
+                    <div class="text-[10px] text-white/80 font-mono">ساعت صدور: ${new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}</div>
+                </div>
             </div>
         </div>
 
-        <div class="mb-10">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
-                    <div class="text-[10px] font-black text-gray-400 mb-1">جمع کل اقلام ${isDebtor ? 'بدهکار' : 'بستانکار'}</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${totalBalance.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+        <div class="p-8">
+            <!-- Modern Statistics Cards with Solid Vivid Gradients -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-gradient-to-br ${isDebtor ? 'from-rose-600 to-red-700' : 'from-teal-605 to-emerald-700'} p-6 rounded-2xl shadow-lg relative overflow-hidden text-white w-full">
+                    <div class="text-xs font-black opacity-80 mb-2">مجموع کل مانده ${isDebtor ? 'بدهی‌ها (طلب شرکت)' : 'بستانکاری دفتری'}</div>
+                    <div class="text-2xl font-black font-mono leading-none">${totalBalance.toLocaleString('fa-IR')} <span class="text-xs font-bold mr-0.5 opacity-90">ریال</span></div>
                 </div>
 
-                <div class="bg-gray-50 border-r-4 border-gray-900 p-5 rounded-xl shadow-sm">
-                    <div class="text-[10px] font-black text-gray-400 mb-1">تعداد پرونده‌های مفتوح</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${rows.length.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">رکورد</span></div>
+                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl shadow-lg relative overflow-hidden text-white w-full">
+                    <div class="text-xs font-black opacity-80 mb-2">تعداد کل حساب کاربری (${isDebtor ? 'بدهکار' : 'بستانکار'})</div>
+                    <div class="text-2xl font-black font-mono leading-none">${rows.length.toLocaleString('fa-IR')} <span class="text-xs font-bold mr-0.5 opacity-95">شخص / کارگزار</span></div>
                 </div>
 
-                <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
-                    <div class="text-[10px] font-black text-gray-400 mb-1">میانگین تراز هر حساب</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${(rows.length ? Math.round(totalBalance / rows.length) : 0).toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+                <div class="bg-gradient-to-br from-blue-600 to-cyan-750 p-6 rounded-2xl shadow-lg relative overflow-hidden text-white w-full">
+                    <div class="text-xs font-black opacity-80 mb-2">میانگین وزنی مانده حساب</div>
+                    <div class="text-2xl font-black font-mono leading-none">${(rows.length ? Math.round(totalBalance / rows.length) : 0).toLocaleString('fa-IR')} <span class="text-xs font-bold mr-0.5 opacity-90">ریال</span></div>
                 </div>
             </div>
 
-            <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <!-- Highly Polished Table Wrapper with Colored Borders -->
+            <div class="border-2 ${isDebtor ? 'border-red-600/30' : 'border-emerald-600/30'} rounded-2xl overflow-hidden shadow-md bg-white">
                 <table class="w-full text-right border-collapse">
                     <thead>
                         <tr class="text-white font-black">
@@ -840,22 +843,14 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
                 </table>
             </div>
 
-            <div class="mt-12 p-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                <div class="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                    <span>محل مهر و امضای مدیریت مالی</span>
-                    <span>محل امضای مدیرعامل</span>
-                    <span>صفحه ۱ از ۱</span>
+            <!-- Footer Section -->
+            <div class="mt-8 flex justify-between items-center border-t border-gray-100 pt-6 text-[10px] text-gray-400">
+                <div class="font-bold flex items-center gap-1.5 text-gray-500">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full ${isDebtor ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse"></span>
+                    سامانه هوشمند پایش و مغایرت‌گیری ترازنامه‌های مالی کالا و انبار
                 </div>
-                <div class="flex justify-between mt-12 gap-20 px-10">
-                    <div class="h-24 w-1/3 border-b-2 border-gray-200"></div>
-                    <div class="h-24 w-1/3 border-b-2 border-gray-200"></div>
-                </div>
+                <div class="font-mono opacity-80 backdrop-blend-luminosity">صفحه ۱ از ۱</div>
             </div>
-        </div>
-
-        <div class="mt-8 flex justify-between items-center text-[10px] text-gray-300 border-t border-gray-50 pt-5 pr-2">
-            <div class="font-bold tracking-tight">این گزارش فاقد قلم‌خوردگی و با شناسه ابری یکتا صادر شده است.</div>
-            <div class="font-mono text-[9px] uppercase">Automated Report | System ID: #7375EH</div>
         </div>
     </div>
 </body>

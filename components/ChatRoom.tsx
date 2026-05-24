@@ -12,10 +12,11 @@ import {
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
     Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
 } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
-import { downloadAndOpenFile } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 interface ChatRoomProps { 
     currentUser: User | null; 
@@ -43,68 +44,53 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(propDuration || 0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const [audioSource, setAudioSource] = useState('');
     
     // Generate random waveform bars (stable per instance)
     const waveform = useMemo(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 60) + 20), []);
 
     useEffect(() => {
-        let absoluteUrl = url.startsWith('blob:') || url.startsWith('data:') ? url : resolveImageUrl(url);
-        // Capacitor hack: if on Android and using localhost, we might need to ensure it's fully qualified
-        if (Capacitor.getPlatform() === 'android' && absoluteUrl.startsWith('/')) {
-            absoluteUrl = window.location.origin + absoluteUrl;
+        let absoluteUrl = url;
+        // Fix for Desktop: Ensure URL is absolute if it's a relative path from server
+        if (!url.startsWith('http') && !url.startsWith('blob')) {
+            // Remove leading slash if present to avoid double slash, then add base
+            const cleanPath = url.startsWith('/') ? url : `/${url}`;
+            absoluteUrl = `${window.location.origin}${cleanPath}`;
         }
-        setAudioSource(absoluteUrl);
-    }, [url]);
-
-    const onLoadedMetadata = () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        const d = audio.duration;
-        if (d && d !== Infinity && !isNaN(d)) {
-            setDuration(d);
-        }
-    };
-
-    const onTimeUpdate = () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        if (audio.duration && audio.duration !== Infinity) {
-            setProgress((audio.currentTime / audio.duration) * 100);
-        } else if (duration > 0) {
-             setProgress((audio.currentTime / duration) * 100);
-        }
-    };
-
-    const onEnded = () => { 
-        setPlaying(false); 
-        setProgress(0); 
-    };
-    
-    const onError = (e: any) => {
-        console.error("Audio Playback Error:", e);
-    };
+        
+        const audio = new Audio();
+        audio.src = absoluteUrl;
+        audioRef.current = audio;
+        
+        audio.onloadedmetadata = () => {
+            const d = audio.duration;
+            if (d && d !== Infinity && !isNaN(d)) {
+                setDuration(d);
+            }
+        };
+        audio.ontimeupdate = () => {
+            if (audio.duration && audio.duration !== Infinity) {
+                setProgress((audio.currentTime / audio.duration) * 100);
+            } else if (duration > 0) {
+                 setProgress((audio.currentTime / duration) * 100);
+            }
+        };
+        audio.onended = () => { setPlaying(false); setProgress(0); };
+        
+        return () => {
+            audio.pause();
+            audio.src = '';
+        };
+    }, [url, duration]);
 
     const togglePlay = () => {
         if (!audioRef.current) return;
-        if (playing) {
-            audioRef.current.pause();
-            setPlaying(false);
-        } else {
-            audioRef.current.play().then(() => {
-                setPlaying(true);
-            }).catch(err => {
-                console.error("Play failed", err);
-                // On Android, sometimes play() fails if not fully loaded
-                setTimeout(() => {
-                   audioRef.current?.play().then(() => setPlaying(true)).catch(console.error);
-                }, 200);
-            });
-        }
+        if (playing) audioRef.current.pause();
+        else audioRef.current.play();
+        setPlaying(!playing);
     };
 
     const formatTime = (time: number) => {
-        if (isNaN(time) || time === Infinity) return '0:00';
+        if (isNaN(time)) return '0:00';
         const mins = Math.floor(time / 60);
         const secs = Math.floor(time % 60);
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -112,16 +98,6 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
     return (
         <div className="flex items-center gap-3 flex-1 px-1">
-            <audio 
-                ref={audioRef}
-                src={audioSource}
-                onLoadedMetadata={onLoadedMetadata}
-                onTimeUpdate={onTimeUpdate}
-                onEnded={onEnded}
-                onError={onError}
-                preload="metadata"
-                className="hidden"
-            />
             <button 
                 onClick={togglePlay}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 shadow-sm ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
@@ -149,6 +125,61 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
             </span>
         </div>
     );
+};
+
+const downloadFileSecure = async (url: string, fileName: string, onProgress?: (p: number) => void) => {
+    try {
+        const fetchUrl = resolveImageUrl(url);
+        
+        if (Capacitor.isNativePlatform()) {
+            // Check if already downloaded
+            try {
+                const stat = await Filesystem.stat({ path: fileName, directory: Directory.Documents });
+                if (stat) {
+                    alert('این فایل قبلاً دانلود شده است (موجود در پوشه Documents دستگاه)');
+                    if (onProgress) onProgress(100);
+                    return;
+                }
+            } catch (e) {
+                // File does not exist, proceed to download
+            }
+        }
+
+        // Simulating some progress anyway to make UX better
+        if (onProgress) {
+            onProgress(10);
+            await new Promise(r => setTimeout(r, 200));
+            onProgress(40);
+        }
+
+        if (Capacitor.isNativePlatform()) {
+            const response = await fetch(fetchUrl);
+            const blob = await response.blob();
+            
+            if (onProgress) onProgress(80);
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result as string;
+                
+                await Filesystem.writeFile({
+                    path: fileName,
+                    data: base64data,
+                    directory: Directory.Documents
+                });
+                if (onProgress) onProgress(100);
+                
+                alert('فایل با موفقیت دانلود و در پوشه Documents ذخیره شد.');
+            };
+        } else {
+            if (onProgress) onProgress(100);
+            window.open(fetchUrl, '_blank');
+        }
+    } catch (err) {
+        console.error('Download error:', err);
+        alert('خطا در دانلود فایل');
+    }
 };
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData }) => {
@@ -365,20 +396,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     }, [activeChannel]);
 
-    useEffect(() => {
-        if (activeChannel) {
-            const handleBack = () => {
-                 setActiveChannel(null);
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else {
-            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-        }
-        return () => {
-            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-        };
-    }, [activeChannel]);
-
     // Handle Document Visibility for Notifications
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -477,7 +494,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
         if (type === 'task_group') return null;
-        const relevant = displayMessages.filter(m => {
+        const relevant = messages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
             if (type === 'group') return m.groupId === channelId;
@@ -805,7 +822,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         // Try to fetch blob for file sharing
         try {
             // Need absolute URL for fetch if it's relative
-            const fetchUrl = fileUrl.startsWith('data:') ? fileUrl : resolveImageUrl(fileUrl);
+            const fetchUrl = fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`;
             
             const response = await fetch(fetchUrl);
             const blob = await response.blob();
@@ -1153,25 +1170,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#1c1c1e]">
-                    {localSharedData && !activeChannel && (
-                        <div className="m-3 p-4 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl animate-bounce-subtle flex flex-col gap-2 border border-white/20">
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-black text-sm flex items-center gap-2">
-                                    <Share2 size={16} />
-                                    محتوای پیوست آماده اشتراک‌گذاری
-                                </h4>
-                                <button onClick={() => setLocalSharedData(null)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
-                                    <X size={16} />
-                                </button>
-                            </div>
-                            <p className="text-[10px] opacity-90 font-bold leading-relaxed line-clamp-2 bg-black/10 p-2 rounded-xl">
-                                {localSharedData.fileUrl ? `📎 فایل: ${localSharedData.fileUrl.split('/').pop()}` : localSharedData.text}
-                            </p>
-                            <div className="bg-white text-blue-700 py-1.5 rounded-xl text-center text-[10px] font-black shadow-inner">
-                                یک گفتگو را برای ارسال انتخاب کنید
-                            </div>
-                        </div>
-                    )}
                     {getSortedChannels().length === 0 && !searchTerm && (
                         <div className="flex flex-col items-center justify-center h-40 text-gray-400 p-10 text-center">
                             <MessageCircle size={32} className="mb-2 opacity-20" />
@@ -1381,9 +1379,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 <div className="mb-1">
                                                     {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                         <img 
-                                                            src={resolveImageUrl(msg.attachment.url)} 
+                                                            src={msg.attachment.url} 
                                                             className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
-                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(resolveImageUrl(msg.attachment!.url)); }}
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
                                                         />
                                                     ) : (
                                                         <button 
@@ -1395,7 +1393,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
                                                                 setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
                                                                 
-                                                                await downloadAndOpenFile(msg.attachment!.url, msg.attachment!.fileName, (p) => {
+                                                                await downloadFileSecure(msg.attachment!.url, msg.attachment!.fileName, (p) => {
                                                                     setFileProgress(prev => ({ ...prev, [msg.id]: p }));
                                                                 });
 
@@ -1415,7 +1413,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                             </div>
                                                             <div className="overflow-hidden flex-1">
                                                                 <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
+                                                                <div className="text-[10px] text-blue-600">{isDownloading[msg.id] ? 'در حال آماده‌سازی...' : 'دانلود فایل'}</div>
                                                             </div>
                                                         </button>
                                                     )}
@@ -1605,7 +1603,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     <div className="absolute top-4 right-4 flex gap-4 z-50">
                         <button onClick={(e) => { 
                             e.stopPropagation(); 
-                            downloadAndOpenFile(showImageViewer, 'image_' + Date.now() + '.jpg'); 
+                            downloadFileSecure(showImageViewer, 'image_' + Date.now() + '.jpg'); 
                         }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><DownloadCloud/></button>
                         <button onClick={(e) => { e.stopPropagation(); setShowImageViewer(null); }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
                     </div>

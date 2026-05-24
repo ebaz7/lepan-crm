@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, Download, Search, FileSpreadsheet, UserCheck, Trash2, Wallet, Plus, Loader2, Landmark, TrendingDown, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
-import { downloadAndOpenFile } from '../services/fileService';
-import { apiCall } from '../services/apiService';
 
 interface CustomerBalance {
   id: string;
@@ -53,15 +51,22 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const fetchData = async () => {
     setLoading(true);
     try {
-      const dataBal = await apiCall<any>('/customer-balances');
-      setBalances(dataBal.balances || []);
-      setLastUploadTime(dataBal.lastXlsxUploadAt || null);
-      
-      const dataMap = await apiCall<any>('/customer-balances/chat-codes');
-      setChatCodes(dataMap);
-      
-      const dataStmts = await apiCall<any>('/customer-balances/statements/all');
-      setStatements(dataStmts);
+      const resBal = await fetch('/api/customer-balances');
+      if (resBal.ok) {
+        const data = await resBal.json();
+        setBalances(data.balances || []);
+        setLastUploadTime(data.lastXlsxUploadAt || null);
+      }
+      const resMap = await fetch('/api/customer-balances/chat-codes');
+      if (resMap.ok) {
+        const data = await resMap.json();
+        setChatCodes(data);
+      }
+      const resStmts = await fetch('/api/customer-balances/statements/all');
+      if (resStmts.ok) {
+        const data = await resStmts.json();
+        setStatements(data);
+      }
     } catch (error) {
       console.error('Error fetching customer balance data:', error);
     } finally {
@@ -178,9 +183,18 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         if (!confirm(`آیا تمایل دارید مانده حساب تعداد ${validRecords.length} مشتری را بروزرسانی کنید؟`)) return;
 
         setLoading(true);
-        const postRes = await apiCall<any>('/customer-balances/bulk', 'POST', { records: validRecords });
-        alert('مانده حساب مشتریان با موفقیت بروزرسانی شد.');
-        fetchData();
+        const postRes = await fetch('/api/customer-balances/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: validRecords })
+        });
+
+        if (postRes.ok) {
+          alert('مانده حساب مشتریان با موفقیت بروزرسانی شد.');
+          fetchData();
+        } else {
+          alert('خطا در بروزرسانی مانده حساب‌ها.');
+        }
       } catch (err) {
         console.error(err);
         alert('خطا در پردازش فایل اکسل.');
@@ -200,16 +214,24 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     setLoading(true);
     try {
-      await apiCall<any>('/customer-balances/chat-code', 'POST', {
-        chatId: mapChatId.trim(),
-        platform: mapPlatform,
-        accountCode: mapAccountCode.trim()
+      const res = await fetch('/api/customer-balances/chat-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: mapChatId.trim(),
+          platform: mapPlatform,
+          accountCode: mapAccountCode.trim()
+        })
       });
 
-      alert('پیوند چت با موفقیت ایجاد دگرگون شد.');
-      setMapChatId('');
-      setMapAccountCode('');
-      fetchData();
+      if (res.ok) {
+        alert('پیوند چت با موفقیت ایجاد دگرگون شد.');
+        setMapChatId('');
+        setMapAccountCode('');
+        fetchData();
+      } else {
+        alert('خطایی رخ داد.');
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -222,9 +244,15 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     setLoading(true);
     try {
-      await apiCall<any>(`/customer-balances/chat-code/${chatId}/${platform}`, 'DELETE');
-      alert('پیوند با موفقیت حذف شد.');
-      fetchData();
+      const res = await fetch(`/api/customer-balances/chat-code/${chatId}/${platform}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert('پیوند با موفقیت حذف شد.');
+        fetchData();
+      } else {
+        alert('خطا در حذف پیوند.');
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -244,15 +272,23 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         const base64Data = result.split(',')[1];
         const ext = file.name.split('.').pop() || '';
 
-        await apiCall<any>('/customer-balances/statement', 'POST', {
-          accountCode,
-          fileName: file.name,
-          fileType: ext,
-          fileData: base64Data
+        const response = await fetch('/api/customer-balances/statement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountCode,
+            fileName: file.name,
+            fileType: ext,
+            fileData: base64Data
+          })
         });
 
-        alert('صورتحساب با موفقیت آپلود شد.');
-        fetchData();
+        if (response.ok) {
+          alert('صورتحساب با موفقیت آپلود شد.');
+          fetchData();
+        } else {
+          alert('خطا در آپلود صورتحساب.');
+        }
       } catch (err) {
         console.error(err);
         alert('خطا در خواندن فایل.');
@@ -267,9 +303,15 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const handleDeleteStatement = async (id: string) => {
     if (!confirm('آیا از حذف این صورتحساب اطمینان دارید؟')) return;
     try {
-      await apiCall<any>(`/customer-balances/statement/${id}`, 'DELETE');
-      alert('صورتحساب با موفقیت حذف شد.');
-      fetchData();
+      const res = await fetch(`/api/customer-balances/statement/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert('صورتحساب با موفقیت حذف شد.');
+        fetchData();
+      } else {
+        alert('خطا در حذف صورتحساب.');
+      }
     } catch (err) {
       console.error(err);
     }
@@ -281,8 +323,17 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     try {
       const url = `/api/customer-balances/reports/${type}/pdf`;
-      const fileName = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
-      await downloadAndOpenFile(url, fileName, undefined, false);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } catch (error) {
       console.error(error);
       alert('خطا در تولید و دانلود فایل گزارش PDF.');
@@ -474,9 +525,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             </div>
           </div>
 
-          {/* List Content - Mobile Optimized */}
+          {/* List Content */}
           <div className="overflow-x-auto">
-            <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs">
+            <table className="w-full min-w-[700px] text-right border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-zinc-800">
                   <th className="py-3 px-4 font-bold">کد حسابداری</th>
@@ -540,55 +591,6 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                 )}
               </tbody>
             </table>
-            
-            {/* Mobile Cards - Enhanced UI */}
-            <div className="md:hidden space-y-4 p-4">
-              {loading ? (
-                <div className="py-10 text-center text-gray-400 font-bold flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-                  <span>در حال بارگذاری لیست...</span>
-                </div>
-              ) : filteredBalances.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed">
-                  موردی با این مشخصات یافت نشد.
-                </div>
-              ) : (
-                filteredBalances.map((item) => (
-                  <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform">
-                    <div className={`absolute top-0 left-0 w-1.5 h-full ${item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                    
-                    <div className="flex justify-between items-start mb-3">
-                        <div className="flex flex-col">
-                            <span className="font-black text-gray-900 dark:text-zinc-100 text-lg leading-tight mb-1">{item.name}</span>
-                            <span className="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-zinc-700 px-2 py-0.5 rounded-md self-start">{item.accountCode}</span>
-                        </div>
-                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
-                          item.type === 'بدهکار' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                        }`}>
-                          {item.type}
-                        </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50 dark:border-zinc-700/50">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-400 font-bold mb-1">مانده خالص</span>
-                            <span className={`text-xl font-black ${item.type === 'بدهکار' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                {item.balance.toLocaleString()} <span className="text-[10px] font-medium opacity-70">ریال</span>
-                            </span>
-                        </div>
-                        
-                        <button
-                          onClick={() => setStmtModalCode(item.accountCode)}
-                          className="bg-zinc-900 dark:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-zinc-900/10 active:opacity-80"
-                        >
-                          <FileSpreadsheet size={16} />
-                          صورتحساب
-                        </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -740,7 +742,6 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                   <p className="text-xs text-gray-400 mt-1">مشاهده و بارگذاری اسناد کمکی مربوط به {customerName}</p>
                 </div>
                 <button 
-                  data-subtab-back="true"
                   onClick={() => setStmtModalCode(null)} 
                   className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg transition-all text-xs font-bold"
                 >
@@ -778,13 +779,14 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                         </span>
                       </div>
                       <div className="flex gap-1">
-                        <button 
-                          onClick={() => downloadAndOpenFile(`/api/customer-balances/statement-download/${st.id}`, st.fileName, undefined, true)}
-                          className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 rounded-lg transition-all font-bold cursor-pointer"
+                        <a 
+                          href={`/api/customer-balances/statement-download/${st.id}`}
+                          download={st.fileName}
+                          className="p-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 rounded-lg transition-all font-bold"
                           title="دانلود فایل"
                         >
                           <Download className="w-3.5 h-3.5" />
-                        </button>
+                        </a>
                         {currentUser?.rolePermissions?.canImportCustomerBalances !== false && (
                           <button
                             onClick={() => handleDeleteStatement(st.id)}

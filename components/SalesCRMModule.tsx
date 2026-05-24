@@ -4,7 +4,6 @@ import { SalesContact, BirthdayGreetingTemplate } from '../types';
 import { apiCall } from '../services/apiService';
 import { getSettings, saveSettings } from '../services/storageService';
 import * as XLSX from 'xlsx';
-import { saveBlobAndOpenFile } from '../services/fileService';
 
 export default function SalesCRMModule() {
     const [contacts, setContacts] = useState<SalesContact[]>([]);
@@ -249,10 +248,7 @@ export default function SalesCRMModule() {
         const ws = XLSX.utils.json_to_sheet(sampleData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Contacts");
-        
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        saveBlobAndOpenFile(blob, "Sample_Contacts.xlsx");
+        XLSX.writeFile(wb, "Sample_Contacts.xlsx");
     };
 
     const handleSaveTemplate = () => {
@@ -546,7 +542,7 @@ export default function SalesCRMModule() {
                                     placeholder="مثلا: 104008"
                                 />
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">آیدی تلگرام</label>
                                     <input 
@@ -676,7 +672,7 @@ export default function SalesCRMModule() {
                             {/* Mode selection (Merge Existing vs Create New) */}
                             <div className="space-y-2">
                                 <label className="block text-xs font-black text-gray-500 dark:text-gray-400">نحوه پردازش و ثبت:</label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-3">
                                     <button 
                                         type="button"
                                         onClick={() => setMergeMode('new')}
@@ -735,7 +731,7 @@ export default function SalesCRMModule() {
                             <div className="space-y-4 pt-1 border-t border-gray-100 dark:border-zinc-800/80">
                                 <span className="block text-xs font-black text-gray-500">بازنگری فیلدها پیش از ذخیره‌سازی:</span>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1">نام مخاطب در پروسه</label>
                                         <input 
@@ -754,7 +750,7 @@ export default function SalesCRMModule() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1">کد حساب مالی (اختیاری)</label>
                                         <input 
@@ -775,7 +771,7 @@ export default function SalesCRMModule() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1">آیدی تلگرام</label>
                                         <input 

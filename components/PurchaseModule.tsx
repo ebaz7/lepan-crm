@@ -50,27 +50,6 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
         loadParts();
     }, []);
 
-    useEffect(() => {
-        if (viewRequest || editingPart || selectedPartKardex || showCreateModal || showPartModal) {
-            const handleBack = () => {
-                if (viewRequest) setViewRequest(null);
-                if (editingPart) setEditingPart(null);
-                if (selectedPartKardex) setSelectedPartKardex(null);
-                if (showCreateModal) setShowCreateModal(false);
-                if (showPartModal) setShowPartModal(false);
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else if (activeTab !== 'DASHBOARD') {
-            const handleBack = () => {
-                setActiveTab('DASHBOARD');
-            };
-            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        } else {
-            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-        }
-        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
-    }, [viewRequest, editingPart, selectedPartKardex, showCreateModal, showPartModal, activeTab]);
-
     const loadRequests = async () => {
         setLoading(true);
         try {
@@ -238,7 +217,7 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {stats.map((s, idx) => (
                     <div key={idx} onClick={() => setActiveTab(s.tab)} className={`glass-panel p-6 rounded-[2rem] border-2 cursor-pointer hover:scale-105 transition-all text-center flex flex-col items-center justify-center gap-2 border-indigo-100 bg-indigo-50/30`}>
                         <div className={`p-3 rounded-2xl bg-indigo-100 text-indigo-600`}>

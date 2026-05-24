@@ -7,12 +7,10 @@ import { logout, hasPermission, getRolePermissions, updateUser } from '../servic
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp, sendNotification } from '../services/notificationService';
 import { getSettings, saveSettings, uploadFile } from '../services/storageService';
 import { apiCall, resolveImageUrl } from '../services/apiService';
-import { DEFAULT_MOBILE_NAV_ORDER } from '../constants';
 import { Capacitor } from '@capacitor/core';
 
 interface LayoutProps {
   children: React.ReactNode;
-  onBack: () => boolean;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   currentUser: User;
@@ -29,7 +27,7 @@ interface LayoutProps {
   unreadChatCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
@@ -46,7 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   // Mobile Drawer State
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
+  
   // PWA & Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
@@ -57,20 +55,12 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const [showProfileModal, setShowProfileModal] = useState(false);
   
   // Local Profile Form State
-  const [profileForm, setProfileForm] = useState<{
-      password?: string;
-      confirmPassword?: string;
-      telegramChatId: string;
-      phoneNumber: string;
-      receiveNotifications: boolean;
-      mobileNavOrder: string[];
-  }>({
+  const [profileForm, setProfileForm] = useState({
       password: '',
       confirmPassword: '',
       telegramChatId: '',
       phoneNumber: '',
-      receiveNotifications: true,
-      mobileNavOrder: []
+      receiveNotifications: true
   });
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -87,8 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
             confirmPassword: '',
             telegramChatId: currentUser.telegramChatId || '',
             phoneNumber: currentUser.phoneNumber || '',
-            receiveNotifications: currentUser.receiveNotifications !== false,
-            mobileNavOrder: currentUser.mobileNavOrder || []
+            receiveNotifications: currentUser.receiveNotifications !== false 
         });
     }
   }, [showProfileModal, currentUser]);
@@ -224,6 +213,19 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
       }
   };
 
+  const handleInstallClick = () => { 
+      if (isIOS) {
+          setShowIOSPrompt(true);
+      } else if (deferredPrompt) { 
+          deferredPrompt.prompt(); 
+          deferredPrompt.userChoice.then((choiceResult: any) => { 
+              if (choiceResult.outcome === 'accepted') { setDeferredPrompt(null); } 
+          }); 
+      } else {
+          alert('دستگاه شما از نصب خودکار پشتیبانی نمی‌کند یا برنامه قبلاً نصب شده است.');
+      }
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       const updates: Partial<User> = {}; 
@@ -235,7 +237,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
       updates.telegramChatId = profileForm.telegramChatId;
       updates.phoneNumber = profileForm.phoneNumber;
       updates.receiveNotifications = profileForm.receiveNotifications;
-      updates.mobileNavOrder = profileForm.mobileNavOrder;
       try { await updateUser({ ...currentUser, ...updates }); alert('اطلاعات با موفقیت بروزرسانی شد.'); setProfileForm(prev => ({...prev, password: '', confirmPassword: ''})); setShowProfileModal(false); window.location.reload(); } catch (err) { alert('خطا در بروزرسانی اطلاعات'); } 
   };
 
@@ -295,29 +296,9 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   if (hasPermission(currentUser, 'manage_users')) navItems.push({ id: 'users', label: 'کاربران', icon: Users });
   if (canSeeSettings) navItems.push({ id: 'settings', label: 'تنظیمات', icon: Settings });
 
-  // Dynamic Navigation Logic
-  const mobileNavOrder_val = currentUser.mobileNavOrder || settings?.mobileNavOrder || DEFAULT_MOBILE_NAV_ORDER;
-
-  const allAvailableItems = navItems.filter(item => {
-      // Dashboard is usually always there if possible
-      if (item.id === 'dashboard') return true;
-      return true; // navItems is already filtered by perms
-  });
-
-  const sortedItems = [...allAvailableItems].sort((a, b) => {
-      const idxA = mobileNavOrder_val.indexOf(a.id);
-      const idxB = mobileNavOrder_val.indexOf(b.id);
-      if (idxA === -1 && idxB === -1) return 0;
-      if (idxA === -1) return 1;
-      if (idxB === -1) return -1;
-      return idxA - idxB;
-  });
-
-  // Max 5 items in bottom bar (including "More" if needed)
-  const limit = 5;
-  const hasMore = sortedItems.length > limit;
-  const bottomVisibleItems = hasMore ? sortedItems.slice(0, limit - 1) : sortedItems;
-  const menuItems = hasMore ? sortedItems.slice(limit - 1) : [];
+  // Mobile Specific Nav Items (Bottom Bar) dynamically built based on permissions
+  let bottomNavItems = navItems.slice(0, 4);
+  let showMoreButton = true;
 
   const NotificationDropdown = () => ( 
     <div role="dialog" aria-label="اعلان‌ها" className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 glass-panel rounded-xl shadow-2xl border border-gray-200/50 dark:border-white/10 text-gray-800 dark:text-gray-200 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">
@@ -375,110 +356,35 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
           <div className="blob blob-3"></div>
       </div>
       
+      {/* ... (Update Banner, iOS Prompt, Profile Modal code preserved) ... */}
       {isUpdateAvailable && (<div className="fixed top-0 left-0 right-0 bg-blue-600 text-white z-[9999] p-3 text-center shadow-lg animate-slide-down flex justify-center items-center gap-4"><div className="flex items-center gap-2"><RefreshCw size={20} className="animate-spin"/><span className="font-bold text-sm">نسخه جدید نرم‌افزار در دسترس است!</span></div><button onClick={handleReload} className="glass-panel text-blue-600 px-4 py-1 rounded-full text-xs font-bold hover:bg-blue-50 transition-colors shadow-sm">بروزرسانی (رفرش)</button></div>)}
       
       {/* Profile Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-fade-in">
-            <div className="glass-panel rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[85vh] flex flex-col">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 flex flex-col items-center justify-center text-white relative shrink-0">
-                    <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors"><X size={20}/></button>
-                    <div className="relative group cursor-pointer mb-2" onClick={() => avatarInputRef.current?.click()}>
-                        <div className="w-16 h-16 rounded-full bg-white/20 border-4 border-white/30 overflow-hidden shadow-lg">
-                            {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="Profile" className="w-full h-full object-cover" /> : <UserIcon size={32} className="w-full h-full p-3 text-white" />}
+            <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 flex flex-col items-center justify-center text-white relative">
+                    <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={20}/></button>
+                    <div className="relative group cursor-pointer mb-3" onClick={() => avatarInputRef.current?.click()}>
+                        <div className="w-24 h-24 rounded-full bg-white/20 border-4 border-white/30 overflow-hidden shadow-lg">
+                            {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="Profile" className="w-full h-full object-cover" /> : <UserIcon size={48} className="w-full h-full p-4 text-white" />}
                         </div>
                         <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            {uploadingAvatar ? <Loader2 size={20} className="animate-spin text-white"/> : <Camera size={20} className="text-white"/>}
+                            {uploadingAvatar ? <Loader2 size={24} className="animate-spin text-white"/> : <Camera size={24} className="text-white"/>}
                         </div>
                         <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} disabled={uploadingAvatar} />
                     </div>
-                    <h3 className="text-md font-black tracking-tight">{currentUser.fullName}</h3>
-                    <p className="text-[10px] font-bold opacity-80">{currentUser.role}</p>
+                    <h3 className="text-xl font-bold">{currentUser.fullName}</h3>
+                    <p className="text-sm opacity-80">{currentUser.role}</p>
                 </div>
-                <div className="p-4 overflow-y-auto flex-1 custom-scrollbar">
-                    <form onSubmit={handleUpdateProfile} className="space-y-4 pb-2">
+                <div className="p-6">
+                    <form onSubmit={handleUpdateProfile} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1"><label className="text-xs font-bold text-gray-500">رمز عبور جدید</label><input type="password" value={profileForm.password} onChange={e => setProfileForm({...profileForm, password: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="******"/></div>
                             <div className="space-y-1"><label className="text-xs font-bold text-gray-500">تکرار رمز</label><input type="password" value={profileForm.confirmPassword} onChange={e => setProfileForm({...profileForm, confirmPassword: e.target.value})} className="w-full border rounded-lg p-2 text-sm" placeholder="******"/></div>
                         </div>
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-500">شماره موبایل (واتساپ)</label><input type="tel" value={profileForm.phoneNumber} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="98912..."/></div>
                         
-                        <div className="space-y-4 pt-4 border-t">
-                            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2"><Smartphone size={16}/> اولویت نوار پایین موبایل</h4>
-                            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-[10px] text-blue-700 leading-relaxed mb-2">
-                                ترتیب آیکون‌ها در نوار پایین گوشی را می‌توانید شخصی‌سازی کنید.
-                            </div>
-                            <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
-                                {(profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : DEFAULT_MOBILE_NAV_ORDER).map((itemId, idx) => {
-                                    const navLabel = {
-                                        dashboard: 'داشبورد',
-                                        create: 'ثبت پرداخت',
-                                        manage: 'سوابق پرداخت',
-                                        'create-exit': 'ثبت خروج',
-                                        'manage-invoices': 'مدیریت فاکتورها',
-                                        'manage-exit': 'سوابق خروج',
-                                        warehouse: 'مدیریت انبار',
-                                        security: 'انتظامات',
-                                        meetings: 'جلسات تولید',
-                                        purchase: 'درخواست خرید',
-                                        chat: 'گفتگو',
-                                        knowledge: 'اطلاعات و یادداشت ها',
-                                        trade: 'بازرگانی',
-                                        balances: 'مانده حساب مشتریان',
-                                        products: 'کالاها',
-                                        sales: 'مشتریان',
-                                        tickets: 'تیکت‌ها',
-                                        users: 'کاربران',
-                                        settings: 'تنظیمات'
-                                    }[itemId] || itemId;
-
-                                    return (
-                                        <div key={itemId} className="flex items-center justify-between bg-white p-1.5 rounded-lg border border-gray-100 shadow-sm">
-                                            <span className="text-[10px] font-bold text-gray-700 truncate">{navLabel}</span>
-                                            <div className="flex gap-1">
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const defaultOrder = DEFAULT_MOBILE_NAV_ORDER;
-                                                            const currentOrder = profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : defaultOrder;
-                                                            const order = [...currentOrder];
-                                                            if (idx > 0) {
-                                                                const temp = order[idx];
-                                                                order[idx] = order[idx-1];
-                                                                order[idx-1] = temp;
-                                                                setProfileForm({...profileForm, mobileNavOrder: order});
-                                                            }
-                                                        }}
-                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
-                                                        disabled={idx === 0}
-                                                    >
-                                                        <RefreshCw size={12} className="rotate-90"/>
-                                                    </button>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const defaultOrder = DEFAULT_MOBILE_NAV_ORDER;
-                                                            const currentOrder = profileForm.mobileNavOrder?.length ? profileForm.mobileNavOrder : defaultOrder;
-                                                            const order = [...currentOrder];
-                                                            if (idx < order.length - 1) {
-                                                                const temp = order[idx];
-                                                                order[idx] = order[idx+1];
-                                                                order[idx+1] = temp;
-                                                                setProfileForm({...profileForm, mobileNavOrder: order});
-                                                            }
-                                                        }}
-                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
-                                                        disabled={idx === (profileForm.mobileNavOrder?.length || 19) - 1}
-                                                    >
-                                                        <RefreshCw size={12} className="-rotate-90"/>
-                                                    </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
                         {canSeeNotifications && (
                             <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 p-3 rounded-lg">
                                 <input type="checkbox" checked={profileForm.receiveNotifications} onChange={e => setProfileForm({...profileForm, receiveNotifications: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
@@ -584,11 +490,11 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
           </div>
       </aside>
       
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer (Refined Glass Design) */}
       {showMobileMenu && (
-          <div className="fixed inset-0 z-[100] md:hidden animate-fade-in flex justify-end">
+          <div className="fixed inset-0 z-[60] md:hidden animate-fade-in flex justify-end">
               <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileMenu(false)}></div>
-              <div className="relative w-72 bg-white/90 backdrop-blur-2xl h-full shadow-2xl flex flex-col transform transition-transform border-l border-white/50 animate-slide-in-right">
+              <div className="relative w-72 bg-white/80 backdrop-blur-2xl h-full shadow-2xl flex flex-col transform transition-transform border-l border-white/50 animate-slide-in-right">
                   {/* Header */}
                   <div className="p-6 border-b border-white/40 flex justify-between items-center bg-white/40">
                       <div className="flex items-center gap-3">
@@ -661,54 +567,38 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
           </div>
       )}
 
-      {/* Mobile Bottom Navigation - Attractive Float Pill */}
-      <AnimatePresence>
-        {activeTab === 'dashboard' && (
-          <motion.div 
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="md:hidden fixed z-[90] bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl"
-          >
-              {bottomVisibleItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                      <button 
-                          key={item.id}
-                          onClick={() => setActiveTab(item.id)} 
-                          className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
-                      >
-                          <div className={`p-2 rounded-2xl transition-all duration-300 ${isActive ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
-                              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'animate-pulse-subtle' : ''}/>
-                              {item.id === 'chat' && unreadChatCount > 0 && (
-                                <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
-                              )}
-                          </div>
-                          <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>{item.label}</span>
-                          {isActive && <motion.div layoutId="bottomNavDot" className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />}
-                      </button>
-                  );
-              })}
-              
-              {hasMore && (
-                  <button 
-                      onClick={() => setShowMobileMenu(true)} 
-                      className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
-                  >
-                      <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
-                          <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
-                          {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
-                            <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
-                          )}
-                      </div>
-                      <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600' : 'text-gray-500'}`}>بیشتر</span>
-                  </button>
-              )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Mobile Bottom Navigation */}
+      <div className={`md:hidden fixed z-50 transition-all duration-300 ease-in-out ${activeTab === 'dashboard' ? 'bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2 shadow-2xl rounded-[2.5rem] backdrop-blur-3xl opacity-100 translate-y-0' : 'bottom-0 left-1/2 -translate-x-1/2 opacity-0 translate-y-full pointer-events-none'}`}>
+         {activeTab === 'dashboard' && (
+             <>
+                {bottomNavItems.map((item) => { 
+                    const Icon = item.icon; 
+                    const isActive = activeTab === item.id;
+                    return (
+                        <button 
+                            key={item.id} 
+                            onClick={() => setActiveTab(item.id)} 
+                            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${isActive ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                            <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                            <span className="text-[9px] font-bold mt-0.5">{item.label}</span>
+                        </button>
+                    ); 
+                })}
+                
+                {/* Menu Button */}
+                {showMoreButton && (
+                <button 
+                    onClick={() => setShowMobileMenu(true)} 
+                    className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 flex-1 ${showMobileMenu ? 'text-blue-600 dark:text-blue-400 font-black scale-110' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                >
+                    <Menu size={22} strokeWidth={showMobileMenu ? 2.5 : 2} />
+                    <span className="text-[9px] font-bold mt-0.5">موارد بیشتر</span>
+                </button>
+                )}
+             </>
+         )}
+      </div>
 
       <main className="flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0">
       {/* Mobile Header */}
@@ -725,7 +615,14 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                 </button>
                 ) : (
                 <button 
-                    onClick={onBack} 
+                    onClick={() => {
+                        // Native or Browser Back
+                        if (window.history.length > 2) {
+                            window.history.back();
+                        } else {
+                            setActiveTab('dashboard');
+                        }
+                    }} 
                     className="flex items-center justify-center w-10 h-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 active:scale-95 transition-all"
                 >
                     <ChevronRight size={24} />
@@ -772,7 +669,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
             </div>
         </header>
         
-        <div className={`flex-1 ${activeTab === 'chat' ? 'flex flex-col overflow-hidden pb-0 min-h-0' : `overflow-y-auto ${activeTab === 'dashboard' ? 'pb-[calc(140px+env(safe-area-inset-bottom))]' : 'pb-[calc(80px+env(safe-area-inset-bottom))]'}`} bg-transparent md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''} custom-scrollbar`} id="main-scroll-container">
+        <div className={`flex-1 ${activeTab === 'chat' ? 'flex flex-col overflow-hidden pb-0 min-h-0' : `overflow-y-auto ${activeTab === 'dashboard' ? 'pb-[calc(140px+env(safe-area-inset-bottom))]' : 'pb-[env(safe-area-inset-bottom)]'}`} bg-transparent md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''} custom-scrollbar`} id="main-scroll-container">
                     <div className={`${activeTab === 'chat' ? 'hidden' : 'hidden md:flex'} justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 z-40 shadow-sm no-print items-center glass-header`}>
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (
@@ -802,5 +699,4 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
     </div>
   );
 };
-
 export default Layout;

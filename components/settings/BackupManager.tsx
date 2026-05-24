@@ -1,9 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Database, DownloadCloud, UploadCloud, Clock, Loader2, CheckCircle, ShieldCheck, FileJson, WifiOff, RefreshCw, FolderOpen, FileArchive, Save } from 'lucide-react';
-import { apiCall, LS_KEYS, getServerHost, resolveImageUrl } from '../../services/apiService';
-import { saveBlobAndOpenFile, downloadAndOpenFile } from '../../services/fileService';
-import { Capacitor } from '@capacitor/core';
+import { apiCall, LS_KEYS, getServerHost } from '../../services/apiService';
 
 const BackupManager: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +66,14 @@ const BackupManager: React.FC = () => {
     };
 
     const downloadBlob = (blob: Blob, filename: string) => {
-        saveBlobAndOpenFile(blob, filename);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     };
 
     const handleDownloadBackup = async () => {
@@ -81,9 +86,7 @@ const BackupManager: React.FC = () => {
             const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for ZIP generation
 
             // Request the ZIP backup from new endpoint
-            const host = getServerHost() || '';
-            const baseUrl = host ? `${host}/api` : '/api';
-            const response = await fetch(`${baseUrl}/full-backup`, { signal: controller.signal });
+            const response = await fetch(`/api/full-backup`, { signal: controller.signal });
             clearTimeout(timeoutId);
             
             if (!response.ok) throw new Error("Server Download Failed");
@@ -197,17 +200,9 @@ const BackupManager: React.FC = () => {
     };
 
     const handleDownloadAutoBackup = (filename: string) => {
-        const path = `/api/backups/download/${filename}`;
-        
-        if (Capacitor.isNativePlatform()) {
-            const url = resolveImageUrl(path);
-            downloadAndOpenFile(url, filename);
-        } else {
-            // For Web: use relative path if no host set (standard behavior)
-            const host = getServerHost();
-            const url = host ? `${host}${path}` : path;
-            window.open(url, '_blank');
-        }
+        const baseUrl = getServerHost() || '';
+        const url = `${baseUrl}/api/backups/download/${filename}`;
+        window.open(url, '_blank');
     };
 
     return (
