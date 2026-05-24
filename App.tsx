@@ -154,6 +154,29 @@ function App() {
     try { window.history.replaceState(state, title, url); } catch (e) { window.location.hash = url; }
   };
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
+
+  // Expose globally for components like Dashboard to use
+  useEffect(() => {
+    (window as any).setAppFinancialYear = (year: string) => {
+        setFinancialYear(year);
+        // Data reload is handled or should be triggered
+        setTimeout(() => loadData(true), 100);
+    };
+    
+    // Check for share intent on initial load (Capacitor)
+    if (Capacitor.isNativePlatform()) {
+        try {
+            CapacitorApp.addListener('appUrlOpen', (data: any) => {
+                if (data.url) {
+                    console.log('App URL Open:', data.url);
+                    // Handle deep link share if applicable
+                }
+            });
+        } catch (e) { console.error("appUrlOpen listener error", e); }
+    }
+
+    return () => { delete (window as any).setAppFinancialYear; };
+  }, [currentUser]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {

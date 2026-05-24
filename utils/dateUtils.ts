@@ -11,7 +11,8 @@ export const isInFinancialYear = (dateStr: string | undefined | null, financialY
         const shamsiDate = d.toLocaleDateString('fa-IR-u-nu-latn');
         const shamsiYear = shamsiDate.split('/')[0];
         
-        return shamsiYear === financialYear;
+        // Match if label contains the year number (e.g. "سال مالی 1403" matches "1403")
+        return financialYear.includes(shamsiYear) || shamsiYear.includes(financialYear);
     } catch (e) {
         return false;
     }

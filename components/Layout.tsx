@@ -324,8 +324,8 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
       return idxA - idxB;
   });
 
-  // Max 5 items in bottom bar (including "More" if needed)
-  const limit = 5;
+  // Max 6 items in bottom bar (including "More" if needed)
+  const limit = 6;
   const hasMore = sortedItems.length > limit;
   const bottomVisibleItems = hasMore ? sortedItems.slice(0, limit - 1) : sortedItems;
   const menuItems = hasMore ? sortedItems.slice(limit - 1) : [];
@@ -439,6 +439,49 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                   <input type="password" value={profileForm.confirmPassword} onChange={e => setProfileForm({...profileForm, confirmPassword: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all font-bold" placeholder="تکرار رمز عبور"/>
                               </div>
                           </div>
+
+                          <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-widest">شماره موبایل</label>
+                              <input type="text" value={profileForm.phoneNumber} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all font-bold" placeholder="0912..."/>
+                          </div>
+
+                          <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-widest">آیدی تلگرام برای اعلان‌ها</label>
+                              <input type="text" value={profileForm.telegramChatId} onChange={e => setProfileForm({...profileForm, telegramChatId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-blue-500 transition-all font-bold" placeholder="Telegram Chat ID"/>
+                          </div>
+
+                          {navItems.length > 5 && (
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-widest">ترتیب آیکون‌های نوار پایین</label>
+                                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl max-h-32 overflow-y-auto space-y-1">
+                                    {(profileForm.mobileNavOrder.length > 0 ? profileForm.mobileNavOrder : DEFAULT_MOBILE_NAV_ORDER).map((id, idx) => {
+                                        const item = navItems.find(i => i.id === id);
+                                        if (!item) return null;
+                                        return (
+                                            <div key={id} className="flex items-center justify-between text-[11px] font-bold p-1">
+                                                <span>{item.label}</span>
+                                                <div className="flex gap-2">
+                                                    <button type="button" onClick={() => {
+                                                        const newOrder = [...profileForm.mobileNavOrder];
+                                                        if (idx > 0) {
+                                                            [newOrder[idx], newOrder[idx-1]] = [newOrder[idx-1], newOrder[idx]];
+                                                            setProfileForm({...profileForm, mobileNavOrder: newOrder});
+                                                        }
+                                                    }} className="text-blue-500">↑</button>
+                                                    <button type="button" onClick={() => {
+                                                        const newOrder = [...profileForm.mobileNavOrder];
+                                                        if (idx < newOrder.length - 1) {
+                                                            [newOrder[idx], newOrder[idx+1]] = [newOrder[idx+1], newOrder[idx]];
+                                                            setProfileForm({...profileForm, mobileNavOrder: newOrder});
+                                                        }
+                                                    }} className="text-blue-500">↓</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                          )}
 
                           <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-[2rem] flex items-center justify-between group">
                               <div className="flex items-center gap-4">

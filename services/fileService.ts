@@ -2,6 +2,44 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { resolveImageUrl } from './apiService';
 import { FileOpener } from '@capacitor-community/file-opener';
+import { Share } from '@capacitor/share';
+
+/**
+ * Checks if a file exists locally on native platform
+ */
+export const checkFileExists = async (fileName: string): Promise<string | null> => {
+    if (!Capacitor.isNativePlatform()) return null;
+    try {
+        const stat = await Filesystem.stat({ path: fileName, directory: Directory.Documents });
+        return stat ? stat.uri : null;
+    } catch (e) {
+        return null;
+    }
+};
+
+/**
+ * Shares a local or remote file to other apps
+ */
+export const shareFile = async (url: string, fileName: string, title?: string) => {
+    try {
+        const localPath = await checkFileExists(fileName);
+        if (localPath) {
+            await Share.share({
+                title: title || 'اشتراک‌گذاری فایل',
+                files: [localPath],
+            });
+        } else {
+            // Share as link if not downloaded locally
+            await Share.share({
+                title: title || 'اشتراک‌گذاری فایل',
+                url: resolveImageUrl(url),
+                text: fileName
+            });
+        }
+    } catch (err) {
+        console.error('Sharing failed', err);
+    }
+};
 
 /**
  * Downloads a file from the URL and saves it to the device, then opens it.

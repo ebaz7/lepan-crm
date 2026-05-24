@@ -14,8 +14,82 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
-import { downloadAndOpenFile } from '../services/fileService';
+import { downloadAndOpenFile, checkFileExists, shareFile } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
+
+const FileItem: React.FC<{ url: string; fileName: string; isMe: boolean; msgId: string }> = ({ url, fileName, isMe, msgId }) => {
+    const [downloadedPath, setDownloadedPath] = useState<string | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [progress, setProgress] = useState(0);
+
+    const checkStatus = async () => {
+        const path = await checkFileExists(fileName);
+        setDownloadedPath(path);
+    };
+
+    useEffect(() => {
+        checkStatus();
+        const interval = setInterval(checkStatus, 3000);
+        return () => clearInterval(interval);
+    }, [fileName]);
+
+    const handleAction = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (isDownloading) return;
+        
+        setIsDownloading(true);
+        await downloadAndOpenFile(url, fileName, (p) => setProgress(p));
+        setIsDownloading(false);
+        checkStatus();
+    };
+
+    const handleShareInternal = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        await shareFile(url, fileName);
+    };
+
+    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+    const isVideo = /\.(mp4|mov|avi|mkv)$/i.test(fileName);
+
+    return (
+        <div className={`p-2 rounded-2xl flex flex-col gap-2 max-w-[260px] ${isMe ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-50 dark:bg-gray-800'}`}>
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={handleAction}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0 ${isMe ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}
+                >
+                    {isDownloading ? (
+                        <div className="relative flex items-center justify-center">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span className="absolute text-[7px] font-bold">{Math.round(progress)}</span>
+                        </div>
+                    ) : downloadedPath ? (
+                        <File size={20} />
+                    ) : (
+                        <DownloadCloud size={20} />
+                    )}
+                </button>
+                <div className="flex-1 overflow-hidden">
+                    <div className="text-[10px] font-bold truncate dir-ltr text-right">{fileName}</div>
+                    <div className="text-[9px] opacity-60 text-right">
+                        {downloadedPath ? 'دانلود شده' : 'نیاز به دانلود'}
+                    </div>
+                </div>
+                {downloadedPath && (
+                    <button onClick={handleShareInternal} className="p-1.5 hover:bg-black/5 rounded-full text-gray-500">
+                        <Share2 size={14}/>
+                    </button>
+                )}
+            </div>
+            
+            {isImage && (
+                <div className="rounded-xl overflow-hidden shadow-inner cursor-pointer" onClick={handleAction}>
+                    <img src={resolveImageUrl(url)} alt={fileName} className="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity" />
+                </div>
+            )}
+        </div>
+    );
+};
 
 interface ChatRoomProps { 
     currentUser: User | null; 
@@ -1330,13 +1404,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     onDrop={handleDrop}
                                 >
                             {filteredMessages.map((msg: ChatMessage) => {
+                                if (!msg || !currentUser) return null;
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
                                 
                                 return (
                                     <div 
                                         key={msg.id} 
-                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
+                                        className={`flex w-full mb-1 group ${isMe ? 'justify-start' : 'justify-end'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
                                         onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
                                         onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
                                     >
@@ -1381,49 +1456,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             {/* Content */}
                                             {msg.attachment ? (
                                                 <div className="mb-1">
-                                                    {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                        <img 
-                                                            src={resolveImageUrl(msg.attachment.url)} 
-                                                            className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
-                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(resolveImageUrl(msg.attachment!.url)); }}
-                                                        />
-                                                    ) : (
-                                                        <button 
-                                                            className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors w-full text-right" 
-                                                            onClick={async (e) => { 
-                                                                e.stopPropagation(); 
-                                                                if (isDownloading[msg.id]) return;
-                                                                
-                                                                setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
-                                                                setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
-                                                                
-                                                                await downloadAndOpenFile(msg.attachment!.url, msg.attachment!.fileName, (p) => {
-                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: p }));
-                                                                });
-
-                                                                setTimeout(() => {
-                                                                    setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
-                                                                    setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
-                                                                }, 500);
-                                                            }}
-                                                        >
-                                                            <div className="bg-blue-500 p-2 rounded text-white relative">
-                                                                {isDownloading[msg.id] ? <Loader2 size={16} className="animate-spin"/> : <File size={16}/>}
-                                                                {isDownloading[msg.id] && (
-                                                                    <div className="absolute inset-0 flex items-center justify-center bg-blue-600 rounded text-[8px] font-bold">
-                                                                        {fileProgress[msg.id]}%
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="overflow-hidden flex-1">
-                                                                <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
-                                                            </div>
-                                                        </button>
-                                                    )}
+                                                    <FileItem url={msg.attachment.url} fileName={msg.attachment.fileName} isMe={isMe} msgId={msg.id} />
                                                 </div>
                                             ) : msg.audioUrl ? (
-                                                <div className="flex items-center gap-2 min-w-[200px] py-1">
+                                                <div className="flex items-center gap-2 min-w-[180px] py-1">
                                                     <AudioPlayer url={msg.audioUrl} isMe={isMe} duration={msg.audioDuration} />
                                                 </div>
                                             ) : (
