@@ -41,6 +41,18 @@ function App() {
 
   const activeTabRef = useRef(activeTab);
   const tabHistoryRef = useRef(tabHistory);
+  const customBackRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const registerBack = (e: any) => { customBackRef.current = e.detail; };
+    const unregisterBack = () => { customBackRef.current = null; };
+    window.addEventListener('REGISTER_BACK_ACTION', registerBack);
+    window.addEventListener('UNREGISTER_BACK_ACTION', unregisterBack);
+    return () => {
+        window.removeEventListener('REGISTER_BACK_ACTION', registerBack);
+        window.removeEventListener('UNREGISTER_BACK_ACTION', unregisterBack);
+    }
+  }, []);
 
   useEffect(() => {
       activeTabRef.current = activeTab;
@@ -69,8 +81,14 @@ function App() {
       }
   };
 
-  const goBackGlobal = (isPopState: boolean = false) => {
-      // 1. Check for Active Modals/Dialogs first
+  const goBack = (isPopState: boolean = false) => {
+      // 1. Registered custom handler
+      if (customBackRef.current) {
+          customBackRef.current();
+          return true;
+      }
+      
+      // 2. Modals check
       const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
       if (activeModals.length > 0) {
           const lastModal = activeModals[activeModals.length - 1];
@@ -78,49 +96,12 @@ function App() {
           if (closeBtn) {
               closeBtn.click();
           } else {
-              // Brute force click the first button that looks like a close/cancel
-              const fallbackBtn = Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                  const txt = (btn.textContent || '').trim();
-                  const hasCloseIcon = btn.querySelector('.lucide-x, .lucide-x-circle, .lucide-chevron-right, .lucide-arrow-right');
-                  const hasRedText = btn.className.includes('red');
-                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || hasCloseIcon || hasRedText;
-              }) as HTMLElement;
-              
-              if (fallbackBtn) {
-                  fallbackBtn.click();
-              } else {
-                   window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
-                   setActiveTabState(activeTabRef.current);
-              }
-          }
-          
-          if (isPopState) {
-              const currentTab = activeTabRef.current;
-              safePushState({ tab: currentTab, recoveredFromModal: true }, '', `#${currentTab}`);
+              window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
           }
           return true;
       }
 
-      // 2. Check for Sub-view back buttons (e.g. data-subtab-back="true")
-      const subTabBtns = Array.from(document.querySelectorAll('[data-subtab-back="true"]')) as HTMLElement[];
-      const subTabBtn = subTabBtns.find(el => {
-         const style = window.getComputedStyle(el);
-         return style.display !== 'none' && style.visibility !== 'hidden';
-      }) || subTabBtns[subTabBtns.length - 1];
-
-      if (subTabBtn) {
-          subTabBtn.click();
-          if (isPopState) {
-              const currentTab = activeTabRef.current;
-              safePushState({ tab: currentTab, recoveredFromSubtab: true }, '', `#${currentTab}`);
-          }
-          return true;
-      }
-
-      // If it's a popstate and no modal/subtab was open, we let handlePopState manage the tab routing
-      if (isPopState) return false;
-
-      // 3. Main Tab History Back (for Android / Custom GO_BACK event)
+      // 3. Tab history back
       if (tabHistoryRef.current.length > 1) {
           setTabHistory(prev => {
               const newHist = [...prev];
@@ -133,9 +114,11 @@ function App() {
           return true;
       }
 
-      // 4. Return to dashboard if lost
+      // 4. Force back to dashboard if not at dashboard
       if (activeTabRef.current !== 'dashboard') {
           setActiveTab('dashboard', false);
+          // Force ref update for tab state in case rendering is slow
+          activeTabRef.current = 'dashboard';
           return true;
       }
 
@@ -724,7 +707,7 @@ function App() {
             <Login onLogin={handleLogin} />
         ) : (
             <Layout 
-            onBack={goBackGlobal}
+            onBack={goBack}
             activeTab={activeTab} 
             setActiveTab={(t) => { setActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); if(t!=='purchase') setPurchaseInitialTab('REQUESTS'); }} 
             currentUser={currentUser} 

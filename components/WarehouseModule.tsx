@@ -175,6 +175,20 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const [editingBijak, setEditingBijak] = useState<WarehouseTransaction | null>(null); 
     const [editingReceipt, setEditingReceipt] = useState<WarehouseTransaction | null>(null); 
     
+    useEffect(() => {
+        if (viewBijak || editingBijak || editingReceipt) {
+            const handleBack = () => {
+                if (viewBijak) setViewBijak(null);
+                if (editingBijak) setEditingBijak(null);
+                if (editingReceipt) setEditingReceipt(null);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
+        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
+    }, [viewBijak, editingBijak, editingReceipt]);
+    
     // Reports State
     const [archiveFilterCompany, setArchiveFilterCompany] = useState('');
     const [reportSearch, setReportSearch] = useState('');
