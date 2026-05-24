@@ -62,6 +62,9 @@ function App() {
   const setActiveTab = (tab: string, addToHistory = true) => {
       if (tab === activeTabRef.current) return;
       
+      // Clear custom back ref when changing tab to avoid leaks
+      customBackRef.current = null;
+      
       setActiveTabState(tab);
       if (addToHistory) {
           setTabHistory(prev => {
@@ -96,7 +99,19 @@ function App() {
           if (closeBtn) {
               closeBtn.click();
           } else {
-              window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+              // Brute force click the first button that looks like a close/cancel
+              const fallbackBtn = Array.from(lastModal.querySelectorAll('button')).find(btn => {
+                  const txt = (btn.textContent || '').trim();
+                  const hasCloseIcon = btn.querySelector('.lucide-x, .lucide-x-circle, .lucide-chevron-right, .lucide-arrow-right');
+                  const hasRedText = btn.className.includes('red');
+                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || hasCloseIcon || hasRedText;
+              }) as HTMLElement;
+              
+              if (fallbackBtn) {
+                  fallbackBtn.click();
+              } else {
+                   window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+              }
           }
           return true;
       }
@@ -189,7 +204,7 @@ function App() {
         let backListener: any;
         try {
             CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-                const handled = goBackGlobal();
+                const handled = goBack();
                 if (!handled && !canGoBack && activeTabRef.current === 'dashboard') {
                     CapacitorApp.exitApp();
                 }
@@ -227,7 +242,7 @@ function App() {
 
   useEffect(() => {
       const handleJob = (e: CustomEvent) => { setBackgroundJobs(prev => [...prev, e.detail]); };
-      const handleGoBack = () => { goBackGlobal(); };
+      const handleGoBack = () => { goBack(); };
       window.addEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
       window.addEventListener('GO_BACK', handleGoBack);
       return () => {
@@ -303,7 +318,7 @@ function App() {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-        const handled = goBackGlobal(true);
+        const handled = goBack(true);
         if (!handled && event.state?.tab) {
             setActiveTab(event.state.tab, false);
         }

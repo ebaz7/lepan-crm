@@ -366,21 +366,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     }, [activeChannel]);
 
     useEffect(() => {
-        // Register the back action to go back in chat logic, or exit chat
-        const handleBack = () => {
-             // Example: If in a specific chat, go back to list, else exit chat view
-             // This is up to the component's internal logic.
-             // For now, it exits chat.
-             window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
-             window.dispatchEvent(new CustomEvent('GO_BACK_CHAT'));
-        };
-        
-        window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
-        
+        if (activeChannel) {
+            const handleBack = () => {
+                 setActiveChannel(null);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
         return () => {
             window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
         };
-    }, []);
+    }, [activeChannel]);
 
     // Handle Document Visibility for Notifications
     useEffect(() => {

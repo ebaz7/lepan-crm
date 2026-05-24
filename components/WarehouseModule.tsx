@@ -183,11 +183,16 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 if (editingReceipt) setEditingReceipt(null);
             };
             window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else if (activeTab !== 'dashboard') {
+            const handleBack = () => {
+                setActiveTab('dashboard');
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
         } else {
             window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
         }
         return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
-    }, [viewBijak, editingBijak, editingReceipt]);
+    }, [viewBijak, editingBijak, editingReceipt, activeTab]);
     
     // Reports State
     const [archiveFilterCompany, setArchiveFilterCompany] = useState('');

@@ -50,6 +50,27 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
         loadParts();
     }, []);
 
+    useEffect(() => {
+        if (viewRequest || editingPart || selectedPartKardex || showCreateModal || showPartModal) {
+            const handleBack = () => {
+                if (viewRequest) setViewRequest(null);
+                if (editingPart) setEditingPart(null);
+                if (selectedPartKardex) setSelectedPartKardex(null);
+                if (showCreateModal) setShowCreateModal(false);
+                if (showPartModal) setShowPartModal(false);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else if (activeTab !== 'DASHBOARD') {
+            const handleBack = () => {
+                setActiveTab('DASHBOARD');
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
+        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
+    }, [viewRequest, editingPart, selectedPartKardex, showCreateModal, showPartModal, activeTab]);
+
     const loadRequests = async () => {
         setLoading(true);
         try {
