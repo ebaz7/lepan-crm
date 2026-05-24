@@ -69,7 +69,7 @@ function App() {
       }
   };
 
-  const goBackGlobal = () => {
+  const goBackGlobal = (isPopState: boolean = false) => {
       // 1. Check for Active Modals/Dialogs first
       const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
       if (activeModals.length > 0) {
@@ -81,10 +81,22 @@ function App() {
               // Brute force click the first button that looks like a close/cancel
               const fallbackBtn = Array.from(lastModal.querySelectorAll('button')).find(btn => {
                   const txt = (btn.textContent || '').trim();
-                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕');
+                  const hasCloseIcon = btn.querySelector('.lucide-x, .lucide-x-circle, .lucide-chevron-right, .lucide-arrow-right');
+                  const hasRedText = btn.className.includes('red');
+                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || hasCloseIcon || hasRedText;
               }) as HTMLElement;
-              if (fallbackBtn) fallbackBtn.click();
-              else setActiveTabState(activeTabRef.current); // Force re-render to hopefully close state-driven modals
+              
+              if (fallbackBtn) {
+                  fallbackBtn.click();
+              } else {
+                   window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+                   setActiveTabState(activeTabRef.current);
+              }
+          }
+          
+          if (isPopState) {
+              const currentTab = activeTabRef.current;
+              safePushState({ tab: currentTab, recoveredFromModal: true }, '', `#${currentTab}`);
           }
           return true;
       }
@@ -98,19 +110,24 @@ function App() {
 
       if (subTabBtn) {
           subTabBtn.click();
+          if (isPopState) {
+              const currentTab = activeTabRef.current;
+              safePushState({ tab: currentTab, recoveredFromSubtab: true }, '', `#${currentTab}`);
+          }
           return true;
       }
 
-      // 3. Main Tab History Back
+      // If it's a popstate and no modal/subtab was open, we let handlePopState manage the tab routing
+      if (isPopState) return false;
+
+      // 3. Main Tab History Back (for Android / Custom GO_BACK event)
       if (tabHistoryRef.current.length > 1) {
           setTabHistory(prev => {
               const newHist = [...prev];
               newHist.pop();
               const prevTab = newHist[newHist.length - 1];
               setActiveTabState(prevTab);
-              try {
-                  window.history.replaceState({ tab: prevTab }, '', `#${prevTab}`);
-              } catch (e) {}
+              safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
               return newHist;
           });
           return true;
@@ -118,11 +135,11 @@ function App() {
 
       // 4. Return to dashboard if lost
       if (activeTabRef.current !== 'dashboard') {
-          setActiveTab('dashboard');
+          setActiveTab('dashboard', false);
           return true;
       }
 
-      return false; // Let native behavior handle exit if at dashboard root
+      return false; // Let native behavior handle exit
   };
 
   const safePushState = (state: any, title: string, url: string) => {
@@ -227,8 +244,13 @@ function App() {
 
   useEffect(() => {
       const handleJob = (e: CustomEvent) => { setBackgroundJobs(prev => [...prev, e.detail]); };
+      const handleGoBack = () => { goBackGlobal(); };
       window.addEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
-      return () => window.removeEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
+      window.addEventListener('GO_BACK', handleGoBack);
+      return () => {
+          window.removeEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
+          window.removeEventListener('GO_BACK', handleGoBack);
+      };
   }, []);
 
   useEffect(() => { if (backgroundJobs.length > 0 && !processingJobRef.current) { processNextJob(); } }, [backgroundJobs]);
@@ -298,7 +320,7 @@ function App() {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-        const handled = goBackGlobal();
+        const handled = goBackGlobal(true);
         if (!handled && event.state?.tab) {
             setActiveTab(event.state.tab, false);
         }
@@ -440,7 +462,7 @@ function App() {
       playNotificationSound();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       setToast({ show: true, title, message });
-      toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
+      toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
       sendNotification(title, message);
   };
 
@@ -673,19 +695,16 @@ function App() {
   return (
     <>
         {toast && toast.show && (
-            <div className="fixed inset-0 flex items-center justify-center p-6 z-[9999999] pointer-events-none">
-                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-[2.5rem] p-6 flex items-center gap-5 min-w-[320px] max-w-[95vw] animate-scale-in backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
-                    <div className="absolute top-0 right-0 w-2 h-full bg-blue-500 shadow-[0_0_25px_rgba(59,130,246,0.5)]"></div>
-                    <div className="bg-blue-600 p-4 rounded-[1.5rem] text-white shadow-lg flex-shrink-0 animate-pulse">
-                        <Bell size={28} />
+            <div className="fixed inset-x-4 top-4 z-[9999999] flex justify-center pointer-events-none w-auto">
+                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-3xl p-4 flex items-center gap-4 min-w-[320px] max-w-[95vw] animate-slide-down backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
+                    <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]"></div>
+                    <div className="bg-gradient-to-tr from-blue-500 to-indigo-600 p-3 rounded-2xl text-white shadow-lg flex-shrink-0 animate-pulse">
+                        <Bell size={24} />
                     </div>
                     <div className="flex-1 pr-1 text-right">
-                        <h4 className="font-extrabold text-gray-900 dark:text-white text-lg mb-1 tracking-tight">{toast.title}</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-200 leading-relaxed font-bold">{toast.message}</p>
+                        <h4 className="font-black text-gray-900 dark:text-white text-sm mb-0.5 tracking-tight">{toast.title}</h4>
+                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed font-bold">{toast.message}</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-2.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95 flex-shrink-0">
-                        <X size={24} />
-                    </button>
                 </div>
             </div>
         )}
