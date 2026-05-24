@@ -190,6 +190,18 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedFileUrl = params.get('sharedFileUrl');
+    const sharedText = params.get('sharedText');
+    if (sharedFileUrl || sharedText) {
+        setSharedData({ fileUrl: sharedFileUrl || undefined, text: sharedText || undefined });
+        setActiveTab('chat');
+        // Clean URL
+        window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
   const toggleTheme = () => {
       const newTheme = theme === 'light' ? 'dark' : 'light';
       setTheme(newTheme);

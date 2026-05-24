@@ -551,7 +551,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
         if (type === 'task_group') return null;
-        const relevant = displayMessages.filter(m => {
+        const relevant = (displayMessages || []).filter(m => {
+            if (!m) return false;
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
             if (type === 'group') return m.groupId === channelId;
@@ -686,7 +687,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if ((!inputText.trim() && !localSharedData?.fileUrl) || isUploading) return;
 
         if (editingMessageId) {
-            const msgToUpdate = displayMessages.find(m => m.id === editingMessageId);
+            const msgToUpdate = (displayMessages || []).find(m => m.id === editingMessageId);
             if (msgToUpdate) {
                 try {
                     await updateMessage({ ...msgToUpdate, message: inputText, isEdited: true });
@@ -1189,8 +1190,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Render Logic ---
     if (!currentUser) return null;
 
-    const filteredMessages = displayMessages.filter(msg => {
-        if (!activeChannel) return false;
+    const filteredMessages = (displayMessages || []).filter(msg => {
+        if (!activeChannel || !msg) return false;
         let match = false;
         if (activeChannel.type === 'public') match = !msg.recipient && !msg.groupId;
         else if (activeChannel.type === 'private') match = (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id);
@@ -1198,7 +1199,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         
         if (!match) return false;
         if (innerSearchTerm) {
-            return (msg.message?.includes(innerSearchTerm) || msg.sender?.includes(innerSearchTerm));
+            const body = msg.message || '';
+            const sender = msg.senderName || msg.senderUsername || '';
+            return (body.toLowerCase().includes(innerSearchTerm.toLowerCase()) || sender.toLowerCase().includes(innerSearchTerm.toLowerCase()));
         }
         return true;
     });
@@ -1411,7 +1414,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 return (
                                     <div 
                                         key={msg.id} 
-                                        className={`flex w-full mb-1 group ${isMe ? 'justify-start' : 'justify-end'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
+                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
                                         onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
                                         onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
                                     >

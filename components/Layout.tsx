@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Calendar as CalendarIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
@@ -681,7 +681,26 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                 {navItems.find(i => i.id === activeTab)?.label}
                             </h2>
                             <div className="flex items-center gap-4 text-[10px] font-black text-gray-400 tracking-widest uppercase">
-                                {financialYear && <span>سال مالی {financialYear}</span>}
+                                <div className="flex items-center gap-2 bg-gray-100/50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-white/20">
+                                    <CalendarIcon size={12} className="text-blue-500" />
+                                    <select 
+                                        value={financialYear} 
+                                        onChange={(e) => (window as any).setAppFinancialYear?.(e.target.value)}
+                                        className="bg-transparent border-none p-0 text-[10px] font-black text-gray-700 dark:text-gray-300 outline-none cursor-pointer focus:ring-0"
+                                    >
+                                        {settings?.financialYears?.length ? (
+                                            settings.financialYears.map((y: any) => (
+                                                <option key={y.year} value={y.year}>{y.label || y.year}</option>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <option value="1402">۱۴۰۲</option>
+                                                <option value="1403">۱۴۰۳</option>
+                                                <option value="1404">۱۴۰۴</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
                                 <span className="w-1 h-1 bg-gray-300 rounded-full" />
                                 <span className="text-blue-500">{currentUser.role}</span>
                             </div>

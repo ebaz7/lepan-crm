@@ -256,6 +256,7 @@ export interface SystemSettings {
   savedContacts?: Contact[];
   knowledgeBaseItems?: KnowledgeBaseItem[];
   pwaIcon?: string;
+  financialYears?: { year: string; label: string }[];
   botCompanyInfo?: string; // fallback / general
   companyAddress?: string;
   companyPhone?: string;

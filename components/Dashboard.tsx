@@ -317,25 +317,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         
         {/* TOP SECTION: MINIMAL DATE, PRICES & SLICK POETRY */}
         <div className="flex flex-col lg:flex-row gap-4">
-            {/* Fiscal Year Selector - Samsung Style */}
-            <div className="glass-panel rounded-2xl p-4 border border-blue-100 shadow-sm flex items-center gap-4 min-w-[200px] shrink-0">
-                <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
-                    <CalendarIcon size={24} />
-                </div>
-                <div className="flex flex-col flex-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">سال مالی فعال</label>
-                    <select 
-                        value={currentYearStr} 
-                        onChange={handleYearChange}
-                        className="bg-transparent border-none p-0 font-black text-gray-900 text-lg outline-none cursor-pointer focus:ring-0"
-                    >
-                        <option value="1402">۱۴۰۲</option>
-                        <option value="1403">۱۴۰۳</option>
-                        <option value="1404">۱۴۰۴</option>
-                    </select>
-                </div>
-            </div>
-
             {/* Minimal Date Card - Smaller & Sleek */}
             <div className="glass-panel rounded-2xl p-4 border border-indigo-100 shadow-sm flex items-center gap-4 min-w-[220px] shrink-0 relative group overflow-hidden">
                 <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity"><CalendarIcon size={40}/></div>
