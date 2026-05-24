@@ -516,6 +516,7 @@ function App() {
               const updated = { ...settings, activeFiscalYearId: year.id };
               await saveSettings(updated);
               setSettings(updated);
+              await loadData(true);
           }
       }
   };
@@ -763,6 +764,12 @@ function App() {
           return true;
       }).length;
   }, [chatMessages, currentUser]);
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      loadData(true);
+    }
+  }, [activeTab]);
 
   return (
     <>

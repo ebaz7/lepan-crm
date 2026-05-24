@@ -738,7 +738,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
 
                {/* Viewport Content */}
                <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden h-full">
-                    <div className={`flex-1 overflow-y-auto ${activeTab === 'chat' ? 'min-h-0 h-full' : 'pb-36 lg:pb-12 px-4 md:px-12 lg:px-16'} custom-scrollbar scroll-smooth`}>
+                    <div className={`flex-1 overflow-y-auto ${activeTab === 'chat' ? 'min-h-0 h-full' : 'pb-48 lg:pb-12 px-4 md:px-12 lg:px-16'} custom-scrollbar scroll-smooth`}>
                          <motion.div 
                             key={activeTab}
                             initial={{ opacity: 0, scale: 0.98, y: 10 }}
