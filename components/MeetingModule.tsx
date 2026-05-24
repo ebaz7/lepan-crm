@@ -45,8 +45,17 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const canManage = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canManageMeetings);
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (showModal || viewMeeting) {
+            const handleBack = () => {
+                if (showModal) setShowModal(false);
+                if (viewMeeting) setViewMeeting(null);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
+        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
+    }, [showModal, viewMeeting]);
 
     const loadData = async () => {
         setLoading(true);

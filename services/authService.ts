@@ -158,19 +158,31 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
         if (!settings?.rolePermissions?.[userRole]?.canManageWarehouse) {
             perms.canManageWarehouse = false;
         }
-    } else if (userRole === UserRole.WAREHOUSE_KEEPER) {
-        // Specifically force off for Warehouse Keeper system role if it was accidentally enabled in settings
-        perms.canManageWarehouse = false;
     }
 
     console.log(`DEBUG: Final permissions for ${userRole}:`, perms);
 
     // 4. FORCE SYSTEM DEFAULTS AGAIN (SAFETY NET)
     // Ensure critical approvals for system roles aren't accidentally disabled by empty settings
-    if (userRole === UserRole.FACTORY_MANAGER) perms.canApproveExitFactory = true;
-    if (userRole === UserRole.WAREHOUSE_KEEPER) perms.canApproveExitWarehouse = true;
-    if (userRole === UserRole.SECURITY_HEAD) perms.canApproveExitSecurity = true;
-    if (userRole === UserRole.CEO) { perms.canApproveExitCeo = true; perms.canApproveCeo = true; }
+    const hasRoleConfig = settings?.rolePermissions && settings.rolePermissions[userRole];
+
+    if (userRole === UserRole.FACTORY_MANAGER && (!hasRoleConfig || settings.rolePermissions[userRole].canApproveExitFactory === undefined)) {
+        perms.canApproveExitFactory = true;
+    }
+    if (userRole === UserRole.WAREHOUSE_KEEPER && (!hasRoleConfig || settings.rolePermissions[userRole].canApproveExitWarehouse === undefined)) {
+        perms.canApproveExitWarehouse = true;
+    }
+    if (userRole === UserRole.SECURITY_HEAD && (!hasRoleConfig || settings.rolePermissions[userRole].canApproveExitSecurity === undefined)) {
+        perms.canApproveExitSecurity = true;
+    }
+    if (userRole === UserRole.CEO) {
+        if (!hasRoleConfig || settings.rolePermissions[userRole].canApproveExitCeo === undefined) {
+            perms.canApproveExitCeo = true;
+        }
+        if (!hasRoleConfig || settings.rolePermissions[userRole].canApproveCeo === undefined) {
+            perms.canApproveCeo = true;
+        }
+    }
 
     // 5. USER SPECIFIC OVERRIDES
     if (userObject?.canManageTrade) {

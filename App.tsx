@@ -23,7 +23,7 @@ import { Tickets } from './components/Tickets';
 import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
-import { getCurrentUser, getUsers } from './services/authService';
+import { getCurrentUser, getUsers, getRolePermissions } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
 import { Loader2, Bell, X } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
@@ -41,17 +41,117 @@ function App() {
 
   const activeTabRef = useRef(activeTab);
   const tabHistoryRef = useRef(tabHistory);
+  const customBackRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const registerBack = (e: any) => { customBackRef.current = e.detail; };
+    const unregisterBack = () => { customBackRef.current = null; };
+    window.addEventListener('REGISTER_BACK_ACTION', registerBack);
+    window.addEventListener('UNREGISTER_BACK_ACTION', unregisterBack);
+    return () => {
+        window.removeEventListener('REGISTER_BACK_ACTION', registerBack);
+        window.removeEventListener('UNREGISTER_BACK_ACTION', unregisterBack);
+    }
+  }, []);
 
   useEffect(() => {
       activeTabRef.current = activeTab;
       tabHistoryRef.current = tabHistory;
   }, [activeTab, tabHistory]);
 
-  const changeTab = (tab: string, addToHistory = true) => {
+  const setActiveTab = (tab: string, addToHistory = true) => {
+      if (tab === activeTabRef.current) return;
+      
+      // Clear custom back ref when changing tab to avoid leaks
+      customBackRef.current = null;
+      
       setActiveTabState(tab);
-      if (addToHistory && tab !== tabHistory[tabHistory.length - 1]) {
-          setTabHistory(prev => [...prev.slice(-9), tab]); // Keep last 10 steps
+      if (addToHistory) {
+          setTabHistory(prev => {
+              if (prev[prev.length - 1] === tab) return prev;
+              return [...prev.slice(-14), tab]; // Keep last 15
+          });
+          
+          // Browser history support
+          const hash = `#${tab}`;
+          if (window.location.hash !== hash) {
+              try {
+                  window.history.pushState({ tab }, '', hash);
+              } catch (e) {
+                  window.location.hash = hash;
+              }
+          }
       }
+  };
+
+  const goBack = (isPopState: boolean = false) => {
+      // 1. Registered custom handler
+      if (customBackRef.current) {
+          customBackRef.current();
+          return true;
+      }
+      
+      // 2. Modals check
+      const activeModals = Array.from(
+          document.querySelectorAll('.fixed.inset-0:not(.pointer-events-none):not(.invisible):not(.opacity-0), [role="dialog"], .notification-dropdown-container, .glass-panel.fixed:not(.pointer-events-none), .modal-active')
+      ).filter(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && !el.classList.contains('pointer-events-none');
+      });
+
+      if (activeModals.length > 0) {
+          const lastModal = activeModals[activeModals.length - 1];
+          const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"], [data-close-announcement="true"]') as HTMLElement;
+          if (closeBtn) {
+              closeBtn.click();
+          } else {
+              // Brute force click the first button that looks like a close/cancel
+              const fallbackBtn = Array.from(lastModal.querySelectorAll('button')).find(btn => {
+                  const txt = (btn.textContent || '').trim();
+                  const hasCloseIcon = btn.querySelector('.lucide-x, .lucide-x-circle, .lucide-chevron-right, .lucide-arrow-right');
+                  const hasRedText = btn.className.includes('red');
+                  return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || hasCloseIcon || hasRedText;
+              }) as HTMLElement;
+              
+              if (fallbackBtn) {
+                  fallbackBtn.click();
+              } else {
+                   window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
+              }
+          }
+          return true;
+      }
+
+      // 3. Tab history back
+      if (tabHistoryRef.current.length > 1) {
+          setTabHistory(prev => {
+              const newHist = [...prev];
+              newHist.pop();
+              const prevTab = newHist[newHist.length - 1];
+              setActiveTabState(prevTab);
+              safeReplaceState({ tab: prevTab }, '', `#${prevTab}`);
+              return newHist;
+          });
+          return true;
+      }
+
+      // 4. Force back to dashboard if not at dashboard
+      if (activeTabRef.current !== 'dashboard') {
+          setActiveTab('dashboard', false);
+          // Force ref update for tab state in case rendering is slow
+          activeTabRef.current = 'dashboard';
+          return true;
+      }
+
+      return false; // Let native behavior handle exit
+  };
+
+  const safePushState = (state: any, title: string, url: string) => {
+    try { window.history.pushState(state, title, url); } catch (e) { window.location.hash = url; }
+  };
+  
+  const safeReplaceState = (state: any, title: string, url: string) => {
+    try { window.history.replaceState(state, title, url); } catch (e) { window.location.hash = url; }
   };
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -77,8 +177,12 @@ function App() {
           document.documentElement.classList.remove('dark');
       }
   };
-  const [orders, setOrders] = useState<PaymentOrder[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); 
+  const [orders, setOrders] = useState<PaymentOrder[]>(() => {
+    try { const item = localStorage.getItem('app_data_orders'); return item ? JSON.parse(item) : []; } catch { return []; }
+  });
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    try { const item = localStorage.getItem('app_data_chat'); return item ? JSON.parse(item) : []; } catch { return []; }
+  }); 
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [manageOrdersInitialTab, setManageOrdersInitialTab] = useState<'current' | 'archive'>('current');
@@ -89,6 +193,7 @@ function App() {
   const toastTimeoutRef = useRef<any>(null);
 
   const [backgroundJobs, setBackgroundJobs] = useState<{order: PaymentOrder, type: 'create' | 'approve'}[]>([]);
+  const [sharedData, setSharedData] = useState<{ fileUrl?: string; text?: string; title?: string } | null>(null);
   const processingJobRef = useRef(false);
 
   const isSyncingRef = useRef(false);
@@ -100,74 +205,13 @@ function App() {
   const lastChatMsgIdRef = useRef<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
 
-  const safePushState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.pushState(state, title, url); else window.history.pushState(state, title); } catch (e) { try { window.history.pushState(state, title); } catch(e2) {} } 
-  };
-  const safeReplaceState = (state: any, title: string, url?: string) => { 
-      if (isNative) return; 
-      try { if (url) window.history.replaceState(state, title, url); else window.history.replaceState(state, title); } catch (e) { try { window.history.replaceState(state, title); } catch(e2) {} } 
-  };
-  
-    const setActiveTab = (tab: string, addToHistory = true) => { 
-      setActiveTabState(tab); 
-      if (addToHistory) {
-          safePushState({ tab }, '', `#${tab}`); 
-          // If we're going to a main module from anything other than dashboard, 
-          // reset history to keep navigation hierarchical if requested by user style
-          if (['warehouse', 'trade', 'balances', 'users', 'settings', 'purchase'].includes(tab)) {
-              setTabHistory(['dashboard', tab]);
-          } else if (tab !== tabHistory[tabHistory.length - 1]) {
-              setTabHistory(prev => [...prev.slice(-9), tab]);
-          }
-      }
-  };
-
   useEffect(() => {
     if (isNative) {
         let backListener: any;
         try {
             CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-                // 1. Check if any modal or dialog-like element is open in the DOM
-                const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
-                if (activeModals.length > 0) {
-                    const lastModal = activeModals[activeModals.length - 1];
-                    const closeBtn = (lastModal.querySelector('button[onClick]') as HTMLElement) || 
-                                     (lastModal.querySelector('.modal-close-btn') as HTMLElement) || 
-                                     (lastModal.querySelector('[aria-label="بستن"]') as HTMLElement) || 
-                                     (lastModal.querySelector('[data-close-modal="true"]') as HTMLElement) ||
-                                     Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                         const txt = (btn.textContent || '').trim();
-                                         return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
-                                     });
-                    if (closeBtn) {
-                        (closeBtn as HTMLElement).click();
-                    } else {
-                        window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
-                    }
-                    return;
-                }
-
-                // 2. Check if a sub-tab/sub-view back selector is in the DOM
-                const subTabBtn = document.querySelector('[data-subtab-back="true"]');
-                if (subTabBtn) {
-                    (subTabBtn as HTMLElement).click();
-                    return;
-                }
-
-                // Standard Tab History Stack using our updated refs
-                const currentHistory = tabHistoryRef.current;
-                const currentTab = activeTabRef.current;
-
-                if (currentHistory.length > 1) {
-                    const newHistory = [...currentHistory];
-                    newHistory.pop(); // remove current
-                    const prevTab = newHistory[newHistory.length - 1];
-                    setTabHistory(newHistory);
-                    setActiveTab(prevTab, false);
-                } else if (currentTab !== 'dashboard') {
-                    setActiveTab('dashboard');
-                } else if (!canGoBack) {
+                const handled = goBack();
+                if (!handled && !canGoBack && activeTabRef.current === 'dashboard') {
                     CapacitorApp.exitApp();
                 }
             }).then(l => { backListener = l; });
@@ -183,6 +227,19 @@ function App() {
             });
         } catch(e) { console.error("Push Listener Error", e); }
 
+        // --- ANDROID SHARE INTENT SUPPORT ---
+        try {
+            CapacitorApp.addListener('appRestoredResult', (data: any) => {
+                if (data.pluginId === 'Share' || data.pluginId === 'App') {
+                    const result = data.data;
+                    if (result && (result.url || result.text)) {
+                         setSharedData({ fileUrl: result.url, text: result.text, title: result.title });
+                         setActiveTab('chat');
+                    }
+                }
+            });
+        } catch (e) { console.error("Share Intent Error", e); }
+
         return () => {
             if (backListener) backListener.remove();
         };
@@ -191,8 +248,13 @@ function App() {
 
   useEffect(() => {
       const handleJob = (e: CustomEvent) => { setBackgroundJobs(prev => [...prev, e.detail]); };
+      const handleGoBack = () => { goBack(); };
       window.addEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
-      return () => window.removeEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
+      window.addEventListener('GO_BACK', handleGoBack);
+      return () => {
+          window.removeEventListener('QUEUE_WHATSAPP_JOB' as any, handleJob);
+          window.removeEventListener('GO_BACK', handleGoBack);
+      };
   }, []);
 
   useEffect(() => { if (backgroundJobs.length > 0 && !processingJobRef.current) { processNextJob(); } }, [backgroundJobs]);
@@ -262,49 +324,56 @@ function App() {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-        // 1. If any modal is active in DOM, close it instead of shifting tab!
-        const activeModals = document.querySelectorAll('.fixed.inset-0, [role="dialog"], .notification-dropdown-container, .glass-panel.fixed, .modal-active');
-        if (activeModals.length > 0) {
-            const lastModal = activeModals[activeModals.length - 1];
-            const closeBtn = lastModal.querySelector('button[onClick], .modal-close-btn, [aria-label="بستن"], [data-close-modal="true"], [data-close-announcement="true"]') || 
-                             Array.from(lastModal.querySelectorAll('button')).find(btn => {
-                                 const txt = (btn.textContent || '').trim();
-                                 return txt.includes('بستن') || txt.includes('انصراف') || txt.includes('✕') || btn.querySelector('svg');
-                             });
-            if (closeBtn) {
-                (closeBtn as HTMLElement).click();
-            } else {
-                window.dispatchEvent(new CustomEvent('CLOSE_ACTIVE_MODALS'));
-            }
-            
-            // Push state back to prevent browser from leaving 
-            const currentTab = activeTabRef.current;
-            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
-            // If we're at the very beginning of history, don't let it back out next time either
-            if (window.history.length <= 2) {
-                safePushState({ tab: currentTab, forced: true }, '', `#${currentTab}`);
-            }
-            return;
-        }
-
-        // 2. If a subtab back button (e.g., records details, bot leads subtab) is in DOM, click it instead!
-        const subTabBtn = document.querySelector('[data-subtab-back="true"]');
-        if (subTabBtn) {
-            (subTabBtn as HTMLElement).click();
-            const currentTab = activeTabRef.current;
-            safeReplaceState({ tab: currentTab }, '', `#${currentTab}`);
-            return;
-        }
-
-        if (event.state && event.state.tab) {
-            setActiveTabState(event.state.tab);
-        } else {
-            setActiveTabState('dashboard');
+        const handled = goBack(true);
+        if (!handled && event.state?.tab) {
+            setActiveTab(event.state.tab, false);
         }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const handleUrlOpen = (data: any) => {
+        try {
+            const url = new URL(data.url);
+            const params = new URLSearchParams(url.search);
+            const sUrl = params.get('sharedFileUrl');
+            const sText = params.get('sharedText');
+            if (sUrl || sText) {
+                setSharedData({ fileUrl: sUrl || undefined, text: sText || undefined });
+                setActiveTab('chat');
+            }
+        } catch (e) {}
+    };
+
+    if (isNative) {
+        CapacitorApp.addListener('appUrlOpen', handleUrlOpen);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const sharedFileUrl = params.get('sharedFileUrl');
+    const sharedText = params.get('sharedText');
+    const sharedTitle = params.get('sharedTitle');
+
+    if (sharedFileUrl || sharedText || sharedTitle) {
+      setSharedData({
+        fileUrl: sharedFileUrl || undefined,
+        text: sharedText || undefined,
+        title: sharedTitle || undefined,
+      });
+      // Switch to the chat tab
+      setActiveTab('chat');
+      
+      // Clean up URL query parameters so refresh doesn't trigger again
+      try {
+        const urlWithoutParams = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
+        window.history.replaceState({ path: urlWithoutParams }, '', urlWithoutParams);
+      } catch (e) {
+        console.error("Failed to clean query parameters", e);
+      }
+    }
   }, []);
 
   useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
@@ -397,7 +466,7 @@ function App() {
       playNotificationSound();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       setToast({ show: true, title, message });
-      toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
+      toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
       sendNotification(title, message);
   };
 
@@ -531,9 +600,16 @@ function App() {
      // Safe guard against non-array input
      if (Array.isArray(newList)) {
          const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
+         const NOTIFICATION_HISTORY_KEY = 'notification_history';
+         const history = JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || '[]');
+         
          newEvents.forEach(newItem => {
             const status = newItem.status;
             const isAdmin = user.role === UserRole.ADMIN;
+            const notificationId = `${newItem.trackingNumber}_${status}_${newItem.updatedAt}`;
+            
+            if (history.includes(notificationId)) return;
+            
             if (isAdmin) {
                  const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
                  if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
@@ -543,7 +619,12 @@ function App() {
             else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
             else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
             else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
+            
+            history.push(notificationId);
          });
+         
+         if (history.length > 50) history.splice(0, history.length - 50);
+         localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
      }
 
      if (Array.isArray(announcementsList)) {
@@ -595,9 +676,12 @@ function App() {
 
   const handleGoToPaymentApprovals = () => {
       let filter: any = 'pending_all';
-      if (currentUser?.role === UserRole.FINANCIAL) filter = 'cartable_financial';
-      else if (currentUser?.role === UserRole.MANAGER) filter = 'cartable_manager';
-      else if (currentUser?.role === UserRole.CEO) filter = 'cartable_ceo';
+      if (currentUser) {
+          const permissions = getRolePermissions(currentUser.role, settings || null);
+          if (currentUser.role === UserRole.FINANCIAL || permissions.canApproveFinancial) filter = 'cartable_financial';
+          else if (currentUser.role === UserRole.MANAGER || permissions.canApproveManager) filter = 'cartable_manager';
+          else if (currentUser.role === UserRole.CEO || permissions.canApproveCeo) filter = 'cartable_ceo';
+      }
       setDashboardStatusFilter(filter);
       setManageOrdersInitialTab('current');
       setActiveTab('manage');
@@ -630,19 +714,16 @@ function App() {
   return (
     <>
         {toast && toast.show && (
-            <div className="fixed inset-0 flex items-center justify-center p-6 z-[9999999] pointer-events-none">
-                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-[2.5rem] p-6 flex items-center gap-5 min-w-[320px] max-w-[95vw] animate-scale-in backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
-                    <div className="absolute top-0 right-0 w-2 h-full bg-blue-500 shadow-[0_0_25px_rgba(59,130,246,0.5)]"></div>
-                    <div className="bg-blue-600 p-4 rounded-[1.5rem] text-white shadow-lg flex-shrink-0 animate-pulse">
-                        <Bell size={28} />
+            <div className="fixed inset-x-0 top-6 z-[9999999] flex justify-center pointer-events-none w-full px-4">
+                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-2xl p-3 flex items-center gap-3 min-w-[280px] max-w-sm animate-slide-down backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
+                    <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                    <div className="bg-gradient-to-tr from-blue-500 to-indigo-600 p-2 rounded-xl text-white shadow-lg flex-shrink-0">
+                        <Bell size={18} />
                     </div>
-                    <div className="flex-1 pr-1 text-right">
-                        <h4 className="font-extrabold text-gray-900 dark:text-white text-lg mb-1 tracking-tight">{toast.title}</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-200 leading-relaxed font-bold">{toast.message}</p>
+                    <div className="flex-1 text-right">
+                        <h4 className="font-bold text-gray-900 dark:text-white text-xs mb-0.5 tracking-tight">{toast.title}</h4>
+                        <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-tight font-medium">{toast.message}</p>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); closeToast(); }} className="text-gray-400 hover:text-red-500 p-2.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-2xl transition-all active:scale-95 flex-shrink-0">
-                        <X size={24} />
-                    </button>
                 </div>
             </div>
         )}
@@ -650,6 +731,7 @@ function App() {
             <Login onLogin={handleLogin} />
         ) : (
             <Layout 
+            onBack={goBack}
             activeTab={activeTab} 
             setActiveTab={(t) => { setActiveTab(t); if(t!=='warehouse') setWarehouseInitialTab('dashboard'); if(t!=='manage-exit') setExitPermitStatusFilter(null); if(t!=='manage') setDashboardStatusFilter(null); if(t!=='purchase') setPurchaseInitialTab('REQUESTS'); }} 
             currentUser={currentUser} 
@@ -676,14 +758,16 @@ function App() {
                 </div>
             )}
 
-            <div className={`relative ${activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'h-full'}`}>
+            <div className="flex-1 relative flex flex-col min-h-0">
                 {loading && (
                     <div className="fixed top-20 right-4 z-[999] bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 shadow-lg flex items-center gap-2 animate-fade-in">
                         <Loader2 size={16} className="animate-spin text-blue-600" />
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">در حال بروزرسانی دیتابیس...</span>
                     </div>
                 )}
-                {activeTab === 'dashboard' && <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />}
+                <div className={activeTab === 'dashboard' ? 'block h-full' : 'hidden'}>
+                    <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />
+                </div>
                 {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
                 {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
                 {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
@@ -701,13 +785,16 @@ function App() {
                 {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
                 {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
                 {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} />}
-                {activeTab === 'chat' && (
+                
+                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}
                         onRefresh={() => loadData(true)} 
+                        sharedData={sharedData}
+                        onClearSharedData={() => setSharedData(null)}
                     />
-                )} 
+                </div> 
             </div>
             </Layout>
         )}

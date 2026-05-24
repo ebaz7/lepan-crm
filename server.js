@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import multer from 'multer';
 import compression from 'compression'; 
 import { fileURLToPath } from 'url';
 import cron from 'node-cron'; 
@@ -127,12 +128,56 @@ app.get('/manifest.json', (req, res) => {
                 sizes: "512x512",
                 type: "image/png"
             }
-        ]
+        ],
+        share_target: {
+            action: "/api/share-target",
+            method: "POST",
+            enctype: "multipart/form-data",
+            params: {
+                title: "title",
+                text: "text",
+                url: "url",
+                files: [
+                    {
+                        name: "files",
+                        accept: [
+                            "image/*",
+                            "video/*",
+                            "audio/*",
+                            "application/*",
+                            "text/*"
+                        ]
+                    }
+                ]
+            }
+        }
     };
     res.json(manifest);
 });
 
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' })); // Cache uploads for speed
+
+// --- SHARE TARGET FOR ANDROID AND PWA ---
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '_' + file.originalname;
+        cb(null, uniqueSuffix);
+    }
+});
+const upload = multer({ storage: storage });
+
+app.post('/api/share-target', upload.single('files'), (req, res) => {
+    const text = req.body.text || req.body.url || '';
+    let sharedUrl = '';
+    if (req.file) {
+        sharedUrl = `/uploads/${req.file.filename}`;
+    }
+    const redirectUrl = `/?sharedFileUrl=${encodeURIComponent(sharedUrl)}&sharedText=${encodeURIComponent(text)}`;
+    res.redirect(redirectUrl);
+});
 
 // Shared data logic moved to db-manager.js and utils.js
 
@@ -318,7 +363,37 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             return true;
         }).map(sub => {
             if (sub.type === 'android') {
-                return Promise.resolve();
+                const fcmServerKey = db.settings?.fcmServerKey || process.env.FCM_SERVER_KEY;
+                if (!fcmServerKey) {
+                    console.log(`Skipping Android push notification for ${sub.username} because FCM_SERVER_KEY is not configured.`);
+                    return Promise.resolve();
+                }
+                
+                const fcmPayload = {
+                    to: sub.endpoint,
+                    notification: {
+                        title: title,
+                        body: body,
+                        sound: 'default'
+                    },
+                    data: {
+                        url: url
+                    }
+                };
+
+                return fetch('https://fcm.googleapis.com/fcm/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `key=${fcmServerKey}`
+                    },
+                    body: JSON.stringify(fcmPayload)
+                }).then(async res => {
+                    const txt = await res.text();
+                    console.log(`FCM send result for ${sub.username}: ${res.status} - ${txt}`);
+                }).catch(err => {
+                    console.error(`FCM send error for ${sub.username}:`, err);
+                });
             }
             return webpush.sendNotification(sub, payload).catch(err => {
                 if (err.statusCode === 404 || err.statusCode === 410) {
@@ -1930,7 +2005,29 @@ app.get('/manifest.json', (req, res) => {
                 label: appName
             }
         ],
-        prefer_related_applications: false
+        prefer_related_applications: false,
+        share_target: {
+            action: "/api/share-target",
+            method: "POST",
+            enctype: "multipart/form-data",
+            params: {
+                title: "title",
+                text: "text",
+                url: "url",
+                files: [
+                    {
+                        name: "files",
+                        accept: [
+                            "image/*",
+                            "video/*",
+                            "audio/*",
+                            "application/*",
+                            "text/*"
+                        ]
+                    }
+                ]
+            }
+        }
     };
     res.setHeader('Content-Type', 'application/manifest+json');
     res.send(JSON.stringify(manifest));

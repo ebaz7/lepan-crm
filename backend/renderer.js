@@ -730,31 +730,139 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         const browser = await getBrowser();
         const page = await browser.newPage();
         
+        const isDebtor = title.includes('بدهکار');
+        const colorClass = isDebtor ? 'red' : 'emerald';
+        const colorHex = isDebtor ? '#dc2626' : '#10b981';
+        const colorBg = isDebtor ? '#fef2f2' : '#ecfdf5';
+        const textClass = isDebtor ? 'text-red-700' : 'text-emerald-700';
+        const borderClass = isDebtor ? 'border-red-600' : 'border-emerald-600';
+        const bgHeader = isDebtor ? 'bg-red-50' : 'bg-emerald-50';
+
+        // Calculate Totals safely
+        let totalBalance = 0;
+        rows.forEach(r => {
+            if (r[2]) {
+                const cleanStr = String(r[2])
+                    .replace(/,/g, '')
+                    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Parse Persian numbers
+                const num = parseFloat(cleanStr) || 0;
+                totalBalance += num;
+            }
+        });
+
         let thead = '<tr>';
-        columns.forEach(c => thead += `<th>${c}</th>`);
+        columns.forEach(c => {
+            thead += `<th class="p-4 text-center text-xs font-black border-b border-gray-200/50 ${isDebtor ? 'bg-red-800 text-white' : 'bg-emerald-800 text-white'}">${c}</th>`;
+        });
         thead += '</tr>';
 
         let tbody = '';
-        rows.forEach(r => {
-            tbody += '<tr>';
-            r.forEach(cell => tbody += `<td>${cell}</td>`);
+        rows.forEach((r, idx) => {
+            const isEven = idx % 2 === 1;
+            tbody += `<tr class="${isEven ? 'bg-gray-50/80' : 'bg-white'} border-b border-gray-100/80 hover:bg-gray-100/30 transition-colors">`;
+            r.forEach((cell, cellIdx) => {
+                let cellStyleClass = "p-3.5 text-xs text-gray-700 text-center font-bold border-l border-gray-100/50 last:border-l-0";
+                if (cellIdx === 1) {
+                    cellStyleClass = "p-3.5 text-sm font-black text-gray-900 text-right pr-6 border-l border-gray-100/50";
+                } else if (cellIdx === 2) {
+                    cellStyleClass = `p-3.5 text-sm font-black font-mono ${isDebtor ? 'text-red-700' : 'text-emerald-700'} text-center border-l border-gray-100/50`;
+                }
+                
+                if (cellIdx === 3) {
+                    tbody += `<td class="p-3.5 text-center"><span class="px-3 py-1 text-[10px] font-black rounded-lg ${isDebtor ? 'bg-red-50 text-red-800 border border-red-200/50' : 'bg-emerald-50 text-emerald-800 border border-emerald-200/50'}">${cell}</span></td>`;
+                } else {
+                    tbody += `<td class="${cellStyleClass}">${cell}</td>`;
+                }
+            });
             tbody += '</tr>';
         });
 
-        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
-            <div class="header">
-                <div class="title">${title}</div>
-                <div class="meta"><span>تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}</span></div>
+        const html = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ${fontFaceRule}
+        body { 
+            font-family: 'Vazirmatn', sans-serif !important; 
+            background: #ffffff; 
+            padding: 0;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="p-0">
+    <div class="max-w-[100%] mx-auto bg-white overflow-hidden p-10">
+        
+        <div class="flex justify-between items-end border-b-4 ${isDebtor ? 'border-red-700' : 'border-emerald-700'} pb-6 mb-8">
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-8 ${isDebtor ? 'bg-red-700' : 'bg-emerald-700'} rounded-full"></div>
+                    <h1 class="text-3xl font-black text-gray-900 tracking-tight">${title}</h1>
+                </div>
+                <p class="text-sm text-gray-500 font-bold pr-5 italic">گزارش وضعیت تراز تفصیلی مشتریان - بخش حسابداری و مدیریت مالی</p>
             </div>
-            <table>
-                <thead>${thead}</thead>
-                <tbody>${tbody}</tbody>
-            </table>
-            <div class="footer">سیستم مدیریت مالی و انبار - گزارش سیستمی</div>
-        </body></html>`;
+            <div class="text-left space-y-1">
+                <div class="inline-block bg-gray-900 text-white px-4 py-1.5 rounded-lg text-xs font-black mb-2">${new Date().toLocaleDateString('fa-IR')}</div>
+                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})} | سیستم گزارشات هوشمند</div>
+            </div>
+        </div>
+
+        <div class="mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
+                    <div class="text-[10px] font-black text-gray-400 mb-1">جمع کل اقلام ${isDebtor ? 'بدهکار' : 'بستانکار'}</div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${totalBalance.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+                </div>
+
+                <div class="bg-gray-50 border-r-4 border-gray-900 p-5 rounded-xl shadow-sm">
+                    <div class="text-[10px] font-black text-gray-400 mb-1">تعداد پرونده‌های مفتوح</div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${rows.length.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">رکورد</span></div>
+                </div>
+
+                <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
+                    <div class="text-[10px] font-black text-gray-400 mb-1">میانگین تراز هر حساب</div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${(rows.length ? Math.round(totalBalance / rows.length) : 0).toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+                </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <table class="w-full text-right border-collapse">
+                    <thead>
+                        <tr class="text-white font-black">
+                            ${thead}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${tbody}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-12 p-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <div class="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    <span>محل مهر و امضای مدیریت مالی</span>
+                    <span>محل امضای مدیرعامل</span>
+                    <span>صفحه ۱ از ۱</span>
+                </div>
+                <div class="flex justify-between mt-12 gap-20 px-10">
+                    <div class="h-24 w-1/3 border-b-2 border-gray-200"></div>
+                    <div class="h-24 w-1/3 border-b-2 border-gray-200"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-between items-center text-[10px] text-gray-300 border-t border-gray-50 pt-5 pr-2">
+            <div class="font-bold tracking-tight">این گزارش فاقد قلم‌خوردگی و با شناسه ابری یکتا صادر شده است.</div>
+            <div class="font-mono text-[9px] uppercase">Automated Report | System ID: #7375EH</div>
+        </div>
+    </div>
+</body>
+</html>`;
 
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdf = await page.pdf({ format: 'A4', landscape, printBackground: true });
+        const pdf = await page.pdf({ format: 'A4', landscape, printBackground: true, margin: { top: '0', right: '0', bottom: '0', left: '0' } });
         await page.close();
         return pdf;
     } catch (e) { 

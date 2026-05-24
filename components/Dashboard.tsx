@@ -36,12 +36,33 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   const [bankReportTab, setBankReportTab] = useState<'summary' | 'timeline'>('summary');
   
   // Data for additional counts
-  const [exitPermits, setExitPermits] = useState<ExitPermit[]>([]);
-  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>([]);
-  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>([]);
+  const [exitPermits, setExitPermits] = useState<ExitPermit[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_exit_permits');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
+  const [warehouseTxs, setWarehouseTxs] = useState<WarehouseTransaction[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_wh_tx');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
+  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_purchase_reqs');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
 
   // Personal Notes State
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<Note[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_notes');
+        const allNotes = item ? JSON.parse(item) : [];
+        return currentUser?.id ? allNotes.filter((n: Note) => n.userId === currentUser.id && !n.isPrivate) : [];
+    } catch { return []; }
+  });
   
   useEffect(() => {
     if (currentUser?.id) {
@@ -72,7 +93,12 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         }
     }, [rawOrders]);
 
-    const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
+    const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_announcements');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
     const [showAnnounceModal, setShowAnnounceModal] = useState(false);
     const [announceText, setAnnounceText] = useState('');
     const [announceTarget, setAnnounceTarget] = useState('');
@@ -493,7 +519,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* PAYMENT DASHBOARD - ONLY IF ACCESS IS GRANTED */}
         {hasPaymentAccess && (
             <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     {statusWidgets.map((widget) => (
                         <div key={widget.key} onClick={() => handleWidgetClick(widget.key === OrderStatus.APPROVED_CEO ? 'pending_all' : widget.key as any)} className={`glass-panel p-4 rounded-2xl border ${widget.border} shadow-sm transition-all relative overflow-hidden group cursor-pointer hover:shadow-md`}>
                             <div className={`absolute top-0 right-0 w-1.5 h-full ${widget.barColor}`}></div>

@@ -12,12 +12,17 @@ import {
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
     Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
+import { downloadAndOpenFile } from '../services/fileService';
+import { resolveImageUrl } from '../services/apiService';
 
 interface ChatRoomProps { 
-    currentUser: User; 
+    currentUser: User | null; 
     preloadedMessages: ChatMessage[]; 
     onRefresh: () => void; 
+    sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
+    onClearSharedData?: () => void;
 }
 
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
@@ -38,53 +43,68 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(propDuration || 0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [audioSource, setAudioSource] = useState('');
     
     // Generate random waveform bars (stable per instance)
     const waveform = useMemo(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 60) + 20), []);
 
     useEffect(() => {
-        let absoluteUrl = url;
-        // Fix for Desktop: Ensure URL is absolute if it's a relative path from server
-        if (!url.startsWith('http') && !url.startsWith('blob')) {
-            // Remove leading slash if present to avoid double slash, then add base
-            const cleanPath = url.startsWith('/') ? url : `/${url}`;
-            absoluteUrl = `${window.location.origin}${cleanPath}`;
+        let absoluteUrl = url.startsWith('blob:') || url.startsWith('data:') ? url : resolveImageUrl(url);
+        // Capacitor hack: if on Android and using localhost, we might need to ensure it's fully qualified
+        if (Capacitor.getPlatform() === 'android' && absoluteUrl.startsWith('/')) {
+            absoluteUrl = window.location.origin + absoluteUrl;
         }
-        
-        const audio = new Audio();
-        audio.src = absoluteUrl;
-        audioRef.current = audio;
-        
-        audio.onloadedmetadata = () => {
-            const d = audio.duration;
-            if (d && d !== Infinity && !isNaN(d)) {
-                setDuration(d);
-            }
-        };
-        audio.ontimeupdate = () => {
-            if (audio.duration && audio.duration !== Infinity) {
-                setProgress((audio.currentTime / audio.duration) * 100);
-            } else if (duration > 0) {
-                 setProgress((audio.currentTime / duration) * 100);
-            }
-        };
-        audio.onended = () => { setPlaying(false); setProgress(0); };
-        
-        return () => {
-            audio.pause();
-            audio.src = '';
-        };
-    }, [url, duration]);
+        setAudioSource(absoluteUrl);
+    }, [url]);
+
+    const onLoadedMetadata = () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        const d = audio.duration;
+        if (d && d !== Infinity && !isNaN(d)) {
+            setDuration(d);
+        }
+    };
+
+    const onTimeUpdate = () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (audio.duration && audio.duration !== Infinity) {
+            setProgress((audio.currentTime / audio.duration) * 100);
+        } else if (duration > 0) {
+             setProgress((audio.currentTime / duration) * 100);
+        }
+    };
+
+    const onEnded = () => { 
+        setPlaying(false); 
+        setProgress(0); 
+    };
+    
+    const onError = (e: any) => {
+        console.error("Audio Playback Error:", e);
+    };
 
     const togglePlay = () => {
         if (!audioRef.current) return;
-        if (playing) audioRef.current.pause();
-        else audioRef.current.play();
-        setPlaying(!playing);
+        if (playing) {
+            audioRef.current.pause();
+            setPlaying(false);
+        } else {
+            audioRef.current.play().then(() => {
+                setPlaying(true);
+            }).catch(err => {
+                console.error("Play failed", err);
+                // On Android, sometimes play() fails if not fully loaded
+                setTimeout(() => {
+                   audioRef.current?.play().then(() => setPlaying(true)).catch(console.error);
+                }, 200);
+            });
+        }
     };
 
     const formatTime = (time: number) => {
-        if (isNaN(time)) return '0:00';
+        if (isNaN(time) || time === Infinity) return '0:00';
         const mins = Math.floor(time / 60);
         const secs = Math.floor(time % 60);
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -92,6 +112,16 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
 
     return (
         <div className="flex items-center gap-3 flex-1 px-1">
+            <audio 
+                ref={audioRef}
+                src={audioSource}
+                onLoadedMetadata={onLoadedMetadata}
+                onTimeUpdate={onTimeUpdate}
+                onEnded={onEnded}
+                onError={onError}
+                preload="metadata"
+                className="hidden"
+            />
             <button 
                 onClick={togglePlay}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-white transition-transform active:scale-90 shadow-sm ${isMe ? 'bg-green-600' : 'bg-blue-600'}`}
@@ -121,7 +151,7 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     );
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
@@ -135,10 +165,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         return [...safeMessages, ...filteredPending].sort((a, b) => a.timestamp - b.timestamp);
     }, [messages, pendingMessages]);
 
-    const [users, setUsers] = useState<User[]>([]);
-    const [groups, setGroups] = useState<ChatGroup[]>([]);
-    const [tasks, setTasks] = useState<GroupTask[]>([]);
-    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
+    const [users, setUsers] = useState<User[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_users');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
+    const [groups, setGroups] = useState<ChatGroup[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_groups');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
+    const [tasks, setTasks] = useState<GroupTask[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_tasks');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
+    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
+        try {
+            const item = localStorage.getItem('app_data_task_groups');
+            return item ? JSON.parse(item) : [];
+        } catch { return []; }
+    });
     
     // --- UI State ---
     const [activeTab, setActiveTab] = useState<TabType>('CHATS');
@@ -163,6 +213,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Input & Recording ---
     const [inputText, setInputText] = useState('');
+    const [localSharedData, setLocalSharedData] = useState<{ fileUrl?: string; text?: string; title?: string } | null>(null);
+
+    useEffect(() => {
+        if (sharedData) {
+            setLocalSharedData({
+                fileUrl: sharedData.fileUrl,
+                text: sharedData.text,
+                title: sharedData.title
+            });
+            if (sharedData.text) {
+                setInputText(sharedData.text);
+            }
+            if (onClearSharedData) onClearSharedData();
+        }
+    }, [sharedData]);
+
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -299,6 +365,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
     }, [activeChannel]);
 
+    useEffect(() => {
+        if (activeChannel) {
+            const handleBack = () => {
+                 setActiveChannel(null);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
+        return () => {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        };
+    }, [activeChannel]);
+
     // Handle Document Visibility for Notifications
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -397,7 +477,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
         if (type === 'task_group') return null;
-        const relevant = messages.filter(m => {
+        const relevant = displayMessages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
             if (type === 'group') return m.groupId === channelId;
@@ -438,7 +518,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true, lastMsg: null, unread: 0 });
         
         users.forEach(u => {
-            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: u.avatar || null, isOnline: false, lastMsg: null, unread: 0 });
+            list.push({ type: 'private', id: u.username, name: u.fullName, avatar: resolveImageUrl(u.avatar), isOnline: false, lastMsg: null, unread: 0 });
         });
         
         groups.forEach(g => {
@@ -482,7 +562,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 if (last || term) {
                     list.push({
                         type: 'private', id: u.username, name: u.fullName,
-                        avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
+                        avatar: resolveImageUrl(u.avatar), isOnline, lastSeen: u.lastSeen,
                         lastMsg: last, unread: getUnreadCount(u.username, 'private')
                     });
                 }
@@ -494,7 +574,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                      if (!list.find(i => i.id === u.username)) {
                          list.push({
                             type: 'private', id: u.username, name: u.fullName,
-                            avatar: u.avatar || null, isOnline: false,
+                            avatar: resolveImageUrl(u.avatar), isOnline: false,
                             lastMsg: null, unread: 0
                          });
                      }
@@ -529,7 +609,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Actions ---
     const handleSendMessage = async () => {
-        if ((!inputText.trim()) || isUploading) return;
+        if ((!inputText.trim() && !localSharedData?.fileUrl) || isUploading) return;
 
         if (editingMessageId) {
             const msgToUpdate = displayMessages.find(m => m.id === editingMessageId);
@@ -553,7 +633,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             message: inputText,
             timestamp: Date.now(),
             recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
-            groupId: activeChannel?.type === 'group' ? activeChannel.id! : undefined,
+            groupId: (activeChannel?.type === 'group' || activeChannel?.type === 'task_group') ? activeChannel.id! : undefined,
+            attachment: localSharedData?.fileUrl ? {
+                fileName: localSharedData.fileUrl.split('/').pop() || 'فایل به اشتراک گذاشته شده',
+                url: localSharedData.fileUrl
+            } : undefined,
             replyTo: replyingTo ? {
                 id: replyingTo.id,
                 sender: replyingTo.sender,
@@ -565,6 +649,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
         // Optimistic UI Update using pendingMessages
         setPendingMessages(prev => [...prev, newMsg]);
+        setLocalSharedData(null);
         setInputText('');
         setReplyingTo(null);
         setTimeout(scrollToBottom, 50);
@@ -720,7 +805,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         // Try to fetch blob for file sharing
         try {
             // Need absolute URL for fetch if it's relative
-            const fetchUrl = fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`;
+            const fetchUrl = fileUrl.startsWith('data:') ? fileUrl : resolveImageUrl(fileUrl);
             
             const response = await fetch(fetchUrl);
             const blob = await response.blob();
@@ -1068,6 +1153,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                 {/* List Items */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#1c1c1e]">
+                    {localSharedData && !activeChannel && (
+                        <div className="m-3 p-4 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl animate-bounce-subtle flex flex-col gap-2 border border-white/20">
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-black text-sm flex items-center gap-2">
+                                    <Share2 size={16} />
+                                    محتوای پیوست آماده اشتراک‌گذاری
+                                </h4>
+                                <button onClick={() => setLocalSharedData(null)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <p className="text-[10px] opacity-90 font-bold leading-relaxed line-clamp-2 bg-black/10 p-2 rounded-xl">
+                                {localSharedData.fileUrl ? `📎 فایل: ${localSharedData.fileUrl.split('/').pop()}` : localSharedData.text}
+                            </p>
+                            <div className="bg-white text-blue-700 py-1.5 rounded-xl text-center text-[10px] font-black shadow-inner">
+                                یک گفتگو را برای ارسال انتخاب کنید
+                            </div>
+                        </div>
+                    )}
                     {getSortedChannels().length === 0 && !searchTerm && (
                         <div className="flex flex-col items-center justify-center h-40 text-gray-400 p-10 text-center">
                             <MessageCircle size={32} className="mb-2 opacity-20" />
@@ -1078,7 +1182,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div key={item.id} onClick={() => { setActiveChannel({type: item.type, id: item.id}); markAsRead(item.id, item.type); }} className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-white/5 relative group ${activeChannel?.id === item.id ? 'bg-blue-50/50 dark:bg-blue-500/10' : ''}`}>
                             <div className="relative">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm ${item.type === 'private' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : item.type === 'task_group' ? 'bg-gradient-to-br from-purple-400 to-purple-600' : 'bg-gradient-to-br from-orange-400 to-orange-600'}`}>
-                                    {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
+                                    {item.avatar ? <img src={resolveImageUrl(item.avatar)} className="w-full h-full rounded-full object-cover"/> : item.name.charAt(0)}
                                 </div>
                                 {item.isOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>}
                             </div>
@@ -1277,9 +1381,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                 <div className="mb-1">
                                                     {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                                                         <img 
-                                                            src={msg.attachment.url} 
+                                                            src={resolveImageUrl(msg.attachment.url)} 
                                                             className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
-                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(msg.attachment!.url); }}
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(resolveImageUrl(msg.attachment!.url)); }}
                                                         />
                                                     ) : (
                                                         <button 
@@ -1291,15 +1395,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
                                                                 setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
                                                                 
-                                                                // Simulate meaningful progress for better UX
-                                                                const steps = [10, 35, 60, 85, 100];
-                                                                for (const s of steps) {
-                                                                    await new Promise(r => setTimeout(r, 200));
-                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: s }));
-                                                                }
-                                                                
-                                                                window.open(msg.attachment!.url, '_blank');
-                                                                
+                                                                await downloadAndOpenFile(msg.attachment!.url, msg.attachment!.fileName, (p) => {
+                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: p }));
+                                                                });
+
                                                                 setTimeout(() => {
                                                                     setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
                                                                     setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
@@ -1316,7 +1415,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                             </div>
                                                             <div className="overflow-hidden flex-1">
                                                                 <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600">{isDownloading[msg.id] ? 'در حال آماده‌سازی...' : 'دانلود فایل'}</div>
+                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
                                                             </div>
                                                         </button>
                                                     )}
@@ -1368,6 +1467,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         {/* Input Area */}
                         <div className="shrink-0 sticky bottom-0 bg-white/90 dark:bg-[#0b141a]/90 backdrop-blur-md glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-[calc(12px+env(safe-area-inset-bottom))] md:pb-2">
                             {/* Reply/Edit Preview */}
+                            {localSharedData && (
+                                <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up bg-blue-50/90 dark:bg-blue-950/90">
+                                    <div className="flex items-center gap-2 border-r-4 border-orange-500 pr-2">
+                                        <Paperclip size={18} className="text-orange-500"/>
+                                        <div className="flex flex-col text-xs">
+                                            <span className="font-bold text-orange-600">فایل پیوست آماده‌ی ارسال</span>
+                                            <span className="text-gray-500 truncate max-w-[200px]">{localSharedData.fileUrl ? localSharedData.fileUrl.split('/').pop() : localSharedData.text}</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => { setLocalSharedData(null); }}><X size={18} className="text-gray-400 hover:text-red-500"/></button>
+                                </div>
+                            )}
+
                             {(replyingTo || editingMessageId) && (
                                 <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up">
                                     <div className="flex items-center gap-2 border-r-4 border-blue-500 pr-2">
@@ -1410,7 +1522,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 />
                             </div>
 
-                            {inputText.trim() || isUploading ? (
+                            {inputText.trim() || isUploading || localSharedData?.fileUrl ? (
                                 <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
                                     {isUploading ? <Loader2 size={24} className="animate-spin"/> : <Send size={24} className={document.dir==='rtl' ? 'rotate-180' : ''}/>}
                                 </button>
@@ -1490,9 +1602,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {showImageViewer && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
                     <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
-                    <div className="absolute top-4 right-4 flex gap-4">
-                        <a href={showImageViewer} download target="_blank" className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white" onClick={e=>e.stopPropagation()}><DownloadCloud/></a>
-                        <button onClick={() => setShowImageViewer(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
+                    <div className="absolute top-4 right-4 flex gap-4 z-50">
+                        <button onClick={(e) => { 
+                            e.stopPropagation(); 
+                            downloadAndOpenFile(showImageViewer, 'image_' + Date.now() + '.jpg'); 
+                        }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><DownloadCloud/></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowImageViewer(null); }} className="p-2 bg-white/20 rounded-full hover:bg-white/40 text-white"><X/></button>
                     </div>
                 </div>
             )}
@@ -1518,7 +1633,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             {getAllChannelsForForward().map((item: ChannelItem) => (
                                 <div key={item.id} onClick={() => handleForward(item.id, item.type)} className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer">
                                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold">
-                                        {item.avatar ? <img src={item.avatar} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
+                                        {item.avatar ? <img src={resolveImageUrl(item.avatar)} className="w-full h-full rounded-full"/> : item.name.charAt(0)}
                                     </div>
                                     <div className="font-bold text-sm tracking-tight">{item.name} <span className="text-xs text-gray-400 font-normal mr-2">({item.type === 'private' ? 'شخصی' : item.type === 'public' ? 'عمومی' : 'گروه'})</span></div>
                                 </div>
@@ -1588,7 +1703,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="relative group/avatar">
                                 <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md overflow-hidden">
-                                    {showGroupInfo.avatar ? <img src={showGroupInfo.avatar} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
+                                    {showGroupInfo.avatar ? <img src={resolveImageUrl(showGroupInfo.avatar)} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
                                 </div>
                                 {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
                                     <button 
@@ -1666,7 +1781,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         <div key={username} className="flex items-center justify-between group/member p-2 hover:bg-gray-50 rounded-xl transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-sm font-bold overflow-hidden">
-                                                    {u?.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
+                                                    {u?.avatar ? <img src={resolveImageUrl(u.avatar)} className="w-full h-full object-cover"/> : (u?.fullName.charAt(0) || username.charAt(0))}
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-bold text-gray-800">{u?.fullName || username} {isMe && '(شما)'}</span>
@@ -1740,7 +1855,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button onClick={() => setShowContactInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
                             <div className="w-24 h-24 rounded-full bg-white/20 p-1 mb-3">
                                 <div className="w-full h-full rounded-full glass-panel flex items-center justify-center text-blue-600 text-4xl font-black shadow-inner overflow-hidden">
-                                    {showContactInfo.avatar ? <img src={showContactInfo.avatar} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
+                                    {showContactInfo.avatar ? <img src={resolveImageUrl(showContactInfo.avatar)} className="w-full h-full object-cover"/> : showContactInfo.fullName.charAt(0)}
                                 </div>
                             </div>
                             <h3 className="text-xl font-black">{showContactInfo.fullName}</h3>

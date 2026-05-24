@@ -4,6 +4,7 @@ import { getSettings, saveSettings, uploadFile } from '../services/storageServic
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
 import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
 import { apiCall } from '../services/apiService';
+import { Capacitor } from '@capacitor/core';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
 import { getUsers } from '../services/authService';
 import { generateUUID } from '../constants';
@@ -48,6 +49,7 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
   const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
   const [settings, setSettings] = useState<SystemSettings>({ 
+      appName: 'سیستم من',
       currentTrackingNumber: 1000, 
       currentExitPermitNumber: 1000, 
       companyNames: [], 
@@ -85,6 +87,33 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [restoring, setRestoring] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [tempServerHost, setTempServerHost] = useState(localStorage.getItem('app_server_host') || '');
+  
+  const handleTestConnection = async () => {
+      setTestingConnection(true);
+      try {
+          // Use the temp host value if it exists, otherwise it falls back to current runtime BASE_URL
+          const hostToTest = tempServerHost.trim().replace(/\/$/, '');
+          const originalHost = localStorage.getItem('app_server_host');
+          
+          if (hostToTest) localStorage.setItem('app_server_host', hostToTest);
+          
+          const result = await apiCall<{status: string}>('/users'); 
+          if(result) {
+              alert('✅ اتصال با موفقیت برقرار شد. سرور پاسخگو است.');
+              if (hostToTest) localStorage.setItem('app_server_host', hostToTest);
+          } else {
+              throw new Error("No data returned");
+          }
+      } catch (e: any) {
+          alert(`❌ خطا در اتصال: ${e.message || 'سرور یافت نشد'}`);
+          // Revert if it failed and we changed it
+          // localStorage.removeItem('app_server_host'); 
+      } finally {
+          setTestingConnection(false);
+      }
+  };
   
   // Designer State
   const [showDesigner, setShowDesigner] = useState(false);
@@ -463,7 +492,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
             </nav>
         </div>
 
-        <div className="flex-1 p-6 md:p-8 overflow-y-auto h-[calc(100dvh-140px)] md:h-full">
+        <div className="flex-1 p-6 md:p-8 overflow-y-auto h-[calc(100dvh-140px)] md:h-full pb-20">
             {activeCategory === 'fiscal' ? (
                 <FiscalYearManager settings={settings} />
             ) : (
@@ -493,6 +522,46 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                         <Send size={18}/> <span>ارسال پیام تست</span>
                                     </button>
                                 </div>
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><WifiOff size={20}/> تنظیمات اتصال به سرور (مخصوص اندروید)</h3>
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-[10px] text-blue-700 leading-relaxed">
+                                        اگر در اپلیکیشن اندروید با خطای اتصال مواجه هستید، آدرس کامل سرور را در اینجا وارد کنید. 
+                                        مثال: https://your-server.aistudio.google
+                                    </div>
+                                    <div className="flex flex-col md:flex-row gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">آدرس میزبان (Host)</label>
+                                            <input 
+                                                type="text" 
+                                                value={tempServerHost} 
+                                                onChange={e => setTempServerHost(e.target.value)}
+                                                className="w-full border rounded-lg p-2 text-sm dir-ltr text-left" 
+                                                placeholder="https://..."
+                                            />
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={handleTestConnection}
+                                            disabled={testingConnection}
+                                            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold text-sm h-10 mt-auto hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {testingConnection ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18}/>}
+                                            {testingConnection ? 'در حال تست...' : 'تست اتصال'}
+                                        </button>
+                                    </div>
+                                    {tempServerHost && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                localStorage.setItem('app_server_host', tempServerHost.trim().replace(/\/$/, ''));
+                                                alert('آدرس سرور ذخیره شد. برنامه را دوباره باز کنید.');
+                                            }}
+                                            className="text-[10px] text-blue-600 font-bold hover:underline"
+                                        >
+                                            ذخیره آدرس دائمی
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div className="space-y-4">
                                 <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Truck size={20}/> شماره‌گذاری اسناد (تنظیمات پیش‌فرض)</h3>
@@ -502,6 +571,81 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div><label className="text-sm font-bold text-gray-700 block mb-1">شروع شماره دستور پرداخت</label><input type="number" className="w-full border rounded-lg p-2 dir-ltr text-left" value={settings.currentTrackingNumber} onChange={(e) => setSettings({...settings, currentTrackingNumber: Number(e.target.value)})} /></div>
                                     <div><label className="text-sm font-bold text-gray-700 block mb-1">شروع شماره مجوز خروج</label><input type="number" className="w-full border rounded-lg p-2 dir-ltr text-left" value={settings.currentExitPermitNumber} onChange={(e) => setSettings({...settings, currentExitPermitNumber: Number(e.target.value)})} /></div>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Smartphone size={20}/> اولویت نمایش در نوار پایین موبایل</h3>
+                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-[10px] text-blue-700 leading-relaxed">
+                                    ترتیب موارد را در اینجا مشخص کنید. ۵ مورد اول (با رعایت دسترسی کاربر) در نوار پایین نمایش داده می‌شوند و مابقی در منوی "بیشتر".
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                                    {(settings.mobileNavOrder?.length ? settings.mobileNavOrder : ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings']).map((itemId, idx) => {
+                                        const navLabel = {
+                                            dashboard: 'داشبورد',
+                                            create: 'ثبت پرداخت',
+                                            manage: 'سوابق پرداخت',
+                                            'create-exit': 'ثبت خروج',
+                                            'manage-invoices': 'مدیریت فاکتورها',
+                                            'manage-exit': 'سوابق خروج',
+                                            warehouse: 'مدیریت انبار',
+                                            security: 'انتظامات',
+                                            meetings: 'جلسات تولید',
+                                            purchase: 'درخواست خرید',
+                                            chat: 'گفتگو',
+                                            knowledge: 'اطلاعات و یادداشت ها',
+                                            trade: 'بازرگانی',
+                                            balances: 'مانده حساب مشتریان',
+                                            products: 'کالاها',
+                                            sales: 'مشتریان',
+                                            tickets: 'تیکت‌ها',
+                                            users: 'کاربران',
+                                            settings: 'تنظیمات'
+                                        }[itemId] || itemId;
+
+                                        return (
+                                            <div key={itemId} className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-bold text-gray-400 w-4">{idx + 1}</span>
+                                                    <span className="text-xs font-bold text-gray-700">{navLabel}</span>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(settings.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx > 0) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx-1];
+                                                                order[idx-1] = temp;
+                                                                setSettings({...settings, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === 0}
+                                                    >
+                                                        <RefreshCcw size={14} className="rotate-90"/>
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const order = [...(settings.mobileNavOrder || ['dashboard', 'trade', 'create', 'warehouse', 'chat', 'manage', 'create-exit', 'manage-exit', 'manage-invoices', 'security', 'meetings', 'purchase', 'knowledge', 'balances', 'products', 'sales', 'tickets', 'users', 'settings'])];
+                                                            if (idx < order.length - 1) {
+                                                                const temp = order[idx];
+                                                                order[idx] = order[idx+1];
+                                                                order[idx+1] = temp;
+                                                                setSettings({...settings, mobileNavOrder: order});
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                                        disabled={idx === (settings.mobileNavOrder?.length || 19) - 1}
+                                                    >
+                                                        <RefreshCcw size={14} className="-rotate-90"/>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -912,6 +1056,10 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                         <div className="border-t pt-3">
                                             <label className="text-xs font-bold text-gray-500 block mb-1">کلید Gemini AI (هوش مصنوعی)</label>
                                             <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.geminiApiKey || ''} onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} placeholder="AI Key..." type="password"/>
+                                        </div>
+                                        <div className="border-t pt-3">
+                                            <label className="text-xs font-bold text-gray-500 block mb-1">کلید سرور Firebase FCM (نوتیفیکیشن اندروید)</label>
+                                            <input className="w-full border rounded p-2 text-xs dir-ltr font-mono" value={settings.fcmServerKey || ''} onChange={e => setSettings({...settings, fcmServerKey: e.target.value})} placeholder="AAAA..." type="password"/>
                                         </div>
                                     </div>
                                 </div>
@@ -1512,8 +1660,27 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         </div>
                     )}
 
-                    <div className="flex justify-end pt-4 border-t sticky bottom-0 glass-panel p-4 shadow-inner md:shadow-none md:static">
-                        <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70">
+                    <div className="flex justify-end pt-4 border-t sticky bottom-0 glass-panel p-4 shadow-inner md:shadow-none md:static gap-2">
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                try {
+                                    // Use absolute path for import in onClick to avoid scope issues or just use the already imported one if possible
+                                    // Since getServerHost is not imported, let's just use it if we can or import it at the top
+                                    const { getServerHost } = await import('../services/apiService');
+                                    const host = getServerHost() || (Capacitor.isNativePlatform() ? 'N/A' : '/');
+                                    alert(`در حال بررسی اتصال به: ${host}`);
+                                    await apiCall('/users');
+                                    alert('اتصال با موفقیت برقرار شد ✅');
+                                } catch (e) {
+                                    alert('خطا در اتصال به سرور ❌\nلطفا آدرس سرور را در بخش اتصالات (API) بررسی کنید.');
+                                }
+                            }}
+                            className="bg-blue-100 text-blue-700 px-4 py-3 rounded-xl text-xs font-black hover:bg-blue-200 transition-colors border border-blue-200"
+                        >
+                            تست اتصال به سرور
+                        </button>
+                        <button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-70 flex-1 md:flex-none justify-center">
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} ذخیره تنظیمات
                         </button>
                     </div>

@@ -4,13 +4,34 @@ import { INITIAL_ORDERS } from '../constants';
 import { Capacitor } from '@capacitor/core';
 
 // تنظیمات آدرس سرور
-let DEFAULT_SERVER_URL = ''; 
+let DEFAULT_SERVER_URL = 'https://ais-pre-yaoimdy2j5d5rzt6mmmkq2-97484218589.us-east1.run.app'; 
 
 export const getServerHost = () => {
     const stored = localStorage.getItem('app_server_host');
     if (stored) return stored.trim().replace(/\/$/, '');
-    if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
+    if (Capacitor.isNativePlatform()) {
+        if (DEFAULT_SERVER_URL) return DEFAULT_SERVER_URL.replace(/\/$/, '');
+    }
     return '';
+};
+
+export const resolveImageUrl = (url: string | null | undefined): string => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+        return url;
+    }
+    const host = getServerHost();
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    
+    // On web, if no host is configured, we use relative paths to current origin.
+    // On native, getServerHost() will return either stored host or DEFAULT_SERVER_URL.
+    if (!host && !Capacitor.isNativePlatform()) {
+        return cleanUrl;
+    }
+    
+    // Fallback for native or if host is set
+    const effectiveHost = host || DEFAULT_SERVER_URL;
+    return `${effectiveHost}${cleanUrl}`;
 };
 
 export const setServerHost = (url: string) => {
@@ -34,7 +55,11 @@ export const LS_KEYS = {
     TRADE: 'app_data_trade',
     WH_ITEMS: 'app_data_wh_items',
     WH_TX: 'app_data_wh_tx',
-    NOTES: 'app_data_notes'
+    NOTES: 'app_data_notes',
+    EXIT_PERMITS: 'app_data_exit_permits',
+    PURCHASE_REQS: 'app_data_purchase_reqs',
+    ANNOUNCEMENTS: 'app_data_announcements',
+    TASK_GROUPS: 'app_data_task_groups'
 };
 
 // Exported so App.tsx can use it for instant load
@@ -102,9 +127,18 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/settings') localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(data));
                     else if (endpoint === '/chat') localStorage.setItem(LS_KEYS.CHAT, JSON.stringify(data));
                     else if (endpoint === '/trade') localStorage.setItem(LS_KEYS.TRADE, JSON.stringify(data));
+                    else if (endpoint === '/customer-balances') localStorage.setItem('app_data_balances', JSON.stringify(data));
+                    else if (endpoint === '/customer-balances/chat-codes') localStorage.setItem('app_data_balances_mappings', JSON.stringify(data));
+                    else if (endpoint === '/customer-balances/statements/all') localStorage.setItem('app_data_balances_statements', JSON.stringify(data));
                     else if (endpoint === '/warehouse/items') localStorage.setItem(LS_KEYS.WH_ITEMS, JSON.stringify(data));
                     else if (endpoint === '/warehouse/transactions') localStorage.setItem(LS_KEYS.WH_TX, JSON.stringify(data));
                     else if (endpoint === '/notes') localStorage.setItem(LS_KEYS.NOTES, JSON.stringify(data));
+                    else if (endpoint === '/exit-permits') localStorage.setItem(LS_KEYS.EXIT_PERMITS, JSON.stringify(data));
+                    else if (endpoint === '/purchase-requests') localStorage.setItem(LS_KEYS.PURCHASE_REQS, JSON.stringify(data));
+                    else if (endpoint === '/announcements') localStorage.setItem(LS_KEYS.ANNOUNCEMENTS, JSON.stringify(data));
+                    else if (endpoint === '/groups') localStorage.setItem(LS_KEYS.GROUPS, JSON.stringify(data));
+                    else if (endpoint === '/task-groups') localStorage.setItem(LS_KEYS.TASK_GROUPS, JSON.stringify(data));
+                    else if (endpoint === '/tasks') localStorage.setItem(LS_KEYS.TASKS, JSON.stringify(data));
                 } catch (cacheError) {
                     console.warn("Cache write failed (storage full?)", cacheError);
                 }
@@ -145,12 +179,21 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         if (method === 'GET') {
             if (endpoint === '/orders') return getLocalData<any>(LS_KEYS.ORDERS, INITIAL_ORDERS);
             if (endpoint === '/trade') return getLocalData<any>(LS_KEYS.TRADE, []);
+            if (endpoint === '/customer-balances') return getLocalData<any>('app_data_balances', { balances: [] });
+            if (endpoint === '/customer-balances/chat-codes') return getLocalData<any>('app_data_balances_mappings', []);
+            if (endpoint === '/customer-balances/statements/all') return getLocalData<any>('app_data_balances_statements', []);
             if (endpoint === '/warehouse/items') return getLocalData<any>(LS_KEYS.WH_ITEMS, []);
             if (endpoint === '/warehouse/transactions') return getLocalData<any>(LS_KEYS.WH_TX, []);
             if (endpoint === '/settings') return getLocalData<any>(LS_KEYS.SETTINGS, { currentTrackingNumber: 1000 });
             if (endpoint === '/chat') return getLocalData<any>(LS_KEYS.CHAT, []);
             if (endpoint === '/users') return getLocalData<any>(LS_KEYS.USERS, MOCK_USERS);
             if (endpoint === '/notes') return getLocalData<any>(LS_KEYS.NOTES, []);
+            if (endpoint === '/exit-permits') return getLocalData<any>(LS_KEYS.EXIT_PERMITS, []);
+            if (endpoint === '/purchase-requests') return getLocalData<any>(LS_KEYS.PURCHASE_REQS, []);
+            if (endpoint === '/announcements') return getLocalData<any>(LS_KEYS.ANNOUNCEMENTS, []);
+            if (endpoint === '/groups') return getLocalData<any>(LS_KEYS.GROUPS, []);
+            if (endpoint === '/task-groups') return getLocalData<any>(LS_KEYS.TASK_GROUPS, []);
+            if (endpoint === '/tasks') return getLocalData<any>(LS_KEYS.TASKS, []);
         }
         
         throw error;

@@ -40,6 +40,21 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     }, [statusFilter]);
 
+    useEffect(() => {
+        if (viewPermit || editPermit || warehouseFinalize || securityFinalize) {
+            const handleBack = () => {
+                if (viewPermit) setViewPermit(null);
+                if (editPermit) setEditPermit(null);
+                if (warehouseFinalize) setWarehouseFinalize(null);
+                if (securityFinalize) setSecurityFinalize(null);
+            };
+            window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+        } else {
+            window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+        }
+        return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
+    }, [viewPermit, editPermit, warehouseFinalize, securityFinalize]);
+
     const loadData = async () => {
         setLoading(true);
         try {

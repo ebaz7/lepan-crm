@@ -158,7 +158,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       }
   }, [embed, printMode, dynamicTemplate]);
 
-  const isCompact = order.paymentDetails.length > 2;
+  const isCompact = order.paymentDetails.length > 1 || (order.description && order.description.length > 70);
   const printAreaId = `print-voucher-${order.id}`;
 
   const isRevocationProcess = [
@@ -170,9 +170,9 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   const isRevoked = order.status === OrderStatus.REVOKED;
 
   const Stamp = ({ name, title }: { name: string; title: string }) => (
-    <div className={`border-[2px] border-blue-800 text-blue-800 rounded-lg ${isCompact ? 'py-0.5 px-2' : 'py-1 px-3'} rotate-[-5deg] opacity-90 mix-blend-multiply print:bg-transparent shadow-sm inline-block`}>
-      <div className={`${isCompact ? 'text-[8px]' : 'text-[9px]'} font-bold border-b border-blue-800 mb-0.5 text-center pb-0.5`}>{title}</div>
-      <div className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} text-center font-bold whitespace-nowrap`}>{name}</div>
+    <div className={`border-[2px] border-blue-800 text-blue-800 rounded-lg ${isCompact ? 'py-0.2 px-1' : 'py-1 px-3'} rotate-[-5deg] opacity-90 mix-blend-multiply print:bg-transparent shadow-sm inline-block`}>
+      <div className={`${isCompact ? 'text-[7px]' : 'text-[9px]'} font-bold border-b border-blue-800 mb-0.5 text-center pb-0.5`}>{title}</div>
+      <div className={`${isCompact ? 'text-[8px]' : 'text-[10px]'} text-center font-bold whitespace-nowrap`}>{name}</div>
     </div>
   );
 
@@ -358,7 +358,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       <div 
         id={printAreaId} 
         className="printable-content bg-white print:bg-white border-2 border-gray-800 print:border-black print:!border-solid relative text-gray-900 flex flex-col justify-between overflow-hidden" 
-        style={{ direction: 'rtl', width: '210mm', height: '148mm', padding: '10mm', boxSizing: 'border-box', margin: '0 auto', maxHeight: '148mm', overflow: 'hidden' }}
+        style={{ direction: 'rtl', width: '210mm', height: '148mm', padding: isCompact ? '4mm 6mm' : '8mm 10mm', boxSizing: 'border-box', margin: '0 auto', maxHeight: '148mm', overflow: 'hidden' }}
       >
         {order.status === OrderStatus.REJECTED && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-8 border-red-600/30 text-red-600/30 font-black text-9xl rotate-[-25deg] p-4 rounded-3xl select-none z-0 pointer-events-none">REJECTED</div>
@@ -370,50 +370,50 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-8 border-red-200/50 text-red-200/50 font-black text-6xl rotate-[-25deg] p-6 rounded-3xl select-none z-0 pointer-events-none whitespace-nowrap">در حال ابطال</div>
         )}
         <div className="relative z-10">
-            <div className={`border-b-2 border-gray-800 print:border-black ${isCompact ? 'pb-1 mb-2' : 'pb-2 mb-3'} flex justify-between items-center`}>
+            <div className={`border-b-2 border-gray-800 print:border-black ${isCompact ? 'pb-1.5 mb-2' : 'pb-2 mb-3'} flex justify-between items-center`}>
                 <div className="flex items-center gap-4 w-2/3">
-                    {company?.logo ? <img src={company.logo} alt="Company Logo" className="h-16 w-16 object-contain mix-blend-multiply" /> : <div className="h-16 w-16 bg-gray-100 text-gray-800 flex items-center justify-center rounded text-xs text-center border border-dashed border-gray-300">بدون لوگو</div>}
+                    {company?.logo ? <img src={company.logo} alt="Company Logo" className={`${isCompact ? 'h-11 w-11' : 'h-16 w-16'} object-contain mix-blend-multiply`} /> : <div className={`${isCompact ? 'h-11 w-11 text-[9px]' : 'h-16 w-16 text-xs'} bg-gray-100 text-gray-800 flex items-center justify-center rounded text-center border border-dashed border-gray-300`}>بدون لوگو</div>}
                     <div className="flex flex-col">
-                        <h1 className={`${isCompact ? 'text-lg' : 'text-xl'} font-bold text-gray-900 print:text-black`}>{order.payingCompany || 'شرکت بازرگانی'}</h1>
+                        <h1 className={`${isCompact ? 'text-base' : 'text-xl'} font-bold text-gray-900 print:text-black`}>{order.payingCompany || 'شرکت بازرگانی'}</h1>
                         <p className="text-[10px] text-gray-500 font-bold mt-0.5 print:text-gray-800">سیستم مدیریت مالی و پرداخت</p>
                     </div>
                 </div>
                 <div className="text-left flex flex-col items-end gap-1 w-1/3">
-                    <h2 className={`${isCompact ? 'text-sm px-2 py-0.5' : 'text-base px-3 py-1'} font-black bg-gray-100 print:bg-transparent border border-gray-200/50 print:border-black text-gray-800 print:text-black rounded-lg mb-1 whitespace-nowrap`}>رسید پرداخت وجه</h2>
-                    <div className="flex items-center gap-2 text-[10px]"><span className="font-bold text-gray-500 print:text-gray-700">شماره:</span><span className="font-mono font-bold text-base print:text-black">{order.trackingNumber}</span></div>
+                    <h2 className={`${isCompact ? 'text-xs px-2 py-0.5' : 'text-base px-3 py-1'} font-black bg-gray-100 print:bg-transparent border border-gray-200/50 print:border-black text-gray-800 print:text-black rounded-lg mb-1 whitespace-nowrap`}>رسید پرداخت وجه</h2>
+                    <div className="flex items-center gap-2 text-[10px]"><span className="font-bold text-gray-500 print:text-gray-700">شماره:</span><span className="font-mono font-bold text-sm print:text-black">{order.trackingNumber}</span></div>
                     <div className="flex items-center gap-2 text-[10px]"><span className="font-bold text-gray-500 print:text-gray-700">تاریخ:</span><span className="font-bold text-gray-800 print:text-black">{formatDate(order.date)}</span></div>
                 </div>
             </div>
             <div className={`${isCompact ? 'space-y-1.5' : 'space-y-3'}`}>
                 <div className="grid grid-cols-2 gap-3">
-                    <div className={`bg-gray-100/50 border-2 border-black print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{order.payee}</span></div>
-                    <div className={`bg-gray-100/50 border-2 border-black print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">مبلغ کل پرداختی:</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-sm' : 'text-base'}`}>{formatCurrency(order.totalAmount)}</span></div>
+                    <div className={`bg-gray-100/50 border-2 border-black print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1 px-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">در وجه (ذینفع):</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-xs' : 'text-base'}`}>{order.payee}</span></div>
+                    <div className={`bg-gray-100/50 border-2 border-black print:bg-transparent print:border-black print:!border-solid ${isCompact ? 'p-1 px-1.5' : 'p-2'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">مبلغ کل پرداختی:</span><span className={`font-bold text-gray-900 print:text-black ${isCompact ? 'text-xs' : 'text-base'}`}>{formatCurrency(order.totalAmount)}</span></div>
                 </div>
-                <div className={`bg-gray-100/50 border-2 border-black py-2 print:border-black print:!border-solid ${isCompact ? 'p-1.5 min-h-[30px]' : 'p-2 min-h-[45px]'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">بابت (شرح پرداخت):</span><p className={`text-gray-800 print:text-black text-justify font-medium leading-tight ${isCompact ? 'text-[10px]' : 'text-xs'}`}>{order.description}</p></div>
+                <div className={`bg-gray-100/50 border-2 border-black print:border-black print:!border-solid ${isCompact ? 'p-1 px-1.5 min-h-[22px]' : 'p-2 min-h-[45px]'} rounded print:rounded-none`} style={{borderStyle: 'solid', borderWidth: '2px'}}><span className="block text-gray-600 print:text-black text-[9px] mb-0.5 font-bold underline underline-offset-2">بابت (شرح پرداخت):</span><p className={`text-gray-800 print:text-black text-justify font-medium leading-tight ${isCompact ? 'text-[9px]' : 'text-xs'}`}>{order.description}</p></div>
                 <div className="border-2 border-black print:border-black print:!border-solid rounded print:rounded-none overflow-hidden" style={{borderStyle: 'solid', borderWidth: '2px'}}>
-                    <table className={`w-full text-right ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>
-                        <thead className="bg-gray-200 print:bg-transparent border-b border-black print:border-black" style={{borderBottomStyle: 'solid', borderBottomWidth: '2px'}}><tr><th className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold text-gray-600 print:text-black w-6 text-center`}>#</th><th className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>نوع پرداخت</th><th className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>مبلغ</th><th className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>بانک / چک / شبا</th><th className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>توضیحات</th></tr></thead>
+                    <table className={`w-full text-right ${isCompact ? 'text-[8.5px]' : 'text-[10px]'}`}>
+                        <thead className="bg-gray-200 print:bg-transparent border-b border-black print:border-black" style={{borderBottomStyle: 'solid', borderBottomWidth: '2px'}}><tr><th className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold text-gray-600 print:text-black w-6 text-center`}>#</th><th className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>نوع پرداخت</th><th className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>مبلغ</th><th className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>بانک / چک / شبا</th><th className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold text-gray-600 print:text-black`}>توضیحات</th></tr></thead>
                         <tbody className="divide-y divide-black">{order.paymentDetails.map((detail, idx) => (
                             <tr key={detail.id}>
-                                <td className={`${isCompact ? 'p-1' : 'p-1.5'} text-center`}>{idx + 1}</td>
-                                <td className={`${isCompact ? 'p-1' : 'p-1.5'} font-bold`}>{detail.method}</td>
-                                <td className={`${isCompact ? 'p-1' : 'p-1.5'} font-mono`}>{formatCurrency(detail.amount)}</td>
-                                <td className={`${isCompact ? 'p-1' : 'p-1.5'} truncate`}>
+                                <td className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} text-center`}>{idx + 1}</td>
+                                <td className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-bold`}>{detail.method}</td>
+                                <td className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} font-mono`}>{formatCurrency(detail.amount)}</td>
+                                <td className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} truncate`}>
                                     {detail.method === PaymentMethod.CHEQUE ? `چک: ${detail.chequeNumber}` : detail.method === PaymentMethod.SHEBA || detail.method === PaymentMethod.SATNA || detail.method === PaymentMethod.PAYA ? `شبا: IR-${detail.sheba}` : detail.method === PaymentMethod.INTERNAL_TRANSFER ? `به حساب: ${detail.destinationAccount} (${detail.destinationOwner})` : detail.method === PaymentMethod.TRANSFER ? `بانک: ${detail.bankName}` : '-'}
                                 </td>
-                                <td className={`${isCompact ? 'p-1' : 'p-1.5'} text-gray-600`}>{detail.description || '-'}</td>
+                                <td className={`${isCompact ? 'p-0.5 px-1' : 'p-1.5'} text-gray-600`}>{detail.description || '-'}</td>
                             </tr>
                         ))}</tbody>
                     </table>
                 </div>
             </div>
         </div>
-        <div className={`mt-auto ${isCompact ? 'pt-1' : 'pt-2'} border-t-2 border-gray-800 relative z-10`}>
+        <div className={`mt-auto ${isCompact ? 'pt-0.5' : 'pt-2'} border-t-2 border-gray-800 relative z-10`}>
             <div className="grid grid-cols-4 gap-2 text-center">
-                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[45px]' : 'min-h-[60px]'}`}><div className="mb-1 flex items-center justify-center h-full"><Stamp name={order.requester} title="درخواست کننده" /></div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">درخواست کننده</span></div></div>
-                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[45px]' : 'min-h-[60px]'}`}><div className="mb-1 flex items-center justify-center h-full">{order.approverFinancial ? <Stamp name={order.approverFinancial} title="تایید مالی" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیر مالی</span></div></div>
-                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[45px]' : 'min-h-[60px]'}`}><div className="mb-1 flex items-center justify-center h-full">{order.approverManager ? <Stamp name={order.approverManager} title="تایید مدیریت" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیریت</span></div></div>
-                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[45px]' : 'min-h-[60px]'}`}><div className="mb-1 flex items-center justify-center h-full">{order.approverCeo ? <Stamp name={order.approverCeo} title="مدیر عامل" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیر عامل</span></div></div>
+                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[35px]' : 'min-h-[60px]'}`}><div className="mb-0.5 flex items-center justify-center h-full"><Stamp name={order.requester} title="درخواست کننده" /></div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">درخواست کننده</span></div></div>
+                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[35px]' : 'min-h-[60px]'}`}><div className="mb-0.5 flex items-center justify-center h-full">{order.approverFinancial ? <Stamp name={order.approverFinancial} title="تایید مالی" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیر مالی</span></div></div>
+                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[35px]' : 'min-h-[60px]'}`}><div className="mb-0.5 flex items-center justify-center h-full">{order.approverManager ? <Stamp name={order.approverManager} title="تایید مدیریت" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیریت</span></div></div>
+                <div className={`flex flex-col items-center justify-end ${isCompact ? 'min-h-[35px]' : 'min-h-[60px]'}`}><div className="mb-0.5 flex items-center justify-center h-full">{order.approverCeo ? <Stamp name={order.approverCeo} title="مدیر عامل" /> : <span className="text-gray-300 text-[8px]">امضا نشده</span>}</div><div className="w-full border-t border-gray-400 pt-0.5"><span className="text-[8px] font-bold text-gray-600">مدیر عامل</span></div></div>
             </div>
         </div>
       </div>

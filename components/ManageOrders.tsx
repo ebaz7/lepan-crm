@@ -44,6 +44,19 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   
   const [currentStatusFilter, setCurrentStatusFilter] = useState<any>(statusFilter || null);
 
+  useEffect(() => {
+      if (viewOrder || editingOrder) {
+          const handleBack = () => {
+              if (viewOrder) setViewOrder(null);
+              if (editingOrder) setEditingOrder(null);
+          };
+          window.dispatchEvent(new CustomEvent('REGISTER_BACK_ACTION', { detail: handleBack }));
+      } else {
+          window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION'));
+      }
+      return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
+  }, [viewOrder, editingOrder]);
+
   // Check if mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -81,13 +94,13 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
   const canApprove = (order: PaymentOrder): boolean => {
     if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.REVOKED) return false;
     if (order.status === OrderStatus.REVOCATION_PENDING_FINANCE) {
-        return currentUser.role === UserRole.FINANCIAL || currentUser.role === UserRole.ADMIN;
+        return currentUser.role === UserRole.FINANCIAL || permissions.canApproveFinancial || currentUser.role === UserRole.ADMIN;
     }
     if (order.status === OrderStatus.REVOCATION_PENDING_MANAGER) {
-        return currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.ADMIN;
+        return currentUser.role === UserRole.MANAGER || permissions.canApproveManager || currentUser.role === UserRole.ADMIN;
     }
     if (order.status === OrderStatus.REVOCATION_PENDING_CEO) {
-        return currentUser.role === UserRole.CEO || currentUser.role === UserRole.ADMIN;
+        return currentUser.role === UserRole.CEO || permissions.canApproveCeo || currentUser.role === UserRole.ADMIN;
     }
     if (isRevocationStatus(order.status)) return false;
 
@@ -245,9 +258,9 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
 
       const roleBasedFilter = (o: PaymentOrder) => {
           if (o.requester === currentUser.fullName) return true;
-          if (currentUser.role === UserRole.FINANCIAL && (o.status === OrderStatus.PENDING || o.status === OrderStatus.REVOCATION_PENDING_FINANCE)) return true;
-          if (currentUser.role === UserRole.MANAGER && (o.status === OrderStatus.APPROVED_FINANCE || o.status === OrderStatus.REVOCATION_PENDING_MANAGER)) return true;
-          if (currentUser.role === UserRole.CEO && (o.status === OrderStatus.APPROVED_MANAGER || o.status === OrderStatus.REVOCATION_PENDING_CEO)) return true;
+          if ((currentUser.role === UserRole.FINANCIAL || permissions.canApproveFinancial) && (o.status === OrderStatus.PENDING || o.status === OrderStatus.REVOCATION_PENDING_FINANCE)) return true;
+          if ((currentUser.role === UserRole.MANAGER || permissions.canApproveManager) && (o.status === OrderStatus.APPROVED_FINANCE || o.status === OrderStatus.REVOCATION_PENDING_MANAGER)) return true;
+          if ((currentUser.role === UserRole.CEO || permissions.canApproveCeo) && (o.status === OrderStatus.APPROVED_MANAGER || o.status === OrderStatus.REVOCATION_PENDING_CEO)) return true;
           return false;
       };
       
