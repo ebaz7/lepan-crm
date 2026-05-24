@@ -351,14 +351,17 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
 
             // 2. PRIVACY FILTER: If targetUsernames is provided, only notify those users.
-            // Even admins shouldn't see private/targeted notifications unless they are in the target list.
             if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
 
-            // 3. ALWAYS NOTIFY ADMIN for general system notifications (where targetUsernames is not specified)
-            if (sub.role === 'admin') return true;
-            
-            // 4. TARGET ROLES
+            // 3. TARGET ROLES: If targetRoles is provided, only notify those roles.
             if (targetRoles && !targetRoles.includes(sub.role)) return false;
+
+            // 4. ADMINS: Admins receive general system notifications (no targetUsernames/roles)
+            if (!targetUsernames && !targetRoles && sub.role === 'admin') return true;
+            
+            // If we reached here and had target filters, the filters already ruled out this sub.
+            // If no filters were provided, we default to notifying everyone (public)
+            if (!targetUsernames && !targetRoles) return true;
             
             return true;
         }).map(sub => {
@@ -871,7 +874,9 @@ app.delete('/api/warehouse/items/:id', (req, res) => {
 });
 
 app.get('/api/warehouse/transactions', (req, res) => {
-    res.json(getDb().warehouseTransactions || []);
+    const transactions = getDb().warehouseTransactions || [];
+    // Limit to last 1500 to keep it snappy for mobile/Android
+    res.json(transactions.slice(0, 1500));
 });
 app.post('/api/warehouse/transactions', (req, res) => { 
     const db = getDb(); 

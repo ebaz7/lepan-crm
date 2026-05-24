@@ -1325,7 +1325,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                                 {/* Messages List */}
                                 <div 
-                                    className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-white dark:bg-black"
+                                    className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative chat-background dark:bg-[#0b141a]"
                                     onDragOver={handleDragOver}
                                     onDrop={handleDrop}
                                 >

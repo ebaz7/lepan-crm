@@ -670,9 +670,19 @@ function App() {
               apiCall('/heartbeat', 'POST', { username: currentUser.username }).catch(console.error);
           }, 60000);
 
+          // FOREGROUND SYNC: Refresh data when user returns to app
+          const handleVisibilityChange = () => {
+              if (!document.hidden) {
+                  console.log("App visible - Triggering foreground sync...");
+                  loadData(true); 
+              }
+          };
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+
           return () => { 
               clearInterval(intervalId); 
               clearInterval(heartbeatId);
+              document.removeEventListener('visibilitychange', handleVisibilityChange);
           }; 
       } 
   }, [currentUser]);
