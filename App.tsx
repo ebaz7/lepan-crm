@@ -552,7 +552,15 @@ function App() {
         
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
-            if (lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username) {
+            
+            // Check if message is relevant to me:
+            // Don't notify if it's a private message to someone else
+            let isRelevantToMe = true;
+            if (lastMsg.recipient && lastMsg.recipient !== currentUser.username && lastMsg.recipient !== currentUser.fullName) {
+                isRelevantToMe = false;
+            }
+            
+            if (isRelevantToMe && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username) {
                 if (activeTab !== 'chat') {
                     let body = lastMsg.message || 'فایل ضمیمه';
                     if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';

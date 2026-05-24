@@ -889,11 +889,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             await sendMessage(finalMsg);
             onRefresh();
         } catch (error: any) { 
-            alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد.'); 
+            alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد یا فرمت پشتیبانی نمی‌شود.'); 
             setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
         }
 
-        e.target.value = '';
+        try {
+            if (e.target) e.target.value = '';
+        } catch(e){}
     };
 
     const handleDragOver = (e: React.DragEvent) => {

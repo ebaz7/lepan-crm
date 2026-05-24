@@ -156,9 +156,10 @@ export const uploadFileChunked = async (file: File, onProgress: (p: number) => v
         const chunk = file.slice(start, end);
         
         // Convert chunk to base64
-        const chunkBase64 = await new Promise<string>((resolve) => {
+        const chunkBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (err) => reject(err);
             reader.readAsDataURL(chunk);
         });
         

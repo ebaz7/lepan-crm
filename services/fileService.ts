@@ -37,17 +37,31 @@ export const downloadAndOpenFile = async (
 
             if (shouldDownload) {
                 if (onProgress) onProgress(10);
-                const response = await fetch(fetchUrl);
-                const blob = await response.blob();
-                if (onProgress) onProgress(80);
                 
-                const base64data = await blobToBase64(blob);
-                const result = await Filesystem.writeFile({
-                    path: fileName,
-                    data: base64data,
-                    directory: Directory.Documents
-                });
-                fileUri = result.uri;
+                try {
+                    const downloadResult = await Filesystem.downloadFile({
+                        url: fetchUrl,
+                        path: fileName,
+                        directory: Directory.Documents
+                    });
+                    
+                    fileUri = downloadResult.path || ''; // Ensure uri is saved
+                } catch (e) {
+                    console.error('Filesystem.downloadFile error:', e);
+                    // Fallback to fetch if downloadFile fails for some reason
+                    const response = await fetch(fetchUrl);
+                    const blob = await response.blob();
+                    if (onProgress) onProgress(80);
+                    
+                    const base64data = await blobToBase64(blob);
+                    const result = await Filesystem.writeFile({
+                        path: fileName,
+                        data: base64data,
+                        directory: Directory.Documents
+                    });
+                    fileUri = result.uri;
+                }
+                
                 if (onProgress) onProgress(100);
             } else {
                 if (onProgress) onProgress(100);
