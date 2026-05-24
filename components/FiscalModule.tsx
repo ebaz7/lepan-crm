@@ -102,18 +102,14 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
         const companies = currentSettings.companies || [];
         
         // GLOBAL DEFAULTS (Current System State)
-        // If year config is missing, we suggest the current system numbers + 1 or existing
-        const defaultPay = currentSettings.currentTrackingNumber ? currentSettings.currentTrackingNumber + 1 : 1000;
-        const defaultExit = currentSettings.currentExitPermitNumber ? currentSettings.currentExitPermitNumber + 1 : 1000;
+        const defaultPay = currentSettings.currentTrackingNumber || 1;
+        const defaultExit = currentSettings.currentExitPermitNumber || 1;
 
         companies.forEach(c => {
-            // FIX: Using type assertion to avoid property errors on empty object
-            // Also ensure we handle potential company renames gracefully in future (though ID based is better, current logic is Name based)
             const seq = (year.companySequences?.[c.name] || {}) as CompanySequenceConfig;
             
-            // Warehouse Bijak: Use specific company sequence if available in settings, else 1
             const currentBijak = currentSettings.warehouseSequences?.[c.name];
-            const defaultBijak = currentBijak ? currentBijak + 1 : 1000;
+            const defaultBijak = currentBijak || 1;
 
             configMap[c.name] = {
                 // Priority: 1. Existing Fiscal Config, 2. Current System Counter, 3. Default 1000
@@ -169,9 +165,9 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
         Object.entries(companyConfig).forEach(([compName, vals]) => {
             const values = vals as { pay: string, exit: string, bijak: string };
             sequences[compName] = {
-                startTrackingNumber: parseInt(values.pay) || 1001,
-                startExitPermitNumber: parseInt(values.exit) || 1001,
-                startBijakNumber: parseInt(values.bijak) || 1001,
+                startTrackingNumber: parseInt(values.pay) || 1,
+                startExitPermitNumber: parseInt(values.exit) || 1,
+                startBijakNumber: parseInt(values.bijak) || 1,
             };
         });
 

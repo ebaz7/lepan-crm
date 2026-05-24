@@ -839,7 +839,7 @@ function App() {
                 {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
                 {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} />}
                 
-                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
+                <div className={activeTab === 'chat' ? 'flex-1 relative flex flex-col w-full h-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}

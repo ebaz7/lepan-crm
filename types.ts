@@ -488,6 +488,7 @@ export interface ExitPermit {
   rejectedBy?: string;
   isEdit?: boolean;
   price?: number;
+  fiscalYearId?: string;
 }
 
 export interface WarehouseItem {

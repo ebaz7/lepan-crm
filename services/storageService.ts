@@ -97,7 +97,7 @@ export const getNextTrackingNumber = async (company?: string): Promise<number> =
         const response = await apiCall<{ nextTrackingNumber: number }>(url); 
         return response.nextTrackingNumber; 
     } catch (e) { 
-        return 1001; 
+        return 1; 
     } 
 };
 
@@ -199,7 +199,7 @@ export const getNextBijakNumber = async (company?: string): Promise<number> => {
         const response = await apiCall<{ nextNumber: number }>(url); 
         return response.nextNumber; 
     } catch (e) { 
-        return 1001; 
+        return 1; 
     } 
 };
 

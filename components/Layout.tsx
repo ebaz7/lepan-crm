@@ -688,13 +688,12 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                         onChange={(e) => (window as any).setAppFinancialYear?.(e.target.value)}
                                         className="bg-transparent border-none p-0 text-[10px] font-black text-gray-700 dark:text-gray-300 outline-none cursor-pointer focus:ring-0"
                                     >
-                                        {settings?.financialYears?.length ? (
-                                            settings.financialYears.map((y: any) => (
-                                                <option key={y.year} value={y.year}>{y.label || y.year}</option>
+                                        {settings?.fiscalYears?.length ? (
+                                            settings.fiscalYears.map((y: any) => (
+                                                <option key={y.id} value={y.label}>{y.label}</option>
                                             ))
                                         ) : (
                                             <>
-                                                <option value="1402">۱۴۰۲</option>
                                                 <option value="1403">۱۴۰۳</option>
                                                 <option value="1404">۱۴۰۴</option>
                                             </>
@@ -738,14 +737,14 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                </header>
 
                {/* Viewport Content */}
-               <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
-                    <div className={`flex-1 overflow-y-auto ${activeTab === 'chat' ? 'min-h-0' : 'pb-32 px-4 md:px-12 lg:px-16'} custom-scrollbar`}>
+               <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden h-full">
+                    <div className={`flex-1 overflow-y-auto ${activeTab === 'chat' ? 'min-h-0 h-full' : 'pb-36 lg:pb-12 px-4 md:px-12 lg:px-16'} custom-scrollbar scroll-smooth`}>
                          <motion.div 
                             key={activeTab}
                             initial={{ opacity: 0, scale: 0.98, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="h-full"
+                            className="h-full w-full max-w-7xl mx-auto"
                          >
                             {children}
                          </motion.div>
@@ -756,7 +755,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
 
       {/* Floating Bottom Navigation Pill (Samsung Inspired) */}
       <AnimatePresence>
-        {!['chat'].includes(activeTab) && (
+        {activeTab && (
             <motion.nav 
                 initial={{ y: 120 }} animate={{ y: 0 }} exit={{ y: 120 }}
                 transition={{ type: "spring", damping: 20, stiffness: 180 }}
@@ -770,14 +769,17 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                             <button 
                                 key={item.id}
                                 onClick={() => setActiveTab(item.id)}
-                                className={`flex-1 flex items-center justify-center py-3.5 px-1 rounded-full transition-all relative ${isActive ? 'text-blue-600' : 'text-gray-400'}`}
+                                className={`flex-1 flex flex-col items-center justify-center pt-3 pb-2.5 px-1 rounded-3xl transition-all relative ${isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
                             >
-                                <Icon size={isActive ? 28 : 24} strokeWidth={isActive ? 3.5 : 2.5} className="relative z-10 transition-transform" />
+                                <Icon size={isActive ? 22 : 20} strokeWidth={isActive ? 2.5 : 2} className="relative z-10 transition-transform mb-1.5" />
+                                <span className={`text-[10px] font-black relative z-10 tracking-tighter leading-none ${isActive ? 'opacity-100 text-blue-600' : 'opacity-80'}`} style={{fontSize: 'calc(10px + 0vw)'}}>
+                                    {item.label}
+                                </span>
                                 {isActive && (
-                                    <motion.div layoutId="activeTabPill" className="absolute inset-0 bg-blue-50 dark:bg-blue-900/30 rounded-full border border-blue-100 dark:border-blue-700 shadow-inner" />
+                                    <motion.div layoutId="activeTabPill" className="absolute inset-x-1 inset-y-1 bg-blue-50 dark:bg-blue-900/30 rounded-2xl border border-blue-100 dark:border-blue-700 shadow-inner" />
                                 )}
                                 {item.id === 'chat' && unreadChatCount > 0 && (
-                                    <span className="absolute top-2 right-4 w-4 h-4 bg-red-500 rounded-full border-[3px] border-white dark:border-gray-950 shadow-lg" />
+                                    <span className="absolute top-1 right-1/2 translate-x-3 w-4 h-4 bg-red-500 text-white text-[8px] rounded-full flex items-center justify-center font-black animate-bounce border-2 border-white dark:border-gray-950 shadow-lg z-20">{unreadChatCount}</span>
                                 )}
                             </button>
                         );
@@ -785,9 +787,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                     {hasMore && (
                         <button 
                             onClick={() => setShowMobileMenu(true)}
-                            className="flex-1 flex items-center justify-center py-3.5 text-gray-400 bg-gray-50 dark:bg-white/10 rounded-full border border-white/10"
+                            className="flex-none flex flex-col items-center justify-center pt-2 pb-1.5 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 bg-gray-50 dark:bg-white/10 rounded-2xl border border-white/10"
                         >
-                            <Menu size={24} />
+                            <Menu size={20} strokeWidth={2} className="mb-1" />
+                            <span className="text-[10px] font-black leading-none" style={{fontSize: 'calc(10px + 0vw)'}}>بیشتر</span>
                         </button>
                     )}
                 </div>

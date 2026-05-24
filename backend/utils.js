@@ -14,14 +14,18 @@ export const getTehranDateString = () => {
 
 export const generateUUID = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-export const findNextGapNumber = (items, company, field, settingsStart) => {
-    let startNum = settingsStart || 1000;
+export const findNextGapNumber = (items, company, field, settingsStart, fiscalYearId = null) => {
+    let startNum = settingsStart || 1;
     const existingNumbers = new Set();
     
     if (items && Array.isArray(items)) {
         for (const i of items) {
             const itemCompany = i.company || i.payingCompany || '';
             const targetCompany = company || '';
+            
+            // Separately consider Year if provided
+            if (fiscalYearId && i.fiscalYearId && i.fiscalYearId !== fiscalYearId) continue;
+
             if (itemCompany === targetCompany) {
                 const num = parseInt(i[field]);
                 if (!isNaN(num) && num >= startNum) {
@@ -36,7 +40,7 @@ export const findNextGapNumber = (items, company, field, settingsStart) => {
     return expected;
 };
 
-export const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null) => {
+export const checkForDuplicate = (list, numField, numValue, companyField, companyValue, excludeId = null, fiscalYearId = null) => {
     if (!list || !Array.isArray(list)) return false;
     
     const targetNum = Number(numValue);
@@ -44,6 +48,10 @@ export const checkForDuplicate = (list, numField, numValue, companyField, compan
 
     return list.some(item => {
         if (item.id === excludeId) return false;
+        
+        // Separately consider Year if provided
+        if (fiscalYearId && item.fiscalYearId && item.fiscalYearId !== fiscalYearId) return false;
+
         const itemNum = Number(item[numField]);
         const itemCompany = (item[companyField] || '').toString().trim();
         return itemNum === targetNum && itemCompany === targetCompany;
