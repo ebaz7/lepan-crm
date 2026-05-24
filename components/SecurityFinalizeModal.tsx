@@ -48,7 +48,7 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
                 <p className="text-[10px] opacity-80 mt-0.5">لطفاً مشخصات راننده و خودرو را بررسی و وارد کنید.</p>
              </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><X size={24} /></button>
+          <button onClick={onClose} data-close-modal="true" className="p-2 hover:bg-white/20 rounded-full transition-colors"><X size={24} /></button>
         </div>
 
         <div className="p-6 md:p-8 space-y-8 bg-gray-50/50">

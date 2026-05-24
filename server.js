@@ -351,17 +351,14 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
 
             // 2. PRIVACY FILTER: If targetUsernames is provided, only notify those users.
+            // Even admins shouldn't see private/targeted notifications unless they are in the target list.
             if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
 
-            // 3. TARGET ROLES: If targetRoles is provided, only notify those roles.
-            if (targetRoles && !targetRoles.includes(sub.role)) return false;
-
-            // 4. ADMINS: Admins receive general system notifications (no targetUsernames/roles)
-            if (!targetUsernames && !targetRoles && sub.role === 'admin') return true;
+            // 3. ALWAYS NOTIFY ADMIN for general system notifications (where targetUsernames is not specified)
+            if (sub.role === 'admin') return true;
             
-            // If we reached here and had target filters, the filters already ruled out this sub.
-            // If no filters were provided, we default to notifying everyone (public)
-            if (!targetUsernames && !targetRoles) return true;
+            // 4. TARGET ROLES
+            if (targetRoles && !targetRoles.includes(sub.role)) return false;
             
             return true;
         }).map(sub => {
@@ -518,16 +515,15 @@ app.post('/api/subscribe', (req, res) => {
 app.get('/api/next-tracking-number', (req, res) => {
     const db = getDb();
     const company = req.query.company || '';
-    const activeId = db.settings.activeFiscalYearId;
-    let minStart = db.settings.currentTrackingNumber || 1;
-    if (activeId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === activeId);
+    let minStart = db.settings.currentTrackingNumber || 1000;
+    if (db.settings.activeFiscalYearId && company) {
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
     } 
-    let nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart, activeId);
-    while (checkForDuplicate(db.orders, 'trackingNumber', nextNum, 'payingCompany', company, null, activeId)) {
+    let nextNum = findNextGapNumber(db.orders, company, 'trackingNumber', minStart);
+    while (checkForDuplicate(db.orders, 'trackingNumber', nextNum, 'payingCompany', company)) {
         nextNum++;
     }
     res.json({ nextTrackingNumber: nextNum });
@@ -536,16 +532,15 @@ app.get('/api/next-tracking-number', (req, res) => {
 app.get('/api/next-exit-permit-number', (req, res) => {
     const db = getDb();
     const company = req.query.company || '';
-    const activeId = db.settings.activeFiscalYearId;
-    let minStart = db.settings.currentExitPermitNumber || 1;
-    if (activeId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === activeId);
+    let minStart = db.settings.currentExitPermitNumber || 1000;
+    if (db.settings.activeFiscalYearId && company) {
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
     }
-    let nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart, activeId);
-    while (checkForDuplicate(db.exitPermits, 'permitNumber', nextNum, 'company', company, null, activeId)) {
+    let nextNum = findNextGapNumber(db.exitPermits, company, 'permitNumber', minStart);
+    while (checkForDuplicate(db.exitPermits, 'permitNumber', nextNum, 'company', company)) {
         nextNum++;
     }
     res.json({ nextNumber: nextNum });
@@ -554,12 +549,11 @@ app.get('/api/next-exit-permit-number', (req, res) => {
 app.get('/api/next-bijak-number', (req, res) => {
     const db = getDb();
     const company = req.query.company || '';
-    const activeId = db.settings.activeFiscalYearId;
-    let minStart = 1;
-    if (activeId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === activeId);
+    let minStart = 1000;
+    if (db.settings.activeFiscalYearId && company) {
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
-            minStart = year.companySequences[company].startBijakNumber || 1;
+            minStart = year.companySequences[company].startBijakNumber || 1000;
         }
     } else {
         if (company && db.settings.warehouseSequences && db.settings.warehouseSequences[company]) { 
@@ -567,8 +561,8 @@ app.get('/api/next-bijak-number', (req, res) => {
         }
     }
     const outTxs = (db.warehouseTransactions || []).filter(t => t.type === 'OUT');
-    let nextNum = findNextGapNumber(outTxs, company, 'number', minStart, activeId);
-    while (checkForDuplicate(outTxs, 'number', nextNum, 'company', company, null, activeId)) {
+    let nextNum = findNextGapNumber(outTxs, company, 'number', minStart);
+    while (checkForDuplicate(outTxs, 'number', nextNum, 'company', company)) {
         nextNum++;
     }
     res.json({ nextNumber: nextNum });
@@ -581,15 +575,13 @@ app.get('/api/orders', (req, res) => {
 app.post('/api/orders', (req, res) => { 
     const db = getDb(); 
     const order = req.body; 
-    const activeId = db.settings.activeFiscalYearId;
     
     // STRICT DUPLICATE CHECK (Create)
-    if (checkForDuplicate(db.orders, 'trackingNumber', order.trackingNumber, 'payingCompany', order.payingCompany, null, activeId)) {
+    if (checkForDuplicate(db.orders, 'trackingNumber', order.trackingNumber, 'payingCompany', order.payingCompany)) {
         return res.status(409).json({ error: "Duplicate tracking number" });
     }
 
     order.id = order.id || Date.now().toString(); 
-    order.fiscalYearId = activeId;
     if(!db.orders) db.orders = []; 
     db.orders.unshift(order); 
     
@@ -612,14 +604,13 @@ app.post('/api/orders', (req, res) => {
 app.put('/api/orders/:id', (req, res) => { 
     const db = getDb(); 
     const idx = db.orders.findIndex(o => o.id === req.params.id); 
-    const activeId = db.settings.activeFiscalYearId;
     if(idx > -1) { 
         // STRICT DUPLICATE CHECK (Update)
         const currentOrder = db.orders[idx];
         const newTracking = req.body.trackingNumber !== undefined ? req.body.trackingNumber : currentOrder.trackingNumber;
         const newCompany = req.body.payingCompany !== undefined ? req.body.payingCompany : currentOrder.payingCompany;
 
-        if (checkForDuplicate(db.orders, 'trackingNumber', newTracking, 'payingCompany', newCompany, req.params.id, activeId)) {
+        if (checkForDuplicate(db.orders, 'trackingNumber', newTracking, 'payingCompany', newCompany, req.params.id)) {
             return res.status(409).json({ error: "Duplicate tracking number" });
         }
 
@@ -681,14 +672,12 @@ app.get('/api/exit-permits', (req, res) => {
 app.post('/api/exit-permits', (req, res) => { 
     const db = getDb(); 
     const permit = req.body;
-    const activeId = db.settings.activeFiscalYearId;
 
     // STRICT DUPLICATE CHECK (Create)
-    if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company, null, activeId)) {
+    if (checkForDuplicate(db.exitPermits, 'permitNumber', permit.permitNumber, 'company', permit.company)) {
         return res.status(409).json({ error: "Duplicate permit number" });
     }
 
-    permit.fiscalYearId = activeId;
     if(!db.exitPermits) db.exitPermits = []; 
     db.exitPermits.push(permit); 
     saveDb(db); 
@@ -709,13 +698,12 @@ app.post('/api/exit-permits', (req, res) => {
 app.put('/api/exit-permits/:id', (req, res) => { 
     const db = getDb(); 
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 
-    const activeId = db.settings.activeFiscalYearId;
     if (idx > -1) { 
         const currentPermit = db.exitPermits[idx];
         const newPermitNum = req.body.permitNumber !== undefined ? req.body.permitNumber : currentPermit.permitNumber;
         const newCompany = req.body.company !== undefined ? req.body.company : currentPermit.company;
         
-        if (checkForDuplicate(db.exitPermits, 'permitNumber', newPermitNum, 'company', newCompany, req.params.id, activeId)) {
+        if (checkForDuplicate(db.exitPermits, 'permitNumber', newPermitNum, 'company', newCompany, req.params.id)) {
              return res.status(409).json({ error: "Duplicate permit number" });
         }
 
@@ -883,22 +871,18 @@ app.delete('/api/warehouse/items/:id', (req, res) => {
 });
 
 app.get('/api/warehouse/transactions', (req, res) => {
-    const transactions = getDb().warehouseTransactions || [];
-    // Limit to last 1500 to keep it snappy for mobile/Android
-    res.json(transactions.slice(0, 1500));
+    res.json(getDb().warehouseTransactions || []);
 });
 app.post('/api/warehouse/transactions', (req, res) => { 
     const db = getDb(); 
     const tx = req.body;
-    const activeId = db.settings.activeFiscalYearId;
 
     if (tx.type === 'OUT') {
-        if (checkForDuplicate(db.warehouseTransactions.filter(t => t.type === 'OUT'), 'number', tx.number, 'company', tx.company, null, activeId)) {
+        if (checkForDuplicate(db.warehouseTransactions.filter(t => t.type === 'OUT'), 'number', tx.number, 'company', tx.company)) {
              return res.status(409).json({ error: "Duplicate bijak number" });
         }
     }
 
-    tx.fiscalYearId = activeId;
     if(!db.warehouseTransactions) db.warehouseTransactions=[]; 
     db.warehouseTransactions.unshift(tx); 
     saveDb(db); 
@@ -917,7 +901,6 @@ app.post('/api/warehouse/transactions', (req, res) => {
 app.put('/api/warehouse/transactions/:id', (req, res) => { 
     const db = getDb(); 
     const idx = db.warehouseTransactions.findIndex(t => t.id === req.params.id); 
-    const activeId = db.settings.activeFiscalYearId;
     if(idx > -1) { 
         const currentTx = db.warehouseTransactions[idx];
         if (currentTx.type === 'OUT' || req.body.type === 'OUT') {
@@ -925,7 +908,7 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
             const newCompany = req.body.company !== undefined ? req.body.company : currentTx.company;
             const outTransactions = db.warehouseTransactions.filter(t => t.type === 'OUT');
             
-            if (checkForDuplicate(outTransactions, 'number', newNumber, 'company', newCompany, req.params.id, activeId)) {
+            if (checkForDuplicate(outTransactions, 'number', newNumber, 'company', newCompany, req.params.id)) {
                  return res.status(409).json({ error: "Duplicate bijak number" });
             }
         }

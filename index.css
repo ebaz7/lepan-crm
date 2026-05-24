@@ -4,34 +4,29 @@
 
 @layer base {
   :root {
-    --app-bg: #f5f6f8;
-    --glass-bg: rgba(255, 255, 255, 0.75); /* More transparent for One UI */
-    --glass-bg-hover: rgba(255, 255, 255, 0.9);
+    --app-bg: #ffffff;
+    --glass-bg: rgba(255, 255, 255, 0.85); /* More matte glass */
+    --glass-bg-hover: rgba(255, 255, 255, 0.95);
     --glass-border: rgba(0, 0, 0, 0.05);
-    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-    --text-primary: #000000;
-    --text-secondary: #5f6368;
-    --border-color: rgba(0, 0, 0, 0.06);
-    --accent-blue: #007aff;
-    --card-radius: 2rem;
-    --one-ui-radius: 28px;
-    --one-ui-radius-sm: 16px;
-    --one-ui-squircle-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath d='M0 50C0 4.47715 4.47715 0 50 0C95.5228 0 100 4.47715 100 50C100 95.5228 95.5228 100 50 100C4.47715 100 0 95.5228 0 50Z'/%3E%3C/svg%3E");
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --border-color: rgba(0, 0, 0, 0.08);
   }
   
   .dark {
     --app-bg: #000000;
-    --glass-bg: rgba(28, 28, 30, 0.7); /* Matte dark glass */
-    --glass-bg-hover: rgba(44, 44, 46, 0.85);
+    --glass-bg: rgba(28, 28, 30, 0.8); /* Matte dark glass */
+    --glass-bg-hover: rgba(44, 44, 46, 0.9);
     --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    --text-primary: #ffffff;
-    --text-secondary: #8e8e93;
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    --text-primary: #f5f5f7;
+    --text-secondary: #86868b;
     --border-color: rgba(255, 255, 255, 0.1);
   }
 }
 
-/* Background Blobs - One UI Style */
+/* Background Blobs - Disabled in light mode for pure white look, kept subtle in dark */
 .bg-blobs {
   position: fixed;
   top: 0;
@@ -41,39 +36,60 @@
   z-index: -1;
   overflow: hidden;
   background: var(--app-bg);
-  pointer-events: none;
+}
+
+.dark .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.15;
+  animation: blob-float 30s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
 }
 
 .blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(140px);
-  opacity: 0.12;
-  animation: blob-float 40s infinite alternate cubic-bezier(0.445, 0.05, 0.55, 0.95);
+  display: none; /* Hidden by default (light mode) */
+}
+
+.dark .blob {
+  display: block;
 }
 
 .blob-1 {
-  width: 70vw;
-  height: 70vw;
-  background: radial-gradient(circle, #007aff 0%, transparent 80%);
-  top: -20vh;
-  right: -20vw;
+  width: 600px;
+  height: 600px;
+  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+  top: -100px;
+  right: -100px;
 }
 
 .blob-2 {
-  width: 60vw;
-  height: 60vw;
-  background: radial-gradient(circle, #5856d6 0%, transparent 80%);
-  bottom: -15vh;
-  left: -15vw;
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  bottom: -50px;
+  left: -50px;
+  animation-delay: -7s;
+}
+
+.blob-3 {
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, #5ee7df 0%, #b491ee 100%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: blob-float 40s infinite alternate-reverse;
+  opacity: 0.15;
 }
 
 @keyframes blob-float {
   0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(10vw, 10vh) scale(1.1); }
+  33% { transform: translate(100px, 50px) scale(1.1); }
+  66% { transform: translate(-50px, 120px) scale(0.9); }
+  100% { transform: translate(50px, -100px) scale(1.05); }
 }
 
-/* Font Face */
+/* Font Face - Updated for better Offline Support */
 @font-face {
   font-family: 'Vazirmatn';
   src: local('Vazirmatn'), local('Vazirmatn-Regular'),
@@ -83,17 +99,18 @@
 }
 
 body {
-  font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Vazirmatn', sans-serif;
   background: var(--app-bg);
+  background-attachment: fixed;
   color: var(--text-primary);
-  overscroll-behavior-y: contain; 
+  overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile PWA */
   -webkit-font-smoothing: antialiased;
   -moz-osx-osx-font-smoothing: grayscale;
+  /* Disable text selection highlight for app-like feel */
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
-  transition: background 0.4s ease, color 0.4s ease;
+  transition: background 0.3s ease, color 0.3s ease;
   min-height: 100vh;
-  overflow-x: hidden;
 }
 
 /* Glassmorphism Global Restyling for generic util classes */
@@ -173,24 +190,6 @@ body {
     backdrop-filter: blur(40px) saturate(210%);
     -webkit-backdrop-filter: blur(40px) saturate(210%);
     border-bottom: 1px solid var(--glass-border);
-  }
-  
-  .one-ui-squircle {
-    mask-image: var(--one-ui-squircle-mask);
-    mask-size: 100% 100%;
-    -webkit-mask-image: var(--one-ui-squircle-mask);
-    -webkit-mask-size: 100% 100%;
-  }
-  
-  .one-ui-card {
-    border-radius: var(--one-ui-radius);
-    overflow: hidden;
-  }
-  
-  .chat-background {
-    background-color: #e5ddd5;
-    background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png");
-    background-attachment: fixed;
   }
 }
 

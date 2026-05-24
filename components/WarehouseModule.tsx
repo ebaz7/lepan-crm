@@ -7,7 +7,7 @@ import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarCha
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
-import { apiCall, getLocalData, LS_KEYS } from '../services/apiService';
+import { apiCall } from '../services/apiService';
 import { getUsers, getRolePermissions } from '../services/authService';
 import html2canvas from 'html2canvas';
 import useIsMobile from '../hooks/useIsMobile';
@@ -323,25 +323,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     }, [selectedCompany, activeTab]);
 
     const loadData = async () => { 
-        // INSTANT LOAD: Read from localStorage first to prevent "Stuck on Loading" feeling
-        const cachedItems = getLocalData<WarehouseItem[]>(LS_KEYS.WH_ITEMS, []);
-        const cachedTransactions = getLocalData<WarehouseTransaction[]>(LS_KEYS.WH_TX, []);
-        
-        if (cachedItems.length > 0) setItems(cachedItems);
-        if (cachedTransactions.length > 0) {
-            setAllTransactions(cachedTransactions);
-            let safeTxs = cachedTransactions;
-            if (financialYear && financialYear !== 'all') {
-                safeTxs = safeTxs.filter(tx => isInFinancialYear(tx.date, financialYear));
-            }
-            setTransactions(safeTxs);
-        }
-
-        // Show loading only if we have no cached data at all
-        if (cachedItems.length === 0 && cachedTransactions.length === 0) {
-            setLoadingData(true); 
-        }
-
+        setLoadingData(true); 
         try { 
             const [i, t] = await Promise.all([getWarehouseItems(), getWarehouseTransactions()]); 
             setItems(Array.isArray(i) ? i : []); 
@@ -354,12 +336,9 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             setTransactions(safeTxs); 
         } catch (e) { 
             console.error(e); 
-            // Only clear if absolutely nothing is there
-            if (!items.length && !transactions.length) {
-                setItems([]);
-                setTransactions([]);
-                setAllTransactions([]);
-            }
+            setItems([]);
+            setTransactions([]);
+            setAllTransactions([]);
         } finally { 
             setLoadingData(false); 
         } 
@@ -677,17 +656,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
         document.body.removeChild(link);
     };
 
-    if (!settings || (loadingData && items.length === 0)) return (
-        <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 gap-4 animate-pulse">
-            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 one-ui-squircle flex items-center justify-center">
-                <Package size={40} className="text-blue-500 animate-bounce" />
-            </div>
-            <div className="flex flex-col items-center gap-1">
-                <span className="text-base font-black text-gray-900 dark:text-white">در حال تنظیم انبار...</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">SAMSUNG ONE UI 8 ENGINE</span>
-            </div>
-        </div>
-    );
+    if (!settings || loadingData) return <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 gap-2"><Loader2 className="animate-spin text-blue-600" size={32}/><span className="text-sm font-bold">در حال بارگذاری اطلاعات انبار...</span></div>;
     const companyList = settings.companies?.filter(c => c.showInWarehouse !== false).map(c => c.name) || [];
     if (companyList.length === 0) return (<div className="flex flex-col items-center justify-center h-[60vh] text-center p-6 animate-fade-in"><div className="bg-amber-100 p-4 rounded-full text-amber-600 mb-4 shadow-sm"><AlertTriangle size={48}/></div><h2 className="text-xl font-bold text-gray-800 mb-2">هیچ شرکتی برای انبار فعال نشده است</h2><p className="text-gray-600 max-w-md mb-6 leading-relaxed">برای استفاده از سیستم انبار، لطفاً در تنظیمات سیستم به بخش "مدیریت شرکت‌ها" بروید و تیک "نمایش در انبار" را برای شرکت‌های مورد نظر فعال کنید.</p><div className="flex gap-2"><button onClick={() => window.location.hash = '#settings'} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg"><Settings size={20}/><span>رفتن به تنظیمات</span></button></div></div>);
 
@@ -727,16 +696,6 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             )}
 
             <div className={`bg-white dark:bg-gray-900 p-2 flex gap-1.5 border-b overflow-x-auto no-print scrollbar-hide shrink-0 sticky top-0 z-[35] backdrop-blur-md bg-opacity-90 ${isMobile ? 'px-4 py-3' : 'p-2'}`}>
-                {/* Sync Button */}
-                <button 
-                    onClick={() => { if(!loadingData) loadData(); }} 
-                    className={`flex items-center justify-center p-2 rounded-xl transition-all ${loadingData ? 'bg-blue-50 text-blue-500' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 hover:bg-white dark:hover:bg-gray-700'}`}
-                    title="بروزرسانی داده‌ها"
-                >
-                    <RefreshCw size={18} className={loadingData ? 'animate-spin' : ''} />
-                </button>
-                <div className="w-px h-6 bg-gray-200 dark:bg-white/10 my-auto mx-1 shrink-0" />
-                
                 {activeTab !== 'dashboard' && (
                     <button 
                         onClick={() => setActiveTab('dashboard')}

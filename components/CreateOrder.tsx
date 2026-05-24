@@ -77,14 +77,14 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ onSuccess, currentUser }) => 
     
     getNextTrackingNumber(company)
         .then(num => {
-            // FORCE A NUMBER. If API returns 0 or null, use 1.
-            const validNum = (num && num > 0) ? num : 1;
+            // FORCE A NUMBER. If API returns 0 or null, use 1001.
+            const validNum = (num && num > 0) ? num : 1001;
             setTrackingNumber(validNum.toString());
         })
         .catch((e) => {
             console.error("Fetch Number Error", e);
             // Fallback on error
-            setTrackingNumber('1');
+            setTrackingNumber('1001');
         })
         .finally(() => setLoadingNum(false));
   };

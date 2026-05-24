@@ -154,29 +154,6 @@ function App() {
     try { window.history.replaceState(state, title, url); } catch (e) { window.location.hash = url; }
   };
   const [financialYear, setFinancialYearState] = useState<string>(new Date().toLocaleDateString('fa-IR-u-nu-latn').split('/')[0]);
-
-  // Expose globally for components like Dashboard to use
-  useEffect(() => {
-    (window as any).setAppFinancialYear = (year: string) => {
-        setFinancialYear(year);
-        // Data reload is handled or should be triggered
-        setTimeout(() => loadData(true), 100);
-    };
-    
-    // Check for share intent on initial load (Capacitor)
-    if (Capacitor.isNativePlatform()) {
-        try {
-            CapacitorApp.addListener('appUrlOpen', (data: any) => {
-                if (data.url) {
-                    console.log('App URL Open:', data.url);
-                    // Handle deep link share if applicable
-                }
-            });
-        } catch (e) { console.error("appUrlOpen listener error", e); }
-    }
-
-    return () => { delete (window as any).setAppFinancialYear; };
-  }, [currentUser]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
@@ -187,18 +164,6 @@ function App() {
     } else {
         setTheme('light');
         document.documentElement.classList.remove('dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sharedFileUrl = params.get('sharedFileUrl');
-    const sharedText = params.get('sharedText');
-    if (sharedFileUrl || sharedText) {
-        setSharedData({ fileUrl: sharedFileUrl || undefined, text: sharedText || undefined });
-        setActiveTab('chat');
-        // Clean URL
-        window.history.replaceState({}, '', '/');
     }
   }, []);
 
@@ -516,7 +481,6 @@ function App() {
               const updated = { ...settings, activeFiscalYearId: year.id };
               await saveSettings(updated);
               setSettings(updated);
-              await loadData(true);
           }
       }
   };
@@ -706,19 +670,9 @@ function App() {
               apiCall('/heartbeat', 'POST', { username: currentUser.username }).catch(console.error);
           }, 60000);
 
-          // FOREGROUND SYNC: Refresh data when user returns to app
-          const handleVisibilityChange = () => {
-              if (!document.hidden) {
-                  console.log("App visible - Triggering foreground sync...");
-                  loadData(true); 
-              }
-          };
-          document.addEventListener('visibilitychange', handleVisibilityChange);
-
           return () => { 
               clearInterval(intervalId); 
               clearInterval(heartbeatId);
-              document.removeEventListener('visibilitychange', handleVisibilityChange);
           }; 
       } 
   }, [currentUser]);
@@ -764,12 +718,6 @@ function App() {
           return true;
       }).length;
   }, [chatMessages, currentUser]);
-
-  useEffect(() => {
-    if (activeTab === 'chat') {
-      loadData(true);
-    }
-  }, [activeTab]);
 
   return (
     <>
@@ -846,7 +794,7 @@ function App() {
                 {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
                 {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} />}
                 
-                <div className={activeTab === 'chat' ? 'flex-1 relative flex flex-col w-full h-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
+                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}

@@ -377,7 +377,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
                     <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Save size={20} /></div>
                     <h2 className="text-xl font-bold text-gray-800">ویرایش دستور پرداخت</h2>
                 </div>
-                <button onClick={onClose} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+                <button onClick={onClose} data-close-modal="true" className="text-gray-400 hover:text-red-500"><X size={24}/></button>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-8">

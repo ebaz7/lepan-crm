@@ -154,26 +154,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
     };
 
     const visibleAnnouncements = useMemo(() => {
-        if (!Array.isArray(announcements)) return [];
         return announcements.filter(a => {
             if (!a.targetUsers || a.targetUsers.length === 0) return true; // all
-            return Array.isArray(a.targetUsers) && a.targetUsers.includes(currentUser.username);
+            return a.targetUsers.includes(currentUser.username);
         });
     }, [announcements, currentUser]);
 
-    const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = e.target.value;
-        // Search for a global handler or use props if available
-        if ((window as any).setAppFinancialYear) {
-            (window as any).setAppFinancialYear(val);
-        } else {
-            console.warn("Global setAppFinancialYear not found");
-        }
-    };
-
-    const currentYearStr = financialYear || '1403';
-
-  // ... (rest of logic) ...
+    // ... (rest of logic) ...
 
   // Permission Check
   const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : { canViewPaymentOrders: false };

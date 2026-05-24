@@ -14,82 +14,8 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
-import { downloadAndOpenFile, checkFileExists, shareFile } from '../services/fileService';
+import { downloadAndOpenFile } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
-
-const FileItem: React.FC<{ url: string; fileName: string; isMe: boolean; msgId: string }> = ({ url, fileName, isMe, msgId }) => {
-    const [downloadedPath, setDownloadedPath] = useState<string | null>(null);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [progress, setProgress] = useState(0);
-
-    const checkStatus = async () => {
-        const path = await checkFileExists(fileName);
-        setDownloadedPath(path);
-    };
-
-    useEffect(() => {
-        checkStatus();
-        const interval = setInterval(checkStatus, 3000);
-        return () => clearInterval(interval);
-    }, [fileName]);
-
-    const handleAction = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (isDownloading) return;
-        
-        setIsDownloading(true);
-        await downloadAndOpenFile(url, fileName, (p) => setProgress(p));
-        setIsDownloading(false);
-        checkStatus();
-    };
-
-    const handleShareInternal = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        await shareFile(url, fileName);
-    };
-
-    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
-    const isVideo = /\.(mp4|mov|avi|mkv)$/i.test(fileName);
-
-    return (
-        <div className={`p-2 rounded-2xl flex flex-col gap-2 max-w-[260px] ${isMe ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-50 dark:bg-gray-800'}`}>
-            <div className="flex items-center gap-2">
-                <button 
-                    onClick={handleAction}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0 ${isMe ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}`}
-                >
-                    {isDownloading ? (
-                        <div className="relative flex items-center justify-center">
-                            <Loader2 size={16} className="animate-spin" />
-                            <span className="absolute text-[7px] font-bold">{Math.round(progress)}</span>
-                        </div>
-                    ) : downloadedPath ? (
-                        <File size={20} />
-                    ) : (
-                        <DownloadCloud size={20} />
-                    )}
-                </button>
-                <div className="flex-1 overflow-hidden">
-                    <div className="text-[10px] font-bold truncate dir-ltr text-right">{fileName}</div>
-                    <div className="text-[9px] opacity-60 text-right">
-                        {downloadedPath ? 'دانلود شده' : 'نیاز به دانلود'}
-                    </div>
-                </div>
-                {downloadedPath && (
-                    <button onClick={handleShareInternal} className="p-1.5 hover:bg-black/5 rounded-full text-gray-500">
-                        <Share2 size={14}/>
-                    </button>
-                )}
-            </div>
-            
-            {isImage && (
-                <div className="rounded-xl overflow-hidden shadow-inner cursor-pointer" onClick={handleAction}>
-                    <img src={resolveImageUrl(url)} alt={fileName} className="w-full h-auto max-h-40 object-cover hover:opacity-90 transition-opacity" />
-                </div>
-            )}
-        </div>
-    );
-};
 
 interface ChatRoomProps { 
     currentUser: User | null; 
@@ -551,8 +477,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
         if (type === 'task_group') return null;
-        const relevant = (displayMessages || []).filter(m => {
-            if (!m) return false;
+        const relevant = displayMessages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
             if (type === 'group') return m.groupId === channelId;
@@ -687,7 +612,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if ((!inputText.trim() && !localSharedData?.fileUrl) || isUploading) return;
 
         if (editingMessageId) {
-            const msgToUpdate = (displayMessages || []).find(m => m.id === editingMessageId);
+            const msgToUpdate = displayMessages.find(m => m.id === editingMessageId);
             if (msgToUpdate) {
                 try {
                     await updateMessage({ ...msgToUpdate, message: inputText, isEdited: true });
@@ -1190,8 +1115,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Render Logic ---
     if (!currentUser) return null;
 
-    const filteredMessages = (displayMessages || []).filter(msg => {
-        if (!activeChannel || !msg) return false;
+    const filteredMessages = displayMessages.filter(msg => {
+        if (!activeChannel) return false;
         let match = false;
         if (activeChannel.type === 'public') match = !msg.recipient && !msg.groupId;
         else if (activeChannel.type === 'private') match = (msg.senderUsername === activeChannel.id && msg.recipient === currentUser.username) || (msg.senderUsername === currentUser.username && msg.recipient === activeChannel.id);
@@ -1199,9 +1124,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         
         if (!match) return false;
         if (innerSearchTerm) {
-            const body = msg.message || '';
-            const sender = msg.senderUsername || '';
-            return (body.toLowerCase().includes(innerSearchTerm.toLowerCase()) || sender.toLowerCase().includes(innerSearchTerm.toLowerCase()));
+            return (msg.message?.includes(innerSearchTerm) || msg.sender?.includes(innerSearchTerm));
         }
         return true;
     });
@@ -1271,13 +1194,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                         <span className="font-bold text-gray-800 dark:text-gray-100 text-sm truncate">{item.name}</span>
                                         {mutedChannels.has(item.id) && <BellOff size={10} className="text-gray-400 opacity-60"/>}
                                     </div>
-                                    {item.lastMsg && <span className="text-[10px] text-gray-400 font-mono tracking-tighter">
-                                        {(() => {
-                                            try {
-                                                return new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'});
-                                            } catch (e) { return '...'; }
-                                        })()}
-                                    </span>}
+                                    {item.lastMsg && <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{new Date(item.lastMsg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>}
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
@@ -1408,26 +1325,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                                 {/* Messages List */}
                                 <div 
-                                    className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative chat-background dark:bg-[#0b141a] pb-32 md:pb-10"
+                                    className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 relative bg-white dark:bg-black"
                                     onDragOver={handleDragOver}
                                     onDrop={handleDrop}
                                 >
                             {filteredMessages.map((msg: ChatMessage) => {
-                                if (!msg || !currentUser || !msg.id) return null;
                                 const isMe = msg.senderUsername === currentUser.username;
                                 const isSelected = selectedMessages.has(msg.id);
                                 
-                                let timeStr = '';
-                                try {
-                                    if (msg.timestamp) {
-                                        timeStr = new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'});
-                                    }
-                                } catch (e) { timeStr = '...'; }
-
                                 return (
                                     <div 
                                         key={msg.id} 
-                                        className={`flex w-full mb-1 group ${isMe ? 'justify-start' : 'justify-end'} flex-row items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
+                                        className={`flex w-full mb-1 group ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2 ${selectionMode ? 'cursor-pointer' : ''}`}
                                         onClick={() => { if(selectionMode) toggleSelection(msg.id); }}
                                         onContextMenu={(e) => { e.preventDefault(); if(!selectionMode) setContextMenuMsg({msg, x: e.clientX, y: e.clientY}); }}
                                     >
@@ -1447,7 +1356,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             </div>
                                         )}
                                         
-                                        <div className={`relative max-w-[75%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] dark:bg-[#056162] dark:text-white rounded-tr-none' : 'glass-panel dark:bg-[#202c33] dark:text-white rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+                                        <div className={`relative max-w-[75%] md:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm text-sm transition-colors ${isMe ? 'bg-[#eeffde] rounded-tr-none' : 'glass-panel rounded-tl-none'} ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
                                             
                                             {/* Forward Header */}
                                             {msg.isForwarded && msg.forwardFrom && (
@@ -1460,7 +1369,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             {msg.replyTo && (
                                                 <div className={`mb-1 px-2 py-0.5 rounded border-r-2 text-[10px] bg-opacity-10 cursor-pointer ${isMe ? 'bg-green-600 border-green-600' : 'bg-blue-600 border-blue-600'}`}>
                                                     <div className="font-bold opacity-80">{msg.replyTo.sender}</div>
-                                                    <div className="truncate opacity-70">{(msg.replyTo.message || '').substring(0, 30)}...</div>
+                                                    <div className="truncate opacity-70">{msg.replyTo.message.substring(0, 30)}...</div>
                                                 </div>
                                             )}
 
@@ -1472,10 +1381,49 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             {/* Content */}
                                             {msg.attachment ? (
                                                 <div className="mb-1">
-                                                    <FileItem url={msg.attachment.url} fileName={msg.attachment.fileName} isMe={isMe} msgId={msg.id} />
+                                                    {msg.attachment.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                        <img 
+                                                            src={resolveImageUrl(msg.attachment.url)} 
+                                                            className="rounded-lg max-h-60 object-cover cursor-pointer hover:opacity-90"
+                                                            onClick={(e) => { e.stopPropagation(); setShowImageViewer(resolveImageUrl(msg.attachment!.url)); }}
+                                                        />
+                                                    ) : (
+                                                        <button 
+                                                            className="flex items-center gap-2 bg-black/5 p-2 rounded hover:bg-black/10 transition-colors w-full text-right" 
+                                                            onClick={async (e) => { 
+                                                                e.stopPropagation(); 
+                                                                if (isDownloading[msg.id]) return;
+                                                                
+                                                                setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
+                                                                setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
+                                                                
+                                                                await downloadAndOpenFile(msg.attachment!.url, msg.attachment!.fileName, (p) => {
+                                                                    setFileProgress(prev => ({ ...prev, [msg.id]: p }));
+                                                                });
+
+                                                                setTimeout(() => {
+                                                                    setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
+                                                                    setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
+                                                                }, 500);
+                                                            }}
+                                                        >
+                                                            <div className="bg-blue-500 p-2 rounded text-white relative">
+                                                                {isDownloading[msg.id] ? <Loader2 size={16} className="animate-spin"/> : <File size={16}/>}
+                                                                {isDownloading[msg.id] && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-blue-600 rounded text-[8px] font-bold">
+                                                                        {fileProgress[msg.id]}%
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="overflow-hidden flex-1">
+                                                                <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
+                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
+                                                            </div>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ) : msg.audioUrl ? (
-                                                <div className="flex items-center gap-2 min-w-[180px] py-1">
+                                                <div className="flex items-center gap-2 min-w-[200px] py-1">
                                                     <AudioPlayer url={msg.audioUrl} isMe={isMe} duration={msg.audioDuration} />
                                                 </div>
                                             ) : (
@@ -1494,7 +1442,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                     <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded font-mono">{msg.uploadProgress}%</span>
                                                 )}
                                                 {msg.isEdited && <span className="text-[9px]">ویرایش شده</span>}
-                                                <span className="text-[10px]">{timeStr}</span>
+                                                <span className="text-[10px]">{new Date(msg.timestamp).toLocaleTimeString('fa-IR', {hour:'2-digit', minute:'2-digit'})}</span>
                                                 {isMe && (
                                                     msg.isPending ? <Clock size={12} className="text-gray-400"/> :
                                                     (msg.readBy && msg.readBy.length > 0) ? <CheckCheck size={14} className="text-green-500" /> :
@@ -1519,7 +1467,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         </div>
 
                         {/* Input Area */}
-                        <div className="shrink-0 sticky bottom-0 bg-white/90 dark:bg-[#0b141a]/90 backdrop-blur-md glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-32 md:pb-4">
+                        <div className="shrink-0 sticky bottom-0 bg-white/90 dark:bg-[#0b141a]/90 backdrop-blur-md glass-panel p-2 flex items-end gap-2 border-t relative z-20 pb-[calc(12px+env(safe-area-inset-bottom))] md:pb-2">
                             {/* Reply/Edit Preview */}
                             {localSharedData && (
                                 <div className="absolute bottom-full left-0 right-0 glass-panel border-t border-b p-2 flex justify-between items-center shadow-sm z-10 animate-slide-up bg-blue-50/90 dark:bg-blue-950/90">

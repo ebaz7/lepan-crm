@@ -66,7 +66,7 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
             <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Package size={24} /></div>
             <div><h3 className="font-bold text-lg text-gray-800">تایید نهایی انبار (توزین خروج)</h3><p className="text-xs text-gray-500">لطفاً مقدار دقیق خروجی را وارد کنید.</p></div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+          <button onClick={onClose} data-close-modal="true" className="text-gray-400 hover:text-red-500 transition-colors"><X size={24} /></button>
         </div>
 
         <div className="p-4 md:p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-1 min-h-0">
