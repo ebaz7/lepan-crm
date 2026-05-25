@@ -115,7 +115,7 @@ export const subscribeToPushNotifications = async () => {
     }
 };
 
-export const sendNotification = async (title: string, body: string) => {
+export const sendNotification = async (title: string, body: string, data?: any) => {
   if (!isNotificationEnabledInApp()) return;
 
   if (Capacitor.isNativePlatform()) {
@@ -127,8 +127,9 @@ export const sendNotification = async (title: string, body: string) => {
                       body: body,
                       id: Math.floor(Math.random() * 2147483647),
                       schedule: { at: new Date(Date.now() + 50) },
-                      extra: null,
+                      extra: data || null,
                       channelId: 'fcm_default_channel',
+                      smallIcon: 'res://ic_stat_name',
                       sound: 'default'
                   }
               ]
@@ -147,7 +148,8 @@ export const sendNotification = async (title: string, body: string) => {
                   icon: '/pwa-192x192.png',
                   dir: 'rtl',
                   lang: 'fa',
-                  vibrate: [200, 100, 200]
+                  vibrate: [200, 100, 200],
+                  data: data
               } as any);
           } else {
               new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa' });

@@ -1556,15 +1556,16 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         }
 
         // Map Persian Status to Internal Key for checking settings
-        // We match against the values in SecondExitGroupSettings.tsx (Persian strings or 'CREATE')
         let statusKey = p.status;
         if (eventType === 'DELETE') {
-            statusKey = 'REJECTED'; // Or handle delete separately? Usually reject settings handle cancellations
+            statusKey = 'REJECTED'; 
         } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات') {
             statusKey = 'CREATE';
         } else if (p.status === 'خارج شده (بایگانی)') {
-            // For settings check, this maps to the final approval step
-            statusKey = 'در انتظار تایید نهایی مدیر کارخانه';
+            // This is the final archived state
+            statusKey = 'ARCHIVED'; 
+        } else if (p.status === 'خارج شد') {
+             statusKey = 'ARCHIVED';
         }
 
         let targetGroups = [];

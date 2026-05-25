@@ -411,7 +411,7 @@ export const generateRecordImage = async (record, type, options = {}) => {
                     </table>
                 </div>
 
-                ${(isInvoice || record.status === 'خارج شده (بایگانی)' || record.status === 'خارج شد') ? '' : `
+                ${isInvoice ? '' : `
                     <div style="margin-top: 30px; border-top: 3px solid #000; padding-top: 20px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;">
                         <div style="text-align: center;">
                             <div class="stamp" style="width: 100%;"><div class="stamp-title">ثبت کننده</div><div class="stamp-name" style="font-size: 11px;">${record.requester || '-'}</div></div>

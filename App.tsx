@@ -31,6 +31,7 @@ import { apiCall, getLocalData, LS_KEYS } from './services/apiService';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app'; 
 import { PushNotifications } from '@capacitor/push-notifications'; 
+import { LocalNotifications } from '@capacitor/local-notifications'; 
 import { sendNotification } from './services/notificationService';
 
 function App() {
@@ -220,30 +221,25 @@ function App() {
         try {
             PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                 const data = notification.notification.data;
+                console.log("Push Action Data:", data);
                 if (data && data.url) {
                     const target = data.url.replace('#', '');
                     setActiveTab(target);
                 }
             });
-        } catch(e) { console.error("Push Listener Error", e); }
 
-        // --- ANDROID SHARE INTENT SUPPORT ---
+            LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+                const data = action.notification.extra;
+                console.log("Local action data:", data);
+                if (data && data.url) {
+                   const target = data.url.replace('#', '');
+                   setActiveTab(target);
+                }
+            });
+        } catch(e) { console.error("Notification Listener Error", e); }
+
+        // --- ANDROID INTENT SUPPORT (Simplified) ---
         try {
-            const checkShareTarget = async () => {
-                const { CapacitorShareTarget } = await import('@capgo/capacitor-share-target');
-                CapacitorShareTarget.addListener('shareReceived', (event: any) => {
-                    if (event && (event.texts?.length > 0 || event.files?.length > 0)) {
-                        setSharedData({ 
-                            text: event.texts?.[0] || undefined, 
-                            title: event.title || undefined,
-                            fileUrl: event.files?.[0]?.uri || undefined
-                        });
-                        setTimeout(() => setActiveTab('chat'), 300);
-                    }
-                });
-            };
-            checkShareTarget();
-            
             CapacitorApp.addListener('appRestoredResult', (data: any) => {
                 if (data.pluginId === 'Share' || data.pluginId === 'App') {
                     const result = data.data;
@@ -253,7 +249,7 @@ function App() {
                     }
                 }
             });
-        } catch (e) { console.error("Share Intent Error", e); }
+        } catch (e) { console.error("App Restored Error", e); }
 
         return () => {
             if (backListener) backListener.remove();
@@ -476,13 +472,13 @@ function App() {
       } catch (e) { } 
   };
 
-  const addAppNotification = (title: string, message: string) => { 
+  const addAppNotification = (title: string, message: string, url?: string) => { 
       setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); 
       playNotificationSound();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       setToast({ show: true, title, message });
       toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
-      sendNotification(title, message);
+      sendNotification(title, message, url ? { url } : null);
   };
 
   const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
@@ -562,7 +558,15 @@ function App() {
         setOrders(prev => JSON.stringify(prev) !== JSON.stringify(safeOrders) ? safeOrders : prev);
         setChatMessages(prev => JSON.stringify(prev) !== JSON.stringify(safeMessages) ? safeMessages : prev); 
         
-        const lastCheck = parseInt(localStorage.getItem(NOTIFICATION_CHECK_KEY) || '0');
+        const lastCheckValue = localStorage.getItem(NOTIFICATION_CHECK_KEY);
+        let lastCheck = parseInt(lastCheckValue || '0');
+        
+        // If it's the first load or very old check, initialize to now to avoid historic flood
+        if (!lastCheck || (Date.now() - lastCheck > 24 * 60 * 60 * 1000)) {
+            lastCheck = Date.now();
+            localStorage.setItem(NOTIFICATION_CHECK_KEY, lastCheck.toString());
+        }
+
         checkForNotifications(safeOrders, safeAnnouncements, currentUser, lastCheck);
         
         if (safeMessages && safeMessages.length > 0) {
@@ -575,11 +579,14 @@ function App() {
                 isRelevantToMe = false;
             }
             
-            if (isRelevantToMe && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username) {
+            // Only notify if we already have a baseline (it's not the first fetch after startup)
+            const isNotFirstSync = !isFirstLoad.current;
+
+            if (isRelevantToMe && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username && isNotFirstSync) {
                 if (activeTab !== 'chat') {
                     let body = lastMsg.message || 'فایل ضمیمه';
                     if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
-                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body);
+                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, 'chat');
                 }
             }
             lastChatMsgIdRef.current = lastMsg.id;
@@ -635,18 +642,18 @@ function App() {
             
             if (isAdmin) {
                  const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
-                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`); }
+                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`, 'manage'); }
             }
-            if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`); }
-            else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`); }
-            else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`); }
-            else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`); } }
-            else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`); }
+            if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`, 'manage'); }
+            else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`, 'manage'); }
+            else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`, 'manage'); }
+            else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`, 'manage'); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`, 'manage'); } }
+            else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`, 'manage'); }
             
             history.push(notificationId);
          });
          
-         if (history.length > 50) history.splice(0, history.length - 50);
+         if (history.length > 200) history.splice(0, history.length - 200);
          localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
      }
 

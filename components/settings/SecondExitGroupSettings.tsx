@@ -47,6 +47,7 @@ const SecondExitGroupSettings: React.FC<Props> = ({
         { value: ExitPermitStatus.PENDING_WAREHOUSE, label: '۴. تایید و توزین انبار (ارجاع به انتظامات)' },
         { value: ExitPermitStatus.PENDING_SECURITY, label: '۵. تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
         { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: '۶. تایید نهایی مدیر کارخانه (خروج بار)' },
+        { value: 'ARCHIVED', label: '۷. بایگانی و خروج نهایی (تکمیل شده)' },
     ];
 
     return (
