@@ -670,14 +670,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
           </div>
       )}
 
-      {/* Mobile Bottom Navigation - Attractive Float Pill */}
+             {/* Mobile Bottom Navigation - Attractive Float Pill */}
       <AnimatePresence>
+        {activeTab !== 'chat' && (
           <motion.div 
-            initial={{ y: 80, opacity: 0 }}
+            initial={{ y: 0, opacity: 1 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="bottom-nav-bar md:hidden fixed z-[90] bottom-6 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-[2.5rem] backdrop-blur-3xl"
+            className="bottom-nav-bar md:hidden fixed z-[90] bottom-8 left-6 right-6 glass-panel border border-white/40 dark:border-white/10 flex justify-around items-center p-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.2)] rounded-[2.5rem] backdrop-blur-3xl"
           >
               {bottomVisibleItems.map((item) => {
                   const Icon = item.icon;
@@ -713,9 +714,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                   <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600' : 'text-gray-500'}`}>منو</span>
               </button>
           </motion.div>
+        )}
       </AnimatePresence>
 
-      <main className="flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0">
+      <main className={`flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0 ${activeTab !== 'chat' ? 'pb-24' : ''}`}>
       {/* Mobile Header */}
         <header className="glass-header p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-[60] safe-pt py-3 sticky top-0 shadow-lg rounded-b-[2rem]">
             <div className="flex items-center gap-3">
