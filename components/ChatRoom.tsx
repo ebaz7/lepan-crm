@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
-import { downloadAndOpenFile } from '../services/fileService';
+import { downloadAndOpenFile, checkFileExists } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
 
 interface ChatRoomProps { 
@@ -155,6 +155,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
+    const [downloadedFiles, setDownloadedFiles] = useState<Record<string, boolean>>({});
     
     // Merge remote and local pending messages
     const displayMessages = useMemo(() => {
@@ -202,6 +203,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [showGroupInfo, setShowGroupInfo] = useState<ChatGroup | (TaskGroup & {isTaskGroup?: boolean, admins?: string[], avatar?: string | null}) | null>(null);
     const [showContactInfo, setShowContactInfo] = useState<User | null>(null);
     const [isDownloading, setIsDownloading] = useState<{ [key: string]: boolean }>({});
+    
+    // Check if files are downloaded
+    useEffect(() => {
+        if (!Capacitor.isNativePlatform()) return;
+        const checkDownloads = async () => {
+            const checks: Record<string, boolean> = {};
+            let hasChanges = false;
+            for (const msg of displayMessages) {
+                if (msg.attachment && msg.attachment.fileName) {
+                    const exists = await checkFileExists(msg.attachment.fileName);
+                    checks[msg.id] = exists;
+                    if (downloadedFiles[msg.id] !== exists) hasChanges = true;
+                }
+            }
+            if (hasChanges) setDownloadedFiles(prev => ({...prev, ...checks}));
+        };
+        checkDownloads();
+    }, [displayMessages]);
     
     // --- Selection & Actions ---
     const [selectionMode, setSelectionMode] = useState(false);
@@ -1404,11 +1423,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setTimeout(() => {
                                                                     setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
                                                                     setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
+                                                                    if(Capacitor.isNativePlatform()) {
+                                                                        setDownloadedFiles(prev => ({ ...prev, [msg.id]: true }));
+                                                                    }
                                                                 }, 500);
                                                             }}
                                                         >
-                                                            <div className="bg-blue-500 p-2 rounded text-white relative">
-                                                                {isDownloading[msg.id] ? <Loader2 size={16} className="animate-spin"/> : <File size={16}/>}
+                                                            <div className={`p-2 rounded text-white relative ${downloadedFiles[msg.id] ? 'bg-green-600' : 'bg-blue-500'}`}>
+                                                                {isDownloading[msg.id] ? <Loader2 size={16} className="animate-spin"/> : downloadedFiles[msg.id] ? <Check size={16}/> : <File size={16}/>}
                                                                 {isDownloading[msg.id] && (
                                                                     <div className="absolute inset-0 flex items-center justify-center bg-blue-600 rounded text-[8px] font-bold">
                                                                         {fileProgress[msg.id]}%
@@ -1417,7 +1439,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                             </div>
                                                             <div className="overflow-hidden flex-1">
                                                                 <div className="font-bold text-xs truncate">{msg.attachment.fileName}</div>
-                                                                <div className="text-[10px] text-blue-600 font-bold">{isDownloading[msg.id] ? 'در حال دریافت...' : 'کلیک برای مشاهده'}</div>
+                                                                <div className={`text-[10px] font-bold ${downloadedFiles[msg.id] ? 'text-green-600' : 'text-blue-600'}`}>
+                                                                    {isDownloading[msg.id] ? 'در حال دریافت...' : downloadedFiles[msg.id] ? 'Downloaded/باز کردن' : 'کلیک برای دریافت'}
+                                                                </div>
                                                             </div>
                                                         </button>
                                                     )}

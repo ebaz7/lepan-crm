@@ -272,9 +272,9 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canViewInvoices = perms.canViewInvoices === true;
   const canViewExit = perms.canViewExitPermits === true;
   const canManageWarehouse = currentUser.role === UserRole.ADMIN || perms.canManageWarehouse === true;
-  const canSeeTrade = perms.canManageTrade === true;
-  const canSeeBalances = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.FINANCIAL || (perms as any).canViewCustomerBalances === true;
-  const canSeeProducts = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SALES_MANAGER || perms.canManageSales === true; // Sales manager & admins
+  const canSeeTrade = currentUser.role === UserRole.ADMIN || perms.canManageTrade === true;
+  const canSeeBalances = currentUser.role === UserRole.ADMIN || (perms as any).canViewCustomerBalances === true;
+  const canSeeProducts = currentUser.role === UserRole.ADMIN || perms.canManageSales === true;
   const canSeeSettings = currentUser.role === UserRole.ADMIN || perms.canManageSettings === true || perms.canManageTradeSettings === true;
   const canSeeSecurity = currentUser.role === UserRole.ADMIN || perms.canViewSecurity === true;
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
@@ -324,11 +324,9 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
       return idxA - idxB;
   });
 
-  // Max 5 items in bottom bar (including "More" if needed)
   const limit = 5;
-  const hasMore = sortedItems.length > limit;
-  const bottomVisibleItems = hasMore ? sortedItems.slice(0, limit - 1) : sortedItems;
-  const menuItems = hasMore ? sortedItems.slice(limit - 1) : [];
+  const bottomVisibleItems = sortedItems.slice(0, 4);
+  const menuItems = sortedItems.slice(4);
 
   const NotificationDropdown = () => ( 
     <div role="dialog" aria-label="اعلان‌ها" className="notification-dropdown-container fixed top-16 left-4 right-4 md:absolute md:top-auto md:bottom-16 md:left-2 md:right-auto md:w-80 glass-panel rounded-xl shadow-2xl border border-gray-200/50 dark:border-white/10 text-gray-800 dark:text-gray-200 z-[9999] overflow-hidden origin-top md:origin-bottom-left animate-scale-in max-h-[60vh] flex flex-col">
@@ -674,7 +672,6 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
 
       {/* Mobile Bottom Navigation - Attractive Float Pill */}
       <AnimatePresence>
-        {activeTab === 'dashboard' && (
           <motion.div 
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -703,22 +700,19 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                   );
               })}
               
-              {hasMore && (
-                  <button 
-                      onClick={() => setShowMobileMenu(true)} 
-                      className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
-                  >
-                      <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
-                          <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
-                          {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
-                            <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
-                          )}
-                      </div>
-                      <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600' : 'text-gray-500'}`}>بیشتر</span>
-                  </button>
-              )}
+              <button 
+                  onClick={() => setShowMobileMenu(true)} 
+                  className={`flex flex-col items-center gap-0.5 p-1 transition-all duration-300 flex-1 relative ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}
+              >
+                  <div className={`p-2 rounded-2xl transition-all duration-300 ${menuItems.some(m => m.id === activeTab) ? 'bg-blue-100/50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-800' : 'active:scale-95'}`}>
+                      <Menu size={22} strokeWidth={menuItems.some(m => m.id === activeTab) ? 2.5 : 2} />
+                      {menuItems.some(m => m.id === 'chat' && unreadChatCount > 0) && (
+                        <span className="absolute top-1.5 right-1/4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-950 shadow-sm"></span>
+                      )}
+                  </div>
+                  <span className={`text-[10px] font-black tracking-tight transition-all duration-300 mt-1 ${menuItems.some(m => m.id === activeTab) ? 'text-blue-600' : 'text-gray-500'}`}>منو</span>
+              </button>
           </motion.div>
-        )}
       </AnimatePresence>
 
       <main className="flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0">
@@ -727,7 +721,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
             <div className="flex items-center gap-3">
                 {activeTab === 'dashboard' ? (
                 <button 
-                    onClick={() => setActiveTab('dashboard')} 
+                    onClick={() => setShowMobileMenu(true)} 
                     className="flex items-center gap-3 transition-all active:scale-95"
                 >
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xl border-2 border-white/50 rotate-3 transition-transform hover:rotate-0">

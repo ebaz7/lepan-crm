@@ -281,8 +281,10 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     try {
       const url = `/api/customer-balances/reports/${type}/pdf`;
-      const fileName = type === 'debtors' ? 'Debtors_Balances.pdf' : 'Creditors_Balances.pdf';
-      await downloadAndOpenFile(url, fileName, undefined, false);
+      const fileName = type === 'debtors' 
+        ? `Debtors_Balances_${lastUploadTime || 'latest'}.pdf` 
+        : `Creditors_Balances_${lastUploadTime || 'latest'}.pdf`;
+      await downloadAndOpenFile(url, fileName, undefined, true);
     } catch (error) {
       console.error(error);
       alert('خطا در تولید و دانلود فایل گزارش PDF.');

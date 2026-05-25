@@ -614,8 +614,9 @@ app.put('/api/orders/:id', (req, res) => {
             return res.status(409).json({ error: "Duplicate tracking number" });
         }
 
-        const updatedOrder = { ...db.orders[idx], ...req.body };
         const isExplicitEdit = req.body.isEdit === true;
+        const updatedOrder = { ...db.orders[idx], ...req.body };
+        delete updatedOrder.isEdit;
         const isFinal = updatedOrder.status === 'تایید نهایی' || updatedOrder.status === 'پرداخت شده';
         
         // Notification Logic for Status Change
@@ -707,9 +708,10 @@ app.put('/api/exit-permits/:id', (req, res) => {
              return res.status(409).json({ error: "Duplicate permit number" });
         }
 
-        const updatedPermit = { ...db.exitPermits[idx], ...req.body };
-
         const isExplicitEdit = req.body.isEdit === true;
+        const updatedPermit = { ...db.exitPermits[idx], ...req.body };
+        // Delete transient flag so it doesn't get persisted
+        delete updatedPermit.isEdit;
 
         // Notification Logic
         if (isExplicitEdit) {
@@ -718,9 +720,6 @@ app.put('/api/exit-permits/:id', (req, res) => {
         } else if (currentPermit.status !== updatedPermit.status) {
             // 1. Bot Group Notifications
             notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status).catch(e => console.error("Bot Notify Error in server.js:", e));
-        } else {
-            // It's an edit without status change (legacy fallback)
-            notifyExitPermitStep(updatedPermit, null, null, null, db, updatedPermit.status, 'EDIT').catch(e => {});
         }
 
         // 2. Web Browser Push Notifications (for both status change and edits)
@@ -913,8 +912,9 @@ app.put('/api/warehouse/transactions/:id', (req, res) => {
             }
         }
 
-        const updatedTx = { ...db.warehouseTransactions[idx], ...req.body };
         const isExplicitEdit = req.body.isEdit === true;
+        const updatedTx = { ...db.warehouseTransactions[idx], ...req.body };
+        delete updatedTx.isEdit;
 
         if (updatedTx.type === 'OUT') {
             if (isExplicitEdit) {

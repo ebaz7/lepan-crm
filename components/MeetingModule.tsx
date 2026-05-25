@@ -7,6 +7,7 @@ import { generateUUID, getCurrentShamsiDate, formatDate } from '../constants';
 import { ClipboardList, Plus, Search, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, Trash2, Edit, Printer, Send, Eye, Loader2, Save, X, PlusCircle, UserCheck, MessageSquare, AlertCircle, CheckSquare, Lock, Paperclip, FileText, Image } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
+import { downloadAndOpenFile } from '../services/fileService';
 
 interface Props {
     currentUser: User;
@@ -509,28 +510,24 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         {((meeting.imageAttachments?.length || 0) + (meeting.pdfAttachments?.length || 0)) > 0 && (
                                             <div className="flex gap-1 border-r border-gray-100 dark:border-white/5 mr-1 pr-1">
                                                 {meeting.imageAttachments?.map((att, idx) => (
-                                                    <a 
+                                                    <button 
                                                         key={`img-${idx}`} 
-                                                        href={att.url} 
-                                                        target="_blank" 
-                                                        rel="noreferrer" 
+                                                        onClick={() => downloadAndOpenFile(att.url, att.fileName)} 
                                                         className="p-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-600 rounded-xl transition-colors" 
                                                         title={`مشاهده تصویر: ${att.fileName}`}
                                                     >
                                                         <Image size={18} />
-                                                    </a>
+                                                    </button>
                                                 ))}
                                                 {meeting.pdfAttachments?.map((att, idx) => (
-                                                    <a 
+                                                    <button 
                                                         key={`pdf-${idx}`} 
-                                                        href={att.url} 
-                                                        target="_blank" 
-                                                        rel="noreferrer" 
+                                                        onClick={() => downloadAndOpenFile(att.url, att.fileName)} 
                                                         className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 rounded-xl transition-colors" 
                                                         title={`دریافت فایل PDF: ${att.fileName}`}
                                                     >
                                                         <FileText size={18} />
-                                                    </a>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -1147,14 +1144,14 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         <span className="text-[10px] font-black text-amber-700 dark:text-amber-400">فایل‌های پیوست:</span>
                                         <div className="flex gap-1.5">
                                             {viewMeeting.imageAttachments?.map((att, i) => (
-                                                <a key={i} href={att.url} target="_blank" rel="noreferrer" className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-blue-600 hover:text-blue-700 transition-colors shadow-sm" title={att.fileName}>
+                                                <button key={i} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-blue-600 hover:text-blue-700 transition-colors shadow-sm" title={att.fileName}>
                                                     <Eye size={14} />
-                                                </a>
+                                                </button>
                                             ))}
                                             {viewMeeting.pdfAttachments?.map((att, i) => (
-                                                <a key={i} href={att.url} target="_blank" rel="noreferrer" className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-red-600 hover:text-red-700 transition-colors shadow-sm" title={att.fileName}>
+                                                <button key={i} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-red-600 hover:text-red-700 transition-colors shadow-sm" title={att.fileName}>
                                                     <Printer size={14} />
-                                                </a>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>

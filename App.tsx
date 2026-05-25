@@ -229,6 +229,21 @@ function App() {
 
         // --- ANDROID SHARE INTENT SUPPORT ---
         try {
+            const checkShareTarget = async () => {
+                const { CapacitorShareTarget } = await import('@capgo/capacitor-share-target');
+                CapacitorShareTarget.addListener('shareReceived', (event: any) => {
+                    if (event && (event.texts?.length > 0 || event.files?.length > 0)) {
+                        setSharedData({ 
+                            text: event.texts?.[0] || undefined, 
+                            title: event.title || undefined,
+                            fileUrl: event.files?.[0]?.uri || undefined
+                        });
+                        setTimeout(() => setActiveTab('chat'), 300);
+                    }
+                });
+            };
+            checkShareTarget();
+            
             CapacitorApp.addListener('appRestoredResult', (data: any) => {
                 if (data.pluginId === 'Share' || data.pluginId === 'App') {
                     const result = data.data;

@@ -7,6 +7,16 @@ import { FileOpener } from '@capacitor-community/file-opener';
  * Downloads a file from the URL and saves it to the device, then opens it.
  * If the file is already downloaded and allowCache is true, it simply opens it without re-downloading.
  */
+export const checkFileExists = async (fileName: string): Promise<boolean> => {
+    if (!Capacitor.isNativePlatform()) return false;
+    try {
+        const stat = await Filesystem.stat({ path: fileName, directory: Directory.Documents });
+        return !!stat;
+    } catch {
+        return false;
+    }
+};
+
 export const downloadAndOpenFile = async (
     url: string, 
     fileName: string, 

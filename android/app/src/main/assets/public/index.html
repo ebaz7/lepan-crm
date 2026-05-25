@@ -7,14 +7,39 @@
     <meta name="theme-color" content="#2563eb" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="PaymentSys" />
-    <link rel="manifest" href="./manifest.json" />
+    <meta name="apple-mobile-web-app-title" content="سامانه مالی" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135706.png" />
+    <link rel="manifest" href="./manifest.json?v=2" />
     <title>سیستم مدیریت پرداخت</title>
     
+    <script>
+      // Apply cached settings immediately for better PWA feel
+      try {
+        const settings = JSON.parse(localStorage.getItem('app_data_settings') || '{}');
+        if (settings.appName) {
+          document.title = settings.appName;
+          const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appleTitle) appleTitle.setAttribute('content', settings.appName);
+        }
+        if (settings.pwaIcon) {
+          const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+          if (appleIcon) appleIcon.setAttribute('href', settings.pwaIcon);
+          
+          let favicon = document.querySelector('link[rel="icon"]');
+          if (!favicon) {
+            favicon = document.createElement('link');
+            favicon.rel = 'icon';
+            document.head.appendChild(favicon);
+          }
+          favicon.setAttribute('href', settings.pwaIcon);
+        }
+      } catch (e) {}
+    </script>
+
     <!-- Dynamic Page Size Style Placeholder -->
     <style id="page-size-style"></style>
-  <script type="module" crossorigin src="./assets/index-B3wweVYI.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-D2nIvfMz.css">
+  <script type="module" crossorigin src="./assets/index-eifaatSU.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D7-4MzWE.css">
 </head>
   <body>
     <div id="root"></div>

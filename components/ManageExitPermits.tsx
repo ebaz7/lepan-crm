@@ -215,11 +215,13 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string }) => {
         if (!securityFinalize) return;
-        setProcessingId(securityFinalize.id);
+        const currentPermit = securityFinalize;
+        setSecurityFinalize(null);
+        setProcessingId(currentPermit.id);
         try {
             const nextStatus = ExitPermitStatus.PENDING_FACTORY_FINAL;
             const updatedPermit = { 
-                ...securityFinalize, 
+                ...currentPermit, 
                 status: nextStatus,
                 driverName: data.driverName,
                 driverPhone: data.driverPhone,
@@ -235,7 +237,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             setTimeout(async () => {
                 await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY);
                 setProcessingId(null);
-                setSecurityFinalize(null);
                 setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
                 loadData();
             }, 2500);
@@ -247,15 +248,17 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     const handleWarehouseSubmit = async (finalItems: any[]) => {
         if (!warehouseFinalize) return;
-        setProcessingId(warehouseFinalize.id);
+        const currentPermit = warehouseFinalize;
+        setWarehouseFinalize(null);
+        setProcessingId(currentPermit.id);
         try {
             const updated = { 
-                ...warehouseFinalize, 
+                ...currentPermit, 
                 items: finalItems, 
                 approverWarehouse: currentUser.fullName, 
                 status: ExitPermitStatus.PENDING_SECURITY,
-                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0) : warehouseFinalize.weight,
-                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0) : warehouseFinalize.cartonCount
+                weight: finalItems.reduce((a,b)=>a+(Number(b.weight)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.weight)||0),0) : currentPermit.weight,
+                cartonCount: finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),1) > 1 ? finalItems.reduce((a,b)=>a+(Number(b.cartonCount)||0),0) : currentPermit.cartonCount
             };
             
             await editExitPermit(updated); 
@@ -264,7 +267,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             setTimeout(async () => {
                 await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
                 setProcessingId(null);
-                setWarehouseFinalize(null);
                 setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
                 loadData();
             }, 2500);
