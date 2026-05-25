@@ -241,12 +241,20 @@ function App() {
         // --- ANDROID INTENT SUPPORT (Simplified) ---
         try {
             CapacitorApp.addListener('appRestoredResult', (data: any) => {
-                if (data.pluginId === 'Share' || data.pluginId === 'App') {
+                if (data.pluginId === 'Share' || data.pluginId === 'App' || !data.pluginId) {
                     const result = data.data;
-                    if (result && (result.url || result.text)) {
-                         setSharedData({ fileUrl: result.url, text: result.text, title: result.title });
-                         setActiveTab('chat');
+                    if (result && (result.url || result.text || result.uri)) {
+                         setSharedData({ fileUrl: result.url || result.uri, text: result.text, title: result.title });
+                         setTimeout(() => setActiveTab('chat'), 500);
                     }
+                }
+            });
+            
+            // Also try to catch it in appUrlOpen
+            CapacitorApp.addListener('appUrlOpen', (data: any) => {
+                if (data.url && (data.url.includes('sharedFileUrl') || data.url.includes('sharedText'))) {
+                    // This case is already handled by the other useEffect but let's be sure
+                    setTimeout(() => setActiveTab('chat'), 500);
                 }
             });
         } catch (e) { console.error("App Restored Error", e); }
@@ -609,7 +617,6 @@ function App() {
       const now = new Date();
       let alertCount = 0;
       list.forEach(order => {
-          // Double check array existence even after sanitization
           if (order.paymentDetails && Array.isArray(order.paymentDetails)) {
               order.paymentDetails.forEach(detail => {
                   if (detail.method === PaymentMethod.CHEQUE && detail.chequeDate) {
@@ -627,12 +634,12 @@ function App() {
   };
 
   const checkForNotifications = (newList: PaymentOrder[], announcementsList: SystemAnnouncement[], user: User, lastCheckTime: number) => {
-     // Safe guard against non-array input
      if (Array.isArray(newList)) {
          const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
          const NOTIFICATION_HISTORY_KEY = 'notification_history';
          const history = JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || '[]');
          
+         let hasNew = false;
          newEvents.forEach(newItem => {
             const status = newItem.status;
             const isAdmin = user.role === UserRole.ADMIN;
@@ -640,21 +647,31 @@ function App() {
             
             if (history.includes(notificationId)) return;
             
+            let notified = false;
             if (isAdmin) {
                  const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
-                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`, 'manage'); }
+                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`, 'manage'); notified = true; }
             }
-            if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`, 'manage'); }
-            else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`, 'manage'); }
-            else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`, 'manage'); }
-            else if (status === OrderStatus.APPROVED_CEO) { if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`, 'manage'); } if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`, 'manage'); } }
-            else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`, 'manage'); }
+            
+            if (!notified) {
+                if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`, 'manage'); }
+                else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`, 'manage'); }
+                else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`, 'manage'); }
+                else if (status === OrderStatus.APPROVED_CEO) { 
+                    if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`, 'manage'); } 
+                    if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`, 'manage'); } 
+                }
+                else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`, 'manage'); }
+            }
             
             history.push(notificationId);
+            hasNew = true;
          });
          
-         if (history.length > 200) history.splice(0, history.length - 200);
-         localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
+         if (hasNew) {
+            if (history.length > 500) history.splice(0, history.length - 500);
+            localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
+         }
      }
 
      if (Array.isArray(announcementsList)) {
