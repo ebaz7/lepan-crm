@@ -21,6 +21,14 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // Force Bouncy Castle to 1.76 to resolve JDK 17 signature/class major version issues with newer releases (e.g., 1.79)
+    configurations.all {
+        resolutionStrategy {
+            force 'org.bouncycastle:bcprov-jdk18on:1.76'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.76'
+        }
+    }
 }
 
 task clean(type: Delete) {
