@@ -238,7 +238,7 @@ function App() {
             });
         } catch(e) { console.error("Notification Listener Error", e); }
 
-        // --- ANDROID INTENT SUPPORT (Simplified) ---
+        // --- ANDROID INTENT SUPPORT (Simplified) & SHARE TARGET plugin ---
         try {
             CapacitorApp.addListener('appRestoredResult', (data: any) => {
                 if (data.pluginId === 'Share' || data.pluginId === 'App' || !data.pluginId) {
@@ -257,6 +257,29 @@ function App() {
                     setTimeout(() => setActiveTab('chat'), 500);
                 }
             });
+
+            // Register @capgo/capacitor-share-target listener
+            const initShareTarget = async () => {
+                try {
+                    const { CapacitorShareTarget } = await import('@capgo/capacitor-share-target');
+                    CapacitorShareTarget.addListener('shareReceived', (event: any) => {
+                        console.log("CapacitorShareTarget shareReceived event:", event);
+                        if (event) {
+                            const text = event.text || (event.texts && event.texts.length > 0 ? event.texts[0] : undefined);
+                            const fileUrl = event.files && event.files.length > 0 ? (event.files[0].uri || event.files[0].url || event.files[0].path) : undefined;
+                            const title = event.title || undefined;
+                            
+                            if (text || fileUrl) {
+                                setSharedData({ fileUrl, text, title });
+                                setTimeout(() => setActiveTab('chat'), 500);
+                            }
+                        }
+                    });
+                } catch (err) {
+                    console.error("Failed to load optional CapacitorShareTarget", err);
+                }
+            };
+            initShareTarget();
         } catch (e) { console.error("App Restored Error", e); }
 
         return () => {

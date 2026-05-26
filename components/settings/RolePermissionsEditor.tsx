@@ -116,8 +116,10 @@ const PERMISSION_GROUPS = [
             { id: 'canDeleteAll', label: 'حذف تمام دستورات' },
             { id: 'canManageTrade', label: 'دسترسی به بخش بازرگانی' },
             { id: 'canManageSettings', label: 'دسترسی به تنظیمات سیستم' },
-            { id: 'canViewKnowledgeBase', label: 'دسترسی به اطلاعات حساب‌ها و بانک‌ها' },
-            { id: 'canManageKnowledgeBase', label: 'مدیریت اطلاعات حساب‌ها و بانک‌ها' },
+            { id: 'canViewKnowledgeBase', label: 'دسترسی کلی به ماژول اطلاعات و یادداشت‌ها' },
+            { id: 'canViewCompanyInfo', label: 'مشاهده اطلاعات شرکت و حساب‌های بانکی' },
+            { id: 'canManageCompanyInfo', label: 'مدیریت اطلاعات شرکت و حساب‌ها (افزودن/ویرایش/حذف)' },
+            { id: 'canUsePersonalNotes', label: 'دسترسی به دفترچه یادداشت شخصی فردی' },
             { id: 'canViewNotifications', label: 'دسترسی به سیستم اعلان‌ها' },
             { id: 'canCreateNotifications', label: 'دسترسی به ثبت نوتیفیکیشن اپلیکیشن' },
             { id: 'canCreateAnnouncements', label: 'دسترسی به ثبت اعلان در داشبورد' }

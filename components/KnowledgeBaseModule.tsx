@@ -413,12 +413,19 @@ interface KnowledgeBaseModuleProps {
 }
 
 const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, settings, onUpdateSettings }) => {
-    const [activeTab, setActiveTab] = useState<'personal' | 'company'>('personal');
+    const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : {};
+    const isAdmin = currentUser.role.toLowerCase() === 'admin';
+    const canViewCompanyTab = isAdmin || permissions.canViewCompanyInfo !== false;
+    const canViewPersonalTab = isAdmin || permissions.canUsePersonalNotes !== false;
+
+    const [activeTab, setActiveTab] = useState<'personal' | 'company'>(() => {
+        if (!canViewPersonalTab && canViewCompanyTab) return 'company';
+        return 'personal';
+    });
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [searchTerm, setSearchTerm] = useState('');
 
-    const permissions = settings ? getRolePermissions(currentUser.role, settings, currentUser) : {};
-    const canManageKnowledge = currentUser.role === 'admin' || permissions.canManageKnowledgeBase === true;
+    const canManageKnowledge = isAdmin || permissions.canManageKnowledgeBase === true || permissions.canManageCompanyInfo === true;
     
     // Personal Notes State
     const [personalNotes, setPersonalNotes] = useState<Note[]>([]);
@@ -738,20 +745,22 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                         </div>
                     </div>
                     
-                    <div className="flex bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-1 rounded-2xl self-start md:self-center">
-                        <button 
-                            onClick={() => setActiveTab('personal')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'personal' ? 'glass-panel shadow-sm text-yellow-600' : 'text-gray-500 hover:text-gray-800'}`}
-                        >
-                            <UserIcon size={18}/> شخصی
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('company')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'company' ? 'glass-panel shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
-                        >
-                            <BookOpen size={18}/> شرکت
-                        </button>
-                    </div>
+                    {canViewPersonalTab && canViewCompanyTab && (
+                        <div className="flex bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 p-1 rounded-2xl self-start md:self-center">
+                            <button 
+                                onClick={() => setActiveTab('personal')}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'personal' ? 'glass-panel shadow-sm text-yellow-600' : 'text-gray-500 hover:text-gray-800'}`}
+                            >
+                                <UserIcon size={18}/> شخصی
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('company')}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-xl transition-all font-black text-sm ${activeTab === 'company' ? 'glass-panel shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                            >
+                                <BookOpen size={18}/> شرکت
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
@@ -785,7 +794,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
             </div>
 
             {/* Content Area */}
-            {activeTab === 'personal' ? (
+            {activeTab === 'personal' && canViewPersonalTab ? (
                 <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-4"}>
                     {personalNotes
                         .filter(n => n.title.includes(searchTerm) || n.content.includes(searchTerm))
@@ -846,7 +855,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : activeTab === 'company' && canViewCompanyTab ? (
                 <div className={viewMode === 'grid' ? "columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6" : "space-y-4"}>
                     {/* Custom Items First */}
                     {customItems
@@ -985,6 +994,10 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                                 </div>
                             );
                         })}
+                </div>
+            ) : (
+                <div className="p-12 text-center text-gray-500 font-bold bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                    شما دسترسی به این بخش را ندارید.
                 </div>
             )}
             {/* Modals */}

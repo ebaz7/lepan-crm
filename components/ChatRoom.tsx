@@ -644,6 +644,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         }
 
         const newMsgId = generateUUID();
+        const hasLocalFile = !!localSharedData?.fileUrl;
+
         const newMsg: ChatMessage = {
             id: newMsgId,
             sender: currentUser.fullName,
@@ -653,9 +655,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             timestamp: Date.now(),
             recipient: activeChannel?.type === 'private' ? activeChannel.id! : undefined,
             groupId: (activeChannel?.type === 'group' || activeChannel?.type === 'task_group') ? activeChannel.id! : undefined,
-            attachment: localSharedData?.fileUrl ? {
-                fileName: localSharedData.fileUrl.split('/').pop() || 'فایل به اشتراک گذاشته شده',
-                url: localSharedData.fileUrl
+            attachment: hasLocalFile ? {
+                fileName: localSharedData.fileUrl!.split('/').pop() || 'فایل به اشتراک گذاشته شده',
+                url: '' // Will be filled once uploaded
             } : undefined,
             replyTo: replyingTo ? {
                 id: replyingTo.id,
@@ -663,8 +665,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 message: replyingTo.message || (replyingTo.audioUrl ? 'پیام صوتی' : 'فایل')
             } : undefined,
             readBy: [],
-            isPending: true
+            isPending: true,
+            uploadProgress: hasLocalFile ? 0 : undefined
         };
+
+        const currentShared = localSharedData;
 
         // Optimistic UI Update using pendingMessages
         setPendingMessages(prev => [...prev, newMsg]);
@@ -674,13 +679,44 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         setTimeout(scrollToBottom, 50);
 
         try {
-            await sendMessage({ ...newMsg, isPending: undefined });
-            // Keep in pending but mark as not pending if we want, 
-            // but merging logic handles it once it appears in 'messages' prop
+            if (hasLocalFile && currentShared?.fileUrl) {
+                setIsUploading(true);
+                let targetUrl = currentShared.fileUrl;
+                
+                // If it's a native path, convert it so standard browser fetch can read it via Capacitor
+                if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
+                    // @ts-ignore
+                    if (window.Capacitor) {
+                        // @ts-ignore
+                        targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                    }
+                }
+                
+                const response = await fetch(targetUrl);
+                const blob = await response.blob();
+                const defaultName = currentShared.title || `shared_file_${Date.now()}`;
+                const ext = blob.type.split('/').pop() || 'bin';
+                const fileSafeName = currentShared.fileUrl.split('/').pop() || `${defaultName}.${ext}`;
+                // @ts-ignore
+                const file = new window.File([blob], fileSafeName, { type: blob.type });
+
+                const result = await uploadFileChunked(file, (progress) => {
+                    setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: progress } : m));
+                });
+                
+                newMsg.attachment = {
+                    fileName: result.fileName,
+                    url: result.url
+                };
+            }
+
+            await sendMessage({ ...newMsg, isPending: undefined, uploadProgress: undefined });
+            setIsUploading(false);
             onRefresh();
         } catch (e: any) { 
             console.error("Send Error:", e);
             setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
+            setIsUploading(false);
             alert("خطا در ارسال پیام");
         }
     };

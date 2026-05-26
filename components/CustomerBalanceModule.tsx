@@ -37,6 +37,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'debit' | 'credit'>('all');
   const [activeSubTab, setActiveSubTab] = useState<'balances' | 'mappings'>('balances');
+  const [hideZeroBalances, setHideZeroBalances] = useState(true);
   const [loading, setLoading] = useState(false);
   const [pdfLoadingDebtors, setPdfLoadingDebtors] = useState(false);
   const [pdfLoadingCreditors, setPdfLoadingCreditors] = useState(false);
@@ -280,7 +281,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     else setPdfLoadingCreditors(true);
 
     try {
-      const url = `/api/customer-balances/reports/${type}/pdf`;
+      const url = `/api/customer-balances/reports/${type}/pdf?hideZero=${hideZeroBalances}`;
       const fileName = type === 'debtors' 
         ? `Debtors_Balances_${lastUploadTime || 'latest'}.pdf` 
         : `Creditors_Balances_${lastUploadTime || 'latest'}.pdf`;
@@ -308,10 +309,13 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
       b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.accountCode.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (filterType === 'all') return matchesSearch;
-    if (filterType === 'debit') return matchesSearch && b.type === 'بدهکار';
-    if (filterType === 'credit') return matchesSearch && b.type === 'بستانکار';
-    return matchesSearch;
+    if (!matchesSearch) return false;
+    if (hideZeroBalances && b.balance === 0) return false;
+
+    if (filterType === 'all') return true;
+    if (filterType === 'debit') return b.type === 'بدهکار';
+    if (filterType === 'credit') return b.type === 'بستانکار';
+    return true;
   });
 
   return (
@@ -447,26 +451,44 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
       {activeSubTab === 'balances' && (
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
           {/* Controls Bar */}
-          <div className="p-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900 flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
-              <input
-                type="text"
-                placeholder="جستجو در نام تفصیلی یا کد..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs text-right pr-9 pl-3 py-2.5 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 duration-150 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
+          <div className="p-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900 flex flex-col lg:flex-row gap-3 items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto items-center">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute right-3 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="جستجو در نام تفصیلی یا کد..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-xs text-right pr-9 pl-3 py-2.5 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 duration-150 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              {/* Hide zero balances switcher */}
+              <div 
+                onClick={() => setHideZeroBalances(!hideZeroBalances)}
+                className="flex items-center gap-2 select-none bg-white dark:bg-zinc-950 p-2.5 px-4 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/40 duration-150 w-full sm:w-auto shrink-0 justify-center sm:justify-start"
+              >
+                <input
+                  type="checkbox"
+                  checked={hideZeroBalances}
+                  onChange={() => {}} // Hanled by parent div onClick
+                  className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
+                />
+                <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
+                  عدم نمایش مانده‌های صفر
+                </span>
+              </div>
             </div>
 
-            <div className="flex gap-2 w-full md:w-auto">
+            <div className="flex gap-2 w-full lg:w-auto">
               {(['all', 'debit', 'credit'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setFilterType(t)}
-                  className={`flex-1 md:flex-initial text-xs font-bold px-4 py-2 rounded-xl border transition-all ${
+                  className={`flex-1 lg:flex-initial text-xs font-bold px-4 py-2.5 rounded-xl border transition-all ${
                     filterType === t
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400 font-extrabold'
                       : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300'
                   }`}
                 >
@@ -478,67 +500,81 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
           {/* List Content - Mobile Optimized */}
           <div className="overflow-x-auto">
-            <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs">
+            <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs border border-zinc-350 dark:border-zinc-800 rounded-lg overflow-hidden">
               <thead>
-                <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-zinc-800">
-                  <th className="py-3 px-4 font-bold">کد حسابداری</th>
-                  <th className="py-3 px-4 font-bold">نام حساب تفصیلی / مشتری</th>
-                  <th className="py-3 px-4 font-bold text-left">مانده حساب (ریال)</th>
-                  <th className="py-3 px-4 font-bold text-center">تشخیص</th>
-                  <th className="py-3 px-4 font-bold text-center">صورتحساب‌ها (ملحق شده)</th>
-                  <th className="py-3 px-4 font-bold text-center">آخرین بروزرسانی</th>
+                <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-b border-zinc-300 dark:border-zinc-700">
+                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">کد حسابداری</th>
+                  <th className="py-3 px-4 font-black text-right border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">نام حساب حساب تفصیلی / مشتری</th>
+                  <th className="py-3 px-4 font-black text-left border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">مانده حساب (ریال)</th>
+                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">تشخیص</th>
+                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">صورتحساب‌ها (ملحق شده)</th>
+                  <th className="py-3 px-4 font-black text-center bg-zinc-100 dark:bg-zinc-850">آخرین بروزرسانی</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-gray-400 hover:text-gray-500">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500" />
-                      <span className="block mt-2 text-xs font-bold">در حال بارگذاری اطلاعات...</span>
+                    <td colSpan={6} className="py-12 text-center text-gray-400 hover:text-gray-500 border border-zinc-200 dark:border-zinc-800">
+                      <Loader2 className="w-7 h-7 animate-spin mx-auto text-emerald-500" />
+                      <span className="block mt-3 text-xs font-bold">در حال بارگذاری اطلاعات...</span>
                     </td>
                   </tr>
                 ) : filteredBalances.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-gray-400">
-                      <AlertCircle className="w-8 h-8 mx-auto text-zinc-300 mb-2" />
-                      <span className="block text-xs font-bold text-gray-500">موردی یافت نشد. اکسل را وارد کنید.</span>
+                    <td colSpan={6} className="py-12 text-center text-gray-400 border border-zinc-200 dark:border-zinc-800">
+                      <AlertCircle className="w-9 h-9 mx-auto text-zinc-400 mb-2" />
+                      <span className="block text-xs font-black text-gray-500">موردی یافت نشد. اکسل را وارد کنید یا فیلترها را بررسی نمائید.</span>
                     </td>
                   </tr>
                 ) : (
-                  filteredBalances.map((item) => (
-                    <tr key={item.id || item.accountCode} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30 transition-all font-medium text-gray-700 dark:text-gray-300">
-                      <td className="py-3 px-4 select-all font-mono">
-                        <code>{item.accountCode}</code>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-gray-900 dark:text-zinc-100">
-                        {item.name}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-left text-zinc-900 dark:text-zinc-100">
-                        {item.balance.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-block px-2 py-1 rounded-md font-bold text-[10px] ${
-                          item.type === 'بدهکار' 
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' 
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400'
+                  filteredBalances.map((item) => {
+                    const isZero = item.balance === 0;
+                    return (
+                      <tr 
+                        key={item.id || item.accountCode} 
+                        className="border-b border-zinc-200 dark:border-zinc-800 even:bg-zinc-50/40 dark:even:bg-zinc-850/10 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.04] transition-all font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        <td className="py-3.5 px-4 text-center select-all font-mono font-bold border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50/20 dark:bg-zinc-900/30">
+                          <code>{item.accountCode}</code>
+                        </td>
+                        <td className="py-3.5 px-4 font-extrabold text-right border-l border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100">
+                          {item.name}
+                        </td>
+                        <td className={`py-3.5 px-4 font-mono font-black text-left border-l border-zinc-200 dark:border-zinc-800 text-sm ${
+                          isZero 
+                            ? 'text-zinc-400 dark:text-zinc-500' 
+                            : item.type === 'بدهکار' 
+                            ? 'text-emerald-600 dark:text-emerald-400' 
+                            : 'text-rose-600 dark:text-rose-400'
                         }`}>
-                          {item.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => setStmtModalCode(item.accountCode)}
-                          className="inline-flex items-center gap-1 bg-gradient-to-l from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 dark:from-zinc-800 dark:to-zinc-800 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-zinc-700 px-2.5 py-1.5 rounded-xl transition-all font-bold text-[10px]"
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                          <span>{statements.filter(s => s.accountCode === item.accountCode).length} صورتحساب</span>
-                        </button>
-                      </td>
-                      <td className="py-3 px-4 text-center text-gray-400">
-                        {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('fa-IR') : '-'}
-                      </td>
-                    </tr>
-                  ))
+                          {item.balance.toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4 text-center border-l border-zinc-200 dark:border-zinc-800">
+                          <span className={`inline-block px-3 py-1 rounded-full font-extrabold text-[10px] tracking-wide shadow-xs ${
+                            isZero
+                              ? 'bg-zinc-100 text-zinc-500 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700'
+                              : item.type === 'بدهکار' 
+                              ? 'bg-emerald-50 text-emerald-850 border border-emerald-250 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/40' 
+                              : 'bg-rose-50 text-rose-850 border border-rose-250 dark:bg-rose-950/40 dark:text-rose-450 dark:border-rose-900/40'
+                          }`}>
+                            {isZero ? 'تسویه' : item.type}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center border-l border-zinc-200 dark:border-zinc-800">
+                          <button
+                            onClick={() => setStmtModalCode(item.accountCode)}
+                            className="inline-flex items-center gap-1 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 text-sky-850 dark:text-sky-400 border border-sky-200 dark:border-sky-900/40 px-3 py-1.5 rounded-xl transition-all font-black text-[10px]"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            <span>{statements.filter(s => s.accountCode === item.accountCode).length} صورتحساب</span>
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 text-center text-gray-500 dark:text-zinc-400 font-mono font-bold">
+                          {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('fa-IR') : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -555,40 +591,55 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                   موردی با این مشخصات یافت نشد.
                 </div>
               ) : (
-                filteredBalances.map((item) => (
-                  <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform">
-                    <div className={`absolute top-0 left-0 w-1.5 h-full ${item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                    
-                    <div className="flex justify-between items-start mb-3">
+                filteredBalances.map((item) => {
+                  const isZero = item.balance === 0;
+                  return (
+                    <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform">
+                      <div className={`absolute top-0 left-0 w-1.5 h-full ${
+                        isZero ? 'bg-zinc-400' : item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}></div>
+                      
+                      <div className="flex justify-between items-start mb-3">
                         <div className="flex flex-col">
                             <span className="font-black text-gray-900 dark:text-zinc-100 text-lg leading-tight mb-1">{item.name}</span>
                             <span className="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-zinc-700 px-2 py-0.5 rounded-md self-start">{item.accountCode}</span>
                         </div>
                         <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
-                          item.type === 'بدهکار' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                          isZero 
+                            ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300' 
+                            : item.type === 'بدهکار' 
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' 
+                            : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'
                         }`}>
-                          {item.type}
+                          {isZero ? 'تسویه' : item.type}
                         </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50 dark:border-zinc-700/50">
+                      </div>
+                      
+                      <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50 dark:border-zinc-700/50">
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-400 font-bold mb-1">مانده خالص</span>
-                            <span className={`text-xl font-black ${item.type === 'بدهکار' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            <span className="text-[10px] text-gray-400 font-bold mb-1">مانده حساب</span>
+                            <span className={`text-xl font-black ${
+                              isZero 
+                                ? 'text-zinc-400 dark:text-zinc-500' 
+                                : item.type === 'بدهکار' 
+                                ? 'text-emerald-600 dark:text-emerald-400' 
+                                : 'text-rose-600 dark:text-rose-400'
+                            }`}>
                                 {item.balance.toLocaleString()} <span className="text-[10px] font-medium opacity-70">ریال</span>
                             </span>
                         </div>
                         
                         <button
                           onClick={() => setStmtModalCode(item.accountCode)}
-                          className="bg-zinc-900 dark:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-zinc-900/10 active:opacity-80"
+                          className="bg-zinc-900 dark:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-zinc-900/10 active:opacity-80 animate-all"
                         >
                           <FileSpreadsheet size={16} />
                           صورتحساب
                         </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

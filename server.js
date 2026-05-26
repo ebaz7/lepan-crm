@@ -1344,9 +1344,15 @@ app.get('/api/customer-balances/statement-download/:id', (req, res) => {
 app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
     try {
         const db = getDb();
-        const list = (db.customerBalances || [])
-            .filter(b => b.type === 'بدهکار' || b.type?.includes('بدهکار'))
-            .sort((a, b) => b.balance - a.balance);
+        const hideZero = req.query.hideZero === 'true';
+        let list = (db.customerBalances || [])
+            .filter(b => b.type === 'بدهکار' || b.type?.includes('بدهکار'));
+
+        if (hideZero) {
+            list = list.filter(b => b.balance !== 0);
+        }
+
+        list = list.sort((a, b) => b.balance - a.balance);
 
         const lastUpload = db.lastXlsxUploadAt ? new Date(db.lastXlsxUploadAt) : null;
         const uploadStr = lastUpload ? new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(lastUpload) : 'ثبت نشده';
@@ -1375,9 +1381,15 @@ app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
 app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
     try {
         const db = getDb();
-        const list = (db.customerBalances || [])
-            .filter(b => b.type === 'بستانکار' || b.type?.includes('بستانکار'))
-            .sort((a, b) => b.balance - a.balance);
+        const hideZero = req.query.hideZero === 'true';
+        let list = (db.customerBalances || [])
+            .filter(b => b.type === 'بستانکار' || b.type?.includes('بستانکار'));
+
+        if (hideZero) {
+            list = list.filter(b => b.balance !== 0);
+        }
+
+        list = list.sort((a, b) => b.balance - a.balance);
 
         const lastUpload = db.lastXlsxUploadAt ? new Date(db.lastXlsxUploadAt) : null;
         const uploadStr = lastUpload ? new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(lastUpload) : 'ثبت نشده';
