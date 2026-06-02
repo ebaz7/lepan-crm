@@ -219,12 +219,34 @@ function App() {
         } catch(e) { console.error("Back button listener error", e); }
         
         try {
+            const mapNotificationUrlToTab = (url: string | undefined): string | null => {
+                if (!url) return null;
+                const path = url.replace('#', '').trim().toLowerCase();
+                
+                if (path.includes('chat')) return 'chat';
+                if (path.includes('payment-approvals') || path.includes('payment-orders') || path.includes('manage')) return 'manage';
+                if (path.includes('exit-permits') || path.includes('exit-approvals') || path.includes('exit') || path.includes('manage-exit')) return 'manage-exit';
+                if (path.includes('security-panel') || path.includes('security')) return 'security';
+                if (path.includes('warehouse')) return 'warehouse';
+                if (path.includes('balances')) return 'balances';
+                if (path.includes('purchase')) return 'purchase';
+                if (path.includes('meetings')) return 'meetings';
+                if (path.includes('invoices') || path.includes('manage-invoices')) return 'manage-invoices';
+                
+                const cleaned = path.replace(/^\//, ''); // remove leading slash
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge'];
+                if (validTabs.includes(cleaned)) {
+                    return cleaned;
+                }
+                return null;
+            };
+
             PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                 const data = notification.notification.data;
                 console.log("Push Action Data:", data);
                 if (data && data.url) {
-                    const target = data.url.replace('#', '');
-                    setActiveTab(target);
+                    const mappedTab = mapNotificationUrlToTab(data.url);
+                    if (mappedTab) setActiveTab(mappedTab);
                 }
             });
 
@@ -232,8 +254,8 @@ function App() {
                 const data = action.notification.extra;
                 console.log("Local action data:", data);
                 if (data && data.url) {
-                   const target = data.url.replace('#', '');
-                   setActiveTab(target);
+                    const mappedTab = mapNotificationUrlToTab(data.url);
+                    if (mappedTab) setActiveTab(mappedTab);
                 }
             });
         } catch(e) { console.error("Notification Listener Error", e); }
@@ -481,7 +503,7 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isNative) {
         const resetIdleTimer = () => {
             if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
             idleTimeoutRef.current = setTimeout(() => { handleLogout(); alert("به دلیل عدم فعالیت به مدت ۱ ساعت، از سیستم خارج شدید."); }, IDLE_LIMIT);
@@ -746,8 +768,9 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          // INCREASED INTERVAL TO 10 SECONDS (from 20s) TO IMPROVE RESPONSIVENESS
-          const intervalId = setInterval(() => loadData(true), 10000); 
+          // Android app has much higher responsiveness (4s) compared to web (8s)
+          const intervalDuration = isNative ? 4000 : 8000;
+          const intervalId = setInterval(() => loadData(true), intervalDuration); 
           
           // Heartbeat for Last Seen (Every 1 minute)
           const heartbeatId = setInterval(() => {

@@ -13,6 +13,7 @@ import {
     Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle, RefreshCw
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem } from '@capacitor/filesystem';
 import { sendNotification } from '../services/notificationService';
 import { downloadAndOpenFile, checkFileExists } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
@@ -155,7 +156,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
-    const [downloadedFiles, setDownloadedFiles] = useState<Record<string, boolean>>({});
+    const [downloadedFiles, setDownloadedFiles] = useState<Record<string, boolean>>(() => {
+        try {
+            const item = localStorage.getItem('chat_downloaded_files');
+            return item ? JSON.parse(item) : {};
+        } catch { return {}; }
+    });
     
     // Merge remote and local pending messages
     const displayMessages = useMemo(() => {
@@ -219,7 +225,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     if (downloadedFiles[msg.id] !== exists) hasChanges = true;
                 }
             }
-            if (hasChanges) setDownloadedFiles(prev => ({...prev, ...checks}));
+            if (hasChanges) {
+                setDownloadedFiles(prev => {
+                    const updated = { ...prev, ...checks };
+                    try {
+                        localStorage.setItem('chat_downloaded_files', JSON.stringify(updated));
+                    } catch (e) { console.error(e); }
+                    return updated;
+                });
+            }
         };
         checkDownloads();
     }, [displayMessages]);
@@ -692,18 +706,53 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 } else {
                     setIsUploading(true);
                     let targetUrl = currentShared.fileUrl;
+                    let blob;
                     
-                    // If it's a native path, convert it so standard browser fetch can read it via Capacitor
-                    if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
-                        // @ts-ignore
-                        if (window.Capacitor) {
+                    if (Capacitor.isNativePlatform() && (targetUrl.startsWith('content://') || targetUrl.startsWith('file://'))) {
+                        try {
+                            const readResult = await Filesystem.readFile({
+                                path: currentShared.fileUrl
+                            });
+                            const base64Data = readResult.data;
+                            const base64String = typeof base64Data === 'string' ? base64Data : ''; 
+                            
+                            let mimeType = 'application/octet-stream';
+                            const ext = currentShared.fileUrl.split('.').pop()?.toLowerCase();
+                            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+                            else if (ext === 'png') mimeType = 'image/png';
+                            else if (ext === 'gif') mimeType = 'image/gif';
+                            else if (ext === 'pdf') mimeType = 'application/pdf';
+                            else if (ext === 'xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                            else if (ext === 'xls') mimeType = 'application/vnd.ms-excel';
+                            else if (ext === 'doc' || ext === 'docx') mimeType = 'application/msword';
+                            else if (ext === 'txt') mimeType = 'text/plain';
+                            else if (ext === 'mp4') mimeType = 'video/mp4';
+                            else if (ext === 'mp3') mimeType = 'audio/mpeg';
+
+                            const b64Response = await fetch(`data:${mimeType};base64,${base64String}`);
+                            blob = await b64Response.blob();
+                        } catch (readErr) {
+                            console.error("Capacitor Filesystem readFile fallback failed:", readErr);
                             // @ts-ignore
-                            targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                            if (window.Capacitor) {
+                                // @ts-ignore
+                                targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                            }
+                            const response = await fetch(targetUrl);
+                            blob = await response.blob();
                         }
+                    } else {
+                        if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
+                            // @ts-ignore
+                            if (window.Capacitor) {
+                                // @ts-ignore
+                                targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                            }
+                        }
+                        const response = await fetch(targetUrl);
+                        blob = await response.blob();
                     }
                     
-                    const response = await fetch(targetUrl);
-                    const blob = await response.blob();
                     const defaultName = currentShared.title || `shared_file_${Date.now()}`;
                     const ext = blob.type.split('/').pop() || 'bin';
                     const fileSafeName = currentShared.fileUrl.split('/').pop() || `${defaultName}.${ext}`;
@@ -1468,7 +1517,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                     setIsDownloading(prev => { const n = {...prev}; delete n[msg.id]; return n; });
                                                                     setFileProgress(prev => { const n = {...prev}; delete n[msg.id]; return n; });
                                                                     if(Capacitor.isNativePlatform()) {
-                                                                        setDownloadedFiles(prev => ({ ...prev, [msg.id]: true }));
+                                                                        setDownloadedFiles(prev => {
+                                                                            const updated = { ...prev, [msg.id]: true };
+                                                                            try {
+                                                                                localStorage.setItem('chat_downloaded_files', JSON.stringify(updated));
+                                                                            } catch (e) {}
+                                                                            return updated;
+                                                                        });
                                                                     }
                                                                 }, 500);
                                                             }}

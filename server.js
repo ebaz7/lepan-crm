@@ -371,13 +371,18 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                 
                 const fcmPayload = {
                     to: sub.endpoint,
+                    priority: 'high',
                     notification: {
                         title: title,
                         body: body,
-                        sound: 'default'
+                        sound: 'default',
+                        badge: '1'
                     },
                     data: {
-                        url: url
+                        title: title,
+                        body: body,
+                        url: url,
+                        click_action: 'FLUTTER_NOTIFICATION_CLICK'
                     }
                 };
 

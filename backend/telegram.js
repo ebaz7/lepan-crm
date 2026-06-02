@@ -42,13 +42,18 @@ export const initTelegram = async (token) => {
         const sendFn = (id, txt, opts) => bot.sendMessage(id, txt, opts).catch(e => console.error("TG Send Err:", e.message));
         const sendPhotoFn = (platform, id, buf, cap, opts) => bot.sendPhoto(id, buf, { caption: cap, ...opts }).catch(e => console.error("TG Photo Err:", e.message));
         
-        // FIXED: Ensure options { filename } is passed as fileOptions
-        const sendDocFn = (id, buf, name, cap) => {
-            return bot.sendDocument(id, buf, { caption: cap }, { filename: name })
-                .catch(e => {
-                    console.error("TG Doc Err:", e.message);
-                    throw e; // Propagate error for Core to handle
-                });
+        // FIXED: Ensure options { filename } is passed as fileOptions with 3-attempt retry system
+        const sendDocFn = async (id, buf, name, cap, attempt = 1) => {
+            try {
+                return await bot.sendDocument(id, buf, { caption: cap }, { filename: name });
+            } catch (e) {
+                console.error(`TG Doc Err (Attempt ${attempt}/3):`, e.message);
+                if (attempt < 3) {
+                    await new Promise(r => setTimeout(r, 2000 * attempt));
+                    return sendDocFn(id, buf, name, cap, attempt + 1);
+                }
+                throw e; // Propagate error for Core to handle
+            }
         };
 
         const checkMembershipFn = async (userId, channelId) => {

@@ -82,13 +82,26 @@ const poll = async () => {
                     return callApi('sendPhoto', form, true).catch(e => console.error("Bale Photo Err", e.message));
                 };
 
-                // FIXED: Ensure buffer is appended correctly with filename
-                const sendDocFn = (id, buffer, name, caption) => {
-                    const form = new FormData();
-                    form.append('chat_id', id);
-                    form.append('document', buffer, { filename: name || 'document.pdf' });
-                    form.append('caption', caption || '');
-                    return callApi('sendDocument', form, true).catch(e => console.error("Bale Doc Err", e.message));
+                // FIXED: Ensure buffer is appended correctly with filename and 3-attempt retry system
+                const sendDocFn = async (id, buffer, name, caption, attempt = 1) => {
+                    try {
+                        const form = new FormData();
+                        form.append('chat_id', id);
+                        form.append('document', buffer, { filename: name || 'document.pdf' });
+                        form.append('caption', caption || '');
+                        const res = await callApi('sendDocument', form, true);
+                        if (!res || !res.ok) {
+                            throw new Error(res ? res.description : "Empty reply");
+                        }
+                        return res;
+                    } catch (e) {
+                        console.error(`Bale Doc Err (Attempt ${attempt}/3):`, e.message);
+                        if (attempt < 3) {
+                            await new Promise(r => setTimeout(r, 2000 * attempt));
+                            return sendDocFn(id, buffer, name, caption, attempt + 1);
+                        }
+                        throw e;
+                    }
                 }
 
                 const checkMembershipFn = async (userId, channelId) => {

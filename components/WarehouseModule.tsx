@@ -11,6 +11,8 @@ import { apiCall } from '../services/apiService';
 import { getUsers, getRolePermissions } from '../services/authService';
 import html2canvas from 'html2canvas';
 import useIsMobile from '../hooks/useIsMobile';
+import * as XLSX from 'xlsx';
+import { saveBlobAndOpenFile } from '../services/fileService';
 
 import { isInFinancialYear } from '../utils/dateUtils';
 
@@ -633,35 +635,94 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
 
     const handlePrintStock = () => { setShowPrintStockReport(true); };
 
-    // --- EXCEL EXPORT FUNCTION (Formatted as HTML Table - OFFLINE) ---
+    // --- EXCEL EXPORT FUNCTION (Formatted side-by-side like PDF - OFFLINE) ---
     const handleExportExcel = () => {
         if (!allWarehousesStock || allWarehousesStock.length === 0) return alert("داده‌ای برای خروجی وجود ندارد.");
-        const rows = [];
-        // Header matching PDF
-        rows.push(["شرکت", "نام کالا / نخ", "تعداد (کارتن)", "وزن (کیلوگرم)", "تعداد کانتینر"].join(","));
         
-        allWarehousesStock.forEach(group => {
-             group.items.forEach(item => {
-                 rows.push(`"${group.company}","${item.name}","${item.quantity.toFixed(2)}","${item.weight.toFixed(2)}","${item.containerCount.toFixed(2)}"`);
-             });
-             
-             // Add Total row for company
-             if (group.items.length > 0) {
-                 const totalQty = group.items.reduce((sum, i) => sum + (i.quantity || 0), 0);
-                 const totalWeight = group.items.reduce((sum, i) => sum + (i.weight || 0), 0);
-                 rows.push(`"جمع کل ${group.company}","","${totalQty.toFixed(2)}","${totalWeight.toFixed(2)}",""`);
-                 rows.push(""); // Empty row for separation
-             }
+        const companiesCount = allWarehousesStock.length;
+        const totalExcelCols = companiesCount * 5 - 1;
+        
+        const aoa = [];
+        
+        const titleRow = new Array(totalExcelCols).fill("");
+        titleRow[0] = "موجودی کلی انبارها";
+        aoa.push(titleRow);
+        
+        const companyRow = new Array(totalExcelCols).fill("");
+        allWarehousesStock.forEach((group, index) => {
+            const startCol = index * 5;
+            companyRow[startCol] = group.company;
         });
+        aoa.push(companyRow);
+        
+        const headerRow = new Array(totalExcelCols).fill("");
+        allWarehousesStock.forEach((group, index) => {
+            const startCol = index * 5;
+            headerRow[startCol] = "نخ / کالا";
+            headerRow[startCol + 1] = "کارتن";
+            headerRow[startCol + 2] = "وزن";
+            headerRow[startCol + 3] = "کانتینر";
+        });
+        aoa.push(headerRow);
+        
+        const maxItems = Math.max(...allWarehousesStock.map(group => group.items.length), 0);
+        for (let i = 0; i < maxItems; i++) {
+            const itemRow = new Array(totalExcelCols).fill("");
+            allWarehousesStock.forEach((group, index) => {
+                const startCol = index * 5;
+                if (group.items[i]) {
+                    const item = group.items[i];
+                    itemRow[startCol] = item.name;
+                    itemRow[startCol + 1] = Number(item.quantity || 0);
+                    itemRow[startCol + 2] = Number(item.weight || 0);
+                    itemRow[startCol + 3] = item.containerCount > 0 ? Number(item.containerCount) : "-";
+                }
+            });
+            aoa.push(itemRow);
+        }
+        
+        const totalRow = new Array(totalExcelCols).fill("");
+        allWarehousesStock.forEach((group, index) => {
+            const startCol = index * 5;
+            if (group.items.length > 0) {
+                const totalQty = group.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+                const totalWeight = group.items.reduce((sum, item) => sum + (item.weight || 0), 0);
+                totalRow[startCol] = "جمع کل موجودی";
+                totalRow[startCol + 1] = totalQty;
+                totalRow[startCol + 2] = totalWeight;
+                totalRow[startCol + 3] = "";
+            }
+        });
+        aoa.push(totalRow);
+        
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        
+        const merges = [];
+        merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, totalExcelCols - 1) } });
+        
+        allWarehousesStock.forEach((group, index) => {
+            const startCol = index * 5;
+            merges.push({ s: { r: 1, c: startCol }, e: { r: 1, c: startCol + 3 } });
+        });
+        
+        ws['!merges'] = merges;
+        
+        const wscols = [];
+        allWarehousesStock.forEach(() => {
+            wscols.push({ wch: 25 });
+            wscols.push({ wch: 12 });
+            wscols.push({ wch: 12 });
+            wscols.push({ wch: 12 });
+            wscols.push({ wch: 4 });
+        });
+        ws['!cols'] = wscols;
 
-        const bom = "\uFEFF";
-        const blob = new Blob([bom + rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `Stock_Report_${new Date().toISOString().slice(0,10)}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "موجودی انبارها");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        saveBlobAndOpenFile(blob, `Stock_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     if (!settings || loadingData) return <div className="flex flex-col items-center justify-center h-[50vh] text-gray-500 gap-2"><Loader2 className="animate-spin text-blue-600" size={32}/><span className="text-sm font-bold">در حال بارگذاری اطلاعات انبار...</span></div>;
