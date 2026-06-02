@@ -637,13 +637,21 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     const handleExportExcel = () => {
         if (!allWarehousesStock || allWarehousesStock.length === 0) return alert("داده‌ای برای خروجی وجود ندارد.");
         const rows = [];
-        // Header
-        rows.push(["شرکت", "کالا", "کد", "واحد", "تعداد", "وزن", "کانتینر"].join(","));
+        // Header matching PDF
+        rows.push(["شرکت", "نام کالا / نخ", "تعداد (کارتن)", "وزن (کیلوگرم)", "تعداد کانتینر"].join(","));
         
         allWarehousesStock.forEach(group => {
              group.items.forEach(item => {
-                 rows.push(`"${group.company}","${item.name}","${item.id}","${item.quantity}","${item.weight}","${item.containerCount}"`);
+                 rows.push(`"${group.company}","${item.name}","${item.quantity.toFixed(2)}","${item.weight.toFixed(2)}","${item.containerCount.toFixed(2)}"`);
              });
+             
+             // Add Total row for company
+             if (group.items.length > 0) {
+                 const totalQty = group.items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+                 const totalWeight = group.items.reduce((sum, i) => sum + (i.weight || 0), 0);
+                 rows.push(`"جمع کل ${group.company}","","${totalQty.toFixed(2)}","${totalWeight.toFixed(2)}",""`);
+                 rows.push(""); // Empty row for separation
+             }
         });
 
         const bom = "\uFEFF";

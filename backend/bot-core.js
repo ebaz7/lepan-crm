@@ -3156,6 +3156,18 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                                                     </td>
                                                 </tr>
                                             `).join('')}
+                                            ${group.items.length > 0 ? `
+                                                <tr style="background-color: #f9fafb; border-top: 2px solid black;">
+                                                    <td style="width: 40%; border-left: 1px solid black; padding: 6px; text-align: right; font-weight: 900; font-size: 12px;">جمع کل موجودی</td>
+                                                    <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
+                                                        ${group.items.reduce((sum, i) => sum + (i.quantity || 0), 0).toFixed(2)}
+                                                    </td>
+                                                    <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
+                                                        ${group.items.reduce((sum, i) => sum + (i.weight || 0), 0).toFixed(2)}
+                                                    </td>
+                                                    <td style="width: 20%; padding: 6px; text-align: center;"></td>
+                                                </tr>
+                                            ` : ''}
                                             ${group.items.length === 0 ? `<tr><td colspan="4" style="padding: 20px; text-align: center; color: #9ca3af;">موجودی صفر</td></tr>` : ''}
                                         </tbody>
                                     </table>

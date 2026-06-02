@@ -1790,19 +1790,26 @@ app.post('/api/upload-finish', async (req, res) => {
     
     // Append all chunks sequentially, using async/await to avoid blocking event loop
     try {
+        // Verify all chunks exist first
         for(let i = 0; i < totalChunks; i++) {
             const chunkPath = path.join(chunkTempDir, `${uploadId}_${i}`);
-            if(fs.existsSync(chunkPath)) {
-                await new Promise((resolve, reject) => {
-                    const readStream = fs.createReadStream(chunkPath);
-                    readStream.pipe(writeStream, { end: false });
-                    readStream.on('end', () => {
-                        try { fs.unlinkSync(chunkPath); } catch(e) {}
-                        resolve();
-                    });
-                    readStream.on('error', reject);
-                });
+            if(!fs.existsSync(chunkPath)) {
+                console.error(`Missing chunk ${i} for upload ${uploadId}`);
+                return res.status(400).send(`Chunk ${i} missing. Please try again.`);
             }
+        }
+
+        for(let i = 0; i < totalChunks; i++) {
+            const chunkPath = path.join(chunkTempDir, `${uploadId}_${i}`);
+            await new Promise((resolve, reject) => {
+                const readStream = fs.createReadStream(chunkPath);
+                readStream.pipe(writeStream, { end: false });
+                readStream.on('end', () => {
+                    try { fs.unlinkSync(chunkPath); } catch(e) {}
+                    resolve();
+                });
+                readStream.on('error', reject);
+            });
         }
         writeStream.end();
         

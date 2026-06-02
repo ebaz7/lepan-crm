@@ -147,7 +147,7 @@ export const uploadFile = async (fileName: string, fileData: string): Promise<{ 
 
 export const uploadFileChunked = async (file: File, onProgress: (p: number) => void): Promise<{ fileName: string, url: string }> => {
     const uploadId = Date.now().toString() + '_' + Math.floor(Math.random() * 1000);
-    const chunkSize = 500 * 1024; // 500KB chunks to be perfectly safe under Nginx's strictly default 1MB limits
+    const chunkSize = 2 * 1024 * 1024; // Increased to 2MB chunks
     const totalChunks = Math.ceil(file.size / chunkSize);
     
     for (let i = 0; i < totalChunks; i++) {
@@ -163,24 +163,51 @@ export const uploadFileChunked = async (file: File, onProgress: (p: number) => v
             reader.readAsDataURL(chunk);
         });
         
-        await apiCall('/upload-chunk', 'POST', {
-            uploadId,
-            chunkIndex: i,
-            chunkData: chunkBase64
-        });
+        // Chunk upload with retry
+        let success = false;
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        while (!success && attempts < maxAttempts) {
+            try {
+                attempts++;
+                await apiCall('/upload-chunk', 'POST', {
+                    uploadId,
+                    chunkIndex: i,
+                    chunkData: chunkBase64
+                });
+                success = true;
+            } catch (err) {
+                console.warn(`Upload chunk ${i} failed (Attempt ${attempts}/${maxAttempts})`, err);
+                if (attempts >= maxAttempts) throw err;
+                // Wait before retry
+                await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, attempts), 5000)));
+            }
+        }
         
         onProgress(Math.round(((i + 1) / totalChunks) * 90)); // 90% is for uploading chunks
     }
     
-    // Finish upload
-    const response = await apiCall<{ fileName: string, url: string }>('/upload-finish', 'POST', {
-        uploadId,
-        fileName: file.name,
-        totalChunks
-    });
+    // Finish upload with retry
+    let finishResponse: any = null;
+    let finishAttempts = 0;
+    while (!finishResponse && finishAttempts < 3) {
+        try {
+            finishAttempts++;
+            finishResponse = await apiCall<{ fileName: string, url: string }>('/upload-finish', 'POST', {
+                uploadId,
+                fileName: file.name,
+                totalChunks
+            });
+        } catch (err) {
+            console.warn(`Finish upload failed (Attempt ${finishAttempts})`, err);
+            if (finishAttempts >= 3) throw err;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
     
     onProgress(100);
-    return response;
+    return finishResponse;
 };
 export const getWarehouseItems = async (): Promise<WarehouseItem[]> => { const res = await apiCall<WarehouseItem[]>('/warehouse/items'); return safeArray(res); };
 export const saveWarehouseItem = async (item: WarehouseItem): Promise<WarehouseItem[]> => { return await apiCall<WarehouseItem[]>('/warehouse/items', 'POST', item); };

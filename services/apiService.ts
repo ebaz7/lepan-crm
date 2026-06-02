@@ -75,8 +75,8 @@ export const getLocalData = <T>(key: string, defaultData: T): T => {
 export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?: any): Promise<T> => {
     try {
         const controller = new AbortController();
-        // Increased timeout significantly for mobile networks AND large file uploads (60s)
-        const timeoutId = setTimeout(() => controller.abort(), 60000); 
+        // Increased timeout significantly for mobile networks AND large file uploads (300s)
+        const timeoutId = setTimeout(() => controller.abort(), 300000); 
 
         let baseUrl = '';
         const host = getServerHost();

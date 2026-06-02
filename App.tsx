@@ -746,8 +746,8 @@ function App() {
   useEffect(() => { 
       if (currentUser) { 
           loadData(false); 
-          // INCREASED INTERVAL TO 20 SECONDS TO REDUCE SERVER LOAD
-          const intervalId = setInterval(() => loadData(true), 20000); 
+          // INCREASED INTERVAL TO 10 SECONDS (from 20s) TO IMPROVE RESPONSIVENESS
+          const intervalId = setInterval(() => loadData(true), 10000); 
           
           // Heartbeat for Last Seen (Every 1 minute)
           const heartbeatId = setInterval(() => {

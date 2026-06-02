@@ -10,7 +10,7 @@ import {
     CheckSquare, Square, X, Trash2, Reply, Edit2, ArrowRight, Mic, 
     Play, Pause, Loader2, Search, MoreVertical, File, Image as ImageIcon,
     Check, CheckCheck, DownloadCloud, StopCircle, Share2, Copy, Forward, Eye, CornerUpLeft, Bell,
-    Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle
+    Shield, UserMinus, UserPlus, BellOff, Camera, Clock, MessageCircle, RefreshCw
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { sendNotification } from '../services/notificationService';
@@ -212,8 +212,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             let hasChanges = false;
             for (const msg of displayMessages) {
                 if (msg.attachment && msg.attachment.fileName) {
-                    const uniqueName = msg.attachment.url ? (msg.attachment.url.split('/').pop() || msg.attachment.fileName) : msg.attachment.fileName;
-                    const exists = await checkFileExists(uniqueName);
+                    const fileName = msg.attachment.fileName || 'file';
+                    const uniqueLocalName = `${msg.id}_${fileName}`;
+                    const exists = await checkFileExists(uniqueLocalName);
                     checks[msg.id] = exists;
                     if (downloadedFiles[msg.id] !== exists) hasChanges = true;
                 }
@@ -727,7 +728,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             console.error("Send Error:", e);
             setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
             setIsUploading(false);
-            alert("خطا در ارسال پیام");
+            alert(`خطا در ارسال پیام: ${e.message || 'خطای شبکه'}`);
         }
     };
 
@@ -911,13 +912,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // 5GB size validation - adjust or warn without hard block
-        if (file.size > 5 * 1024 * 1024 * 1024) {
-            alert(`⚠️ حجم فایل بسیار زیاد است.`);
-            e.target.value = '';
-            return;
-        }
-
         const safeName = file.name || `unknown_${Date.now()}`;
         const newMsgId = generateUUID();
 
@@ -954,7 +948,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             await sendMessage(finalMsg);
             onRefresh();
         } catch (error: any) { 
-            alert('خطا در ارسال فایل. حجم فایل ممکن است زیاد باشد یا فرمت پشتیبانی نمی‌شود.'); 
+            console.error("Upload Error:", error);
+            alert(`خطا در ارسال فایل: ${error.message || 'خطای شبکه'}`); 
             setPendingMessages(prev => prev.filter(m => m.id !== newMsgId));
         }
 
@@ -1304,6 +1299,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             </div>
                             {activeChannel.type !== 'task_group' && (
                                 <div className="flex gap-2">
+                                    <button onClick={() => onRefresh()} className="p-2 hover:bg-gray-100 rounded-full text-blue-600" title="بروزرسانی"><RefreshCw size={20} className={isUploading ? 'animate-spin' : ''}/></button>
                                     {selectionMode ? (
                                         <div className="flex gap-2 animate-fade-in">
                                             <button onClick={() => setShowForwardModal(true)} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100" title="فوروارد"><Forward size={18}/></button>
@@ -1462,8 +1458,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
                                                                 setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
                                                                 
-                                                                const uniqueName = msg.attachment!.url ? (msg.attachment!.url.split('/').pop() || msg.attachment!.fileName) : msg.attachment!.fileName;
-                                                                await downloadAndOpenFile(msg.attachment!.url, uniqueName, (p) => {
+                                                                const fileName = msg.attachment!.fileName || 'file';
+                                                                const uniqueLocalName = `${msg.id}_${fileName}`;
+                                                                await downloadAndOpenFile(msg.attachment!.url, uniqueLocalName, (p) => {
                                                                     setFileProgress(prev => ({ ...prev, [msg.id]: p }));
                                                                 });
 

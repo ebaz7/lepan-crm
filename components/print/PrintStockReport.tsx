@@ -131,6 +131,18 @@ const PrintStockReport: React.FC<PrintStockReportProps> = ({ data, onClose }) =>
                                                 </td>
                                             </tr>
                                         ))}
+                                        {group.items.length > 0 && (
+                                            <tr style={{ backgroundColor: '#f9fafb', borderTop: '2px solid black' }}>
+                                                <td style={{ width: '40%', borderLeft: '1px solid black', padding: '6px', textAlign: 'right', fontWeight: '900', fontSize: '12px' }}>جمع کل موجودی</td>
+                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: '900', fontSize: '12px', borderBottom: '2px double black' }}>
+                                                    {group.items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0).toFixed(2)}
+                                                </td>
+                                                <td style={{ width: '20%', borderLeft: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: '900', fontSize: '12px', borderBottom: '2px double black' }}>
+                                                    {group.items.reduce((sum: number, i: any) => sum + (i.weight || 0), 0).toFixed(2)}
+                                                </td>
+                                                <td style={{ width: '20%', padding: '6px', textAlign: 'center' }}></td>
+                                            </tr>
+                                        )}
                                         {group.items.length === 0 && <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>موجودی صفر</td></tr>}
                                     </tbody>
                                 </table>
