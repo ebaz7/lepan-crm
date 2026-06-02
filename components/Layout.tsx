@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet } from 'lucide-react';
+import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
@@ -502,26 +502,28 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
         </div>
       )}
 
-      {/* Desktop Sidebar */}
-      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-[60] bg-white/70 dark:bg-gray-950/90 backdrop-blur-2xl border-l border-gray-200/50 dark:border-white/10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] text-gray-800 dark:text-gray-100 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
-          <div className="p-6 border-b border-gray-200/50 dark:border-white/10 flex items-center justify-between gap-3">
+      {/* Desktop Sidebar with Google Gemini brand aesthetics */}
+      <aside className={`flex-shrink-0 hidden md:flex flex-col no-print relative h-screen sticky top-0 transition-all duration-300 z-[60] bg-white/40 dark:bg-zinc-900/40 backdrop-blur-3xl border-l border-zinc-200/50 dark:border-zinc-800/50 shadow-[4px_0_24px_rgba(0,0,0,0.01)] text-zinc-900 dark:text-zinc-100 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className="p-6 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center justify-between gap-3">
               <div className={`flex items-center gap-3 overflow-hidden ${!isSidebarOpen && 'hidden'}`}>
-                  <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-600/20"><FileText className="w-5 h-5" /></div>
-                  <div className="whitespace-nowrap"><h1 className="text-base font-bold tracking-tight">{settings?.appName || 'سیستم مالی'}</h1><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">پنل کاربری</span></div>
+                  <div className="bg-gradient-to-tr from-[#4b90ff] via-[#aa72ff] to-[#ff6097] p-2 rounded-xl text-white shadow-lg shadow-purple-500/10 animate-pulse-subtle"><Sparkles className="w-5 h-5" /></div>
+                  <div className="whitespace-nowrap"><h1 className="text-base font-black tracking-tight gemini-gradient-text bg-gradient-to-r from-[#4b90ff] to-[#ff6097]">{settings?.appName || 'سیستم مالی'}</h1><span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold block mt-0.5">پنل کاربری جمینای</span></div>
               </div>
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-gray-100 dark:bg-gray-800/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700/60 rounded-xl transition-colors mx-auto">
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-zinc-100 dark:bg-zinc-800/40 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-colors mx-auto">
                  <Menu size={20}/>
               </button>
           </div>
           
-          <div className={`p-4 bg-white/50 dark:bg-gray-800/20 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-gray-100/50 dark:border-white/5 relative group cursor-pointer hover:glass-panel hover:shadow-sm transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden shrink-0 text-white shadow-md">
-                 {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="" className="w-full h-full object-cover"/> : <span className="font-bold">{currentUser.fullName.charAt(0)}</span>}
+          <div className={`p-4 bg-zinc-100/30 dark:bg-zinc-800/10 mx-4 mt-4 rounded-2xl flex items-center gap-3 border border-zinc-200/20 dark:border-zinc-800/50 relative group cursor-pointer hover:bg-zinc-100/60 dark:hover:bg-zinc-800/25 transition-all ${!isSidebarOpen && 'justify-center mx-2 px-0'}`} onClick={() => setShowProfileModal(true)} title="تنظیمات کاربری">
+              <div className="w-10 h-10 rounded-full p-[2px] bg-gradient-to-tr from-[#4b90ff] via-[#aa72ff] to-[#ff6097] flex items-center justify-center overflow-hidden shrink-0 text-white shadow-md">
+                 <div className="w-full h-full bg-zinc-900 rounded-full overflow-hidden flex items-center justify-center">
+                    {currentUser.avatar ? <img src={resolveImageUrl(currentUser.avatar)} alt="" className="w-full h-full object-cover"/> : <span className="font-bold text-xs">{currentUser.fullName.charAt(0)}</span>}
+                 </div>
               </div>
               {isSidebarOpen && (
                  <div className="overflow-hidden flex-1">
-                     <p className="text-sm font-bold truncate text-gray-800 dark:text-gray-100">{currentUser.fullName}</p>
-                     <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate font-bold bg-gray-100 dark:bg-gray-700/50 inline-block px-1.5 py-0.5 rounded mt-0.5">نقش: {currentUser.role}</p>
+                     <p className="text-sm font-black truncate text-zinc-800 dark:text-zinc-100">{currentUser.fullName}</p>
+                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate font-black bg-zinc-100 dark:bg-zinc-800/40 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5"><span>نقش:</span> <span className="text-purple-600 dark:text-purple-400">{currentUser.role}</span></p>
                  </div>
               )}
           </div>
@@ -534,13 +536,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                     <button 
                         key={item.id} 
                         onClick={() => setActiveTab(item.id)} 
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'} ${!isSidebarOpen && 'justify-center'}`} 
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 group relative ${isActive ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20 font-black' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/85 dark:hover:bg-zinc-800/40'} ${!isSidebarOpen && 'justify-center'}`} 
                         title={item.label}
                     >
                         <div className="relative z-10 flex items-center justify-between w-full">
                             <div className="flex items-center gap-3">
-                                <Icon size={20} className={isActive ? '' : 'group-hover:scale-110 transition-transform'} />
-                                {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">{item.label}</span>}
+                                <Icon size={20} className={isActive ? 'text-[#4b90ff] dark:text-[#ff8da1]' : 'group-hover:scale-110 transition-transform'} />
+                                {isSidebarOpen && <span className="text-sm whitespace-nowrap">{item.label}</span>}
                             </div>
                             {item.id === 'chat' && unreadChatCount > 0 && isSidebarOpen && (
                                 <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold shadow-sm animate-pulse">{unreadChatCount}</span>
@@ -552,8 +554,8 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                         {isActive && (
                             <motion.div
                                 layoutId="desktopActiveTab"
-                                className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20"
-                                transition={{ type: "spring", bounce: 0.35, duration: 0.6 }}
+                                className="absolute inset-0 bg-gradient-to-r from-blue-50/40 via-purple-50/25 to-pink-50/15 dark:from-[#4b90ff]/5 dark:via-[#aa72ff]/5 dark:to-transparent border-r-4 border-blue-500 dark:border-[#4b90ff] rounded-xl"
+                                transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
                             />
                         )}
                     </button>

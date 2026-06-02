@@ -455,60 +455,63 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* ACTIONABLE CARTABLE SECTION */}
         {showActionSection && (
             <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><ListChecks className="text-blue-600"/> کارتابل و وظایف من</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-200 mb-4 flex items-center gap-2">
+                    <ListChecks className="text-[#4b90ff]" /> 
+                    <span>کارتابل و وظایف من</span>
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {pendingPaymentCount > 0 && hasPaymentAccess && (
-                        <div onClick={onGoToPaymentApprovals} className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200 cursor-pointer transform hover:scale-105 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Banknote size={80}/></div>
+                        <div onClick={onGoToPaymentApprovals} className="bg-gradient-to-br from-[#4b90ff] to-[#7154ff] rounded-2xl p-6 text-white shadow-lg shadow-blue-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Banknote size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingPaymentCount} مورد</span>
+                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-[#ff4e6e] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingPaymentCount} مورد</span>
                                 </div>
-                                <h3 className="text-2xl font-bold mb-1">تایید دستور پرداخت</h3>
-                                <p className="text-blue-100 text-sm opacity-90">درخواست‌های منتظر تایید شما</p>
+                                <h3 className="text-xl font-black mb-1">تایید دستور پرداخت</h3>
+                                <p className="text-blue-50 text-xs opacity-85">درخواست‌های منتظر تایید شما</p>
                             </div>
                         </div>
                     )}
 
                     {pendingExitCount > 0 && hasExitAccess && (
-                        <div onClick={onGoToExitApprovals} className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg shadow-orange-200 cursor-pointer transform hover:scale-105 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Truck size={80}/></div>
+                        <div onClick={onGoToExitApprovals} className="bg-gradient-to-br from-[#ff6097] to-[#e0306c] rounded-2xl p-6 text-white shadow-lg shadow-pink-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Truck size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingExitCount} مورد</span>
+                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-zinc-900/60 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingExitCount} مورد</span>
                                 </div>
-                                <h3 className="text-2xl font-bold mb-1">تایید مجوز خروج</h3>
-                                <p className="text-orange-100 text-sm opacity-90">مجوزهای منتظر اقدام شما</p>
+                                <h3 className="text-xl font-black mb-1">تایید مجوز خروج</h3>
+                                <p className="text-rose-50 text-xs opacity-85">مجوزهای منتظر اقدام شما</p>
                             </div>
                         </div>
                     )}
 
                     {pendingBijakCount > 0 && hasWarehouseAccess && (
-                        <div onClick={onGoToBijakApprovals} className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg shadow-purple-200 cursor-pointer transform hover:scale-105 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Package size={80}/></div>
+                        <div onClick={onGoToBijakApprovals} className="bg-gradient-to-br from-[#aa72ff] to-[#7f39f0] rounded-2xl p-6 text-white shadow-lg shadow-purple-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Package size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingBijakCount} مورد</span>
+                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-[#ff4e6e] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingBijakCount} مورد</span>
                                 </div>
-                                <h3 className="text-2xl font-bold mb-1">تایید تحویل بیجک</h3>
-                                <p className="text-purple-100 text-sm opacity-90">اعلام بارهای خروجی (انتظامات)</p>
+                                <h3 className="text-xl font-black mb-1">تایید تحویل بیجک</h3>
+                                <p className="text-purple-50 text-xs opacity-85">اعلام بارهای خروجی (انتظامات)</p>
                             </div>
                         </div>
                     )}
 
                     {pendingPurchaseCount > 0 && hasPurchaseAccess && (
-                        <div onClick={onGoToPurchaseApprovals} className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 cursor-pointer transform hover:scale-105 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Package size={80}/></div>
+                        <div onClick={onGoToPurchaseApprovals} className="bg-gradient-to-br from-[#10b981] to-[#047857] rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Package size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/20 p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">{pendingPurchaseCount} مورد</span>
+                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingPurchaseCount} مورد</span>
                                 </div>
-                                <h3 className="text-2xl font-bold mb-1">تایید درخواست خرید</h3>
-                                <p className="text-emerald-100 text-sm opacity-90">درخواست‌های منتظر تایید شما</p>
+                                <h3 className="text-xl font-black mb-1">تایید درخواست خرید</h3>
+                                <p className="text-emerald-50 text-xs opacity-85">درخواست‌های منتظر تایید شما</p>
                             </div>
                         </div>
                     )}

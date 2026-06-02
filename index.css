@@ -4,89 +4,101 @@
 
 @layer base {
   :root {
-    --app-bg: #ffffff;
-    --glass-bg: rgba(255, 255, 255, 0.85); /* More matte glass */
-    --glass-bg-hover: rgba(255, 255, 255, 0.95);
-    --glass-border: rgba(0, 0, 0, 0.05);
-    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
-    --text-primary: #1d1d1f;
-    --text-secondary: #6e6e73;
-    --border-color: rgba(0, 0, 0, 0.08);
+    --app-bg: #f0f4f9; /* Gemini sleek light theme base */
+    --glass-bg: rgba(255, 255, 255, 0.7); /* Frosted premium glass */
+    --glass-bg-hover: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(227, 227, 227, 0.8);
+    --glass-shadow: 0 12px 32px rgba(26, 32, 44, 0.04);
+    --text-primary: #1f1f1f;
+    --text-secondary: #474747;
+    --border-color: rgba(227, 227, 227, 0.8);
+    --gemini-spark: linear-gradient(135deg, #4b90ff 0%, #aa72ff 50%, #ff6097 100%);
   }
   
   .dark {
-    --app-bg: #000000;
-    --glass-bg: rgba(28, 28, 30, 0.8); /* Matte dark glass */
-    --glass-bg-hover: rgba(44, 44, 46, 0.9);
+    --app-bg: #131314; /* Authentical Gemini dark theme background */
+    --glass-bg: rgba(30, 31, 32, 0.7); /* Frosted translucent panel */
+    --glass-bg-hover: rgba(36, 37, 39, 0.85);
     --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-    --text-primary: #f5f5f7;
-    --text-secondary: #86868b;
-    --border-color: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    --text-primary: #e3e3e3;
+    --text-secondary: #9e9e9e;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --gemini-spark: linear-gradient(135deg, #9bb5ff 0%, #c5a3ff 50%, #ff8da1 100%);
   }
 }
 
-/* Background Blobs - Disabled in light mode for pure white look, kept subtle in dark */
+/* Authentic Gemini Background Auroras - Soft, organic, eye-comfortable glowing ambient background */
 .bg-blobs {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: -2;
   overflow: hidden;
   background: var(--app-bg);
+  transition: background 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dark .blob {
+/* Subtle background noise layer for textured film look like Gemini */
+.bg-blobs::after {
+  content: "";
   position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.15;
-  animation: blob-float 30s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  inset: 0;
+  opacity: 0.015;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 .blob {
-  display: none; /* Hidden by default (light mode) */
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.08; /* Perfect elegant sub-opacity for distraction-free reading */
+  mix-blend-mode: plus-lighter;
+  animation: blob-float 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
 }
 
 .dark .blob {
-  display: block;
+  opacity: 0.12; /* Slightly more colorful in dark mode to offset deep darks */
 }
 
 .blob-1 {
-  width: 600px;
-  height: 600px;
-  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
-  top: -100px;
-  right: -100px;
+  width: min(60vw, 650px);
+  height: min(60vw, 650px);
+  background: conic-gradient(from 180deg at 50% 50%, #4b90ff 0deg, #aa72ff 120deg, #ff6097 240deg, #4b90ff 360deg);
+  top: -15%;
+  right: -10%;
 }
 
 .blob-2 {
-  width: 500px;
-  height: 500px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  bottom: -50px;
-  left: -50px;
-  animation-delay: -7s;
+  width: min(50vw, 550px);
+  height: min(50vw, 550px);
+  background: conic-gradient(from 0deg at 50% 50%, #ff6097 0deg, #4b90ff 180deg, #aa72ff 360deg);
+  bottom: -10%;
+  left: -10%;
+  animation-delay: -8s;
+  animation-duration: 35s;
 }
 
 .blob-3 {
-  width: 400px;
-  height: 400px;
-  background: linear-gradient(135deg, #5ee7df 0%, #b491ee 100%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation: blob-float 40s infinite alternate-reverse;
-  opacity: 0.15;
+  width: min(40vw, 450px);
+  height: min(40vw, 450px);
+  background: linear-gradient(135deg, #aa72ff 0%, #4b90ff 100%);
+  top: 40%;
+  left: 35%;
+  animation: blob-float 30s infinite alternate-reverse;
+  opacity: 0.03;
+  animation-delay: -4s;
 }
 
 @keyframes blob-float {
-  0% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(100px, 50px) scale(1.1); }
-  66% { transform: translate(-50px, 120px) scale(0.9); }
-  100% { transform: translate(50px, -100px) scale(1.05); }
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(4%, 2%) scale(1.08) rotate(120deg); }
+  66% { transform: translate(-3%, 5%) scale(0.92) rotate(240deg); }
+  100% { transform: translate(2%, -4%) scale(1.04) rotate(360deg); }
 }
 
 /* Font Face - Updated for better Offline Support */
@@ -176,21 +188,80 @@ body {
 @layer utilities {
   .glass-panel {
     background: var(--glass-bg);
-    backdrop-filter: blur(32px) saturate(210%);
-    -webkit-backdrop-filter: blur(32px) saturate(210%);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
-    border-radius: 2rem;
+    border-radius: 1.75rem; /* softer corners like M3 and Gemini dialogs */
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .glass-panel:hover {
     background: var(--glass-bg-hover);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
   }
   .glass-header {
     background: var(--glass-bg);
-    backdrop-filter: blur(40px) saturate(210%);
-    -webkit-backdrop-filter: blur(40px) saturate(210%);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
     border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.03);
   }
+  
+  /* Gemini specific styling elements */
+  .gemini-gradient-text {
+    background: var(--gemini-spark);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+  }
+  
+  .gemini-btn-primary {
+    background: var(--gemini-spark);
+    color: white;
+    font-weight: 700;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 15px rgba(75, 144, 255, 0.3);
+  }
+  .gemini-btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(170, 114, 255, 0.45);
+    filter: brightness(1.05);
+  }
+  .gemini-btn-primary:active {
+    transform: translateY(1px) scale(0.99);
+  }
+  
+  .gemini-border-glow {
+    position: relative;
+  }
+  .gemini-border-glow::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gemini-spark);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.4;
+    transition: opacity 0.3s ease;
+  }
+  .gemini-border-glow:hover::before {
+    opacity: 1;
+  }
+  
+  .animate-pulse-subtle {
+    animation: pulse-subtle 3s infinite ease-in-out;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.97); }
 }
 
 /* Safe Area Utilities for Mobile */

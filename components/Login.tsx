@@ -314,11 +314,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         ) : (
             <>
                 <div className="flex flex-col items-center mb-8">
-                    <div className="w-20 h-20 bg-blue-600 rounded-2xl rotate-3 flex items-center justify-center text-white mb-6 shadow-xl shadow-blue-600/30">
-                        <KeyRound size={40} className="-rotate-3" />
+                    <div className="w-20 h-20 bg-gradient-to-tr from-[#4b90ff] via-[#aa72ff] to-[#ff6097] rounded-[1.5rem] rotate-3 flex items-center justify-center text-white mb-6 shadow-xl shadow-purple-500/15 animate-pulse-subtle">
+                        <KeyRound size={36} className="-rotate-3" />
                     </div>
-                    <h1 className="text-3xl font-black text-gray-800 tracking-tight">ورود به سیستم</h1>
-                    <div className="mt-3 flex items-center gap-2 px-3 py-1 bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 rounded-full border border-gray-200">
+                    <h1 className="text-3xl font-black tracking-tight gemini-gradient-text bg-gradient-to-r from-[#4b90ff] via-[#aa72ff] to-[#ff6097]">ورود به سامانه</h1>
+                    <div className="mt-3 flex items-center gap-2 px-3 py-1 bg-zinc-100/50 dark:bg-zinc-800/40 text-zinc-800 dark:text-zinc-200 rounded-full border border-zinc-200/50 dark:border-zinc-800/50">
                         <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-purple-500' : 'bg-green-500'}`}></div>
                         <p className="text-gray-500 text-xs font-bold">{isNative ? 'نسخه موبایل' : 'نسخه وب'}</p>
                     </div>
