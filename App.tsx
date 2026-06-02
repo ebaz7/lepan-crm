@@ -380,9 +380,12 @@ function App() {
     }
 
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances'].includes(hash)) {
-        setActiveTabState(hash); 
-        safeReplaceState({ tab: hash }, '', `#${hash}`);
+    const path = window.location.pathname.replace(/^\/+/, '');
+    const defaultTab = hash || path || 'dashboard';
+
+    if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances'].includes(defaultTab)) {
+        setActiveTabState(defaultTab); 
+        safeReplaceState({ tab: defaultTab }, '', `#${defaultTab}`);
     } else { 
         safeReplaceState({ tab: 'dashboard' }, '', '#dashboard'); 
     }
@@ -455,7 +458,18 @@ function App() {
     };
   }, []);
 
-  const handleLogout = () => { setCurrentUser(null); isFirstLoad.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
+  const handleLogout = async () => { 
+      const endpoint = localStorage.getItem('push_endpoint');
+      if (endpoint) {
+          try {
+              await apiCall('/unsubscribe', 'POST', { endpoint });
+          } catch(e) {}
+      }
+      localStorage.removeItem('push_endpoint');
+      setCurrentUser(null); 
+      isFirstLoad.current = true; 
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); 
+  };
 
   useEffect(() => {
     if (settings) {
@@ -921,7 +935,14 @@ function App() {
             unreadChatCount={unreadChatCount}
             >
             
-            <NotificationController currentUser={currentUser} />
+            <NotificationController 
+                currentUser={currentUser} 
+                onNotificationClick={(data) => {
+                    if (data && data.tab) {
+                        setActiveTab(data.tab);
+                    }
+                }}
+            />
 
             {backgroundJobs.length > 0 && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>

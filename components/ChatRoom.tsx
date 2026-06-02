@@ -452,7 +452,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     bodyText = `🎤 پیام صوتی ${lastMsg.audioDuration ? `(${lastMsg.audioDuration} ثانیه)` : ''}`;
                 }
                 
-                sendNotification(title, bodyText);
+                sendNotification(title, bodyText, { tab: 'chat' });
             }
         }
     }, [messages.length, mutedChannels, groups]);
@@ -1657,7 +1657,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <input type="file" ref={galleryInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileUpload}/>
                             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload}/>
 
-                            <div className="flex-1 bg-gray-100 rounded-3xl flex items-center px-4 py-2 min-h-[48px]">
+                            <div className={`flex-1 rounded-3xl flex items-center px-4 py-2 min-h-[48px] relative transition-all duration-300 ${inputText.length > 0 ? 'bg-white shadow-[0_4px_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-100 dark:bg-gray-800 dark:ring-blue-900/50' : 'bg-gray-100 dark:bg-gray-800/80'}`}>
+                                {inputText.length > 0 && (
+                                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 opacity-10 animate-bg-pan pointer-events-none dark:opacity-20" style={{ backgroundSize: '200% 200%' }} />
+                                )}
                                 <textarea 
                                     ref={inputAreaRef}
                                     value={inputText}
@@ -1668,15 +1671,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     }}
                                     onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                                     placeholder="پیام..."
-                                    className="bg-transparent border-none outline-none w-full text-sm resize-none custom-scrollbar"
+                                    className="bg-transparent border-none outline-none w-full text-sm resize-none custom-scrollbar relative z-10 placeholder-gray-500 dark:placeholder-gray-400 text-gray-800 dark:text-gray-100"
                                     rows={1}
                                     style={{ height: 'auto', minHeight: '24px', maxHeight: '40vh' }}
                                 />
                             </div>
 
                             {inputText.trim() || isUploading || localSharedData?.fileUrl ? (
-                                <button onClick={handleSendMessage} className="p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-transform active:scale-95 mb-1">
-                                    {isUploading ? <Loader2 size={24} className="animate-spin"/> : <Send size={24} className={document.dir==='rtl' ? 'rotate-180' : ''}/>}
+                                <button onClick={handleSendMessage} className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all active:scale-95 mb-1 relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"></div>
+                                    {isUploading ? <Loader2 size={24} className="animate-spin relative z-10"/> : <Send size={24} className={`relative z-10 ${document.dir==='rtl' ? 'rotate-180' : ''}`}/>}
                                 </button>
                             ) : (
                                 <button 

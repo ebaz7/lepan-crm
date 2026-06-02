@@ -115,8 +115,19 @@ export const subscribeToPushNotifications = async () => {
     }
 };
 
+let lastNotificationString = '';
+let lastNotificationTime = 0;
+
 export const sendNotification = async (title: string, body: string, data?: any) => {
   if (!isNotificationEnabledInApp()) return;
+  
+  const currentStr = `${title}:${body}`;
+  const now = Date.now();
+  if (currentStr === lastNotificationString && (now - lastNotificationTime < 5000)) {
+      return; // Deduplicate identical notifications fired within 5 seconds
+  }
+  lastNotificationString = currentStr;
+  lastNotificationTime = now;
 
   if (Capacitor.isNativePlatform()) {
       try {

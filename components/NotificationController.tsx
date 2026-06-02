@@ -11,9 +11,10 @@ import { getRolePermissions } from '../services/authService';
 
 interface Props {
     currentUser?: User | null;
+    onNotificationClick?: (data: any) => void;
 }
 
-const NotificationController: React.FC<Props> = ({ currentUser }) => {
+const NotificationController: React.FC<Props> = ({ currentUser, onNotificationClick }) => {
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
 
   // Helper to convert Key
@@ -100,6 +101,7 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                         role: currentUser.role,
                         deviceType: 'web'
                     };
+                    localStorage.setItem('push_endpoint', existingSub.endpoint);
                     await apiCall('/subscribe', 'POST', payload);
                 } else {
                     // 4. Subscribe New
@@ -115,6 +117,7 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                             role: currentUser.role,
                             deviceType: 'web'
                         };
+                        localStorage.setItem('push_endpoint', subscription.endpoint);
                         await apiCall('/subscribe', 'POST', payload);
                     }
                 }
@@ -151,12 +154,22 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 username: currentUser.username,
                 role: currentUser.role
             };
+            localStorage.setItem('push_endpoint', token.value);
             apiCall('/subscribe', 'POST', subObject);
         });
         
+        let lastPushString = '';
+        let lastPushTime = 0;
+
         // Handle incoming notifications while app is open
         PushNotifications.addListener('pushNotificationReceived', async (notification) => {
             console.log('Push received: ', notification);
+            const currentStr = `${notification.title}:${notification.body}`;
+            const now = Date.now();
+            if (currentStr === lastPushString && (now - lastPushTime < 5000)) return;
+            lastPushString = currentStr;
+            lastPushTime = now;
+            
             try {
                 // Display foreground notification as a native banner
                 await LocalNotifications.schedule({
@@ -175,6 +188,21 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
                 });
             } catch (e) {
                 console.error('Local Notification foreground display failed', e);
+            }
+        });
+
+        PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            console.log('Push action performed: ', action);
+            if (onNotificationClick && action.notification.data) {
+                onNotificationClick(action.notification.data);
+            }
+        });
+
+        // Add LocalNotification listener as well for foreground tapped notifications
+        LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+            console.log('Local action performed: ', action);
+            if (onNotificationClick && action.notification.extra) {
+                onNotificationClick(action.notification.extra);
             }
         });
     }

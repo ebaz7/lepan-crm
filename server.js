@@ -344,7 +344,7 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
 
         console.log(`>>> Broadcasting Notification: "${title}" to ${uniqueSubs.length} unique devices (Filtered from ${subs.length}).`);
 
-        const payload = JSON.stringify({ title, body, url });
+        const payload = JSON.stringify({ title, body, url, tab: url.replace('/', '') });
 
         const sendPromises = uniqueSubs.filter(sub => {
             // 1. EXPLICIT EXCLUSION (e.g. Sender)
@@ -382,6 +382,7 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                         title: title,
                         body: body,
                         url: url,
+                        tab: url.replace('/', ''),
                         click_action: 'FLUTTER_NOTIFICATION_CLICK'
                     }
                 };
@@ -515,6 +516,18 @@ app.post('/api/subscribe', (req, res) => {
 
     saveDb(db);
     res.status(201).json({});
+});
+
+app.post('/api/unsubscribe', (req, res) => {
+    const db = getDb();
+    if (!db.subscriptions) return res.json({});
+    
+    // Unsubscribe by endpoint
+    if (req.body.endpoint) {
+        db.subscriptions = db.subscriptions.filter(s => s.endpoint !== req.body.endpoint);
+    }
+    saveDb(db);
+    res.json({});
 });
 
 app.get('/api/next-tracking-number', (req, res) => {
