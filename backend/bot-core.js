@@ -2816,7 +2816,28 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 const banks = [...new Set(order.paymentDetails.map(d => d.bankName).filter(Boolean))];
                 if (banks.length > 0) paymentBankInfo = banks.join('، ');
             }
-            const caption = `🔸 سند #${order.trackingNumber}\n👤 ${order.payee}\n💰 ${parseInt(order.totalAmount).toLocaleString()} ریال\n🏦 بانک: ${paymentBankInfo}\n📝 بابت: ${order.description}`;
+            
+            let detailsText = '';
+            if (order.paymentDetails && order.paymentDetails.length > 0) {
+                detailsText = '\n📋 *جزئیات پرداخت:*';
+                order.paymentDetails.forEach((d, i) => {
+                    detailsText += `\n   ${i+1}. ${d.method} (${Number(d.amount).toLocaleString()} ریال)${d.bankName ? ' - بانک ' + d.bankName : ''}${d.chequeNumber ? ' - چک ' + d.chequeNumber : ''}${d.chequeDate ? ' (' + d.chequeDate + ')' : ''}`;
+                });
+            }
+            
+            const methodType = (order.paymentDetails && order.paymentDetails.length > 0) ? order.paymentDetails[0].method : '-';
+            const caption = `💸 *دستور پرداخت کارتابل*
+--------------------------
+🏢 *شرکت:* ${order.payingCompany || '-'}
+🔢 *شماره سند:* #${order.trackingNumber || order.id}
+📅 *تاریخ ثبت:* ${order.date ? toShamsiFull(order.date) : '-'}
+👤 *ذینفع:* ${order.payee || '-'}
+📍 *محل پرداخت:* ${order.paymentPlace || '-'}
+💳 *روش اصلی:* ${methodType}
+🏦 *بانک صادرکننده:* ${paymentBankInfo}
+💰 *مبلغ کل:* ${Number(order.totalAmount || 0).toLocaleString()} ریال
+📝 *بابت/توضیحات:* ${order.description || '-'}
+🔄 *وضعیت فعلی:* ${order.status}${detailsText}`;
             const kb = {
                 inline_keyboard: [
                     [

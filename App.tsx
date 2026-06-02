@@ -706,18 +706,40 @@ function App() {
   };
 
   useEffect(() => {
-      const handleAppStateChange = async (state: any) => {
-          if (state.isActive && currentUser) {
-              await loadData(true);
+      const triggerReload = () => {
+          if (currentUser) {
+              console.log("Forcing data synchronizer on focus/online/visibilitychange");
+              loadData(true);
           }
       };
+
+      const handleAppStateChange = async (state: any) => {
+          if (state.isActive) {
+              triggerReload();
+          }
+      };
+      
       let listener: any;
       
       if (Capacitor.isNativePlatform()) {
           CapacitorApp.addListener('appStateChange', handleAppStateChange).then(l => { listener = l; });
       }
+      
+      window.addEventListener('focus', triggerReload);
+      window.addEventListener('online', triggerReload);
+      
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+              triggerReload();
+          }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       return () => { 
         if (listener) listener.remove(); 
+        window.removeEventListener('focus', triggerReload);
+        window.removeEventListener('online', triggerReload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
   }, [currentUser]);
 

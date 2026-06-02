@@ -212,7 +212,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             let hasChanges = false;
             for (const msg of displayMessages) {
                 if (msg.attachment && msg.attachment.fileName) {
-                    const exists = await checkFileExists(msg.attachment.fileName);
+                    const uniqueName = msg.attachment.url ? (msg.attachment.url.split('/').pop() || msg.attachment.fileName) : msg.attachment.fileName;
+                    const exists = await checkFileExists(uniqueName);
                     checks[msg.id] = exists;
                     if (downloadedFiles[msg.id] !== exists) hasChanges = true;
                 }
@@ -434,27 +435,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const loadMeta = async () => {
         try {
             console.log("ChatRoom: Starting loadMeta");
-            const usrList = await getUsers();
-            console.log("ChatRoom: Users loaded", usrList);
+            const [usrList, grpList, taskGps, tskList] = await Promise.all([
+                getUsers(),
+                getGroups(),
+                getTaskGroups(),
+                getTasks()
+            ]);
+            console.log("ChatRoom: Meta preloads loaded in parallel");
+            
             setUsers(usrList.filter(u => u.username !== currentUser.username));
             
-            const grpList = await getGroups();
-            console.log("ChatRoom: Groups loaded", grpList);
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setGroups(visibleGroups);
 
-            const taskGps = await getTaskGroups();
-            console.log("ChatRoom: TaskGroups loaded", taskGps);
             const visibleTaskGps = taskGps.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
             setTaskGroups(visibleTaskGps);
             
-            const tskList = await getTasks();
-            console.log("ChatRoom: Tasks loaded", tskList);
             setTasks(tskList);
         } catch (e) { 
             console.error("Chat load error", e); 
-            // Removed intrusive alert
         }
     };
 
@@ -680,34 +680,44 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
         try {
             if (hasLocalFile && currentShared?.fileUrl) {
-                setIsUploading(true);
-                let targetUrl = currentShared.fileUrl;
+                const isAlreadyUploaded = currentShared.fileUrl.startsWith('/uploads/') || currentShared.fileUrl.includes('/uploads/');
                 
-                // If it's a native path, convert it so standard browser fetch can read it via Capacitor
-                if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
-                    // @ts-ignore
-                    if (window.Capacitor) {
+                if (isAlreadyUploaded) {
+                    // Already hosted on server (e.g. redirected from share-target server helper), send directly!
+                    newMsg.attachment = {
+                        fileName: currentShared.title || currentShared.fileUrl.split('/').pop() || 'فایل به اشتراک گذاشته شده',
+                        url: currentShared.fileUrl
+                    };
+                } else {
+                    setIsUploading(true);
+                    let targetUrl = currentShared.fileUrl;
+                    
+                    // If it's a native path, convert it so standard browser fetch can read it via Capacitor
+                    if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
                         // @ts-ignore
-                        targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                        if (window.Capacitor) {
+                            // @ts-ignore
+                            targetUrl = window.Capacitor.convertFileSrc(targetUrl);
+                        }
                     }
-                }
-                
-                const response = await fetch(targetUrl);
-                const blob = await response.blob();
-                const defaultName = currentShared.title || `shared_file_${Date.now()}`;
-                const ext = blob.type.split('/').pop() || 'bin';
-                const fileSafeName = currentShared.fileUrl.split('/').pop() || `${defaultName}.${ext}`;
-                // @ts-ignore
-                const file = new window.File([blob], fileSafeName, { type: blob.type });
+                    
+                    const response = await fetch(targetUrl);
+                    const blob = await response.blob();
+                    const defaultName = currentShared.title || `shared_file_${Date.now()}`;
+                    const ext = blob.type.split('/').pop() || 'bin';
+                    const fileSafeName = currentShared.fileUrl.split('/').pop() || `${defaultName}.${ext}`;
+                    // @ts-ignore
+                    const file = new window.File([blob], fileSafeName, { type: blob.type });
 
-                const result = await uploadFileChunked(file, (progress) => {
-                    setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: progress } : m));
-                });
-                
-                newMsg.attachment = {
-                    fileName: result.fileName,
-                    url: result.url
-                };
+                    const result = await uploadFileChunked(file, (progress) => {
+                        setPendingMessages(prev => prev.map(m => m.id === newMsgId ? { ...m, uploadProgress: progress } : m));
+                    });
+                    
+                    newMsg.attachment = {
+                        fileName: result.fileName,
+                        url: result.url
+                    };
+                }
             }
 
             await sendMessage({ ...newMsg, isPending: undefined, uploadProgress: undefined });
@@ -1452,7 +1462,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                                                 setIsDownloading(prev => ({ ...prev, [msg.id]: true }));
                                                                 setFileProgress(prev => ({ ...prev, [msg.id]: 0 }));
                                                                 
-                                                                await downloadAndOpenFile(msg.attachment!.url, msg.attachment!.fileName, (p) => {
+                                                                const uniqueName = msg.attachment!.url ? (msg.attachment!.url.split('/').pop() || msg.attachment!.fileName) : msg.attachment!.fileName;
+                                                                await downloadAndOpenFile(msg.attachment!.url, uniqueName, (p) => {
                                                                     setFileProgress(prev => ({ ...prev, [msg.id]: p }));
                                                                 });
 
