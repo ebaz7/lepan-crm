@@ -608,14 +608,40 @@ function App() {
         const safeAnnouncements = Array.isArray(announcementsData) ? announcementsData : [];
         
         // --- OPTIMIZATION: ONLY SET IF CHANGED ---
-        setOrders(prev => JSON.stringify(prev) !== JSON.stringify(safeOrders) ? safeOrders : prev);
-        setChatMessages(prev => JSON.stringify(prev) !== JSON.stringify(safeMessages) ? safeMessages : prev); 
+        const areOrdersEqual = (arr1: PaymentOrder[], arr2: PaymentOrder[]) => {
+            if (arr1.length !== arr2.length) return false;
+            for (let i = 0; i < arr1.length; i++) {
+                if (arr1[i].id !== arr2[i].id || arr1[i].status !== arr2[i].status || arr1[i].updatedAt !== arr2[i].updatedAt) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        const areChatEqual = (arr1: ChatMessage[], arr2: ChatMessage[]) => {
+            if (arr1.length !== arr2.length) return false;
+            const checkCount = Math.min(arr1.length, 15);
+            for (let i = 0; i < checkCount; i++) {
+                const idx1 = arr1.length - 1 - i;
+                const idx2 = arr2.length - 1 - i;
+                if (arr1[idx1].id !== arr2[idx2].id || arr1[idx1].timestamp !== arr2[idx2].timestamp || arr1[idx1].isEdited !== arr2[idx2].isEdited || arr1[idx1].readBy?.length !== arr2[idx2].readBy?.length) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        setOrders(prev => areOrdersEqual(prev, safeOrders) ? prev : safeOrders);
+        setChatMessages(prev => areChatEqual(prev, safeMessages) ? prev : safeMessages); 
         
+        const isNotFirstSync = !isFirstLoad.current;
         const lastCheckValue = localStorage.getItem(NOTIFICATION_CHECK_KEY);
         let lastCheck = parseInt(lastCheckValue || '0');
         
-        // If it's the first load or very old check, initialize to now to avoid historic flood
-        if (!lastCheck || (Date.now() - lastCheck > 24 * 60 * 60 * 1000)) {
+        // If it's the very first load or very old check, initialize to now to avoid historic flood
+        if (!isNotFirstSync) {
+            lastCheck = Date.now();
+            localStorage.setItem(NOTIFICATION_CHECK_KEY, lastCheck.toString());
+        } else if (!lastCheck || (Date.now() - lastCheck > 24 * 60 * 60 * 1000)) {
             lastCheck = Date.now();
             localStorage.setItem(NOTIFICATION_CHECK_KEY, lastCheck.toString());
         }
@@ -631,15 +657,35 @@ function App() {
             if (lastMsg.recipient && lastMsg.recipient !== currentUser.username && lastMsg.recipient !== currentUser.fullName) {
                 isRelevantToMe = false;
             }
-            
-            // Only notify if we already have a baseline (it's not the first fetch after startup)
-            const isNotFirstSync = !isFirstLoad.current;
 
-            if (isRelevantToMe && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && lastMsg.senderUsername !== currentUser.username && isNotFirstSync) {
-                if (activeTab !== 'chat') {
-                    let body = lastMsg.message || 'فایل ضمیمه';
-                    if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
-                    addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, 'chat');
+            const CHAT_NOTIFIED_HISTORY_KEY = 'chat_notified_history';
+            const chatHistory = JSON.parse(localStorage.getItem(CHAT_NOTIFIED_HISTORY_KEY) || '[]');
+ 
+            if (isRelevantToMe && lastMsg.senderUsername !== currentUser.username) {
+                if (isNotFirstSync && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && !chatHistory.includes(lastMsg.id)) {
+                    if (activeTab !== 'chat') {
+                        let body = 'پیام جدید';
+                        if (lastMsg.message && lastMsg.message.trim() !== '') {
+                            body = lastMsg.message;
+                            if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
+                        } else if (lastMsg.attachment) {
+                            body = `📎 فایل ضمیمه: ${lastMsg.attachment.fileName || 'بدون نام'}`;
+                        } else if (lastMsg.audioUrl) {
+                            body = '🎤 پیام صوتی جدید';
+                        }
+                        addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, 'chat');
+                        
+                        chatHistory.push(lastMsg.id);
+                        if (chatHistory.length > 500) chatHistory.splice(0, chatHistory.length - 500);
+                        localStorage.setItem(CHAT_NOTIFIED_HISTORY_KEY, JSON.stringify(chatHistory));
+                    }
+                } else if (!isNotFirstSync) {
+                    // Record existing message in first sync so it is never repeated
+                    if (!chatHistory.includes(lastMsg.id)) {
+                        chatHistory.push(lastMsg.id);
+                        if (chatHistory.length > 500) chatHistory.splice(0, chatHistory.length - 500);
+                        localStorage.setItem(CHAT_NOTIFIED_HISTORY_KEY, JSON.stringify(chatHistory));
+                    }
                 }
             }
             lastChatMsgIdRef.current = lastMsg.id;
@@ -721,9 +767,21 @@ function App() {
 
      if (Array.isArray(announcementsList)) {
          const newAnnouncements = announcementsList.filter(a => a.createdAt > lastCheckTime && (!a.targetUsers || a.targetUsers.length === 0 || a.targetUsers.includes(user.id) || a.targetUsers.includes(user.role)));
+         const ANNOUNCEMENT_HISTORY_KEY = 'announcement_notification_history';
+         const annHistory = JSON.parse(localStorage.getItem(ANNOUNCEMENT_HISTORY_KEY) || '[]');
+         let hasNewAnn = false;
+
          newAnnouncements.forEach(ann => {
+             if (annHistory.includes(ann.id)) return;
              addAppNotification('اعلان جدید داشبورد', ann.message);
+             annHistory.push(ann.id);
+             hasNewAnn = true;
          });
+
+         if (hasNewAnn) {
+             if (annHistory.length > 200) annHistory.splice(0, annHistory.length - 200);
+             localStorage.setItem(ANNOUNCEMENT_HISTORY_KEY, JSON.stringify(annHistory));
+         }
      }
   };
 
@@ -880,28 +938,28 @@ function App() {
                         <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300">در حال بروزرسانی دیتابیس...</span>
                     </div>
                 )}
-                <div className={activeTab === 'dashboard' ? 'block h-full' : 'hidden'}>
+                <div className={activeTab === 'dashboard' ? 'block h-full page-transition' : 'hidden'}>
                     <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />
                 </div>
-                {activeTab === 'create' && <CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} />}
-                {activeTab === 'manage' && <ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} />}
-                {activeTab === 'create-exit' && <CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} />}
-                {activeTab === 'manage-invoices' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="INVOICE" />}
-                {activeTab === 'manage-exit' && <ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="EXIT" />}
-                {activeTab === 'warehouse' && <WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} />}
-                {activeTab === 'trade' && <TradeModule currentUser={currentUser} />}
-                {activeTab === 'balances' && <CustomerBalanceModule currentUser={currentUser} />}
-                {activeTab === 'sales' && <SalesCRMModule />}
-                {activeTab === 'products' && <ProductsModule />}
-                {activeTab === 'tickets' && <Tickets />}
-                {activeTab === 'users' && <ManageUsers />}
-                {activeTab === 'settings' && <Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} />}
-                {(activeTab === 'knowledge' || activeTab === 'notes') && <KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} />}
-                {activeTab === 'security' && <SecurityModule currentUser={currentUser} financialYear={financialYear} />}
-                {activeTab === 'meetings' && <MeetingModule currentUser={currentUser} />}
-                {activeTab === 'purchase' && <PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} />}
+                {activeTab === 'create' && <div className="page-transition flex flex-col flex-1 min-h-0"><CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} /></div>}
+                {activeTab === 'manage' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} /></div>}
+                {activeTab === 'create-exit' && <div className="page-transition flex flex-col flex-1 min-h-0"><CreateExitPermit onSuccess={() => setActiveTab('manage-exit')} currentUser={currentUser} /></div>}
+                {activeTab === 'manage-invoices' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="INVOICE" /></div>}
+                {activeTab === 'manage-exit' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageExitPermits currentUser={currentUser} settings={settings} statusFilter={exitPermitStatusFilter} financialYear={financialYear} mode="EXIT" /></div>}
+                {activeTab === 'warehouse' && <div className="page-transition flex flex-col flex-1 min-h-0"><WarehouseModule currentUser={currentUser} settings={settings} initialTab={warehouseInitialTab} financialYear={financialYear} /></div>}
+                {activeTab === 'trade' && <div className="page-transition flex flex-col flex-1 min-h-0"><TradeModule currentUser={currentUser} /></div>}
+                {activeTab === 'balances' && <div className="page-transition flex flex-col flex-1 min-h-0"><CustomerBalanceModule currentUser={currentUser} /></div>}
+                {activeTab === 'sales' && <div className="page-transition flex flex-col flex-1 min-h-0"><SalesCRMModule /></div>}
+                {activeTab === 'products' && <div className="page-transition flex flex-col flex-1 min-h-0"><ProductsModule /></div>}
+                {activeTab === 'tickets' && <div className="page-transition flex flex-col flex-1 min-h-0"><Tickets /></div>}
+                {activeTab === 'users' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageUsers /></div>}
+                {activeTab === 'settings' && <div className="page-transition flex flex-col flex-1 min-h-0"><Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} /></div>}
+                {(activeTab === 'knowledge' || activeTab === 'notes') && <div className="page-transition flex flex-col flex-1 min-h-0"><KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} /></div>}
+                {activeTab === 'security' && <div className="page-transition flex flex-col flex-1 min-h-0"><SecurityModule currentUser={currentUser} financialYear={financialYear} /></div>}
+                {activeTab === 'meetings' && <div className="page-transition flex flex-col flex-1 min-h-0"><MeetingModule currentUser={currentUser} /></div>}
+                {activeTab === 'purchase' && <div className="page-transition flex flex-col flex-1 min-h-0"><PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} /></div>}
                 
-                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
+                <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0 page-transition' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 
                         currentUser={currentUser} 
                         preloadedMessages={chatMessages}

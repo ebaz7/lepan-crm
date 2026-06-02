@@ -442,7 +442,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                     const grp = groups.find(g => g.id === lastMsg.groupId);
                     if (grp) title = `${lastMsg.sender} @ ${grp.name}`;
                 }
-                sendNotification(title, lastMsg.message || 'پیام جدید');
+                
+                let bodyText = 'پیام جدید';
+                if (lastMsg.message && lastMsg.message.trim() !== '') {
+                    bodyText = lastMsg.message;
+                } else if (lastMsg.attachment) {
+                    bodyText = `📎 فایل ضمیمه: ${lastMsg.attachment.fileName || 'بدون نام'}`;
+                } else if (lastMsg.audioUrl) {
+                    bodyText = `🎤 پیام صوتی ${lastMsg.audioDuration ? `(${lastMsg.audioDuration} ثانیه)` : ''}`;
+                }
+                
+                sendNotification(title, bodyText);
             }
         }
     }, [messages.length, mutedChannels, groups]);
@@ -729,8 +739,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             else if (ext === 'mp4') mimeType = 'video/mp4';
                             else if (ext === 'mp3') mimeType = 'audio/mpeg';
 
-                            const b64Response = await fetch(`data:${mimeType};base64,${base64String}`);
-                            blob = await b64Response.blob();
+                            // Safe synchronous base64 to blob conversion instead of fetching data URI
+                            const rawBase64 = base64String.includes(',') ? base64String.split(',')[1] : base64String;
+                            const byteCharacters = atob(rawBase64);
+                            const byteNumbers = new Array(byteCharacters.length);
+                            for (let idx = 0; idx < byteCharacters.length; idx++) {
+                                byteNumbers[idx] = byteCharacters.charCodeAt(idx);
+                            }
+                            const byteArray = new Uint8Array(byteNumbers);
+                            blob = new Blob([byteArray], { type: mimeType });
                         } catch (readErr) {
                             console.error("Capacitor Filesystem readFile fallback failed:", readErr);
                             // @ts-ignore
@@ -738,8 +755,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 // @ts-ignore
                                 targetUrl = window.Capacitor.convertFileSrc(targetUrl);
                             }
-                            const response = await fetch(targetUrl);
-                            blob = await response.blob();
+                            try {
+                                const response = await fetch(targetUrl);
+                                blob = await response.blob();
+                            } catch (secFetchErr: any) {
+                                console.error("Converter fetch also failed:", secFetchErr);
+                                throw new Error(`سیستم در دسترسی به فایل گالری با خطا مواجه شد. لطفاً فایل را از دکمه سنجاق انتخاب فرمایید. جزئیات: ${secFetchErr.message || 'خطای دسترسی'}`);
+                            }
                         }
                     } else {
                         if (targetUrl.startsWith('content://') || targetUrl.startsWith('file://')) {
@@ -749,8 +771,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 targetUrl = window.Capacitor.convertFileSrc(targetUrl);
                             }
                         }
-                        const response = await fetch(targetUrl);
-                        blob = await response.blob();
+                        try {
+                            const response = await fetch(targetUrl);
+                            blob = await response.blob();
+                        } catch (fetchErr: any) {
+                            console.error("Standard native path fetch failed:", fetchErr);
+                            throw new Error(`خطا در بارگذاری موقت فایل برای ارسال: ${fetchErr.message || 'خطای شبکه'}`);
+                        }
                     }
                     
                     const defaultName = currentShared.title || `shared_file_${Date.now()}`;

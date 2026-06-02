@@ -674,7 +674,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
 
              {/* Mobile Bottom Navigation - Attractive Float Pill */}
       <AnimatePresence>
-        {activeTab === 'dashboard' && (
+        {activeTab !== 'chat' && (
           <motion.div 
             initial={{ y: 0, opacity: 1 }}
             animate={{ y: 0, opacity: 1 }}
@@ -719,7 +719,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
         )}
       </AnimatePresence>
 
-      <main className={`flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0 ${activeTab === 'dashboard' ? 'pb-24' : ''}`}>
+      <main className={`flex flex-1 flex-col overflow-hidden relative min-w-0 min-h-0 ${activeTab !== 'chat' ? 'pb-24' : ''}`}>
       {/* Mobile Header */}
         <header className="glass-header p-4 md:hidden no-print flex items-center justify-between shrink-0 relative z-[60] safe-pt py-3 sticky top-0 shadow-lg rounded-b-[2rem]">
             <div className="flex items-center gap-3">

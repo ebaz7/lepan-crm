@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Share, PlusSquare, X, Bell } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getSettings } from '../services/storageService';
@@ -154,10 +155,27 @@ const NotificationController: React.FC<Props> = ({ currentUser }) => {
         });
         
         // Handle incoming notifications while app is open
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        PushNotifications.addListener('pushNotificationReceived', async (notification) => {
             console.log('Push received: ', notification);
-            // You can use LocalNotifications here if you want a custom in-app banner, 
-            // but the system tray notification usually handles it if configured correctly in background.
+            try {
+                // Display foreground notification as a native banner
+                await LocalNotifications.schedule({
+                    notifications: [
+                        {
+                            title: notification.title || 'اعلان جدید',
+                            body: notification.body || (notification.data && notification.data.body) || '',
+                            id: Math.floor(Math.random() * 2147483647),
+                            schedule: { at: new Date(Date.now() + 50) },
+                            extra: notification.data || null,
+                            channelId: 'fcm_default_channel',
+                            smallIcon: 'res://ic_stat_name',
+                            sound: 'default'
+                        }
+                    ]
+                });
+            } catch (e) {
+                console.error('Local Notification foreground display failed', e);
+            }
         });
     }
 
