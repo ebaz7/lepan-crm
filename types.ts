@@ -475,6 +475,7 @@ export interface ExitPermit {
   driverPhone?: string;
   description?: string;
   status: ExitPermitStatus;
+  attachments?: { fileName: string, data: string }[];
   createdAt: number;
   updatedAt?: number;
   approverCeo?: string;

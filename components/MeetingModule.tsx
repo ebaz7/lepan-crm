@@ -1122,41 +1122,56 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         })}
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="p-6 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-black/20 flex justify-between items-center shrink-0">
-                            <div className="flex gap-3">
-                                {viewMeeting.status === MeetingStatus.DRAFT && (
-                                    <button onClick={() => handleSendAnnouncement(viewMeeting)} className="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">
-                                        <Send size={18} className="hidden md:block" /> ارسال اعلان برگزاری
-                                    </button>
-                                )}
-                                {viewMeeting.status === MeetingStatus.APPROVED && (
-                                    <button onClick={() => handleSendMinutes(viewMeeting)} className="px-5 py-3 bg-blue-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
-                                        <MessageSquare size={18} className="hidden md:block" /> ارسال به گروه تولید
-                                    </button>
-                                )}
-                            </div>
-                            <div className="flex gap-2">
+                                
                                 {((viewMeeting.imageAttachments && viewMeeting.imageAttachments.length > 0) || (viewMeeting.pdfAttachments && viewMeeting.pdfAttachments.length > 0)) && (
-                                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-200 dark:border-amber-900/30">
-                                        <span className="text-[10px] font-black text-amber-700 dark:text-amber-400">فایل‌های پیوست:</span>
-                                        <div className="flex gap-1.5">
+                                    <div className="mt-8 pt-6 border-t border-gray-100 dark:border-white/5">
+                                        <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                                            <Paperclip size={20} className="text-amber-500" /> فایل‌های پیوست صورتجلسه
+                                        </h3>
+                                        <div className="flex flex-wrap gap-3">
                                             {viewMeeting.imageAttachments?.map((att, i) => (
-                                                <button key={i} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-blue-600 hover:text-blue-700 transition-colors shadow-sm" title={att.fileName}>
-                                                    <Eye size={14} />
+                                                <button key={`img-${i}`} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-xl flex items-center gap-3 hover:border-blue-300 dark:hover:border-blue-700 transition-colors shadow-sm">
+                                                    <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/40 rounded-lg flex items-center justify-center text-blue-600">
+                                                        <Image size={20} />
+                                                    </div>
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 max-w-[150px] truncate" dir="ltr">{att.fileName}</span>
+                                                        <span className="text-[10px] text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">مشاهده تصویر</span>
+                                                    </div>
                                                 </button>
                                             ))}
                                             {viewMeeting.pdfAttachments?.map((att, i) => (
-                                                <button key={i} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-red-600 hover:text-red-700 transition-colors shadow-sm" title={att.fileName}>
-                                                    <Printer size={14} />
+                                                <button key={`pdf-${i}`} onClick={() => downloadAndOpenFile(att.url, att.fileName)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-xl flex items-center gap-3 hover:border-red-300 dark:hover:border-red-700 transition-colors shadow-sm">
+                                                    <div className="w-10 h-10 bg-red-50 dark:bg-red-900/40 rounded-lg flex items-center justify-center text-red-600">
+                                                        <FileText size={20} />
+                                                    </div>
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 max-w-[150px] truncate" dir="ltr">{att.fileName}</span>
+                                                        <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded">دانلود PDF</span>
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-                                <button onClick={() => setViewMeeting(null)} className="px-8 py-3 rounded-2xl text-xs font-black bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-all active:scale-95">بستن پنجره</button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-black/20 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
+                            <div className="flex gap-3 w-full sm:w-auto">
+                                {viewMeeting.status === MeetingStatus.DRAFT && (
+                                    <button onClick={() => handleSendAnnouncement(viewMeeting)} className="flex-1 sm:flex-none px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">
+                                        <Send size={18} /> ارسال اعلان برگزاری
+                                    </button>
+                                )}
+                                {viewMeeting.status === MeetingStatus.APPROVED && (
+                                    <button onClick={() => handleSendMinutes(viewMeeting)} className="flex-1 sm:flex-none px-5 py-3 bg-blue-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
+                                        <MessageSquare size={18} /> ارسال به گروه تولید
+                                    </button>
+                                )}
+                            </div>
+                            <div className="w-full sm:w-auto">
+                                <button onClick={() => setViewMeeting(null)} className="w-full sm:w-auto px-8 py-3 rounded-2xl text-xs font-black bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-all active:scale-95">بستن پنجره</button>
                             </div>
                         </div>
                     </div>

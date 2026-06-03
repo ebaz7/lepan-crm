@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ExitPermit } from '../types';
-import { X, ShieldCheck, CheckCircle, Smartphone, User, Truck } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle, Smartphone, User, Truck, Paperclip, Trash2 } from 'lucide-react';
 
 interface Props {
   permit: ExitPermit;
   onClose: () => void;
-  onConfirm: (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string }) => void;
+  onConfirm: (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string; attachments: {fileName: string, data: string}[] }) => void;
 }
 
 const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) => {
@@ -13,6 +13,9 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
   const [driverPhone, setDriverPhone] = useState(permit.driverPhone || '');
   const [exitTime, setExitTime] = useState(new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }));
   
+  const [attachments, setAttachments] = useState<{fileName: string, data: string}[]>(permit.attachments || []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Plate parts: [12] [الف] [123] [11]
   const initialPlate = permit.plateNumber || '';
   const plateMatch = initialPlate.match(/^(\d{2})([آابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی])(\d{3})(\d{2})$/);
@@ -24,6 +27,23 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
 
   const plateChars = ['الف', 'ب', 'ت', 'ج', 'د', 'س', 'ص', 'ط', 'ع', 'ق', 'ل', 'م', 'ن', 'و', 'ه', 'ی', 'ژ', 'ت'];
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      files.forEach(file => {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              if (evt.target?.result) {
+                  setAttachments(prev => [...prev, { fileName: file.name, data: evt.target!.result as string }]);
+              }
+          };
+          reader.readAsDataURL(file);
+      });
+  };
+
+  const removeAttachment = (index: number) => {
+      setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = () => {
     const finalPlate = (plate1 && plateChar && plate2 && plateCity) 
         ? `${plate1}${plateChar}${plate2}${plateCity}` 
@@ -33,7 +53,8 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
       driverName,
       driverPhone,
       plateNumber: finalPlate,
-      exitTime: '' // Handled in next stage
+      exitTime: '', // Handled in next stage
+      attachments
     });
   };
 
@@ -116,6 +137,43 @@ const SecurityFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm }) 
                     </div>
                 </div>
             </div>
+          </div>
+          {/* Attachments Section */}
+          <div className="space-y-4">
+              <h3 className="font-bold text-gray-700 flex items-center gap-2 border-r-4 border-emerald-500 pr-3">
+                  <Paperclip size={18} className="text-emerald-500" /> 📎 ضمیمه تصاویر و مدارک (اختیاری)
+              </h3>
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                  <div className="flex flex-col gap-3">
+                      <input 
+                          type="file" 
+                          multiple 
+                          accept="image/*,.pdf" 
+                          className="hidden" 
+                          ref={fileInputRef} 
+                          onChange={handleFileUpload} 
+                      />
+                      <button 
+                          onClick={() => fileInputRef.current?.click()} 
+                          className="w-full py-3 border-2 border-dashed border-emerald-200 text-emerald-600 rounded-xl hover:bg-emerald-50 font-bold flex items-center justify-center gap-2 transition-colors"
+                      >
+                          <Paperclip size={18} /> انتخاب فایل یا تصویر (مثلاً عکس باسکول یا بار)
+                      </button>
+                      
+                      {attachments.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                              {attachments.map((att, idx) => (
+                                  <div key={idx} className="flex justify-between items-center bg-gray-50 border border-gray-100 p-2 rounded-lg text-sm">
+                                      <span className="truncate flex-1 font-mono text-xs" dir="ltr">{att.fileName}</span>
+                                      <button onClick={() => removeAttachment(idx)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded-md shrink-0 ml-2">
+                                          <Trash2 size={14} />
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+              </div>
           </div>
         </div>
 

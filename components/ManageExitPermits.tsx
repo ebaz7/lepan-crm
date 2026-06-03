@@ -213,7 +213,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string }) => {
+    const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string; attachments: {fileName: string, data: string}[] }) => {
         if (!securityFinalize) return;
         const currentPermit = securityFinalize;
         setSecurityFinalize(null);
@@ -226,6 +226,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 driverName: data.driverName,
                 driverPhone: data.driverPhone,
                 plateNumber: data.plateNumber,
+                attachments: data.attachments,
                 approverSecurity: currentUser.fullName,
                 updatedAt: Date.now()
             };

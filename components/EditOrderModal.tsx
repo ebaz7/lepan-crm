@@ -22,13 +22,13 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
   const currentShamsi = getCurrentShamsiDate();
   const initialShamsi = getShamsiDateFromIso(order.date);
   const [shamsiDate, setShamsiDate] = useState({ year: initialShamsi.year, month: initialShamsi.month, day: initialShamsi.day });
-  const [formData, setFormData] = useState({ payee: order.payee, totalAmount: order.totalAmount.toString(), description: order.description, trackingNumber: order.trackingNumber.toString() });
+  const [formData, setFormData] = useState({ payee: order.payee || '', totalAmount: order.totalAmount?.toString() || '0', description: order.description || '', trackingNumber: order.trackingNumber?.toString() || '' });
   const [payingCompany, setPayingCompany] = useState(order.payingCompany || '');
   
   const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
   const [availableBanks, setAvailableBanks] = useState<string[]>([]);
-  const [paymentLines, setPaymentLines] = useState<PaymentDetail[]>(order.paymentDetails || []);
-  const [attachments, setAttachments] = useState<{ fileName: string, data: string }[]>(order.attachments || []);
+  const [paymentLines, setPaymentLines] = useState<PaymentDetail[]>(Array.isArray(order.paymentDetails) ? order.paymentDetails : []);
+  const [attachments, setAttachments] = useState<{ fileName: string, data: string }[]>(Array.isArray(order.attachments) ? order.attachments : []);
   
   // NEW: Editing state for lines
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -76,6 +76,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
 
   useEffect(() => { 
       getSettings().then((s: SystemSettings) => { 
+          if (!s) return;
           setSettings(s);
           const names = s.companies?.map(c => c.name) || s.companyNames || [];
           setAvailableCompanies(names); 
@@ -85,7 +86,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
           } else {
               setAvailableBanks([]); // Default empty
           }
-      }); 
+      }).catch(err => console.error(err)); 
   }, []);
 
   const updateBanksForCompany = (companyName: string, currentSettings: SystemSettings) => {
