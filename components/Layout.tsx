@@ -280,6 +280,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
+  const canSeeCcti = currentUser.role === UserRole.ADMIN || canCreatePayment || canViewPayment;
   const canSeeNotifications = true;
 
   const navItems = [
@@ -287,6 +288,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   ];
   if (canCreatePayment) navItems.push({ id: 'create', label: 'ثبت پرداخت', icon: PlusCircle });
   if (canViewPayment) navItems.push({ id: 'manage', label: 'سوابق پرداخت', icon: ListChecks });
+  if (canSeeCcti) navItems.push({ id: 'ccti', label: 'تبدیل CCTI', icon: FileText });
   if (canCreateExit) navItems.push({ id: 'create-exit', label: 'ثبت خروج', icon: Truck });
   if (canViewInvoices) navItems.push({ id: 'manage-invoices', label: 'مدیریت فاکتورها', icon: FileText });
   if (canViewExit) navItems.push({ id: 'manage-exit', label: 'سوابق خروج', icon: ClipboardList });
@@ -438,6 +440,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                         sales: 'مشتریان',
                                         tickets: 'تیکت‌ها',
                                         users: 'کاربران',
+                                        ccti: 'تبدیل CCTI',
                                         settings: 'تنظیمات'
                                     }[itemId] || itemId;
 

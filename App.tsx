@@ -22,6 +22,7 @@ import ProductsModule from './components/ProductsModule';
 import { Tickets } from './components/Tickets';
 import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { CustomerBalanceModule } from './components/CustomerBalanceModule';
+import CctiConverter from './components/CctiConverter';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers, getRolePermissions } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
@@ -234,7 +235,7 @@ function App() {
                 if (path.includes('invoices') || path.includes('manage-invoices')) return 'manage-invoices';
                 
                 const cleaned = path.replace(/^\//, ''); // remove leading slash
-                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge'];
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti'];
                 if (validTabs.includes(cleaned)) {
                     return cleaned;
                 }
@@ -383,7 +384,7 @@ function App() {
     const path = window.location.pathname.replace(/^\/+/, '');
     const defaultTab = hash || path || 'dashboard';
 
-    if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances'].includes(defaultTab)) {
+    if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'ccti'].includes(defaultTab)) {
         setActiveTabState(defaultTab); 
         safeReplaceState({ tab: defaultTab }, '', `#${defaultTab}`);
     } else { 
@@ -973,6 +974,7 @@ function App() {
                 {activeTab === 'sales' && <div className="page-transition flex flex-col flex-1 min-h-0"><SalesCRMModule /></div>}
                 {activeTab === 'products' && <div className="page-transition flex flex-col flex-1 min-h-0"><ProductsModule /></div>}
                 {activeTab === 'tickets' && <div className="page-transition flex flex-col flex-1 min-h-0"><Tickets /></div>}
+                {activeTab === 'ccti' && <div className="page-transition flex flex-col flex-1 min-h-0"><CctiConverter /></div>}
                 {activeTab === 'users' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageUsers /></div>}
                 {activeTab === 'settings' && <div className="page-transition flex flex-col flex-1 min-h-0"><Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} /></div>}
                 {(activeTab === 'knowledge' || activeTab === 'notes') && <div className="page-transition flex flex-col flex-1 min-h-0"><KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} /></div>}
