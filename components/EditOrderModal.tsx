@@ -19,6 +19,14 @@ interface EditOrderModalProps {
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
 const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+        containerRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, []);
+
   const currentShamsi = getCurrentShamsiDate();
   const initialShamsi = getShamsiDateFromIso(order.date);
   const [shamsiDate, setShamsiDate] = useState({ year: initialShamsi.year, month: initialShamsi.month, day: initialShamsi.day });
@@ -337,7 +345,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div ref={containerRef} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:pt-10 overflow-y-auto w-full">
         {/* Hidden Render for Auto Send */}
         {tempOrderForCapture && (
             <div className="hidden-print-export" style={{position: 'absolute', top: '-9999px', left: '-9999px'}}>

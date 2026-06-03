@@ -1123,7 +1123,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                     </div>
                                 </div>
                                 
-                                {((viewMeeting.imageAttachments && viewMeeting.imageAttachments.length > 0) || (viewMeeting.pdfAttachments && viewMeeting.pdfAttachments.length > 0)) && (
+                                {((viewMeeting.imageAttachments && viewMeeting.imageAttachments.length > 0) || (viewMeeting.pdfAttachments && viewMeeting.pdfAttachments.length > 0) || ((viewMeeting as any).attachments && (viewMeeting as any).attachments.length > 0)) && (
                                     <div className="mt-8 pt-6 border-t border-gray-100 dark:border-white/5">
                                         <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
                                             <Paperclip size={20} className="text-amber-500" /> فایل‌های پیوست صورتجلسه
@@ -1148,6 +1148,17 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     <div className="flex flex-col items-start gap-1">
                                                         <span className="text-xs font-bold text-gray-700 dark:text-gray-300 max-w-[150px] truncate" dir="ltr">{att.fileName}</span>
                                                         <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded">دانلود PDF</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {(viewMeeting as any).attachments?.map((att: any, i: number) => (
+                                                <button key={`leg-${i}`} onClick={() => downloadAndOpenFile(att.url || att.data, att.fileName)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-xl flex items-center gap-3 hover:border-gray-300 dark:hover:border-gray-700 transition-colors shadow-sm">
+                                                    <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900/40 rounded-lg flex items-center justify-center text-gray-600">
+                                                        <Paperclip size={20} />
+                                                    </div>
+                                                    <div className="flex flex-col items-start gap-1">
+                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 max-w-[150px] truncate" dir="ltr">{att.fileName}</span>
+                                                        <span className="text-[10px] text-gray-600 bg-gray-50 dark:bg-gray-900/30 px-2 py-0.5 rounded">دریافت فایل (نسخه قدیم)</span>
                                                     </div>
                                                 </button>
                                             ))}

@@ -19,7 +19,11 @@ interface CctiArchive {
     details: CctiArchiveDetail[];
 }
 
-const CctiConverter: React.FC = () => {
+interface Props {
+    financialYear?: string;
+}
+
+const CctiConverter: React.FC<Props> = ({ financialYear }) => {
     const [file, setFile] = useState<File | null>(null);
     const [excelData, setExcelData] = useState<any[]>([]);
     const [columns, setColumns] = useState<string[]>([]);
@@ -54,7 +58,22 @@ const CctiConverter: React.FC = () => {
     
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Helper for Persian months
+    const PERSIAN_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
     useEffect(() => {
+        // Safe get of Shamsi date since we can't easily import conditionally without modifying more files
+        try {
+            const options: Intl.DateTimeFormatOptions = { calendar: 'persian', year: 'numeric', month: 'numeric' };
+            const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', options).formatToParts(new Date());
+            const m = parseInt(parts.find(p => p.type === 'month')?.value || '1');
+            const y = parseInt(parts.find(p => p.type === 'year')?.value || '1403');
+            const defaultMName = PERSIAN_MONTHS[m - 1] || '';
+            setArchiveMonthName(`حقوق ${defaultMName} ${financialYear || y}`);
+        } catch(e) {
+            setArchiveMonthName(`حقوق ماه جاری`);
+        }
+
         const data = localStorage.getItem('ccti_persons');
         if (data) {
             try {
@@ -89,10 +108,28 @@ const CctiConverter: React.FC = () => {
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
             
             if (data.length > 0) {
-                const headers = (data[0] as unknown[]).map(String);
+                // Smart header detection: find row with expected keywords
+                let headerRowIndex = 0;
+                for (let i = 0; i < Math.min(data.length, 20); i++) {
+                    const rowParams = (data[i] as any[]) || [];
+                    const rowStr = rowParams.join(' ').replace(/\s+/g, ' ');
+                    if (rowStr.includes('مبلغ') || rowStr.includes('نام') || rowStr.includes('حساب') || rowStr.includes('شبا') || rowStr.includes('خالص') || rowStr.includes('کد پرسنلی') || rowStr.includes('کد ملی')) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
+                const rawHeaders = (data[headerRowIndex] as unknown[] || []);
+                const expectedLength = Math.max(...data.slice(headerRowIndex).map((r: any) => r.length));
+                // Fill undefined headers
+                const headers = Array.from({ length: expectedLength }).map((_, idx) => {
+                    const col = rawHeaders[idx];
+                    return col ? String(col).trim() : `ستون_${idx + 1}`;
+                });
+
                 setColumns(headers);
                 
-                const rowData = data.slice(1).filter(r => Array.isArray(r) && r.length > 0);
+                const rowData = data.slice(headerRowIndex + 1).filter((r: unknown) => Array.isArray(r) && r.length > 0);
                 
                 const formattedData = rowData.map((row: any) => {
                     const obj: any = {};
@@ -203,13 +240,18 @@ const CctiConverter: React.FC = () => {
 
         updateSavedPersons(newSaved);
 
-        if (missingCount > 0) {
+        if (missingCount > 0 && generatedCount > 0) {
             const proceed = window.confirm(`${missingCount} ردیف به دلیل نداشتن شماره حساب در فایل نهایی قرار نگرفتند.\nآیا مایل به دریافت فایل هستید؟ (می توانید در بخش مدیریت، شماره حساب آنها را تکمیل کنید)`);
             if (!proceed) return;
         }
 
+        if (generatedCount === 0 && missingCount > 0) {
+             alert(`هیچ ردیف معتبری برای تولید فایل پیدا نشد! ${missingCount} نفر در لیست هستند اما شماره حساب (شبا) برای هیچ‌کدام ثبت نشده است. لطفاً فایل کامل آپلود کنید یا در تب "حافظه پرسنل" شبا را معرفی کنید.`);
+             return;
+        }
+
         if (generatedCount === 0) {
-            alert('هیچ ردیف معتبری برای تولید فایل پیدا نشد.');
+            alert('هیچ ردیف معتبری برای تولید فایل پیدا نشد. لطفاً از صحت ستون‌ها مطمئن شوید.');
             return;
         }
 
