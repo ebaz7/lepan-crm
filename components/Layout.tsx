@@ -363,7 +363,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                              if (n.url) {
                                  let tab = n.url.replace(/^\//, ''); // Remove leading slash
                                  setActiveTab(tab);
-                                 setMenuOpen(false);
+                                 setShowMobileMenu(false);
                              }
                          }}
                          className={`p-3 border-b hover:bg-gray-50 text-right last:border-0 relative group cursor-pointer ${n.read ? 'opacity-60' : ''}`}>

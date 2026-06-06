@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Download, CheckCircle, AlertTriangle, Settings2, Users, Search, Trash2, Edit2, Check, X, Archive, Eye, Printer, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-import { User, SystemSettings, UserRole } from '../types';
-import { getRolePermissions } from '../services/authService';
+import { User } from '../types';
 
 interface CctiArchiveDetail {
     id: string;
@@ -25,15 +24,15 @@ interface CctiArchive {
 interface Props {
     financialYear?: string;
     currentUser: User;
-    settings?: SystemSettings | null;
+    canManageArchive?: boolean;
 }
 
-const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, settings }) => {
-    const perms = settings ? getRolePermissions(currentUser.role, settings, currentUser) : {};
-    const canManageArchive = currentUser.role === UserRole.ADMIN || perms.canManageCctiArchive === true;
+const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageArchive = false }) => {
     const [file, setFile] = useState<File | null>(null);
     const [excelData, setExcelData] = useState<any[]>([]);
     const [columns, setColumns] = useState<string[]>([]);
+    const [archives, setArchives] = useState<CctiArchive[]>([]);
+    const [selectedArchiveView, setSelectedArchiveView] = useState<CctiArchive | null>(null);
     
     // Mapping state
     const [idCol, setIdCol] = useState<string>(''); // Used for referencing saved info
@@ -66,7 +65,6 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, settings }
     const kardexPersons = Array.from(new Set(archives.flatMap(a => a.details.map(d => d.name || d.id))));
     const filteredKardexPersons = kardexPersons.filter(p => p.includes(kardexSearch));
     const [savedPersons, setSavedPersons] = useState<Record<string, { account: string, name: string }>>({});
-    const [archives, setArchives] = useState<CctiArchive[]>([]);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -78,7 +76,6 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, settings }
     const [expectedTotalAmount, setExpectedTotalAmount] = useState<string>('');
     
     const [manualRows, setManualRows] = useState<{id: string, name: string, account: string, amount: string}[]>([]);
-    const [selectedArchiveView, setSelectedArchiveView] = useState<CctiArchive | null>(null);
     const [manualAmount, setManualAmount] = useState('');
     
     // For manage tab manual entry
