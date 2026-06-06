@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SystemSettings, UserRole, RolePermissions, CustomRole } from '../../types';
-import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList, ShoppingCart, Pencil, Check } from 'lucide-react';
+import { ShieldCheck, Truck, Warehouse, Lock, ChevronDown, ChevronUp, Landmark, Trash2, CheckSquare, Square, Info, ClipboardList, ShoppingCart, Pencil, Check, FileText } from 'lucide-react';
 
 interface Props {
     settings: SystemSettings;
@@ -101,6 +101,16 @@ const PERMISSION_GROUPS = [
         items: [
             { id: 'canViewCustomerBalances', label: 'مشاهده لیست مانده حساب‌های مالی مشتریان' },
             { id: 'canImportCustomerBalances', label: 'بارگذاری/واردات فایل اکسل تفصیلی مانده حساب‌ها' }
+        ] 
+    },
+    { 
+        id: 'ccti', 
+        title: 'ماژول تبدیل CCTI', 
+        icon: FileText, 
+        color: 'pink', 
+        items: [
+            { id: 'canAccessCcti', label: 'دسترسی به بخش تبدیل شبا و تولید فایل پایا' },
+            { id: 'canManageCctiArchive', label: 'مدیریت و حذف بایگانی فایل‌های CCTI' }
         ] 
     },
     { 

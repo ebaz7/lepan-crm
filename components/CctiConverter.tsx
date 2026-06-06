@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Download, CheckCircle, AlertTriangle, Settings2, Users, Search, Trash2, Edit2, Check, X, Archive, Eye } from 'lucide-react';
+import { Upload, FileText, Download, CheckCircle, AlertTriangle, Settings2, Users, Search, Trash2, Edit2, Check, X, Archive, Eye, Printer, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+import { User, SystemSettings, UserRole } from '../types';
+import { getRolePermissions } from '../services/authService';
 
 interface CctiArchiveDetail {
     id: string;
@@ -21,9 +24,13 @@ interface CctiArchive {
 
 interface Props {
     financialYear?: string;
+    currentUser: User;
+    settings?: SystemSettings | null;
 }
 
-const CctiConverter: React.FC<Props> = ({ financialYear }) => {
+const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, settings }) => {
+    const perms = settings ? getRolePermissions(currentUser.role, settings, currentUser) : {};
+    const canManageArchive = currentUser.role === UserRole.ADMIN || perms.canManageCctiArchive === true;
     const [file, setFile] = useState<File | null>(null);
     const [excelData, setExcelData] = useState<any[]>([]);
     const [columns, setColumns] = useState<string[]>([]);
@@ -39,6 +46,25 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
     const [archiveMonthName, setArchiveMonthName] = useState<string>('');
     
     const [activeTab, setActiveTab] = useState<'convert' | 'manage' | 'archive'>('convert');
+    const [archiveTab, setArchiveTab] = useState<'list' | 'kardex'>('list');
+    const [kardexSearch, setKardexSearch] = useState('');
+    const [selectedKardexPerson, setSelectedKardexPerson] = useState<string | null>(null);
+
+    const handleDeleteArchive = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm('آیا از حذف این بایگانی مطمئن هستید؟ این عملیات غیرقابل بازگشت است.')) {
+            const newArchives = archives.filter(a => a.id !== id);
+            setArchives(newArchives);
+            localStorage.setItem('ccti_archives', JSON.stringify(newArchives));
+            if (selectedArchiveView?.id === id) {
+                setSelectedArchiveView(null);
+            }
+        }
+    };
+
+    // Calculate Unique Persons for Kardex
+    const kardexPersons = Array.from(new Set(archives.flatMap(a => a.details.map(d => d.name || d.id))));
+    const filteredKardexPersons = kardexPersons.filter(p => p.includes(kardexSearch));
     const [savedPersons, setSavedPersons] = useState<Record<string, { account: string, name: string }>>({});
     const [archives, setArchives] = useState<CctiArchive[]>([]);
     
@@ -728,88 +754,253 @@ ${xmlTxLines.join('\\n')}
                 
                 {activeTab === 'archive' && (
                     <div className="space-y-4 animate-fade-in h-full flex flex-col">
-                        {!selectedArchiveView ? (
+                        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+                            <button 
+                                onClick={() => { setArchiveTab('list'); setSelectedArchiveView(null); }}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${archiveTab === 'list' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                            >
+                                لیست فایل‌ها
+                            </button>
+                            <button 
+                                onClick={() => { setArchiveTab('kardex'); setSelectedArchiveView(null); }}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${archiveTab === 'kardex' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                            >
+                                کاردکس اشخاص
+                            </button>
+                        </div>
+
+                        {archiveTab === 'list' && (
                             <>
-                                <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 shadow-sm mb-4 bg-gradient-to-l from-transparent to-blue-50 dark:to-blue-900/20">
-                                    <h3 className="font-black text-gray-800 dark:text-gray-200 text-lg flex items-center gap-2"><Archive className="text-blue-500" /> بایگانی پرداخت‌های حقوق</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">لیست فایل‌های صادر شده قبلی در اینجا قابل مشاهده و بازبینی هستند.</p>
-                                </div>
-                                <div className="flex-1 overflow-y-auto space-y-3 min-h-[300px] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 bg-gray-50/50 dark:bg-black/20 custom-scrollbar">
-                                    {archives.length === 0 ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 font-bold py-12">
-                                            <Archive size={48} className="mb-4 opacity-50" />
-                                            بایگانی خالی است
+                                {!selectedArchiveView ? (
+                                    <>
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 shadow-sm mb-4 bg-gradient-to-l from-transparent to-blue-50 dark:to-blue-900/20">
+                                            <h3 className="font-black text-gray-800 dark:text-gray-200 text-lg flex items-center gap-2"><Archive className="text-blue-500" /> بایگانی پرداخت‌های حقوق</h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">لیست فایل‌های صادر شده قبلی در اینجا قابل مشاهده و بازبینی هستند.</p>
                                         </div>
-                                    ) : (
-                                        archives.map(arch => (
-                                            <div key={arch.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
-                                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 text-lg">{arch.monthName}</h4>
-                                                    <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
-                                                        <span>{new Date(arch.date).toLocaleDateString('fa-IR')}</span>
-                                                        <span>{arch.personCount} پرسنل</span>
-                                                        <span>جمع کل: {arch.totalAmount.toLocaleString()} ریال</span>
-                                                    </div>
+                                        <div className="flex-1 overflow-y-auto space-y-3 min-h-[300px] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 bg-gray-50/50 dark:bg-black/20 custom-scrollbar">
+                                            {archives.length === 0 ? (
+                                                <div className="h-full flex flex-col items-center justify-center text-gray-400 font-bold py-12">
+                                                    <Archive size={48} className="mb-4 opacity-50" />
+                                                    بایگانی خالی است
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button 
-                                                        onClick={() => setSelectedArchiveView(arch)}
-                                                        className="flex items-center gap-2 bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
-                                                    >
-                                                        <Eye size={16} /> نمایش جزئیات
-                                                    </button>
+                                            ) : (
+                                                archives.map(arch => (
+                                                    <div key={arch.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md">
+                                                        <div>
+                                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-lg">{arch.monthName}</h4>
+                                                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                                                                <span className="flex items-center gap-1"><Calendar size={12}/> {new Date(arch.date).toLocaleDateString('fa-IR')}</span>
+                                                                <span className="flex items-center gap-1"><Users size={12}/> {arch.personCount} پرسنل</span>
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">جمع کل: {arch.totalAmount.toLocaleString()} ریال</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {canManageArchive && (
+                                                                <button 
+                                                                    onClick={(e) => handleDeleteArchive(arch.id, e)}
+                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                    title="حذف بایگانی"
+                                                                >
+                                                                    <Trash2 size={18} />
+                                                                </button>
+                                                            )}
+                                                            <button 
+                                                                onClick={() => setSelectedArchiveView(arch)}
+                                                                className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                                            >
+                                                                <Eye size={16} /> نمایش جزئیات
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col h-full animate-fade-in relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-4 print:p-0 print:border-none print:shadow-none">
+                                        <div className="flex items-start justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-700 flex-wrap gap-4">
+                                            <div>
+                                                <h3 className="font-black text-gray-800 dark:text-gray-200 text-xl">{selectedArchiveView.monthName}</h3>
+                                                <div className="flex gap-6 text-sm text-gray-500 mt-2">
+                                                    <span>تعداد: <strong className="text-gray-800 dark:text-gray-200">{selectedArchiveView.personCount} نفر</strong></span>
+                                                    <span>جمع پرداختی: <strong className="text-green-600 dark:text-green-400">{selectedArchiveView.totalAmount.toLocaleString()} ریال</strong></span>
+                                                    <span>تاریخ صدور: <strong className="text-gray-800 dark:text-gray-200">{new Date(selectedArchiveView.date).toLocaleDateString('fa-IR')}</strong></span>
                                                 </div>
                                             </div>
-                                        ))
+                                            <div className="flex items-center gap-2 hidden-print">
+                                                <button 
+                                                    onClick={() => window.print()}
+                                                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                                >
+                                                    <Printer size={16} /> چاپ
+                                                </button>
+                                                <button 
+                                                    onClick={() => setSelectedArchiveView(null)}
+                                                    className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                                >
+                                                    بازگشت
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar print:overflow-visible">
+                                            <table className="w-full text-sm text-right border-collapse print:text-xs">
+                                                <thead>
+                                                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                                                        <th className="py-3 px-4 font-bold rounded-tr-lg">ردیف</th>
+                                                        <th className="py-3 px-4 font-bold">نام و نام خانوادگی</th>
+                                                        <th className="py-3 px-4 font-bold">شماره شبا (تخصیص یافته)</th>
+                                                        <th className="py-3 px-4 font-bold text-left rounded-tl-lg">مبلغ پرداختی (ریال)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedArchiveView.details && selectedArchiveView.details.map((detail, idx) => (
+                                                        <tr key={idx} className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                                            <td className="py-3 px-4 text-gray-500">{idx + 1}</td>
+                                                            <td className="py-3 px-4 font-bold text-gray-800 dark:text-gray-200">{detail.name || detail.id}</td>
+                                                            <td className="py-3 px-4 text-gray-600 dark:text-gray-400 font-mono text-xs">{detail.account}</td>
+                                                            <td className="py-3 px-4 font-bold text-green-600 dark:text-green-400 text-left dir-ltr">{detail.amount.toLocaleString()}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                const blob = new Blob([selectedArchiveView.fileContent], { type: 'text/plain;charset=utf-8;' });
+                                                const link = document.createElement("a");
+                                                const url = URL.createObjectURL(blob);
+                                                link.setAttribute("href", url);
+                                                link.setAttribute("download", `salary_${selectedArchiveView.monthName}.ccti`);
+                                                link.style.visibility = 'hidden';
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                            className="mt-4 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95 hidden-print"
+                                        >
+                                            <Download size={20} />
+                                            دانلود مجدد فایل CCTI صادر شده
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {archiveTab === 'kardex' && (
+                            <div className="flex flex-col h-full animate-fade-in bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-4 print:p-0 print:border-none print:shadow-none">
+                                <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-4 hidden-print">
+                                    <h3 className="font-black text-gray-800 dark:text-gray-200 text-lg flex items-center gap-2"><FileText className="text-emerald-500" /> کاردکس پرداخت حقوق اشخاص</h3>
+                                    {selectedKardexPerson && (
+                                        <button 
+                                            onClick={() => setSelectedKardexPerson(null)}
+                                            className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                        >
+                                            بازگشت به لیست
+                                        </button>
                                     )}
                                 </div>
-                            </>
-                        ) : (
-                            <div className="flex flex-col h-full animate-fade-in">
-                                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm mb-4 flex items-center justify-between">
-                                    <div>
-                                        <h3 className="font-black text-gray-800 dark:text-gray-200 text-lg">{selectedArchiveView.monthName}</h3>
-                                        <div className="text-sm text-gray-500 mt-1">
-                                            {selectedArchiveView.personCount} نفر | جمع مبالغ: <span className="font-bold text-gray-700 dark:text-gray-300">{selectedArchiveView.totalAmount.toLocaleString()} ریال</span>
+
+                                {!selectedKardexPerson ? (
+                                    <div className="flex flex-col h-full space-y-4">
+                                        <div className="relative hidden-print">
+                                            <input 
+                                                type="text" 
+                                                placeholder="جستجوی شخص..." 
+                                                value={kardexSearch}
+                                                onChange={e => setKardexSearch(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            />
+                                            <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                                {filteredKardexPersons.length === 0 ? (
+                                                    <div className="col-span-full py-10 text-center text-gray-400 font-bold">شخصی با این نام یافت نشد.</div>
+                                                ) : (
+                                                    filteredKardexPersons.map(person => {
+                                                        const personHistory = archives.map(a => {
+                                                            const detail = a.details.find(d => (d.name || d.id) === person);
+                                                            return detail ? { monthTitle: a.monthName, amount: detail.amount, date: a.date } : null;
+                                                        }).filter(Boolean);
+                                                        const totalAmount = personHistory.reduce((sum, item) => sum + (item?.amount || 0), 0);
+
+                                                        return (
+                                                            <div 
+                                                                key={person} 
+                                                                onClick={() => setSelectedKardexPerson(person)}
+                                                                className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all group"
+                                                            >
+                                                                <h4 className="font-bold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 transition-colors">{person}</h4>
+                                                                <div className="flex justify-between items-end mt-3">
+                                                                    <div className="text-xs text-gray-500">طی {personHistory.length} ماه صادر شده</div>
+                                                                    <div className="text-sm font-bold text-green-600 dark:text-green-500">{totalAmount.toLocaleString()} ریال</div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={() => setSelectedArchiveView(null)}
-                                        className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
-                                    >
-                                        بازگشت
-                                    </button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto space-y-2 border border-blue-100 dark:border-blue-900/30 rounded-2xl p-4 bg-gray-50/50 dark:bg-black/20 custom-scrollbar">
-                                    {selectedArchiveView.details && selectedArchiveView.details.map((detail, idx) => (
-                                        <div key={idx} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm shadow-sm transition-all hover:border-blue-200 dark:hover:border-blue-800">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-gray-800 dark:text-gray-200">{detail.name || detail.id}</span>
-                                                <span className="text-gray-500 font-mono text-xs">{detail.account}</span>
+                                ) : (
+                                    <div className="flex flex-col h-full animate-fade-in relative">
+                                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+                                            <div>
+                                                <h3 className="font-black text-gray-900 dark:text-white text-2xl mb-1">کاردکس پرداختی: {selectedKardexPerson}</h3>
+                                                <p className="text-sm text-gray-500">تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')} | سال مالی وابسته</p>
                                             </div>
-                                            <div className="font-bold text-green-600 dark:text-green-400 border border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-900/10 px-3 py-1 rounded-md">
-                                                {detail.amount.toLocaleString()} 
-                                            </div>
+                                            <button 
+                                                onClick={() => window.print()}
+                                                className="hidden-print flex items-center gap-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                                            >
+                                                <Printer size={18} /> چاپ کاردکس
+                                            </button>
                                         </div>
-                                    ))}
-                                </div>
-                                <button 
-                                    onClick={() => {
-                                        const blob = new Blob([selectedArchiveView.fileContent], { type: 'text/plain;charset=utf-8;' });
-                                        const link = document.createElement("a");
-                                        const url = URL.createObjectURL(blob);
-                                        link.setAttribute("href", url);
-                                        link.setAttribute("download", `salary_${selectedArchiveView.monthName}.ccti`);
-                                        link.style.visibility = 'hidden';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                    }}
-                                    className="mt-4 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95"
-                                >
-                                    <Download size={20} />
-                                    دانلود مجدد فایل CCTI صادر شده
-                                </button>
+
+                                        <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar print:overflow-visible">
+                                            {(() => {
+                                                const history = archives
+                                                    .map(a => {
+                                                        const detail = a.details.find(d => (d.name || d.id) === selectedKardexPerson);
+                                                        return detail ? { monthTitle: a.monthName, amount: detail.amount, date: a.date, account: detail.account } : null;
+                                                    })
+                                                    .filter(Boolean)
+                                                    .sort((a, b) => (a!.date - b!.date)); // Ascending
+                                                
+                                                const grandTotal = history.reduce((sum, item) => sum + item!.amount, 0);
+
+                                                return (
+                                                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden print:border-none">
+                                                        <table className="w-full text-sm text-right border-collapse">
+                                                            <thead>
+                                                                <tr className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+                                                                    <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-gray-700">ردیف</th>
+                                                                    <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-gray-700">دوره حقوق (نام فایل)</th>
+                                                                    <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-gray-700">شماره حساب (شبا) مقصد</th>
+                                                                    <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-gray-700 text-left">مبلغ پرداختی (ریال)</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {history.map((record, index) => (
+                                                                    <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                                        <td className="py-3 px-4 text-gray-500">{index + 1}</td>
+                                                                        <td className="py-3 px-4 font-bold text-gray-800 dark:text-gray-200">{record!.monthTitle}</td>
+                                                                        <td className="py-3 px-4 text-gray-500 font-mono text-xs">{record!.account}</td>
+                                                                        <td className="py-3 px-4 font-bold text-green-600 dark:text-green-400 text-left dir-ltr">{record!.amount.toLocaleString()}</td>
+                                                                    </tr>
+                                                                ))}
+                                                                <tr className="bg-blue-50 dark:bg-blue-900/20 print:bg-gray-100">
+                                                                    <td colSpan={3} className="py-4 px-4 font-black text-left text-gray-800 dark:text-gray-200">جمع کل پرداختی‌ها:</td>
+                                                                    <td className="py-4 px-4 font-black text-left text-blue-700 dark:text-blue-400 text-lg dir-ltr">{grandTotal.toLocaleString()} ریال</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

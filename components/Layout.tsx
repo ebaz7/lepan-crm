@@ -280,7 +280,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canSeeKnowledgeBase = currentUser.role === UserRole.ADMIN || perms.canViewKnowledgeBase === true || perms.canManageKnowledgeBase === true;
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
-  const canSeeCcti = currentUser.role === UserRole.ADMIN || canCreatePayment || canViewPayment;
+  const canSeeCcti = currentUser.role === UserRole.ADMIN || perms.canAccessCcti === true;
   const canSeeNotifications = true;
 
   const navItems = [

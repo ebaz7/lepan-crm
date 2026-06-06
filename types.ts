@@ -131,6 +131,8 @@ export interface RolePermissions {
   canViewExitArchive?: boolean;
   canEditExitArchive?: boolean;
   canManageWarehouse?: boolean;
+  canAccessCcti?: boolean;
+  canManageCctiArchive?: boolean;
   canViewWarehouseReports?: boolean;
   canApproveBijak?: boolean;
   canViewSecurity?: boolean;
