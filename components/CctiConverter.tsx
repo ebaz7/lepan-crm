@@ -47,6 +47,10 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
     const [editAccount, setEditAccount] = useState('');
     const [editName, setEditName] = useState('');
     
+    // New states for validation and dynamic IBAN
+    const [sourceIban, setSourceIban] = useState<string>(() => localStorage.getItem('ccti_source_iban') || 'IR790110000000200043622006');
+    const [expectedTotalAmount, setExpectedTotalAmount] = useState<string>('');
+    
     const [manualRows, setManualRows] = useState<{id: string, name: string, account: string, amount: string}[]>([]);
     const [selectedArchiveView, setSelectedArchiveView] = useState<CctiArchive | null>(null);
     const [manualAmount, setManualAmount] = useState('');
@@ -269,13 +273,26 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
             return;
         }
 
+        if (expectedTotalAmount && Number(expectedTotalAmount.replace(/,/g, '')) !== totalAmount) {
+            const expectedNum = Number(expectedTotalAmount.replace(/,/g, ''));
+            alert(`جمع مبالغ وارد شده (${expectedNum.toLocaleString()} ریال) با جمع کل ردیف‌ها (${totalAmount.toLocaleString()} ریال) مغایرت دارد.\n\nاختلاف: ${Math.abs(expectedNum - totalAmount).toLocaleString()} ریال`);
+            return;
+        }
+
         if (missingCount > 0) {
             const proceed = window.confirm(`${missingCount} ردیف مجاز به دلیل نداشتن شماره شبا به صورت EMPTY ایجاد شدند.\nآیا مایل به دریافت فایل هستید؟`);
             if (!proceed) return;
         }
 
-        const msgId = `IR790110000000200043622006${Date.now().toString().slice(-9)}`;
-        const groupIban = 'IR790110000000200043622006'; 
+        localStorage.setItem('ccti_source_iban', sourceIban);
+
+        let safeSourceIban = sourceIban.toUpperCase();
+        if (!safeSourceIban.startsWith('IR') && safeSourceIban.length > 0) {
+            safeSourceIban = 'IR' + safeSourceIban;
+        }
+        
+        const msgId = `${safeSourceIban}${Date.now().toString().slice(-9)}`;
+        const groupIban = safeSourceIban; 
         const companyName = 'شرکت تولیدی لپان بافت';
 
         const xmlContent = `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
@@ -314,7 +331,7 @@ ${xmlTxLines.join('\\n')}
   </CstmrCdtTrfInitn>
 </Document>`;
 
-        const fileName = `salary_${archiveMonthName || new Date().getTime()}.xml`;
+        const fileName = `${safeSourceIban || `salary_${archiveMonthName || new Date().getTime()}`}.ccti`;
 
         // Save archive
         const newArchive: CctiArchive = {
@@ -331,7 +348,7 @@ ${xmlTxLines.join('\\n')}
         localStorage.setItem('ccti_archives', JSON.stringify(newArchivesList));
         setArchiveMonthName('');
 
-        const blob = new Blob([xmlContent], { type: 'text/xml;charset=utf-8;' });
+        const blob = new Blob([xmlContent], { type: 'text/plain;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
@@ -517,6 +534,34 @@ ${xmlTxLines.join('\\n')}
                                             <option value="\t">تب ( Tab )</option>
                                             <option value="|">خط عمودی ( | )</option>
                                         </select>
+                                    </div>
+                                    
+                                    <div className="space-y-4 md:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-6 mt-2">
+                                        <h4 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2"><Settings2 size={18}/> تنظیمات فایل خروجی</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">شماره شبا حساب مبدا (برداشت) <span className="text-red-500">*</span></label>
+                                                <input 
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dir-ltr text-left font-mono"
+                                                    value={sourceIban}
+                                                    placeholder="IR..."
+                                                    onChange={(e) => setSourceIban(e.target.value)}
+                                                />
+                                                <p className="text-[10px] text-gray-500 font-bold pr-1">این شماره دقیقاً نام فایل خروجی شما خواهد بود.</p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">جمع کل مبلغ حقوق‌ها (برای بررسی صحت کسر) <span className="text-red-500">*</span></label>
+                                                <input 
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dir-ltr text-left font-mono"
+                                                    value={expectedTotalAmount}
+                                                    placeholder="ریال"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(/[^0-9]/g, '');
+                                                        setExpectedTotalAmount(val ? Number(val).toLocaleString() : '');
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
