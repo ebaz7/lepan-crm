@@ -356,20 +356,31 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                     هیچ پیامی نیست
                 </div>
             ) : (
-                notifications.map(n => (
-                    <div key={n.id} className="p-3 border-b hover:bg-gray-50 text-right last:border-0 relative group">
+                notifications.map((n: any) => (
+                    <div key={n.id} 
+                         onClick={() => {
+                             onRemoveNotification(n.id);
+                             if (n.url) {
+                                 let tab = n.url.replace(/^\//, ''); // Remove leading slash
+                                 setActiveTab(tab);
+                                 setMenuOpen(false);
+                             }
+                         }}
+                         className={`p-3 border-b hover:bg-gray-50 text-right last:border-0 relative group cursor-pointer ${n.read ? 'opacity-60' : ''}`}>
                         <div className="flex justify-between items-start pl-6">
                             <div className="text-xs font-bold text-gray-800 mb-1">{n.title}</div>
                             <div className="text-[9px] text-gray-400 whitespace-nowrap">{new Date(n.timestamp).toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}</div>
                         </div>
                         <div className="text-xs text-gray-600 leading-tight">{n.message}</div>
+                        {!n.read && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); onRemoveNotification(n.id); }} 
-                            className="absolute top-3 left-2 text-gray-300 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-colors"
-                            title="حذف پیام"
+                            className="absolute top-3 left-2 text-gray-300 hover:text-green-500 p-1 rounded-full hover:bg-green-50 transition-colors"
+                            title="علامت خوانده شده"
                         >
-                            <X size={14}/>
+                            <Check size={14}/>
                         </button>
+                        )}
                     </div>
                 ))
             )}

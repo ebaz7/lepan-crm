@@ -68,8 +68,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
             const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', options).formatToParts(new Date());
             const m = parseInt(parts.find(p => p.type === 'month')?.value || '1');
             const y = parseInt(parts.find(p => p.type === 'year')?.value || '1403');
-            const defaultMName = PERSIAN_MONTHS[m - 1] || '';
-            setArchiveMonthName(`حقوق ${defaultMName} ${financialYear || y}`);
+            setArchiveMonthName(`حقوق ماه ${m} سال ${financialYear || y}`);
         } catch(e) {
             setArchiveMonthName(`حقوق ماه جاری`);
         }
@@ -166,24 +165,35 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
             return;
         }
 
-        let output = '';
         let missingCount = 0;
         let generatedCount = 0;
         let totalAmount = 0;
         const detailsArchive: CctiArchiveDetail[] = [];
         
         const newSaved = { ...savedPersons };
+        const xmlTxLines: string[] = [];
 
-        excelData.forEach(row => {
-            const id = row[idCol] ? String(row[idCol]).trim() : '';
+        // Helper for XML Date
+        let shamsiDateStr = '1403-01-01';
+        let shamsiDateTimeStr = '1403-01-01T12:00:00';
+        try {
+            const options: Intl.DateTimeFormatOptions = { calendar: 'persian', year: 'numeric', month: '2-digit', day: '2-digit' };
+            const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', options).formatToParts(new Date());
+            const y = parts.find(p => p.type === 'year')?.value || '1403';
+            const m = parts.find(p => p.type === 'month')?.value || '01';
+            const d = parts.find(p => p.type === 'day')?.value || '01';
+            const h = new Date().getHours().toString().padStart(2, '0');
+            const min = new Date().getMinutes().toString().padStart(2, '0');
+            const sec = new Date().getSeconds().toString().padStart(2, '0');
+            shamsiDateStr = `${y}-${m}-${d}`;
+            shamsiDateTimeStr = `${y}-${m}-${d}T${h}:${min}:${sec}`;
+        } catch(e) {}
+
+        const processRow = (id: string, amount: string, accountOrig: string, nameOrig: string) => {
             if (!id) return;
-            
-            let amount = row[amountCol] || '';
-            if (typeof amount === 'string') amount = amount.replace(/,/g, '');
-            
-            let account = accountCol ? String(row[accountCol] || '').trim() : '';
-            let name = nameCol ? String(row[nameCol] || '').trim() : '';
-            
+            let account = accountOrig;
+            let name = nameOrig;
+
             if (account) {
                 newSaved[id] = { account, name: name || newSaved[id]?.name || id };
             } else {
@@ -193,69 +203,118 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
                      newSaved[id] = { ...newSaved[id], name };
                 }
             }
-            
-            if (account) {
-                let line = `${account}${delimiter}${amount}`;
-                if (name) line += `${delimiter}${name}`;
-                output += line + '\r\n';
-                generatedCount++;
-                const nAmount = Number(amount) || 0;
-                totalAmount += nAmount;
-                detailsArchive.push({ id, name, account, amount: nAmount });
-            } else {
+
+            if (!account) {
                 missingCount++;
+                account = 'EMPTY';
             }
+
+            let iban = account.toUpperCase();
+            if (iban !== 'EMPTY' && !iban.startsWith('IR')) {
+                iban = 'IR' + account;
+            }
+
+            generatedCount++;
+            const nAmount = Number(amount) || 0;
+            totalAmount += nAmount;
+            detailsArchive.push({ id, name, account, amount: nAmount });
+
+            xmlTxLines.push(`      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>EMPTY</InstrId>
+          <EndToEndId>EMPTY</EndToEndId>
+        </PmtId>
+        <Amt>
+          <InstdAmt Ccy="IRR">${nAmount}</InstdAmt>
+        </Amt>
+        <Cdtr>
+          <Nm>${name}</Nm>
+          <Id>
+            <PrvtId>
+              <Othr>
+                <Id>EMPTY</Id>
+              </Othr>
+            </PrvtId>
+          </Id>
+        </Cdtr>
+        <CdtrAcct>
+          <Id>
+            <IBAN>${iban}</IBAN>
+          </Id>
+        </CdtrAcct>
+      </CdtTrfTxInf>`);
+        };
+
+        excelData.forEach(row => {
+            const id = row[idCol] ? String(row[idCol]).trim() : '';
+            let amount = row[amountCol] || '';
+            if (typeof amount === 'string') amount = amount.replace(/,/g, '');
+            let account = accountCol ? String(row[accountCol] || '').trim() : '';
+            let name = nameCol ? String(row[nameCol] || '').trim() : '';
+            processRow(id, amount, account, name);
         });
         
         manualRows.forEach(row => {
             const id = row.id.trim();
-            if (!id) return;
-            
             let amount = String(row.amount).replace(/,/g, '');
             let account = row.account.trim();
             let name = row.name.trim();
-
-            if (account) {
-                newSaved[id] = { account, name: name || newSaved[id]?.name || id };
-            } else {
-                account = newSaved[id]?.account || '';
-                name = name || newSaved[id]?.name || id;
-                if (name && !newSaved[id]?.name) {
-                     newSaved[id] = { ...newSaved[id], name };
-                }
-            }
-
-            if (account) {
-                let line = `${account}${delimiter}${amount}`;
-                if (name) line += `${delimiter}${name}`;
-                output += line + '\r\n';
-                generatedCount++;
-                const nAmount = Number(amount) || 0;
-                totalAmount += nAmount;
-                detailsArchive.push({ id, name, account, amount: nAmount });
-            } else {
-                missingCount++;
-            }
+            processRow(id, amount, account, name);
         });
 
         updateSavedPersons(newSaved);
-
-        if (missingCount > 0 && generatedCount > 0) {
-            const proceed = window.confirm(`${missingCount} ردیف به دلیل نداشتن شماره حساب در فایل نهایی قرار نگرفتند.\nآیا مایل به دریافت فایل هستید؟ (می توانید در بخش مدیریت، شماره حساب آنها را تکمیل کنید)`);
-            if (!proceed) return;
-        }
-
-        if (generatedCount === 0 && missingCount > 0) {
-             alert(`هیچ ردیف معتبری برای تولید فایل پیدا نشد! ${missingCount} نفر در لیست هستند اما شماره حساب (شبا) برای هیچ‌کدام ثبت نشده است. لطفاً فایل کامل آپلود کنید یا در تب "حافظه پرسنل" شبا را معرفی کنید.`);
-             return;
-        }
 
         if (generatedCount === 0) {
             alert('هیچ ردیف معتبری برای تولید فایل پیدا نشد. لطفاً از صحت ستون‌ها مطمئن شوید.');
             return;
         }
 
-        const fileName = `salary_${archiveMonthName || new Date().getTime()}.ccti`;
+        if (missingCount > 0) {
+            const proceed = window.confirm(`${missingCount} ردیف مجاز به دلیل نداشتن شماره شبا به صورت EMPTY ایجاد شدند.\nآیا مایل به دریافت فایل هستید؟`);
+            if (!proceed) return;
+        }
+
+        const msgId = `IR790110000000200043622006${Date.now().toString().slice(-9)}`;
+        const groupIban = 'IR790110000000200043622006'; 
+        const companyName = 'شرکت تولیدی لپان بافت';
+
+        const xmlContent = `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.002.001.03">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>${msgId}</MsgId>
+      <CreDtTm>${shamsiDateTimeStr}</CreDtTm>
+      <NbOfTxs>${generatedCount}</NbOfTxs>
+      <CtrlSum>${totalAmount}</CtrlSum>
+      <InitgPty>
+        <Nm>${companyName}</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>1</PmtInfId>
+      <PmtMtd Ccy="IRR">TRF</PmtMtd>
+      <NbOfTxs>${generatedCount}</NbOfTxs>
+      <CtrlSum>${totalAmount}</CtrlSum>
+      <ReqdExctnDt>${shamsiDateStr}</ReqdExctnDt>
+      <Dbtr>
+        <Nm>${companyName}</Nm>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <IBAN>${groupIban}</IBAN>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BIC>BMJIIRTHXXX</BIC>
+        </FinInstnId>
+      </DbtrAgt>
+${xmlTxLines.join('\\n')}
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>`;
+
+        const fileName = `salary_${archiveMonthName || new Date().getTime()}.xml`;
 
         // Save archive
         const newArchive: CctiArchive = {
@@ -264,7 +323,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
             monthName: archiveMonthName || 'بدون نام مستعار',
             totalAmount,
             personCount: generatedCount,
-            fileContent: output,
+            fileContent: xmlContent,
             details: detailsArchive
         };
         const newArchivesList = [newArchive, ...archives];
@@ -272,7 +331,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear }) => {
         localStorage.setItem('ccti_archives', JSON.stringify(newArchivesList));
         setArchiveMonthName('');
 
-        const blob = new Blob([output], { type: 'text/plain;charset=utf-8;' });
+        const blob = new Blob([xmlContent], { type: 'text/xml;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);

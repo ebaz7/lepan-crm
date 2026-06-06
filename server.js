@@ -331,6 +331,19 @@ try {
 // --- NOTIFICATION HELPER ---
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
     try {
+        const notifDb = getDb();
+        if (!notifDb.notifications) notifDb.notifications = [];
+        const newNotif = {
+            id: utils.generateUUID(),
+            title, body, url, targetRoles, targetUsernames, excludeUsernames,
+            createdAt: Date.now(), readBy: []
+        };
+        notifDb.notifications.push(newNotif);
+        if (notifDb.notifications.length > 2000) notifDb.notifications = notifDb.notifications.slice(-1000);
+        saveDb(notifDb);
+    } catch(e) { console.error("Notification DB Error", e); }
+
+    try {
         const db = getDb();
         const subs = db.subscriptions || [];
         
@@ -424,6 +437,45 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
 // 1. SEQUENCE GENERATORS
 app.get('/api/vapid-key', (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
+});
+
+// --- NOTIFICATIONS API ---
+app.get('/api/notifications', (req, res) => {
+    const { username, role } = req.query;
+    if (!username || !role) return res.status(400).json({error: "username and role required"});
+    const db = getDb();
+    const notifs = (db.notifications || []).filter(n => {
+         // 1. EXPLICIT EXCLUSION
+         if (n.excludeUsernames && n.excludeUsernames.includes(username)) return false;
+         // 2. PRIVACY FILTER
+         if (n.targetUsernames && !n.targetUsernames.includes(username)) return false;
+         // 3. ALWAYS NOTIFY ADMIN for general system notifications
+         if (role === 'admin' && !n.targetUsernames) return true;
+         // 4. TARGET ROLES
+         if (n.targetRoles && !n.targetRoles.includes(role)) return false;
+         return true;
+    });
+    res.json(notifs.sort((a,b)=>b.createdAt - a.createdAt).slice(0, 100));
+});
+
+app.post('/api/notifications/read', (req, res) => {
+    const { username, id } = req.body;
+    const db = getDb();
+    if (!db.notifications) db.notifications = [];
+    if (id === 'all') {
+         db.notifications.forEach(n => {
+             if (!n.readBy) n.readBy = [];
+             if (!n.readBy.includes(username)) n.readBy.push(username);
+         });
+    } else {
+         const n = db.notifications.find(n => n.id === id);
+         if (n) {
+             if (!n.readBy) n.readBy = [];
+             if (!n.readBy.includes(username)) n.readBy.push(username);
+         }
+    }
+    saveDb(db);
+    res.json({success: true});
 });
 
 // --- PRODUCT MANAGEMENT API ---
@@ -611,8 +663,8 @@ app.post('/api/orders', (req, res) => {
 
     // Notify relevant roles
     broadcastNotification(
-        'درخواست پرداخت جدید',
-        `${order.description || 'بدون شرح'} - مبلغ: ${Number(order.totalAmount || 0).toLocaleString()} ریال`,
+        `دستور پرداخت ثبت شد`,
+        `دستور پرداخت شماره ${order.trackingNumber} ثبت شد.`,
         '/payment-approvals',
         ['FINANCIAL', 'ADMIN'],
         null,
@@ -1656,7 +1708,7 @@ app.post('/api/chat', async (req, res) => {
     if (msg.recipient) {
         broadcastNotification(
             `پیام از ${msg.sender}`,
-            msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+            `${msg.sender} پیام داد: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
             '/chat',
             null,
             [msg.recipient],
@@ -1666,8 +1718,8 @@ app.post('/api/chat', async (req, res) => {
         const group = db.groups?.find(g => g.id === msg.groupId);
         if (group) {
             broadcastNotification(
-                `${msg.sender} در ${group.name}`,
-                msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+                `${group.name}`,
+                `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
                 '/chat',
                 null,
                 group.members.filter(m => m !== msg.senderUsername),
@@ -1677,8 +1729,8 @@ app.post('/api/chat', async (req, res) => {
     } else {
         // Public channel
         broadcastNotification(
-            `پیام عمومی از ${msg.sender}`,
-            msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل'),
+            `گروه عمومی`,
+            `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
             '/chat',
             null,
             null,

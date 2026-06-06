@@ -187,6 +187,7 @@ function App() {
   }); 
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const notificationsRef = useRef<AppNotification[]>([]);
   const [manageOrdersInitialTab, setManageOrdersInitialTab] = useState<'current' | 'archive'>('current');
   const [dashboardStatusFilter, setDashboardStatusFilter] = useState<any>(null); 
   const [exitPermitStatusFilter, setExitPermitStatusFilter] = useState<'pending' | null>(null);
@@ -540,16 +541,24 @@ function App() {
       } catch (e) { } 
   };
 
-  const addAppNotification = (title: string, message: string, url?: string) => { 
-      setNotifications(prev => [{ id: generateUUID(), title, message, timestamp: Date.now(), read: false }, ...prev]); 
+  const showToast = (title: string, message: string) => {
       playNotificationSound();
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       setToast({ show: true, title, message });
       toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+  };
+
+  const addAppNotification = (title: string, message: string, url?: string) => { 
+      // Only for local non-db alerts (like cheque alerts), though they will be 
+      // overwritten if setNotifications is called. The toast is more important.
+      showToast(title, message);
       sendNotification(title, message, url ? { url } : null);
   };
 
-  const removeNotification = (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); };
+  const removeNotification = (id: string) => { 
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      if (currentUser) apiCall('/notifications/read', 'POST', { username: currentUser.username, id }).catch(console.error);
+  };
   const closeToast = () => { setToast(null); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
 
   const setFinancialYear = async (yearLabel: string) => {
@@ -649,20 +658,38 @@ function App() {
         setChatMessages(prev => areChatEqual(prev, safeMessages) ? prev : safeMessages); 
         
         const isNotFirstSync = !isFirstLoad.current;
-        const lastCheckValue = localStorage.getItem(NOTIFICATION_CHECK_KEY);
-        let lastCheck = parseInt(lastCheckValue || '0');
-        
-        // If it's the very first load or very old check, initialize to now to avoid historic flood
-        if (!isNotFirstSync) {
-            lastCheck = Date.now();
-            localStorage.setItem(NOTIFICATION_CHECK_KEY, lastCheck.toString());
-        } else if (!lastCheck || (Date.now() - lastCheck > 24 * 60 * 60 * 1000)) {
-            lastCheck = Date.now();
-            localStorage.setItem(NOTIFICATION_CHECK_KEY, lastCheck.toString());
-        }
 
-        checkForNotifications(safeOrders, safeAnnouncements, currentUser, lastCheck);
-        
+        // Fetch server notifications
+        try {
+            const notifsData = await apiCall<{id:string, title:string, body:string, createdAt:number, readBy:string[], url:string}[]>(`/notifications?username=${currentUser.username}&role=${currentUser.role}`);
+            if (notifsData && Array.isArray(notifsData)) {
+                const mappedNotifs = notifsData.map((n: any) => ({
+                    id: n.id,
+                    title: n.title,
+                    message: n.body,
+                    timestamp: n.createdAt,
+                    read: n.readBy && n.readBy.includes(currentUser.username),
+                    url: n.url
+                }));
+                
+                if (isNotFirstSync) {
+                    const prevIds = notificationsRef.current.map(n => n.id);
+                    const newUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id));
+                    if (newUnread.length > 0) {
+                        playNotificationSound();
+                        const latest = newUnread[0];
+                        setToast({ show: true, title: latest.title, message: latest.message });
+                        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                        toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+                        sendNotification(latest.title, latest.message, { url: latest.url });
+                    }
+                }
+                
+                notificationsRef.current = mappedNotifs;
+                setNotifications(mappedNotifs);
+            }
+        } catch (e) { console.error("Notification load err:", e); }
+
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
             
@@ -681,14 +708,16 @@ function App() {
                     if (activeTab !== 'chat') {
                         let body = 'پیام جدید';
                         if (lastMsg.message && lastMsg.message.trim() !== '') {
-                            body = lastMsg.message;
-                            if (body.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
+                            body = `${lastMsg.sender} پیام داد: ${lastMsg.message}`;
+                            if (lastMsg.message.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
                         } else if (lastMsg.attachment) {
-                            body = `📎 فایل ضمیمه: ${lastMsg.attachment.fileName || 'بدون نام'}`;
+                            body = `${lastMsg.sender} پیام داد: 📎 فایل ضمیمه`;
                         } else if (lastMsg.audioUrl) {
-                            body = '🎤 پیام صوتی جدید';
+                            body = `${lastMsg.sender} پیام داد: 🎤 پیام صوتی`;
                         }
-                        addAppNotification(`پیام جدید از ${lastMsg.sender}`, body, 'chat');
+                        
+                        let title = lastMsg.groupId ? `گروه ${lastMsg.groupId}` : `پیام از ${lastMsg.sender}`;
+                        addAppNotification(title, body, 'chat');
                         
                         chatHistory.push(lastMsg.id);
                         if (chatHistory.length > 500) chatHistory.splice(0, chatHistory.length - 500);
@@ -737,67 +766,6 @@ function App() {
           }
       });
       if (alertCount > 0) { addAppNotification('هشدار سررسید چک', `${alertCount} چک در ۲ روز آینده سررسید می‌شوند.`); }
-  };
-
-  const checkForNotifications = (newList: PaymentOrder[], announcementsList: SystemAnnouncement[], user: User, lastCheckTime: number) => {
-     if (Array.isArray(newList)) {
-         const newEvents = newList.filter(o => o.updatedAt && o.updatedAt > lastCheckTime);
-         const NOTIFICATION_HISTORY_KEY = 'notification_history';
-         const history = JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY) || '[]');
-         
-         let hasNew = false;
-         newEvents.forEach(newItem => {
-            const status = newItem.status;
-            const isAdmin = user.role === UserRole.ADMIN;
-            const notificationId = `${newItem.trackingNumber}_${status}_${newItem.updatedAt}`;
-            
-            if (history.includes(notificationId)) return;
-            
-            let notified = false;
-            if (isAdmin) {
-                 const isAdminSelfChange = (status === OrderStatus.PENDING && newItem.requester === user.fullName); 
-                 if (!isAdminSelfChange) { addAppNotification(`تغییر وضعیت (${newItem.trackingNumber})`, `وضعیت جدید: ${status}`, 'manage'); notified = true; }
-            }
-            
-            if (!notified) {
-                if (status === OrderStatus.PENDING && user.role === UserRole.FINANCIAL) { addAppNotification('درخواست پرداخت جدید', `شماره: ${newItem.trackingNumber} | درخواست کننده: ${newItem.requester}`, 'manage'); }
-                else if (status === OrderStatus.APPROVED_FINANCE && user.role === UserRole.MANAGER) { addAppNotification('تایید مالی شد', `درخواست ${newItem.trackingNumber} منتظر تایید مدیریت است.`, 'manage'); }
-                else if (status === OrderStatus.APPROVED_MANAGER && user.role === UserRole.CEO) { addAppNotification('تایید مدیریت شد', `درخواست ${newItem.trackingNumber} منتظر تایید نهایی شماست.`, 'manage'); }
-                else if (status === OrderStatus.APPROVED_CEO) { 
-                    if (user.role === UserRole.FINANCIAL) { addAppNotification('تایید نهایی شد (پرداخت)', `درخواست ${newItem.trackingNumber} تایید شد. لطفا اقدام به پرداخت کنید.`, 'manage'); } 
-                    if (newItem.requester === user.fullName) { addAppNotification('درخواست تایید شد', `درخواست شما (${newItem.trackingNumber}) تایید نهایی شد.`, 'manage'); } 
-                }
-                else if (status === OrderStatus.REJECTED && newItem.requester === user.fullName) { addAppNotification('درخواست رد شد', `درخواست ${newItem.trackingNumber} رد شد. دلیل: ${newItem.rejectionReason || 'نامشخص'}`, 'manage'); }
-            }
-            
-            history.push(notificationId);
-            hasNew = true;
-         });
-         
-         if (hasNew) {
-            if (history.length > 500) history.splice(0, history.length - 500);
-            localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history));
-         }
-     }
-
-     if (Array.isArray(announcementsList)) {
-         const newAnnouncements = announcementsList.filter(a => a.createdAt > lastCheckTime && (!a.targetUsers || a.targetUsers.length === 0 || a.targetUsers.includes(user.id) || a.targetUsers.includes(user.role)));
-         const ANNOUNCEMENT_HISTORY_KEY = 'announcement_notification_history';
-         const annHistory = JSON.parse(localStorage.getItem(ANNOUNCEMENT_HISTORY_KEY) || '[]');
-         let hasNewAnn = false;
-
-         newAnnouncements.forEach(ann => {
-             if (annHistory.includes(ann.id)) return;
-             addAppNotification('اعلان جدید داشبورد', ann.message);
-             annHistory.push(ann.id);
-             hasNewAnn = true;
-         });
-
-         if (hasNewAnn) {
-             if (annHistory.length > 200) annHistory.splice(0, annHistory.length - 200);
-             localStorage.setItem(ANNOUNCEMENT_HISTORY_KEY, JSON.stringify(annHistory));
-         }
-     }
   };
 
   useEffect(() => {
@@ -925,7 +893,10 @@ function App() {
             currentUser={currentUser} 
             onLogout={handleLogout} 
             notifications={notifications} 
-            clearNotifications={() => setNotifications([])}
+            clearNotifications={() => {
+                setNotifications(prev => prev.map(n => ({...n, read: true})));
+                apiCall('/notifications/read', 'POST', { username: currentUser.username, id: 'all' }).catch(console.error);
+            }}
             onAddNotification={addAppNotification}
             onRemoveNotification={removeNotification}
             financialYear={financialYear}
