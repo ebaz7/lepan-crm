@@ -48,6 +48,7 @@ const SecondExitGroupSettings: React.FC<Props> = ({
         { value: ExitPermitStatus.PENDING_SECURITY, label: '۵. تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
         { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: '۶. تایید نهایی مدیر کارخانه (خروج بار)' },
         { value: 'ARCHIVED', label: '۷. بایگانی و خروج نهایی (تکمیل شده)' },
+        { value: 'CANCELED', label: '❌ ابطال و کنسلی (بار خارج نشود)' },
     ];
 
     return (

@@ -248,13 +248,20 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             let g2Bale = g2Config?.baleId;
             let g2Tg = g2Config?.telegramId;
 
-            if (g1WA) targets.push({ group: g1WA });
-            if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
-            if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+            const g1Statuses = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
+            const g2Statuses = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
 
-            if (g2WA) targets.push({ group: g2WA });
-            if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
-            if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+            if (g1Statuses.includes('CANCELED')) {
+                if (g1WA) targets.push({ group: g1WA });
+                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+            }
+
+            if (g2Statuses.includes('CANCELED')) {
+                if (g2WA) targets.push({ group: g2WA });
+                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+            }
 
             let caption = `❌ *برگه خروج کارخانه ابطال/کنسل شد* ❌\n`;
             caption += `🚨 *بار به هیچ عنوان خارج نشود!* 🚨\n\n`;
