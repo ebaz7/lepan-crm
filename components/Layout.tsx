@@ -578,7 +578,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
               
               {canSeeNotifications && (
                   <div className="pt-4 mt-2 border-t border-gray-200/50 dark:border-white/5 relative" ref={notifRef}>
-                      <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
+                      <button onClick={() => {
+                          const nextState = !showNotifDropdown;
+                          setShowNotifDropdown(nextState);
+                          if (nextState && clearNotifications) {
+                              clearNotifications();
+                          }
+                      }} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
                           <div className="relative">
                               <Bell size={20} />
                               {unreadCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-bounce">{unreadCount}</span>)}
@@ -785,7 +791,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                 </button>
                 {canSeeNotifications && (
                     <div className="relative notification-trigger" ref={mobileNotifRef}>
-                        <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
+                        <button onClick={() => {
+                            const nextState = !showNotifDropdown;
+                            setShowNotifDropdown(nextState);
+                            if (nextState && clearNotifications) {
+                                clearNotifications();
+                            }
+                        }} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
                             <Bell size={20} className="text-gray-700 dark:text-gray-200" />
                             {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
                         </button>

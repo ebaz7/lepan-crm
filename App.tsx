@@ -686,25 +686,35 @@ function App() {
             
             if (isNotFirstSync) {
                 const prevIds = notificationsRef.current.map(n => n.id);
-                const newUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id));
-                const unnotifiedUnread = newUnread.filter(n => !hasNotificationBeenShown(n.id));
+                // Filter unread notifications that have not been shown on this device in the current session
+                const unnotifiedUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id) && !hasNotificationBeenShown(n.id));
+                
                 if (unnotifiedUnread.length > 0) {
-                    playNotificationSound();
-                    const latest = unnotifiedUnread[0];
+                    const chronNotifs = [...unnotifiedUnread].sort((a,b) => a.timestamp - b.timestamp);
+                    const latest = chronNotifs[0];
                     
-                    setToast({ show: true, title: latest.title, message: latest.message });
-                    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-                    toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+                    // Do not alarm if the user is actively looking at the relevant section (e.g. Chat)
+                    const isLookingAtSection = latest.url && (latest.url === 'chat' || latest.url === '/chat' || latest.url === 'sales' || latest.url === '/sales') && activeTab === 'chat';
                     
-                    // Send notification FIRST so sendNotification's hasNotificationBeenShown check is false initially
-                    sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
+                    if (!isLookingAtSection) {
+                        playNotificationSound();
+                        setToast({ show: true, title: latest.title, message: latest.message });
+                        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                        toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+                        
+                        sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
+                    }
                     
-                    // Then immediately mark ALL of them as shown to completely block them from repeating or trickling on subsequent intervals
+                    // Mark as shown locally to defend against duplicate re-evaluation
                     unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
+                    
+                    // Immediately mark as read/seen on the server so that background workers and other devices are instantly silenced!
+                    unnotifiedUnread.forEach(n => {
+                        apiCall('/notifications/read', 'POST', { username: currentUser.username, id: n.id }).catch(console.error);
+                    });
                 }
             } else {
                 // Ensure all existing notifications are marked as shown on first load/sync
-                // This shields the client from getting duplicate flashes on component mount or ref resets!
                 mappedNotifs.forEach(n => markNotificationAsShown(n.id));
             }
             
@@ -714,46 +724,6 @@ function App() {
 
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
-            
-            // Check if message is relevant to me:
-            // Don't notify if it's a private message to someone else
-            let isRelevantToMe = true;
-            if (lastMsg.recipient && lastMsg.recipient !== currentUser.username && lastMsg.recipient !== currentUser.fullName) {
-                isRelevantToMe = false;
-            }
-
-            const CHAT_NOTIFIED_HISTORY_KEY = 'chat_notified_history';
-            const chatHistory = JSON.parse(localStorage.getItem(CHAT_NOTIFIED_HISTORY_KEY) || '[]');
- 
-            if (isRelevantToMe && lastMsg.senderUsername !== currentUser.username) {
-                if (isNotFirstSync && lastChatMsgIdRef.current && lastMsg.id !== lastChatMsgIdRef.current && !chatHistory.includes(lastMsg.id)) {
-                    if (activeTab !== 'chat') {
-                        let body = 'پیام جدید';
-                        if (lastMsg.message && lastMsg.message.trim() !== '') {
-                            body = `${lastMsg.sender} پیام داد: ${lastMsg.message}`;
-                            if (lastMsg.message.startsWith('CALL_INVITE|')) body = '📞 تماس ورودی...';
-                        } else if (lastMsg.attachment) {
-                            body = `${lastMsg.sender} پیام داد: 📎 فایل ضمیمه`;
-                        } else if (lastMsg.audioUrl) {
-                            body = `${lastMsg.sender} پیام داد: 🎤 پیام صوتی`;
-                        }
-                        
-                        let title = lastMsg.groupId ? `گروه ${lastMsg.groupId}` : `پیام از ${lastMsg.sender}`;
-                        addAppNotification(title, body, 'chat');
-                        
-                        chatHistory.push(lastMsg.id);
-                        if (chatHistory.length > 500) chatHistory.splice(0, chatHistory.length - 500);
-                        localStorage.setItem(CHAT_NOTIFIED_HISTORY_KEY, JSON.stringify(chatHistory));
-                    }
-                } else if (!isNotFirstSync) {
-                    // Record existing message in first sync so it is never repeated
-                    if (!chatHistory.includes(lastMsg.id)) {
-                        chatHistory.push(lastMsg.id);
-                        if (chatHistory.length > 500) chatHistory.splice(0, chatHistory.length - 500);
-                        localStorage.setItem(CHAT_NOTIFIED_HISTORY_KEY, JSON.stringify(chatHistory));
-                    }
-                }
-            }
             lastChatMsgIdRef.current = lastMsg.id;
         }
 

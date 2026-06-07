@@ -102,7 +102,23 @@ public class SyncWorker extends Worker {
                     
                     if (id.isEmpty()) continue;
 
-                    // Filter or check if already notified on this device locally (coherently shared with WebView)
+                    // 1. Check if already marked as read by this user on the server
+                    boolean isRead = false;
+                    JSONArray readBy = notif.optJSONArray("readBy");
+                    if (readBy != null && username != null && !username.isEmpty()) {
+                        for (int j = 0; j < readBy.length(); j++) {
+                            if (username.equalsIgnoreCase(readBy.optString(j, ""))) {
+                                isRead = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isRead) {
+                        continue; // Already seen/read on the server, skip entirely!
+                    }
+
+                    // 2. Otherwise, check if already notified on this device locally (coherently shared with WebView)
                     String shownKey = "_cap_shown_" + id;
                     boolean isShown = false;
                     try {
@@ -123,8 +139,15 @@ public class SyncWorker extends Worker {
                             // Show native notification
                             showNativeNotification(id, title, body);
                         }
+                        
+                        // Mark as shown locally
                         prefs.edit().putString(shownKey, "true").apply();
                         newNotifCount++;
+
+                        // Mark as read/seen on the server immediately so other devices don't notify!
+                        if (username != null && !username.isEmpty()) {
+                            markNotificationAsReadOnServer(id, serverUrl, username);
+                        }
                     }
                 }
                 Log.d(TAG, "Background sync completed successfully. Displayed/Marked " + newNotifCount + " new notifications.");
@@ -137,6 +160,34 @@ public class SyncWorker extends Worker {
         } catch (Exception e) {
             Log.e(TAG, "Error performing background synchronization", e);
             return Result.failure(); // Clean failure so we do not spam retry sequence
+        }
+    }
+
+    private void markNotificationAsReadOnServer(String id, String serverUrl, String username) {
+        try {
+            String readUrlStr = serverUrl + "/api/notifications/read";
+            URL url = new URL(readUrlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            conn.setRequestProperty("Content-Type", "application/json");
+            
+            JSONObject body = new JSONObject();
+            body.put("username", username);
+            body.put("id", id);
+            
+            byte[] outputBytes = body.toString().getBytes("UTF-8");
+            conn.getOutputStream().write(outputBytes);
+            conn.getOutputStream().flush();
+            conn.getOutputStream().close();
+            
+            int responseCode = conn.getResponseCode();
+            Log.d(TAG, "Sent read status to server for notification: " + id + ". Response code: " + responseCode);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error marking notification as read on server: " + id, e);
         }
     }
 
