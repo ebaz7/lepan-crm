@@ -19,6 +19,8 @@ interface LayoutProps {
   onLogout: () => void;
   notifications: AppNotification[];
   clearNotifications: () => void;
+  markAllNotificationsAsRead?: () => void;
+  onDeleteNotification?: (id: string) => void;
   onAddNotification: (title: string, message: string) => void;
   onRemoveNotification: (id: string) => void;
   financialYear?: string;
@@ -29,7 +31,7 @@ interface LayoutProps {
   unreadChatCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, markAllNotificationsAsRead, onDeleteNotification, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
@@ -90,6 +92,16 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   // Update Detection State
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
+
+  const prevShowDropdown = useRef(showNotifDropdown);
+  useEffect(() => {
+      if (prevShowDropdown.current && !showNotifDropdown) {
+          if (clearNotifications && notifications.length > 0) {
+              clearNotifications();
+          }
+      }
+      prevShowDropdown.current = showNotifDropdown;
+  }, [showNotifDropdown, clearNotifications, notifications]);
 
   useEffect(() => {
     if (showProfileModal && currentUser) {
@@ -344,7 +356,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
         <div className="bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 p-2 flex justify-between items-center border-b shrink-0">
             <span className="text-xs font-bold text-gray-600 dark:text-gray-400">پیام‌های سیستم</span>
             {notifications.length > 0 && (
-                <button onClick={clearNotifications} className="text-gray-400 hover:text-red-500 flex items-center gap-1 text-[10px]">
+                <button onClick={clearNotifications} className="text-gray-400 hover:text-red-500 flex items-center gap-1 text-[10px] cursor-pointer">
                     <Trash2 size={12} /> پاک کردن همه
                 </button>
             )}
@@ -366,21 +378,31 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                  setShowMobileMenu(false);
                              }
                          }}
-                         className={`p-3 border-b hover:bg-gray-50 text-right last:border-0 relative group cursor-pointer ${n.read ? 'opacity-60' : ''}`}>
-                        <div className="flex justify-between items-start pl-6">
+                         className={`p-3 border-b hover:bg-gray-50 text-right last:border-0 relative group cursor-pointer ${n.read ? 'opacity-50' : ''}`}>
+                        <div className="flex justify-between items-start pl-14">
                             <div className="text-xs font-bold text-gray-800 mb-1">{n.title}</div>
                             <div className="text-[9px] text-gray-400 whitespace-nowrap">{new Date(n.timestamp).toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}</div>
                         </div>
-                        <div className="text-xs text-gray-600 leading-tight">{n.message}</div>
-                        {!n.read && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onRemoveNotification(n.id); }} 
-                            className="absolute top-3 left-2 text-gray-300 hover:text-green-500 p-1 rounded-full hover:bg-green-50 transition-colors"
-                            title="علامت خوانده شده"
-                        >
-                            <Check size={14}/>
-                        </button>
-                        )}
+                        <div className="text-xs text-gray-600 leading-tight pl-14">{n.message}</div>
+                        
+                        <div className="absolute top-2.5 left-2 flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            {!n.read && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onRemoveNotification(n.id); }} 
+                                className="text-gray-400 hover:text-green-500 p-1.5 rounded-full hover:bg-green-50 transition-colors"
+                                title="علامت خوانده شده"
+                            >
+                                <Check size={14}/>
+                            </button>
+                            )}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onDeleteNotification && onDeleteNotification(n.id); }} 
+                                className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                                title="حذف اعلان"
+                            >
+                                <Trash2 size={14}/>
+                            </button>
+                        </div>
                     </div>
                 ))
             )}
@@ -581,8 +603,8 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                       <button onClick={() => {
                           const nextState = !showNotifDropdown;
                           setShowNotifDropdown(nextState);
-                          if (nextState && clearNotifications) {
-                              clearNotifications();
+                          if (nextState && markAllNotificationsAsRead) {
+                              markAllNotificationsAsRead();
                           }
                       }} className={`notification-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm relative ${unreadCount > 0 ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-bold' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'} ${!isSidebarOpen && 'justify-center'}`} title="اعلان‌ها">
                           <div className="relative">
@@ -794,8 +816,8 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                         <button onClick={() => {
                             const nextState = !showNotifDropdown;
                             setShowNotifDropdown(nextState);
-                            if (nextState && clearNotifications) {
-                                clearNotifications();
+                            if (nextState && markAllNotificationsAsRead) {
+                                markAllNotificationsAsRead();
                             }
                         }} className="relative p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl hover:glass-panel transition-colors shadow-sm">
                             <Bell size={20} className="text-gray-700 dark:text-gray-200" />

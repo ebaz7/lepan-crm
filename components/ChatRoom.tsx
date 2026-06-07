@@ -373,6 +373,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             }
             // Follow up with smooth scroll to catch any layout shifts
             setTimeout(scrollToBottom, 150); 
+            
+            // Auto-mark as read when inside the active conversation
+            if (activeChannel.id) {
+                markAsRead(activeChannel.id, activeChannel.type);
+            }
         }
     }, [activeChannel, messages.length]);
 

@@ -509,6 +509,26 @@ app.post('/api/notifications/read', (req, res) => {
     res.json({success: true});
 });
 
+app.post('/api/notifications/delete', (req, res) => {
+    const { username, id } = req.body;
+    const db = getDb();
+    if (!db.notifications) db.notifications = [];
+    if (id === 'all') {
+         db.notifications.forEach(n => {
+             if (!n.excludeUsernames) n.excludeUsernames = [];
+             if (!n.excludeUsernames.includes(username)) n.excludeUsernames.push(username);
+         });
+    } else {
+         const n = db.notifications.find(n => n.id === id);
+         if (n) {
+             if (!n.excludeUsernames) n.excludeUsernames = [];
+             if (!n.excludeUsernames.includes(username)) n.excludeUsernames.push(username);
+         }
+    }
+    saveDb(db);
+    res.json({success: true});
+});
+
 // --- PRODUCT MANAGEMENT API ---
 app.get('/api/products', (req, res) => {
     const db = getDb();

@@ -37,6 +37,7 @@ export interface AppNotification {
   message: string;
   timestamp: number;
   read: boolean;
+  url?: string;
 }
 
 export interface CompanyBank {

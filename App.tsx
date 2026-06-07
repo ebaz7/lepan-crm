@@ -190,6 +190,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const notificationsRef = useRef<AppNotification[]>([]);
+  const sessionStartTimeRef = useRef(Date.now());
   const [manageOrdersInitialTab, setManageOrdersInitialTab] = useState<'current' | 'archive'>('current');
   const [dashboardStatusFilter, setDashboardStatusFilter] = useState<any>(null); 
   const [exitPermitStatusFilter, setExitPermitStatusFilter] = useState<'pending' | null>(null);
@@ -563,7 +564,14 @@ function App() {
 
   const removeNotification = (id: string) => { 
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      notificationsRef.current = notificationsRef.current.map(n => n.id === id ? { ...n, read: true } : n);
       if (currentUser) apiCall('/notifications/read', 'POST', { username: currentUser.username, id }).catch(console.error);
+  };
+
+  const deleteNotification = (id: string) => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      notificationsRef.current = notificationsRef.current.filter(n => n.id !== id);
+      if (currentUser) apiCall('/notifications/delete', 'POST', { username: currentUser.username, id }).catch(console.error);
   };
   const closeToast = () => { setToast(null); if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
 
@@ -673,7 +681,7 @@ function App() {
         
         const isNotFirstSync = !isFirstLoad.current;
 
-        // Process server notifications
+        // Process server notifications under super smart rules
         if (notifsData && Array.isArray(notifsData)) {
             const mappedNotifs = notifsData.map((n: any) => ({
                 id: n.id,
@@ -686,8 +694,18 @@ function App() {
             
             if (isNotFirstSync) {
                 const prevIds = notificationsRef.current.map(n => n.id);
-                // Filter unread notifications that have not been shown on this device in the current session
-                const unnotifiedUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id) && !hasNotificationBeenShown(n.id));
+                // Filter unread notifications that have not been shown on this device, and are recent (created in active session)
+                const unnotifiedUnread = mappedNotifs.filter(n => {
+                    const isUnread = !n.read;
+                    // Deduplicate against API poll failures/emptying
+                    const isNew = prevIds.length > 0 && !prevIds.includes(n.id);
+                    const isNotShown = !hasNotificationBeenShown(n.id);
+                    
+                    // Critical: ONLY sound/toast if the notification happened AFTER this app session actually started
+                    // (we add 2000ms grace period of starting layout loads so old alerts don't chime on tab open/refreshes)
+                    const isRecent = n.timestamp > (sessionStartTimeRef.current + 2000);
+                    return isUnread && isNew && isNotShown && isRecent;
+                });
                 
                 if (unnotifiedUnread.length > 0) {
                     const chronNotifs = [...unnotifiedUnread].sort((a,b) => a.timestamp - b.timestamp);
@@ -714,7 +732,7 @@ function App() {
                     });
                 }
             } else {
-                // Ensure all existing notifications are marked as shown on first load/sync
+                // Ensure all existing notifications are marked as shown on first load/sync so they stay completely silent
                 mappedNotifs.forEach(n => markNotificationAsShown(n.id));
             }
             
@@ -840,6 +858,29 @@ function App() {
           }; 
       } 
   }, [currentUser]);
+
+  // Synchronize Active Screen Views with Client and Server Notification read statuses
+  useEffect(() => {
+      if (!currentUser || notifications.length === 0) return;
+      
+      let targetUrls: string[] = [];
+      if (activeTab === 'chat') {
+          targetUrls = ['chat', '/chat'];
+      } else if (activeTab === 'manage' || activeTab === 'manage-orders') {
+          targetUrls = ['/payment-approvals', '/payment-orders', 'payment-approvals', 'payment-orders'];
+      } else if (activeTab === 'manage-exit' || activeTab === 'manage-invoices') {
+          targetUrls = ['/exit-permits', '/exit-approvals', 'exit-permits', 'exit-approvals'];
+      }
+      
+      if (targetUrls.length > 0) {
+          const unreadMatched = notifications.filter(n => !n.read && n.url && targetUrls.includes(n.url));
+          if (unreadMatched.length > 0) {
+              unreadMatched.forEach(n => {
+                  removeNotification(n.id);
+              });
+          }
+      }
+  }, [activeTab, notifications, currentUser]);
 
   const handleOrderCreated = () => { loadData(); setManageOrdersInitialTab('current'); setDashboardStatusFilter(null); setActiveTab('manage'); };
   const handleLogin = (user: User) => { setCurrentUser(user); setActiveTab('dashboard'); };
@@ -989,9 +1030,16 @@ function App() {
             onLogout={handleLogout} 
             notifications={notifications} 
             clearNotifications={() => {
-                setNotifications(prev => prev.map(n => ({...n, read: true})));
-                apiCall('/notifications/read', 'POST', { username: currentUser.username, id: 'all' }).catch(console.error);
+                setNotifications([]);
+                notificationsRef.current = [];
+                if (currentUser) apiCall('/notifications/delete', 'POST', { username: currentUser.username, id: 'all' }).catch(console.error);
             }}
+            markAllNotificationsAsRead={() => {
+                setNotifications(prev => prev.map(n => ({...n, read: true})));
+                notificationsRef.current = notificationsRef.current.map(n => ({...n, read: true}));
+                if (currentUser) apiCall('/notifications/read', 'POST', { username: currentUser.username, id: 'all' }).catch(console.error);
+            }}
+            onDeleteNotification={deleteNotification}
             onAddNotification={addAppNotification}
             onRemoveNotification={removeNotification}
             financialYear={financialYear}
