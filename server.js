@@ -365,7 +365,7 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
 
             // 3. ALWAYS NOTIFY ADMIN for general system notifications (where targetUsernames is not specified)
-            if (sub.role === 'admin') return true;
+            if (sub.role === 'admin' && !targetUsernames) return true;
             
             // 4. TARGET ROLES
             if (targetRoles && !targetRoles.includes(sub.role)) return false;
@@ -1772,7 +1772,7 @@ app.post('/api/chat', async (req, res) => {
             broadcastNotification(
                 `پیام از ${msg.sender}`,
                 `${msg.sender} پیام داد: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
-                '/chat',
+                `/chat?pv=${msg.senderUsername}`,
                 null,
                 [msg.recipient],
                 [msg.senderUsername] // Exclude sender
@@ -1783,7 +1783,7 @@ app.post('/api/chat', async (req, res) => {
                 broadcastNotification(
                     `${group.name}`,
                     `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
-                    '/chat',
+                    `/chat?group=${msg.groupId}`,
                     null,
                     group.members.filter(m => m !== msg.senderUsername),
                     [msg.senderUsername] // Exclude sender

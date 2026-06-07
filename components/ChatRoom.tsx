@@ -205,6 +205,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
     
+    // Check URL parameters for direct Chat Navigation
+    useEffect(() => {
+        const checkUrl = () => {
+            const params = new URLSearchParams(window.location.search);
+            const pvUser = params.get('pv');
+            const groupUser = params.get('group');
+            if (pvUser) {
+                setActiveTab('CHATS');
+                setActiveChannel({ type: 'private', id: pvUser });
+                window.history.replaceState({}, '', window.location.pathname);
+            } else if (groupUser) {
+                setActiveTab('CHATS');
+                setActiveChannel({ type: 'group', id: groupUser });
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+        };
+        checkUrl();
+        const interval = setInterval(checkUrl, 1000);
+        return () => clearInterval(interval);
+    }, []);
+    
     // --- File Progress & Management ---
     const [fileProgress, setFileProgress] = useState<{ [key: string]: number }>({});
     const [showGroupInfo, setShowGroupInfo] = useState<ChatGroup | (TaskGroup & {isTaskGroup?: boolean, admins?: string[], avatar?: string | null}) | null>(null);

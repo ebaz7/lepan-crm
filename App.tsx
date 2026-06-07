@@ -252,6 +252,10 @@ function App() {
                 if (data && data.url) {
                     const mappedTab = mapNotificationUrlToTab(data.url);
                     if (mappedTab) setActiveTab(mappedTab);
+                    if (data.url.includes('?')) {
+                        const searchStr = data.url.substring(data.url.indexOf('?'));
+                        if (searchStr.length > 1) window.history.pushState({}, '', window.location.pathname + searchStr);
+                    }
                 }
             });
 
@@ -261,6 +265,10 @@ function App() {
                 if (data && data.url) {
                     const mappedTab = mapNotificationUrlToTab(data.url);
                     if (mappedTab) setActiveTab(mappedTab);
+                    if (data.url.includes('?')) {
+                        const searchStr = data.url.substring(data.url.indexOf('?'));
+                        if (searchStr.length > 1) window.history.pushState({}, '', window.location.pathname + searchStr);
+                    }
                 }
             });
         } catch(e) { console.error("Notification Listener Error", e); }
@@ -428,10 +436,14 @@ function App() {
         if (event.data && event.data.type === 'NAVIGATE') {
             try {
                 const url = new URL(event.data.url);
-                const path = url.pathname.replace(/^\/+/, '');
+                let path = url.pathname.replace(/^\/+/, '');
+                if (!path) path = url.hash.replace(/^#\/?/, '');
                 const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti'];
-                if (validTabs.includes(path)) {
-                    setActiveTab(path);
+                if (validTabs.includes(path) || path === '') {
+                    setActiveTab(path || 'dashboard');
+                    if (url.search) {
+                       window.history.pushState({}, '', url.href);
+                    }
                 }
             } catch(e) {}
         }
@@ -902,7 +914,12 @@ function App() {
       }
       
       if (targetUrls.length > 0) {
-          const unreadMatched = notifications.filter(n => !n.read && n.url && targetUrls.includes(n.url));
+          const unreadMatched = notifications.filter(n => {
+              if (n.read || !n.url) return false;
+              // Ignore query parameters when matching base path
+              const cleanUrl = n.url.split('?')[0];
+              return targetUrls.includes(n.url) || targetUrls.includes(cleanUrl);
+          });
           if (unreadMatched.length > 0) {
               unreadMatched.forEach(n => {
                   removeNotification(n.id);
