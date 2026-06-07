@@ -91,6 +91,16 @@ export const clearAllActiveNotifications = async () => {
         } catch (e) {
             console.error('Error removing delivered local notifications', e);
         }
+    } else {
+        if ("serviceWorker" in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                if (reg && reg.getNotifications) {
+                    const activeNotifs = await reg.getNotifications();
+                    activeNotifs.forEach(n => n.close());
+                }
+            } catch (e) {}
+        }
     }
 };
 
@@ -352,6 +362,8 @@ export const sendNotification = async (title: string, body: string, data?: any) 
                   dir: 'rtl',
                   lang: 'fa',
                   vibrate: [200, 100, 200],
+                  tag: idValue || 'general',
+                  renotify: true,
                   data: data
               } as any);
           } else {

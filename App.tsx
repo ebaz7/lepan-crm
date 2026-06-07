@@ -424,6 +424,23 @@ function App() {
         CapacitorApp.addListener('appUrlOpen', handleUrlOpen);
     }
 
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'NAVIGATE') {
+            try {
+                const url = new URL(event.data.url);
+                const path = url.pathname.replace(/^\/+/, '');
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti'];
+                if (validTabs.includes(path)) {
+                    setActiveTab(path);
+                }
+            } catch(e) {}
+        }
+    };
+    
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
     const params = new URLSearchParams(window.location.search);
     const sharedFileUrl = params.get('sharedFileUrl');
     const sharedText = params.get('sharedText');
@@ -692,15 +709,9 @@ function App() {
                 url: n.url
             }));
             
-            // Clean up / Mark older notifications as shown on first load to prevent spamming alarms
+            // Clean up / Mark all older notifications as shown on first load to prevent spamming alarms
             if (isFirstLoad.current) {
-                const now = Date.now();
-                mappedNotifs.forEach(n => {
-                    const isVeryRecent = (now - n.timestamp) < 300000; // 5 minutes
-                    if (!isVeryRecent) {
-                        markNotificationAsShown(n.id);
-                    }
-                });
+                mappedNotifs.forEach(n => markNotificationAsShown(n.id));
             }
 
             const prevIds = notificationsRef.current.map(n => n.id);
@@ -708,11 +719,10 @@ function App() {
             const unnotifiedUnread = mappedNotifs.filter(n => {
                 const isUnread = !n.read;
                 const isNotShown = !hasNotificationBeenShown(n.id);
-                // Alert if it is a dynamically received new notification, or if it is extremely recent (last 5 min)
-                const isDynamicNew = !isFirstLoad.current && (prevIds.length === 0 || !prevIds.includes(n.id));
-                const isVeryRecent = (Date.now() - n.timestamp) < 300000; // 5 minutes
+                // Alert ONLY if it is a dynamically received completely new notification during active polling session
+                const isDynamicNew = !isFirstLoad.current && !prevIds.includes(n.id);
                 
-                return isUnread && isNotShown && (isDynamicNew || isVeryRecent);
+                return isUnread && isNotShown && isDynamicNew;
             });
             
             if (unnotifiedUnread.length > 0) {
@@ -722,11 +732,13 @@ function App() {
                 const alertsToShow = chronNotifs.slice(-3);
                 
                 alertsToShow.forEach((latest, index) => {
-                    // Do not play sounds or toast if the user is actively inside the corresponding view
+                    // Do not play sounds or toast if the user is actively inside the corresponding view AND app is focused
                     let isLookingAtSection = false;
                     if (latest.url) {
                         const path = latest.url.replace(/^\//, '').trim();
-                        if (path === 'chat' && activeTab === 'chat') isLookingAtSection = true;
+                        if (path === 'chat' && activeTabRef.current === 'chat' && document.visibilityState === 'visible') {
+                            isLookingAtSection = true;
+                        }
                     }
                     
                     if (!isLookingAtSection) {
