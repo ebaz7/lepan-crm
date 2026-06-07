@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem } from '@capacitor/filesystem';
-import { sendNotification } from '../services/notificationService';
+import { sendNotification, clearAllActiveNotifications } from '../services/notificationService';
 import { downloadAndOpenFile, checkFileExists } from '../services/fileService';
 import { resolveImageUrl } from '../services/apiService';
 
@@ -24,6 +24,7 @@ interface ChatRoomProps {
     onRefresh: () => void; 
     sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
     onClearSharedData?: () => void;
+    onMessagesRead?: (msgIds: string[]) => void;
 }
 
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
@@ -152,7 +153,7 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     );
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData, onMessagesRead }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
@@ -547,10 +548,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             return false;
         });
 
+        // Whenever any chat is read, clear any status-bar notifications instantly
+        clearAllActiveNotifications().catch(console.error);
+
         if (unreadMsgs.length > 0) {
             const updatedIds = new Set(unreadMsgs.map(m => m.id));
             setMessages(prev => prev.map(m => updatedIds.has(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUser.username] } : m));
             
+            if (onMessagesRead) {
+                onMessagesRead(unreadMsgs.map(m => m.id));
+            }
+
             for (const msg of unreadMsgs) {
                 const reads = msg.readBy || [];
                 if (!reads.includes(currentUser.username)) {

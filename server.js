@@ -1722,71 +1722,86 @@ app.post('/api/chat', async (req, res) => {
     const msg = req.body;
     if(!db.messages) db.messages=[]; 
 
-    // Sync with Bot if recipient is a bot user
-    if (msg.recipient) {
-        const targetUser = db.users?.find(u => u.username === msg.recipient || u.fullName === msg.recipient);
-        if (targetUser) {
-            try {
-                let botRes = null;
-                if (targetUser.telegramChatId && db.settings?.telegramBotToken) {
-                    const tg = await safeImport('./backend/telegram.js');
-                    if (tg && tg.sendBotMessage) {
-                        botRes = await tg.sendBotMessage(targetUser.telegramChatId, msg.message || '📎 فایل');
-                        msg.botPlatform = 'telegram';
-                        msg.botChatId = targetUser.telegramChatId;
-                        msg.botMessageId = botRes?.message_id;
-                    }
-                } else if (targetUser.baleChatId && db.settings?.baleBotToken) {
-                    const bale = await safeImport('./backend/bale.js');
-                    if (bale && bale.sendBotMessage) {
-                        botRes = await bale.sendBotMessage(targetUser.baleChatId, msg.message || '📎 فایل');
-                        msg.botPlatform = 'bale';
-                        msg.botChatId = targetUser.baleChatId;
-                        msg.botMessageId = botRes?.result?.message_id;
-                    }
-                }
-            } catch (e) {
-                console.error("Bot Sync Error:", e);
-            }
-        }
-    }
-
+    // Instantly append and resave database
     db.messages.push(msg); 
     saveDb(db); 
+    
+    // Instantly respond to client to maximize UI speed and responsiveness
     res.json(db.messages); 
 
-    // Chat Notification
+    // Synchronize with external bots asynchronously in the background so it never blocks the user
     if (msg.recipient) {
-        broadcastNotification(
-            `پیام از ${msg.sender}`,
-            `${msg.sender} پیام داد: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
-            '/chat',
-            null,
-            [msg.recipient],
-            [msg.senderUsername] // Exclude sender
-        );
-    } else if (msg.groupId) {
-        const group = db.groups?.find(g => g.id === msg.groupId);
-        if (group) {
+        (async () => {
+            const targetUser = db.users?.find(u => u.username === msg.recipient || u.fullName === msg.recipient);
+            if (targetUser) {
+                try {
+                    let botRes = null;
+                    let mutated = false;
+                    if (targetUser.telegramChatId && db.settings?.telegramBotToken) {
+                        const tg = await safeImport('./backend/telegram.js');
+                        if (tg && tg.sendBotMessage) {
+                            botRes = await tg.sendBotMessage(targetUser.telegramChatId, msg.message || '📎 فایل');
+                            msg.botPlatform = 'telegram';
+                            msg.botChatId = targetUser.telegramChatId;
+                            msg.botMessageId = botRes?.message_id;
+                            mutated = true;
+                        }
+                    } else if (targetUser.baleChatId && db.settings?.baleBotToken) {
+                        const bale = await safeImport('./backend/bale.js');
+                        if (bale && bale.sendBotMessage) {
+                            botRes = await bale.sendBotMessage(targetUser.baleChatId, msg.message || '📎 فایل');
+                            msg.botPlatform = 'bale';
+                            msg.botChatId = targetUser.baleChatId;
+                            msg.botMessageId = botRes?.result?.message_id;
+                            mutated = true;
+                        }
+                    }
+                    if (mutated) {
+                        saveDb(db);
+                    }
+                } catch (e) {
+                    console.error("Async Bot Sync Error:", e);
+                }
+            }
+        })().catch(console.error);
+    }
+
+    // Broadcast notifications asynchronously in the background
+    try {
+        if (msg.recipient) {
             broadcastNotification(
-                `${group.name}`,
+                `پیام از ${msg.sender}`,
+                `${msg.sender} پیام داد: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
+                '/chat',
+                null,
+                [msg.recipient],
+                [msg.senderUsername] // Exclude sender
+            );
+        } else if (msg.groupId) {
+            const group = db.groups?.find(g => g.id === msg.groupId);
+            if (group) {
+                broadcastNotification(
+                    `${group.name}`,
+                    `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
+                    '/chat',
+                    null,
+                    group.members.filter(m => m !== msg.senderUsername),
+                    [msg.senderUsername] // Exclude sender
+                );
+            }
+        } else {
+            // Public channel
+            broadcastNotification(
+                `گروه عمومی`,
                 `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
                 '/chat',
                 null,
-                group.members.filter(m => m !== msg.senderUsername),
+                null,
                 [msg.senderUsername] // Exclude sender
             );
         }
-    } else {
-        // Public channel
-        broadcastNotification(
-            `گروه عمومی`,
-            `${msg.sender}: ${msg.message || (msg.audioUrl ? '🎤 پیام صوتی' : '📎 فایل')}`,
-            '/chat',
-            null,
-            null,
-            [msg.senderUsername] // Exclude sender
-        );
+    } catch (e) {
+        console.error("Async broadcast notification error:", e);
     }
 });
 app.put('/api/chat/:id', (req, res) => { 

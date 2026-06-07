@@ -34,7 +34,7 @@ import { Preferences } from '@capacitor/preferences';
 import { App as CapacitorApp } from '@capacitor/app'; 
 import { PushNotifications } from '@capacitor/push-notifications'; 
 import { LocalNotifications } from '@capacitor/local-notifications'; 
-import { sendNotification, hasNotificationBeenShown, markNotificationAsShown, syncNativeShownNotifications } from './services/notificationService';
+import { sendNotification, hasNotificationBeenShown, markNotificationAsShown, syncNativeShownNotifications, clearAllActiveNotifications, setupNativePushNotifications } from './services/notificationService';
 import { motion, AnimatePresence } from 'motion/react';
 
 function App() {
@@ -681,7 +681,7 @@ function App() {
         
         const isNotFirstSync = !isFirstLoad.current;
 
-        // Process server notifications under super smart rules
+        // Process server notifications under ultra smart, responsive, and deduplicated rules
         if (notifsData && Array.isArray(notifsData)) {
             const mappedNotifs = notifsData.map((n: any) => ({
                 id: n.id,
@@ -692,48 +692,59 @@ function App() {
                 url: n.url
             }));
             
-            if (isNotFirstSync) {
-                const prevIds = notificationsRef.current.map(n => n.id);
-                // Filter unread notifications that have not been shown on this device, and are recent (created in active session)
-                const unnotifiedUnread = mappedNotifs.filter(n => {
-                    const isUnread = !n.read;
-                    // Deduplicate against API poll failures/emptying
-                    const isNew = prevIds.length > 0 && !prevIds.includes(n.id);
-                    const isNotShown = !hasNotificationBeenShown(n.id);
-                    
-                    // Critical: ONLY sound/toast if the notification happened AFTER this app session actually started
-                    // (we add 2000ms grace period of starting layout loads so old alerts don't chime on tab open/refreshes)
-                    const isRecent = n.timestamp > (sessionStartTimeRef.current + 2000);
-                    return isUnread && isNew && isNotShown && isRecent;
+            // Clean up / Mark older notifications as shown on first load to prevent spamming alarms
+            if (isFirstLoad.current) {
+                const now = Date.now();
+                mappedNotifs.forEach(n => {
+                    const isVeryRecent = (now - n.timestamp) < 300000; // 5 minutes
+                    if (!isVeryRecent) {
+                        markNotificationAsShown(n.id);
+                    }
                 });
+            }
+
+            const prevIds = notificationsRef.current.map(n => n.id);
+            // Filter unread notifications that have not been shown on this device yet
+            const unnotifiedUnread = mappedNotifs.filter(n => {
+                const isUnread = !n.read;
+                const isNotShown = !hasNotificationBeenShown(n.id);
+                // Alert if it is a dynamically received new notification, or if it is extremely recent (last 5 min)
+                const isDynamicNew = !isFirstLoad.current && (prevIds.length === 0 || !prevIds.includes(n.id));
+                const isVeryRecent = (Date.now() - n.timestamp) < 300000; // 5 minutes
                 
-                if (unnotifiedUnread.length > 0) {
-                    const chronNotifs = [...unnotifiedUnread].sort((a,b) => a.timestamp - b.timestamp);
-                    const latest = chronNotifs[0];
-                    
-                    // Do not alarm if the user is actively looking at the relevant section (e.g. Chat)
-                    const isLookingAtSection = latest.url && (latest.url === 'chat' || latest.url === '/chat' || latest.url === 'sales' || latest.url === '/sales') && activeTab === 'chat';
+                return isUnread && isNotShown && (isDynamicNew || isVeryRecent);
+            });
+            
+            if (unnotifiedUnread.length > 0) {
+                const chronNotifs = [...unnotifiedUnread].sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Show maximum of 3 notifications elements to prevent UI alarms spam
+                const alertsToShow = chronNotifs.slice(-3);
+                
+                alertsToShow.forEach((latest, index) => {
+                    // Do not play sounds or toast if the user is actively inside the corresponding view
+                    let isLookingAtSection = false;
+                    if (latest.url) {
+                        const path = latest.url.replace(/^\//, '').trim();
+                        if (path === 'chat' && activeTab === 'chat') isLookingAtSection = true;
+                    }
                     
                     if (!isLookingAtSection) {
-                        playNotificationSound();
+                        if (index === 0) {
+                            playNotificationSound();
+                        }
+                        
                         setToast({ show: true, title: latest.title, message: latest.message });
                         if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
                         toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
                         
+                        // Fire native/web push notification alert
                         sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
                     }
-                    
-                    // Mark as shown locally to defend against duplicate re-evaluation
-                    unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
-                    
-                    // Immediately mark as read/seen on the server so that background workers and other devices are instantly silenced!
-                    unnotifiedUnread.forEach(n => {
-                        apiCall('/notifications/read', 'POST', { username: currentUser.username, id: n.id }).catch(console.error);
-                    });
-                }
-            } else {
-                // Ensure all existing notifications are marked as shown on first load/sync so they stay completely silent
-                mappedNotifs.forEach(n => markNotificationAsShown(n.id));
+                });
+                
+                // Ensure marked as shown locally so they stay completely silent going forward
+                unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
             }
             
             notificationsRef.current = mappedNotifs;
@@ -857,6 +868,12 @@ function App() {
               clearInterval(heartbeatId);
           }; 
       } 
+  }, [currentUser]);
+
+  useEffect(() => {
+      if (currentUser) {
+          setupNativePushNotifications(currentUser.username, currentUser.role).catch(console.error);
+      }
   }, [currentUser]);
 
   // Synchronize Active Screen Views with Client and Server Notification read statuses
@@ -1103,6 +1120,11 @@ function App() {
                         onRefresh={() => loadData(true)} 
                         sharedData={sharedData}
                         onClearSharedData={() => setSharedData(null)}
+                        onMessagesRead={(msgIds) => {
+                            if (!currentUser) return;
+                            const idsSet = new Set(msgIds);
+                            setChatMessages(prev => prev.map(m => idsSet.has(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUser.username] } : m));
+                        }}
                     />
                 </div> 
             </div>

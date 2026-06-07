@@ -79,6 +79,95 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
+export const clearAllActiveNotifications = async () => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await PushNotifications.removeAllDeliveredNotifications();
+        } catch (e) {
+            console.error('Error removing delivered push notifications', e);
+        }
+        try {
+            await LocalNotifications.removeAllDeliveredNotifications();
+        } catch (e) {
+            console.error('Error removing delivered local notifications', e);
+        }
+    }
+};
+
+export const setupNativePushNotifications = async (username: string, role: string) => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+        // Clear old listeners first to protect against multiple callbacks
+        await PushNotifications.removeAllListeners();
+
+        // 1. Listen for successful registration & get the actual FCM registration token
+        await PushNotifications.addListener('registration', async (token) => {
+            console.log("FCM registration token achieved:", token.value);
+            try {
+                // Post to /api/subscribe so the server caches this native token securely
+                await apiCall('/subscribe', 'POST', {
+                    endpoint: token.value,
+                    username: username,
+                    role: role,
+                    type: 'android',
+                    deviceType: 'android',
+                    keys: {} // Standard parameters
+                });
+                console.log("FCM push token registered with server for user:", username);
+            } catch (e) {
+                console.error("Error subscribing FCM token on server", e);
+            }
+        });
+
+        // 2. Listen for registration failures
+        await PushNotifications.addListener('registrationError', (error) => {
+            console.error('Capacitor Push Registration Error:', JSON.stringify(error));
+        });
+
+        // 3. Listen for foreground push notification reception
+        await PushNotifications.addListener('pushNotificationReceived', async (notification) => {
+            console.log('FCM Push received in foreground:', notification);
+            const data = notification.data || {};
+            const idValue = data.id || '';
+            
+            // Prevent duplicated notification loops if it has already been shown
+            if (idValue && hasNotificationBeenShown(idValue)) {
+                return;
+            }
+
+            // Fire clean local toast/banner on Android screen immediately
+            try {
+                await LocalNotifications.schedule({
+                    notifications: [
+                        {
+                            title: notification.title || 'اعلان جدید',
+                            body: notification.body || '',
+                            id: Math.floor(Math.random() * 2147483647),
+                            schedule: { at: new Date(Date.now() + 50) },
+                            extra: data || null,
+                            channelId: 'default',
+                            smallIcon: 'res://ic_launcher',
+                            sound: 'default'
+                        }
+                    ]
+                });
+                if (idValue) markNotificationAsShown(idValue);
+            } catch (err) {
+                console.error('Error scheduling local notification for received FCM push', err);
+            }
+        });
+
+        // Request permissions and trigger register
+        const result = await PushNotifications.requestPermissions();
+        if (result.receive === 'granted') {
+            await PushNotifications.register();
+            console.log("PushNotifications registered for user:", username);
+        }
+    } catch (e) {
+        console.error("setupNativePushNotifications setup failed:", e);
+    }
+};
+
 export const subscribeToPushNotifications = async () => {
     if (Capacitor.isNativePlatform()) return; // Native handled by Capacitor plugin
 
