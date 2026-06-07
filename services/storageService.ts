@@ -56,6 +56,11 @@ export const updateExitPermitStatus = async (id: string, status: ExitPermitStatu
             updates.rejectedBy = approverUser.fullName;
         }
 
+        if (status === ExitPermitStatus.CANCELED) {
+            updates.rejectionReason = extra?.rejectionReason || 'کنسل شده';
+            updates.rejectedBy = approverUser.fullName;
+        }
+
         const updatedPermit = { ...permit, ...updates };
         return await apiCall<ExitPermit[]>(`/exit-permits/${id}`, 'PUT', updatedPermit);
     }

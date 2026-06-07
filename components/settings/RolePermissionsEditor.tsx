@@ -56,7 +56,8 @@ const PERMISSION_GROUPS = [
             { id: 'canApproveExitWarehouse', label: 'تایید خروج (سرپرست انبار/توزین)' },
             { id: 'canApproveExitSecurity', label: 'تایید خروج (انتظامات - نهایی)' },
             { id: 'canViewExitArchive', label: 'مشاهده بایگانی خروج' },
-            { id: 'canEditExitArchive', label: 'اصلاح اسناد بایگانی (Admin)' }
+            { id: 'canEditExitArchive', label: 'اصلاح اسناد بایگانی (Admin)' },
+            { id: 'canCancelExitPermit', label: 'ابطال/کنسلی برگه خروج کارخانه' }
         ] 
     }, 
     { 

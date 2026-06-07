@@ -130,6 +130,7 @@ export interface RolePermissions {
   canApproveExitSecurity?: boolean;
   canViewExitArchive?: boolean;
   canEditExitArchive?: boolean;
+  canCancelExitPermit?: boolean;
   canManageWarehouse?: boolean;
   canAccessCcti?: boolean;
   canManageCctiArchive?: boolean;
@@ -439,7 +440,8 @@ export enum ExitPermitStatus {
   PENDING_SECURITY = 'در انتظار خروج (انتظامات)',
   PENDING_FACTORY_FINAL = 'در انتظار تایید نهایی مدیر کارخانه',
   EXITED = 'خارج شده (بایگانی)',
-  REJECTED = 'رد شده'
+  REJECTED = 'رد شده',
+  CANCELED = 'کنسل شده'
 }
 
 export interface ExitPermitItem {

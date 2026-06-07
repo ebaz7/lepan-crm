@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExitPermit, ExitPermitStatus, User, UserRole, SystemSettings } from '../types';
 import { getExitPermits, updateExitPermitStatus, deleteExitPermit, editExitPermit } from '../services/storageService';
-import { getUsers } from '../services/authService';
+import { getUsers, getRolePermissions } from '../services/authService';
 import { apiCall } from '../services/apiService';
 import { formatDate, formatIranianPlate } from '../constants';
 import { 
@@ -74,7 +74,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     // ... (isMyTurn, getActionLabel, filtering logic remains same)
     const isMyTurn = (p: ExitPermit) => {
-        if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED) return false;
+        if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.CANCELED) return false;
         switch (currentUser.role) {
             case UserRole.CEO: return p.status === ExitPermitStatus.PENDING_CEO;
             case UserRole.FACTORY_MANAGER: return p.status === ExitPermitStatus.PENDING_FACTORY || p.status === ExitPermitStatus.PENDING_FACTORY_FINAL;
@@ -108,13 +108,13 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const myCartablePermits = getMyCartableFiltered();
     
     // Proformas: active invoices pending completion
-    const proformaArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED);
+    const proformaArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED);
     
     // Invoices Archive: all permits shown as invoices (maybe all non-rejected ones)
-    const invoiceArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.REJECTED);
+    const invoiceArchivePermits = permits.filter(p => p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED);
 
     // Exited Archive: only completed factory exits
-    const exitArchivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED);
+    const exitArchivePermits = permits.filter(p => p.status === ExitPermitStatus.EXITED || p.status === ExitPermitStatus.CANCELED);
 
     const canSeeProforma = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.CEO || currentUser?.role === UserRole.SALES_MANAGER;
 
@@ -137,7 +137,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
     const getStepStatus = (p: ExitPermit, step: 'CEO' | 'FACTORY' | 'WAREHOUSE' | 'SECURITY') => {
         if (p.status === ExitPermitStatus.EXITED) return 'done';
-        if (p.status === ExitPermitStatus.REJECTED) return 'rejected';
+        if (p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.CANCELED) return 'rejected';
 
         const statusOrder = [
             ExitPermitStatus.PENDING_CEO,
@@ -209,6 +209,139 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
         } catch (e) {
             alert('خطا در عملیات تایید');
+            setProcessingId(null);
+        }
+    };
+
+    const sendCancellationNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, reason: string) => {
+        const elementNoPrice = document.getElementById(`print-permit-autosend-noprice-${permit.id}`);
+        const elementWithPrice = document.getElementById(`print-permit-autosend-price-${permit.id}`);
+        
+        let base64NoPrice = '';
+        let base64WithPrice = '';
+        
+        try {
+            if (elementNoPrice) {
+                const canvasNoPrice = await html2canvas(elementNoPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                base64NoPrice = canvasNoPrice.toDataURL('image/png').split(',')[1];
+            }
+            if (elementWithPrice) {
+                const canvasWithPrice = await html2canvas(elementWithPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                base64WithPrice = canvasWithPrice.toDataURL('image/png').split(',')[1];
+            }
+        } catch (e) {
+            console.error("Canvas Gen Failed for Canceled", e);
+        }
+
+        try {
+            const targets = [];
+            const companyConfig = settings?.companyNotifications?.[permit.company || ''];
+            
+            // Group 1 IDs
+            let g1WA = companyConfig?.warehouseGroup || settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
+            let g1Bale = companyConfig?.baleChannelId || settings?.exitPermitNotificationBaleId;
+            let g1Tg = companyConfig?.telegramChannelId || settings?.exitPermitNotificationTelegramId;
+
+            // Group 2 IDs
+            const g2Config = settings?.exitPermitSecondGroupConfig;
+            let g2WA = g2Config?.groupId;
+            let g2Bale = g2Config?.baleId;
+            let g2Tg = g2Config?.telegramId;
+
+            if (g1WA) targets.push({ group: g1WA });
+            if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+            if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+
+            if (g2WA) targets.push({ group: g2WA });
+            if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+            if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+
+            let caption = `❌ *برگه خروج کارخانه ابطال/کنسل شد* ❌\n`;
+            caption += `🚨 *بار به هیچ عنوان خارج نشود!* 🚨\n\n`;
+            caption += `🔢 شماره برگه خروج: ${permit.permitNumber}\n`;
+            caption += `👤 گیرنده: ${permit.recipientName}\n`;
+            caption += `📦 کالا: ${permit.goodsName}\n`;
+            if (permit.plateNumber) caption += `🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}\n`;
+            if (permit.driverName) caption += `👨‍✈️ راننده: ${permit.driverName}\n`;
+            if (permit.driverPhone) caption += `📞 تماس راننده: ${permit.driverPhone}\n`;
+            caption += `\n💬 *دلیل کنسلی:* ${reason}\n`;
+            caption += `👤 لغو کننده: ${currentUser.fullName}`;
+
+            const mediaNoPrice = base64NoPrice ? { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_Canceled_${permit.permitNumber}.png` } : undefined;
+            const botMediaNoPrice = base64NoPrice ? { data: base64NoPrice, filename: `Permit_Canceled_${permit.permitNumber}.png` } : undefined;
+
+            for (const t of targets) {
+                if (t.group) {
+                    await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: mediaNoPrice });
+                }
+                if (t.platform) {
+                    await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: botMediaNoPrice });
+                }
+            }
+            
+            // Managers too
+            const allUsers = await getUsers();
+            const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+            const priceInfo = `\n💰 مبلغ: ${Number(permit.price || 0).toLocaleString()} ریال`;
+            
+            const mediaWithPrice = base64WithPrice ? { data: base64WithPrice, mimeType: 'image/png', filename: `Permit_Canceled_${permit.permitNumber}.png` } : undefined;
+            const botMediaWithPrice = base64WithPrice ? { data: base64WithPrice, filename: `Permit_Canceled_${permit.permitNumber}.png` } : undefined;
+
+            for (const m of managers) {
+                const tgId = (m as any).telegramId || (m as any).telegramChatId;
+                const blId = (m as any).baleId || (m as any).baleChatId;
+                const isGroup = (id: string) => id && (id.startsWith('-') || id.includes('@g.us'));
+                
+                const managerCaption = caption + (isGroup(String(tgId || blId || m.phoneNumber)) ? '' : priceInfo);
+                const managerMedia = isGroup(String(tgId || blId || m.phoneNumber)) ? mediaNoPrice : mediaWithPrice;
+                const managerBotMedia = isGroup(String(tgId || blId || m.phoneNumber)) ? botMediaNoPrice : botMediaWithPrice;
+
+                if (m.phoneNumber) {
+                    await apiCall('/send-whatsapp', 'POST', { number: m.phoneNumber, message: managerCaption, mediaData: managerMedia });
+                }
+                if (tgId) await apiCall('/send-bot-message', 'POST', { platform: 'telegram', chatId: tgId, caption: managerCaption, mediaData: managerBotMedia });
+                if (blId) await apiCall('/send-bot-message', 'POST', { platform: 'bale', chatId: blId, caption: managerCaption, mediaData: managerBotMedia });
+            }
+        } catch (e) {
+            console.error("Cancel notif failed", e);
+        }
+    };
+
+    const handleCancel = async (p: ExitPermit) => {
+        const perms = settings ? getRolePermissions(currentUser.role, settings, currentUser) : {};
+        const canCancel = currentUser.role === UserRole.ADMIN || perms.canCancelExitPermit === true;
+        if (!canCancel) {
+            alert('شما دسترسی لازم برای کنسل کردن برگه خروج را ندارید.');
+            return;
+        }
+
+        const reason = prompt('لطفاً دلیل لغو و کنسلی این برگه خروج را وارد نمایید:');
+        if (!reason) return;
+
+        setProcessingId(p.id);
+        try {
+            const nextStatus = ExitPermitStatus.CANCELED;
+            const updatedPermit = { 
+                ...p, 
+                status: nextStatus,
+                rejectionReason: reason,
+                rejectedBy: currentUser.fullName,
+                updatedAt: Date.now()
+            };
+
+            await updateExitPermitStatus(p.id, nextStatus, currentUser, { rejectionReason: reason });
+            
+            setActiveAutoSends(prev => [...prev, updatedPermit]);
+            
+            setTimeout(async () => {
+                await sendCancellationNotification(updatedPermit, p.status, reason);
+                setProcessingId(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
+                loadData();
+            }, 2500);
+
+        } catch (e) {
+            alert('خطا در انجام کنسلی برگه خروج');
             setProcessingId(null);
         }
     };
@@ -496,6 +629,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                          {getActionLabel(p.status)}
                      </button>
                 )}
+                {(currentUser.role === UserRole.ADMIN || (settings ? getRolePermissions(currentUser.role, settings, currentUser).canCancelExitPermit : false)) && 
+                 p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED && !processingId && (
+                     <button onClick={() => handleCancel(p)} className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
+                          کنسل کردن
+                     </button>
+                )}
                 <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
@@ -524,7 +663,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         return (
             <div key={p.id} className={`glass-panel rounded-2xl border transition-all relative overflow-hidden ${canAct ? 'border-blue-400 shadow-lg scale-[1.01]' : 'border-gray-200 shadow-sm opacity-90'}`}>
                 {canAct && <div className="absolute top-0 right-0 left-0 bg-blue-500 h-1.5 animate-pulse"></div>}
-                {p.status === ExitPermitStatus.REJECTED && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
+                {(p.status === ExitPermitStatus.REJECTED || p.status === ExitPermitStatus.CANCELED) && <div className="absolute top-0 right-0 left-0 h-1.5 bg-red-500"></div>}
                 
                 <div className="p-5">
                     <div className="flex justify-between items-start mb-4">
@@ -543,6 +682,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                 <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); handleApprove(p); }} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-2 transition-transform active:scale-95">
                                     <CheckCircle size={16}/> {getActionLabel(p.status)}
                                 </button>
+                            )}
+                            {(currentUser.role === UserRole.ADMIN || (settings ? getRolePermissions(currentUser.role, settings, currentUser).canCancelExitPermit : false)) && 
+                             p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED && !processingId && (
+                                 <button onClick={() => handleCancel(p)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-2 transition-transform active:scale-95" title="کنسل کردن">
+                                     <XCircle size={16}/> لغو/کنسل کردن
+                                 </button>
                             )}
                             <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
@@ -683,6 +828,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                 loadData(); setViewPermit(null); 
                             } 
                         } : undefined
+                    }
+                    onCancel={
+                        (currentUser.role === UserRole.ADMIN || (settings ? getRolePermissions(currentUser.role, settings, currentUser).canCancelExitPermit : false)) &&
+                        viewPermit.status !== ExitPermitStatus.EXITED &&
+                        viewPermit.status !== ExitPermitStatus.REJECTED &&
+                        viewPermit.status !== ExitPermitStatus.CANCELED
+                        ? () => { handleCancel(viewPermit); setViewPermit(null); }
+                        : undefined
                     }
                     onEdit={
                         (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && viewPermit.status === ExitPermitStatus.PENDING_CEO)) 

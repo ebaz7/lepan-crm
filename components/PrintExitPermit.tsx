@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void;
   onApprove?: () => void;
   onReject?: () => void;
+  onCancel?: () => void;
   onEdit?: () => void;
   settings?: SystemSettings;
   embed?: boolean; 
@@ -22,7 +23,7 @@ interface Props {
   onToggleMode?: (mode: 'PROFORMA' | 'EXIT' | 'CUSTOMER_INVOICE') => void;
 }
 
-export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onEdit, settings, embed, watermark, showPrice, mode = 'EXIT', onToggleMode }: Props) {
+export default function PrintExitPermit({ permit, onClose, onApprove, onReject, onCancel, onEdit, settings, embed, watermark, showPrice, mode = 'EXIT', onToggleMode }: Props) {
   const [sharePlatform, setSharePlatform] = useState<'whatsapp' | 'telegram' | 'bale' | null>(null);
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
@@ -271,6 +272,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
         }}>
             {watermark === 'DELETED' && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none overflow-hidden"><div className="border-[12px] border-red-500 text-red-500 font-black text-9xl opacity-40 rotate-[-45deg] p-10 rounded-3xl whitespace-nowrap bg-white/50 backdrop-blur-[2px]">حذف شد</div></div>)}
             {watermark === 'EDITED' && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none overflow-hidden"><div className="border-[12px] border-orange-500 text-orange-500 font-black text-9xl opacity-40 rotate-[-45deg] p-10 rounded-3xl whitespace-nowrap bg-white/50 backdrop-blur-[2px]">اصلاحیه</div></div>)}
+            {permit.status === ExitPermitStatus.CANCELED && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none overflow-hidden"><div className="border-[12px] border-red-600 text-red-600 font-black text-8xl opacity-40 rotate-[45deg] p-10 rounded-3xl whitespace-nowrap bg-white/50 backdrop-blur-[2px]">کنسل شد</div></div>)}
 
             <div className={`flex justify-between items-center ${mode === 'CUSTOMER_INVOICE' ? 'border-b-8 border-blue-900' : 'border-b-4 border-black'} pb-4 mb-4`}>
                 <div className="flex items-center gap-4">
@@ -535,10 +537,11 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
             )}
 
             <div className="flex items-center gap-2 flex-wrap justify-center">
-                {(onApprove || onReject) && (
+                {(onApprove || onReject || onCancel) && (
                     <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200/50">
                         {onApprove && <button onClick={onApprove} className="px-5 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2 text-[12px] font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 hover:bg-emerald-700 hover:shadow-lg"><CheckCircle size={14}/> تایید و صدور</button>}
                         {onReject && <button onClick={onReject} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-lg flex items-center gap-2 text-[12px] font-black transition-all active:scale-95 hover:bg-rose-100"><XCircle size={14}/> رد درخواست</button>}
+                        {onCancel && <button onClick={onCancel} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-[12px] font-black transition-all active:scale-95 hover:bg-red-100"><XCircle size={14}/> ابطال/کنسلی خروج</button>}
                     </div>
                 )}
                 
