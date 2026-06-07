@@ -104,12 +104,26 @@ public class SyncWorker extends Worker {
 
                     // Filter or check if already notified on this device locally (coherently shared with WebView)
                     String shownKey = "_cap_shown_" + id;
-                    if (!prefs.getBoolean(shownKey, false)) {
+                    boolean isShown = false;
+                    try {
+                        String val = prefs.getString(shownKey, null);
+                        if (val != null) {
+                            isShown = "true".equalsIgnoreCase(val);
+                        } else {
+                            isShown = prefs.getBoolean(shownKey, false);
+                        }
+                    } catch (Exception castEx) {
+                        try {
+                            isShown = prefs.getBoolean(shownKey, false);
+                        } catch (Exception ignored) {}
+                    }
+
+                    if (!isShown) {
                         if (newNotifCount < 3) {
                             // Show native notification
                             showNativeNotification(id, title, body);
                         }
-                        prefs.edit().putBoolean(shownKey, true).apply();
+                        prefs.edit().putString(shownKey, "true").apply();
                         newNotifCount++;
                     }
                 }

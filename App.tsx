@@ -624,8 +624,16 @@ function App() {
             }
         }).catch(err => console.error("Settings load error", err));
 
-        // Load Heavy Data in Parallel
-        const [ordersData, messagesData, announcementsData] = await Promise.all([getOrders(), getMessages(), getSystemAnnouncements()]);
+        // Load Heavy Data & Notifications in Parallel
+        const [ordersData, messagesData, announcementsData, notifsData] = await Promise.all([
+            getOrders(),
+            getMessages(),
+            getSystemAnnouncements(),
+            apiCall<any[]>(`/notifications?username=${currentUser.username}&role=${currentUser.role}`).catch(err => {
+                console.error("Notifications fetch failed", err);
+                return [];
+            })
+        ]);
         
         // --- SAFE GUARD & DEEP SANITIZATION ---
         const safeOrders = Array.isArray(ordersData) ? ordersData.map(o => ({
@@ -665,43 +673,44 @@ function App() {
         
         const isNotFirstSync = !isFirstLoad.current;
 
-        // Fetch server notifications
-        try {
-            const notifsData = await apiCall<{id:string, title:string, body:string, createdAt:number, readBy:string[], url:string}[]>(`/notifications?username=${currentUser.username}&role=${currentUser.role}`);
-            if (notifsData && Array.isArray(notifsData)) {
-                const mappedNotifs = notifsData.map((n: any) => ({
-                    id: n.id,
-                    title: n.title,
-                    message: n.body,
-                    timestamp: n.createdAt,
-                    read: n.readBy && n.readBy.includes(currentUser.username),
-                    url: n.url
-                }));
-                
-                if (isNotFirstSync) {
-                    const prevIds = notificationsRef.current.map(n => n.id);
-                    const newUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id));
-                    const unnotifiedUnread = newUnread.filter(n => !hasNotificationBeenShown(n.id));
-                    if (unnotifiedUnread.length > 0) {
-                        playNotificationSound();
-                        const latest = unnotifiedUnread[0];
-                        
-                        setToast({ show: true, title: latest.title, message: latest.message });
-                        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-                        toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
-                        
-                        // Send notification FIRST so sendNotification's hasNotificationBeenShown check is false initially
-                        sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
-                        
-                        // Then immediately mark ALL of them as shown to completely block them from repeating or trickling on subsequent intervals
-                        unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
-                    }
+        // Process server notifications
+        if (notifsData && Array.isArray(notifsData)) {
+            const mappedNotifs = notifsData.map((n: any) => ({
+                id: n.id,
+                title: n.title,
+                message: n.body,
+                timestamp: n.createdAt,
+                read: n.readBy && n.readBy.includes(currentUser.username),
+                url: n.url
+            }));
+            
+            if (isNotFirstSync) {
+                const prevIds = notificationsRef.current.map(n => n.id);
+                const newUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id));
+                const unnotifiedUnread = newUnread.filter(n => !hasNotificationBeenShown(n.id));
+                if (unnotifiedUnread.length > 0) {
+                    playNotificationSound();
+                    const latest = unnotifiedUnread[0];
+                    
+                    setToast({ show: true, title: latest.title, message: latest.message });
+                    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                    toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+                    
+                    // Send notification FIRST so sendNotification's hasNotificationBeenShown check is false initially
+                    sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
+                    
+                    // Then immediately mark ALL of them as shown to completely block them from repeating or trickling on subsequent intervals
+                    unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
                 }
-                
-                notificationsRef.current = mappedNotifs;
-                setNotifications(mappedNotifs);
+            } else {
+                // Ensure all existing notifications are marked as shown on first load/sync
+                // This shields the client from getting duplicate flashes on component mount or ref resets!
+                mappedNotifs.forEach(n => markNotificationAsShown(n.id));
             }
-        } catch (e) { console.error("Notification load err:", e); }
+            
+            notificationsRef.current = mappedNotifs;
+            setNotifications(mappedNotifs);
+        }
 
         if (safeMessages && safeMessages.length > 0) {
             const lastMsg = safeMessages[safeMessages.length - 1];
