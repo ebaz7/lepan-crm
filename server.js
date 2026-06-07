@@ -330,11 +330,12 @@ try {
 
 // --- NOTIFICATION HELPER ---
 const broadcastNotification = async (title, body, url = '/', targetRoles = null, targetUsernames = null, excludeUsernames = null) => {
+    const notifId = utils.generateUUID();
     try {
         const notifDb = getDb();
         if (!notifDb.notifications) notifDb.notifications = [];
         const newNotif = {
-            id: utils.generateUUID(),
+            id: notifId,
             title, body, url, targetRoles, targetUsernames, excludeUsernames,
             createdAt: Date.now(), readBy: []
         };
@@ -350,16 +351,12 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
         // Deduplicate within this broadcast attempt to be absolutely sure
         const seenEndpoints = new Set();
         const uniqueSubs = subs.filter(sub => {
-            if (seenEndpoints.has(sub.endpoint)) return false;
+            if (!sub.endpoint || seenEndpoints.has(sub.endpoint)) return false;
             seenEndpoints.add(sub.endpoint);
             return true;
         });
 
-        console.log(`>>> Broadcasting Notification: "${title}" to ${uniqueSubs.length} unique devices (Filtered from ${subs.length}).`);
-
-        const payload = JSON.stringify({ title, body, url, tab: url.replace('/', '') });
-
-        const sendPromises = uniqueSubs.filter(sub => {
+        const filteredSubs = uniqueSubs.filter(sub => {
             // 1. EXPLICIT EXCLUSION (e.g. Sender)
             if (excludeUsernames && excludeUsernames.includes(sub.username)) return false;
 
@@ -374,7 +371,40 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             if (targetRoles && !targetRoles.includes(sub.role)) return false;
             
             return true;
-        }).map(sub => {
+        });
+
+        // Group subscriptions by username to prioritize Android and prevent duplicates
+        const userSubsMap = {};
+        for (const sub of filteredSubs) {
+            const username = sub.username || 'unknown';
+            if (!userSubsMap[username]) {
+                userSubsMap[username] = [];
+            }
+            userSubsMap[username].push(sub);
+        }
+
+        const finalSendSubs = [];
+        for (const username in userSubsMap) {
+            const subsForUser = userSubsMap[username];
+            if (subsForUser.length > 1) {
+                // Sort so that 'android' comes first, then 'web'
+                subsForUser.sort((a, b) => {
+                    const typeA = a.type || a.deviceType || '';
+                    const typeB = b.type || b.deviceType || '';
+                    if (typeA === 'android' && typeB !== 'android') return -1;
+                    if (typeA !== 'android' && typeB === 'android') return 1;
+                    return 0;
+                });
+            }
+            // Only send to the top priority device (e.g., Android if registered, otherwise Web)
+            finalSendSubs.push(subsForUser[0]);
+        }
+
+        console.log(`>>> Broadcasting Notification: "${title}" (ID: ${notifId}) to ${finalSendSubs.length} unique/prioritized users (Filtered from ${subs.length} total active devices).`);
+
+        const payload = JSON.stringify({ id: notifId, title, body, url, tab: url.replace('/', '') });
+
+        const sendPromises = finalSendSubs.map(sub => {
             if (sub.type === 'android') {
                 const fcmServerKey = db.settings?.fcmServerKey || process.env.FCM_SERVER_KEY;
                 if (!fcmServerKey) {
@@ -392,6 +422,7 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
                         badge: '1'
                     },
                     data: {
+                        id: notifId,
                         title: title,
                         body: body,
                         url: url,

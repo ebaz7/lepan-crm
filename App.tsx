@@ -26,14 +26,15 @@ import CctiConverter from './components/CctiConverter';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers, getRolePermissions } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
-import { Loader2, Bell, X } from 'lucide-react';
+import { Loader2, Bell, X, MessageSquare, AlertTriangle, FileWarning, CreditCard, BellRing } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
 import { apiCall, getLocalData, LS_KEYS } from './services/apiService'; 
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app'; 
 import { PushNotifications } from '@capacitor/push-notifications'; 
 import { LocalNotifications } from '@capacitor/local-notifications'; 
-import { sendNotification } from './services/notificationService';
+import { sendNotification, hasNotificationBeenShown, markNotificationAsShown } from './services/notificationService';
+import { motion, AnimatePresence } from 'motion/react';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -675,13 +676,15 @@ function App() {
                 if (isNotFirstSync) {
                     const prevIds = notificationsRef.current.map(n => n.id);
                     const newUnread = mappedNotifs.filter(n => !n.read && !prevIds.includes(n.id));
-                    if (newUnread.length > 0) {
+                    const unnotifiedUnread = newUnread.filter(n => !hasNotificationBeenShown(n.id));
+                    if (unnotifiedUnread.length > 0) {
                         playNotificationSound();
-                        const latest = newUnread[0];
+                        const latest = unnotifiedUnread[0];
+                        markNotificationAsShown(latest.id);
                         setToast({ show: true, title: latest.title, message: latest.message });
                         if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-                        toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
-                        sendNotification(latest.title, latest.message, { url: latest.url });
+                        toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+                        sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
                     }
                 }
                 
@@ -867,22 +870,101 @@ function App() {
       }).length;
   }, [chatMessages, currentUser]);
 
+  const toastStyle = useMemo(() => {
+     if (!toast || !toast.title) return null;
+     const titleText = toast.title.toLowerCase();
+     const msgText = (toast.message || '').toLowerCase();
+     const combined = `${titleText} ${msgText}`;
+     
+     if (combined.includes('گفتگو') || combined.includes('پیام') || combined.includes('چت') || combined.includes('گروه') || combined.includes('پیام جدید')) {
+         return {
+             gradient: 'from-emerald-500 to-teal-600',
+             icon: <MessageSquare size={20} className="text-white" />,
+             badge: 'پیام گفتگو',
+             badgeBg: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400',
+             barColor: 'bg-emerald-500'
+         };
+     }
+     
+     if (combined.includes('ابطال') || combined.includes('کنسل') || combined.includes('رد شد') || combined.includes('خطا')) {
+         return {
+             gradient: 'from-rose-500 to-red-600',
+             icon: <AlertTriangle size={20} className="text-white animate-bounce" />,
+             badge: 'هشدار ابطال',
+             badgeBg: 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400',
+             barColor: 'bg-rose-500'
+         };
+     }
+
+     if (combined.includes('خروج') || combined.includes('سند خروج') || combined.includes('باربری') || combined.includes('مجوز')) {
+         return {
+             gradient: 'from-amber-600 to-orange-500',
+             icon: <FileWarning size={20} className="text-white" />,
+             badge: 'مجوز خروج',
+             badgeBg: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400',
+             barColor: 'bg-amber-500'
+         };
+     }
+
+     if (combined.includes('پرداخت') || combined.includes('تایید مالی') || combined.includes('صندوق') || combined.includes('چک') || combined.includes('حواله')) {
+         return {
+             gradient: 'from-blue-500 to-indigo-600',
+             icon: <CreditCard size={20} className="text-white" />,
+             badge: 'مالی و پرداخت',
+             badgeBg: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400',
+             barColor: 'bg-blue-500'
+         };
+     }
+
+     return {
+         gradient: 'from-indigo-500 to-purple-600',
+         icon: <BellRing size={20} className="text-white" />,
+         badge: 'اعلان سیستم',
+         badgeBg: 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400',
+         barColor: 'bg-indigo-500'
+     };
+  }, [toast]);
+
   return (
     <>
-        {toast && toast.show && (
-            <div className="fixed inset-x-0 top-6 z-[9999999] flex justify-center pointer-events-none w-full px-4">
-                <div className="glass-panel border border-white/50 dark:border-white/10 shadow-2xl rounded-2xl p-3 flex items-center gap-3 min-w-[280px] max-w-sm animate-slide-down backdrop-blur-3xl overflow-hidden pointer-events-auto cursor-pointer relative" onClick={closeToast}>
-                    <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                    <div className="bg-gradient-to-tr from-blue-500 to-indigo-600 p-2 rounded-xl text-white shadow-lg flex-shrink-0">
-                        <Bell size={18} />
-                    </div>
-                    <div className="flex-1 text-right">
-                        <h4 className="font-bold text-gray-900 dark:text-white text-xs mb-0.5 tracking-tight">{toast.title}</h4>
-                        <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-tight font-medium">{toast.message}</p>
-                    </div>
+        <AnimatePresence>
+            {toast && toast.show && toastStyle && (
+                <div className="fixed inset-x-0 top-6 z-[9999999] flex justify-center pointer-events-none w-full px-4">
+                    <motion.div
+                        initial={{ opacity: 0, y: -45, scale: 0.93 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -35, scale: 0.93 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 24 }}
+                        drag="y"
+                        dragConstraints={{ top: -30, bottom: 30 }}
+                        onDragEnd={(e, info) => {
+                            if (info.offset.y < -12 || info.offset.y > 20) {
+                                closeToast();
+                            }
+                        }}
+                        className="glass-panel border-2 border-white/70 dark:border-white/10 shadow-[0_15px_30px_-5px_rgba(0,0,0,0.18)] rounded-2xl p-3 flex items-center gap-3.5 min-w-[290px] max-w-sm pointer-events-auto cursor-pointer relative bg-white/95 dark:bg-gray-900/95 backdrop-blur-3xl overflow-hidden text-right select-none"
+                        onClick={closeToast}
+                    >
+                        {/* Elegant Left bar */}
+                        <div className={`absolute top-0 bottom-0 left-0 w-1.5 ${toastStyle.gradient.split(' ')[0].replace('from-', 'bg-')} shadow-[0_0_10px_rgba(59,130,246,0.3)]`}></div>
+                        
+                        {/* Rounded Dynamic Icon */}
+                        <div className={`bg-gradient-to-tr ${toastStyle.gradient} p-2.5 rounded-2xl text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
+                            {toastStyle.icon}
+                        </div>
+                        
+                        {/* Body labels */}
+                        <div className="flex-1 min-w-0 pr-1 select-none">
+                            <div className="flex justify-between items-baseline mb-0.5">
+                                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${toastStyle.badgeBg}`}>{toastStyle.badge}</span>
+                                <h4 className="font-extrabold text-gray-900 dark:text-white text-xs tracking-tight select-none">{toast.title}</h4>
+                            </div>
+                            <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed font-semibold max-h-[36px] overflow-hidden text-ellipsis line-clamp-2 select-none">{toast.message}</p>
+                        </div>
+                    </motion.div>
                 </div>
-            </div>
-        )}
+            )}
+        </AnimatePresence>
         {!currentUser ? (
             <Login onLogin={handleLogin} />
         ) : (

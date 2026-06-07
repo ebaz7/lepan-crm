@@ -8,6 +8,7 @@ import { Share, PlusSquare, X, Bell } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { getSettings } from '../services/storageService';
 import { getRolePermissions } from '../services/authService';
+import { markNotificationAsShown, hasNotificationBeenShown } from '../services/notificationService';
 
 interface Props {
     currentUser?: User | null;
@@ -164,12 +165,22 @@ const NotificationController: React.FC<Props> = ({ currentUser, onNotificationCl
         // Handle incoming notifications while app is open
         PushNotifications.addListener('pushNotificationReceived', async (notification) => {
             console.log('Push received: ', notification);
+            const notifId = notification.data?.id;
+            if (notifId && hasNotificationBeenShown(notifId)) {
+                console.log('Push notification ignored because it was already shown:', notifId);
+                return;
+            }
+
             const currentStr = `${notification.title}:${notification.body}`;
             const now = Date.now();
             if (currentStr === lastPushString && (now - lastPushTime < 5000)) return;
             lastPushString = currentStr;
             lastPushTime = now;
             
+            if (notifId) {
+                markNotificationAsShown(notifId);
+            }
+
             try {
                 // Display foreground notification as a native banner
                 await LocalNotifications.schedule({
@@ -193,6 +204,10 @@ const NotificationController: React.FC<Props> = ({ currentUser, onNotificationCl
 
         PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
             console.log('Push action performed: ', action);
+            const notifId = action.notification.data?.id;
+            if (notifId) {
+                markNotificationAsShown(notifId);
+            }
             if (onNotificationClick && action.notification.data) {
                 onNotificationClick(action.notification.data);
             }
@@ -201,6 +216,10 @@ const NotificationController: React.FC<Props> = ({ currentUser, onNotificationCl
         // Add LocalNotification listener as well for foreground tapped notifications
         LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
             console.log('Local action performed: ', action);
+            const notifId = action.notification.extra?.id;
+            if (notifId) {
+                markNotificationAsShown(notifId);
+            }
             if (onNotificationClick && action.notification.extra) {
                 onNotificationClick(action.notification.extra);
             }

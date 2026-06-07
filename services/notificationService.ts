@@ -115,12 +115,47 @@ export const subscribeToPushNotifications = async () => {
     }
 };
 
+export const hasNotificationBeenShown = (id: string): boolean => {
+    if (!id) return false;
+    try {
+        const key = 'shown_notifications_log';
+        const raw = localStorage.getItem(key);
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        return list.includes(id);
+    } catch {
+        return false;
+    }
+};
+
+export const markNotificationAsShown = (id: string) => {
+    if (!id) return;
+    try {
+        const key = 'shown_notifications_log';
+        const raw = localStorage.getItem(key);
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        if (!list.includes(id)) {
+            list.push(id);
+            if (list.length > 500) {
+                list.shift();
+            }
+            localStorage.setItem(key, JSON.stringify(list));
+        }
+    } catch (e) {
+        console.error("markNotificationAsShown error", e);
+    }
+};
+
 let lastNotificationString = '';
 let lastNotificationTime = 0;
 
 export const sendNotification = async (title: string, body: string, data?: any) => {
   if (!isNotificationEnabledInApp()) return;
   
+  const idValue = data?.id || '';
+  if (idValue && hasNotificationBeenShown(idValue)) {
+      return; // Already notified on this device, do not duplicate!
+  }
+
   const currentStr = `${title}:${body}`;
   const now = Date.now();
   if (currentStr === lastNotificationString && (now - lastNotificationTime < 5000)) {
@@ -128,6 +163,10 @@ export const sendNotification = async (title: string, body: string, data?: any) 
   }
   lastNotificationString = currentStr;
   lastNotificationTime = now;
+
+  if (idValue) {
+      markNotificationAsShown(idValue);
+  }
 
   if (Capacitor.isNativePlatform()) {
       try {
