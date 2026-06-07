@@ -2,6 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Preferences } from '@capacitor/preferences';
 import { apiCall } from './apiService';
 
 const PREF_KEY = 'app_notification_pref';
@@ -115,13 +116,54 @@ export const subscribeToPushNotifications = async () => {
     }
 };
 
+const shownInMemory = new Set<string>();
+
+export const syncNativeShownNotifications = async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+        const { keys } = await Preferences.keys();
+        const shownIdsFromNative: string[] = [];
+        for (const k of keys) {
+            if (k.startsWith('shown_')) {
+                const id = k.substring(6); // remove 'shown_'
+                shownIdsFromNative.push(id);
+            }
+        }
+        if (shownIdsFromNative.length > 0) {
+            const key = 'shown_notifications_log';
+            const raw = localStorage.getItem(key);
+            const list: string[] = raw ? JSON.parse(raw) : [];
+            let updated = false;
+            for (const id of shownIdsFromNative) {
+                shownInMemory.add(id);
+                if (!list.includes(id)) {
+                    list.push(id);
+                    updated = true;
+                }
+            }
+            if (updated) {
+                if (list.length > 500) list.splice(0, list.length - 500);
+                localStorage.setItem(key, JSON.stringify(list));
+                console.log('[NativeSync] Synchronized native shown notifications count:', shownIdsFromNative.length);
+            }
+        }
+    } catch (e) {
+        console.error('Error synchronizing native shown notifications', e);
+    }
+};
+
 export const hasNotificationBeenShown = (id: string): boolean => {
     if (!id) return false;
+    if (shownInMemory.has(id)) return true;
     try {
         const key = 'shown_notifications_log';
         const raw = localStorage.getItem(key);
         const list: string[] = raw ? JSON.parse(raw) : [];
-        return list.includes(id);
+        const found = list.includes(id);
+        if (found) {
+            shownInMemory.add(id);
+        }
+        return found;
     } catch {
         return false;
     }
@@ -129,6 +171,7 @@ export const hasNotificationBeenShown = (id: string): boolean => {
 
 export const markNotificationAsShown = (id: string) => {
     if (!id) return;
+    shownInMemory.add(id);
     try {
         const key = 'shown_notifications_log';
         const raw = localStorage.getItem(key);
@@ -139,6 +182,11 @@ export const markNotificationAsShown = (id: string) => {
                 list.shift();
             }
             localStorage.setItem(key, JSON.stringify(list));
+            
+            // Sync to native SharedPreferences as well so background worker can see it!
+            if (Capacitor.isNativePlatform()) {
+                Preferences.set({ key: `shown_${id}`, value: 'true' }).catch(console.error);
+            }
         }
     } catch (e) {
         console.error("markNotificationAsShown error", e);
@@ -147,6 +195,21 @@ export const markNotificationAsShown = (id: string) => {
 
 let lastNotificationString = '';
 let lastNotificationTime = 0;
+
+const getPwaIconUrl = (): string => {
+  try {
+    const cached = localStorage.getItem('app_data_settings');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.pwaIcon) {
+        return parsed.pwaIcon;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse settings for pwaIcon', e);
+  }
+  return '/pwa-192x192.png'; // default fallback
+};
 
 export const sendNotification = async (title: string, body: string, data?: any) => {
   if (!isNotificationEnabledInApp()) return;
@@ -179,7 +242,7 @@ export const sendNotification = async (title: string, body: string, data?: any) 
                       schedule: { at: new Date(Date.now() + 50) },
                       extra: data || null,
                       channelId: 'fcm_default_channel',
-                      smallIcon: 'res://ic_stat_name',
+                      smallIcon: 'res://ic_launcher',
                       sound: 'default'
                   }
               ]
@@ -190,19 +253,20 @@ export const sendNotification = async (title: string, body: string, data?: any) 
 
   if (Notification.permission === "granted") {
       try {
+          const iconUrl = getPwaIconUrl();
           // Check if SW is active to show via SW (more reliable)
           const registration = await navigator.serviceWorker.ready;
           if (registration && registration.active) {
               registration.showNotification(title, {
                   body,
-                  icon: '/pwa-192x192.png',
+                  icon: iconUrl,
                   dir: 'rtl',
                   lang: 'fa',
                   vibrate: [200, 100, 200],
                   data: data
               } as any);
           } else {
-              new Notification(title, { body, icon: '/pwa-192x192.png', dir: 'rtl', lang: 'fa' });
+              new Notification(title, { body, icon: iconUrl, dir: 'rtl', lang: 'fa' });
           }
       } catch (e) {
           console.error("Web Notification Error:", e);

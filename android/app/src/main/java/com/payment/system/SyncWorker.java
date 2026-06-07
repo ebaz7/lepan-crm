@@ -34,11 +34,14 @@ public class SyncWorker extends Worker {
         Log.d(TAG, "Background synchronization started...");
         
         try {
-            // Retrieve configuration values from preferences (synchronized from web interface)
+            // Retrieve configuration values from preferences (synchronized from web interface via Capacitor Storage API)
             SharedPreferences prefs = getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            String serverUrl = prefs.getString("server_url", DEFAULT_SERVER_URL);
-            String currentUserRaw = prefs.getString("current_user", "");
             
+            // Retrieve server url
+            String serverUrl = prefs.getString("_cap_server_url", null);
+            if (serverUrl == null) {
+                serverUrl = prefs.getString("server_url", DEFAULT_SERVER_URL);
+            }
             if (serverUrl == null || serverUrl.isEmpty()) {
                 serverUrl = DEFAULT_SERVER_URL;
             }
@@ -46,10 +49,29 @@ public class SyncWorker extends Worker {
                 serverUrl = serverUrl.substring(0, serverUrl.length() - 1);
             }
 
-            Log.d(TAG, "Syncing with Server: " + serverUrl);
+            // Retrieve username
+            String username = prefs.getString("_cap_user_username", null);
+            if (username == null) {
+                username = prefs.getString("user_username", "");
+            }
+
+            // Retrieve role
+            String role = prefs.getString("_cap_user_role", null);
+            if (role == null) {
+                role = prefs.getString("user_role", "");
+            }
+
+            // If no user is logged in, exit gracefully without errors
+            if (username == null || username.isEmpty() || role == null || role.isEmpty()) {
+                Log.d(TAG, "No user credentials synced yet. Skipping background sync.");
+                return Result.success();
+            }
+
+            Log.d(TAG, "Syncing background notifications for " + username + " (" + role + ") with Server: " + serverUrl);
             
-            // Fetch unread notifications
-            URL url = new URL(serverUrl + "/api/notifications/unread");
+            // Fetch unread notifications with correct querying parameters expected by server.js
+            String queryUrl = serverUrl + "/api/notifications?username=" + java.net.URLEncoder.encode(username, "UTF-8") + "&role=" + java.net.URLEncoder.encode(role, "UTF-8");
+            URL url = new URL(queryUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(10000);
@@ -78,26 +100,30 @@ public class SyncWorker extends Worker {
                     String title = notif.optString("title", "اعلان جدید");
                     String body = notif.optString("body", "");
                     
-                    // Filter or check if already notified on this device locally
-                    SharedPreferences logPrefs = getApplicationContext().getSharedPreferences("shown_notifications_log", Context.MODE_PRIVATE);
-                    if (!logPrefs.getBoolean(id, false)) {
-                        // Show native notification
-                        showNativeNotification(id, title, body);
-                        logPrefs.edit().putBoolean(id, true).apply();
+                    if (id.isEmpty()) continue;
+
+                    // Filter or check if already notified on this device locally (coherently shared with WebView)
+                    String shownKey = "_cap_shown_" + id;
+                    if (!prefs.getBoolean(shownKey, false)) {
+                        if (newNotifCount < 3) {
+                            // Show native notification
+                            showNativeNotification(id, title, body);
+                        }
+                        prefs.edit().putBoolean(shownKey, true).apply();
                         newNotifCount++;
                     }
                 }
-                Log.d(TAG, "Background sync completed successfully. Displayed " + newNotifCount + " new notifications.");
+                Log.d(TAG, "Background sync completed successfully. Displayed/Marked " + newNotifCount + " new notifications.");
+                return Result.success();
             } else {
                 Log.e(TAG, "Server returned response code: " + responseCode);
+                return Result.failure(); // Fail instead of retry to prevent WorkManager spam loop
             }
             
         } catch (Exception e) {
             Log.e(TAG, "Error performing background synchronization", e);
-            return Result.retry();
+            return Result.failure(); // Clean failure so we do not spam retry sequence
         }
-
-        return Result.success();
     }
 
     private void showNativeNotification(String id, String title, String body) {
@@ -127,12 +153,13 @@ public class SyncWorker extends Worker {
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
+                .setOnlyAlertOnce(true)
                 .setVibrate(new long[]{100, 200, 300, 400, 500});
 
         notificationManager.notify(id.hashCode(), builder.build());

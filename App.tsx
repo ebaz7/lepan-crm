@@ -28,12 +28,13 @@ import { getCurrentUser, getUsers, getRolePermissions } from './services/authSer
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
 import { Loader2, Bell, X, MessageSquare, AlertTriangle, FileWarning, CreditCard, BellRing } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
-import { apiCall, getLocalData, LS_KEYS } from './services/apiService'; 
+import { apiCall, getLocalData, LS_KEYS, getServerHost } from './services/apiService'; 
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import { App as CapacitorApp } from '@capacitor/app'; 
 import { PushNotifications } from '@capacitor/push-notifications'; 
 import { LocalNotifications } from '@capacitor/local-notifications'; 
-import { sendNotification, hasNotificationBeenShown, markNotificationAsShown } from './services/notificationService';
+import { sendNotification, hasNotificationBeenShown, markNotificationAsShown, syncNativeShownNotifications } from './services/notificationService';
 import { motion, AnimatePresence } from 'motion/react';
 
 function App() {
@@ -446,7 +447,11 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { const user = getCurrentUser(); if (user) setCurrentUser(user); }, []);
+  useEffect(() => { 
+    const user = getCurrentUser(); 
+    if (user) setCurrentUser(user); 
+    syncNativeShownNotifications().catch(console.error);
+  }, []);
 
   useEffect(() => {
     const handleTabChange = (e: any) => {
@@ -680,11 +685,16 @@ function App() {
                     if (unnotifiedUnread.length > 0) {
                         playNotificationSound();
                         const latest = unnotifiedUnread[0];
-                        markNotificationAsShown(latest.id);
+                        
                         setToast({ show: true, title: latest.title, message: latest.message });
                         if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
                         toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+                        
+                        // Send notification FIRST so sendNotification's hasNotificationBeenShown check is false initially
                         sendNotification(latest.title, latest.message, { id: latest.id, url: latest.url });
+                        
+                        // Then immediately mark ALL of them as shown to completely block them from repeating or trickling on subsequent intervals
+                        unnotifiedUnread.forEach(n => markNotificationAsShown(n.id));
                     }
                 }
                 
@@ -807,6 +817,30 @@ function App() {
         window.removeEventListener('online', triggerReload);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
+  }, [currentUser]);
+
+  useEffect(() => {
+    const syncSettings = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const host = getServerHost() || 'https://dlkam.ir';
+          if (currentUser) {
+            await Preferences.set({ key: 'user_username', value: currentUser.username });
+            await Preferences.set({ key: 'user_role', value: currentUser.role });
+            await Preferences.set({ key: 'user_logged_in', value: 'true' });
+          } else {
+            await Preferences.remove({ key: 'user_username' });
+            await Preferences.remove({ key: 'user_role' });
+            await Preferences.remove({ key: 'user_logged_in' });
+          }
+          await Preferences.set({ key: 'server_url', value: host });
+          console.log('[NativeSync] Synchronized user metadata across Preferences');
+        } catch (err) {
+          console.error('[NativeSync] Preferences sync failed:', err);
+        }
+      }
+    };
+    syncSettings();
   }, [currentUser]);
 
   useEffect(() => { 
