@@ -454,13 +454,22 @@ app.get('/api/notifications', (req, res) => {
     const notifs = (db.notifications || []).filter(n => {
          // 1. EXPLICIT EXCLUSION
          if (n.excludeUsernames && n.excludeUsernames.includes(username)) return false;
-         // 2. PRIVACY FILTER
-         if (n.targetUsernames && !n.targetUsernames.includes(username)) return false;
-         // 3. ALWAYS NOTIFY ADMIN for general system notifications
-         if (role === 'admin' && !n.targetUsernames) return true;
-         // 4. TARGET ROLES
-         if (n.targetRoles && !n.targetRoles.includes(role)) return false;
-         return true;
+         
+         // 2. PRIVACY FILTER: If targeted users are specified, must be in that list
+         if (n.targetUsernames) {
+             return n.targetUsernames.includes(username);
+         }
+         
+         // 3. TARGET ROLES: If targeted roles are specified, must be in that list
+         if (n.targetRoles) {
+             return n.targetRoles.includes(role);
+         }
+
+         // 4. ALWAYS ALLOW ADMIN for standard untargeted alerts
+         if (role === 'admin') return true;
+         
+         // Non-admin users should NOT receive notifications that are general unless they are specifically targeted
+         return false;
     });
     res.json(notifs.sort((a,b)=>b.createdAt - a.createdAt).slice(0, 100));
 });
@@ -572,6 +581,8 @@ app.post('/api/subscribe', (req, res) => {
     if (!db.subscriptions) db.subscriptions = [];
     
     const newSub = req.body;
+    newSub.updatedAt = Date.now(); // Record when this subscription was registered/refreshed
+    
     // Prevent duplicates and CLEANUP existing duplicates for this endpoint
     const idx = db.subscriptions.findIndex(s => s.endpoint === newSub.endpoint);
     
@@ -587,8 +598,13 @@ app.post('/api/subscribe', (req, res) => {
     const unique = [];
     for (const s of db.subscriptions) {
         if (!seen.has(s.endpoint)) {
-            seen.add(s.endpoint);
-            unique.push(s);
+            // Prune subscriptions older than 7 days (stale systems auto-disconnected)
+            const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const subTime = s.updatedAt || Date.now();
+            if (subTime > cutoff) {
+                seen.add(s.endpoint);
+                unique.push(s);
+            }
         }
     }
     db.subscriptions = unique;
@@ -601,10 +617,17 @@ app.post('/api/unsubscribe', (req, res) => {
     const db = getDb();
     if (!db.subscriptions) return res.json({});
     
-    // Unsubscribe by endpoint
-    if (req.body.endpoint) {
-        db.subscriptions = db.subscriptions.filter(s => s.endpoint !== req.body.endpoint);
+    const { endpoint, username } = req.body;
+    
+    // Unsubscribe by endpoint preferentially. 
+    // This allows logging out of one machine without disconnecting all of the user's devices.
+    if (endpoint) {
+        db.subscriptions = db.subscriptions.filter(s => s.endpoint !== endpoint);
+    } else if (username) {
+        // If no endpoint is specified, only then do we prune all devices for this username.
+        db.subscriptions = db.subscriptions.filter(s => s.username !== username);
     }
+    
     saveDb(db);
     res.json({});
 });
@@ -743,7 +766,7 @@ app.put('/api/orders/:id', (req, res) => {
             } else if (updatedOrder.status === 'تایید نهایی') {
                 broadcastNotification('تایید نهایی پرداخت', `سند #${updatedOrder.trackingNumber} تایید نهایی شد. لطفا نسبت به پرداخت اقدام کنید.`, '/payment-orders', ['FINANCIAL']);
             } else if (updatedOrder.status === 'رد شده') {
-                broadcastNotification('رد درخواست پرداخت', `سند #${updatedOrder.trackingNumber} رد شد.`, '/payment-orders');
+                broadcastNotification('رد درخواست پرداخت', `سند #${updatedOrder.trackingNumber} رد شد.`, '/payment-orders', ['ADMIN'], [updatedOrder.requester]);
             }
         }
 
@@ -838,9 +861,9 @@ app.put('/api/exit-permits/:id', (req, res) => {
             } else if (updatedPermit.status === 'در انتظار خروج') {
                 broadcastNotification('تایید انبار خروج', `مجوز #${updatedPermit.permitNumber} تایید انبار شد و در انتظار خروج است.`, '/security-panel', ['SECURITY_HEAD', 'SECURITY_GUARD']);
             } else if (updatedPermit.status === 'خارج شده (بایگانی)') {
-                broadcastNotification('خروج نهایی کالا', `مجوز #${updatedPermit.permitNumber} از کارخانه خارج شد.`, '/exit-permits');
+                broadcastNotification('خروج نهایی کالا', `مجوز #${updatedPermit.permitNumber} از کارخانه خارج شد.`, '/exit-permits', ['CEO', 'FACTORY_MANAGER', 'WAREHOUSE_KEEPER', 'SECURITY_HEAD', 'ADMIN'], [updatedPermit.requester]);
             } else if (updatedPermit.status === 'رد شده') {
-                broadcastNotification('رد مجوز خروج', `مجوز #${updatedPermit.permitNumber} رد شد.`, '/exit-permits');
+                broadcastNotification('رد مجوز خروج', `مجوز #${updatedPermit.permitNumber} رد شد.`, '/exit-permits', ['ADMIN'], [updatedPermit.requester]);
             }
         }
 
@@ -1570,6 +1593,18 @@ app.post('/api/heartbeat', (req, res) => {
     const user = db.users.find(u => u.username === username);
     if (user) {
         user.lastSeen = new Date().toISOString();
+        
+        // Keep active subscription timestamps fresh
+        if (db.subscriptions) {
+            let subUpdated = false;
+            db.subscriptions.forEach(s => {
+                if (s.username === username) {
+                    s.updatedAt = Date.now();
+                    subUpdated = true;
+                }
+            });
+        }
+        
         saveDb(db);
     }
     res.json({ success: true });

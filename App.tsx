@@ -24,7 +24,7 @@ import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import CctiConverter from './components/CctiConverter';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
-import { getCurrentUser, getUsers, getRolePermissions } from './services/authService';
+import { getCurrentUser, getUsers, getRolePermissions, logout as authLogout } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
 import { Loader2, Bell, X, MessageSquare, AlertTriangle, FileWarning, CreditCard, BellRing } from 'lucide-react';
 import { generateUUID, parsePersianDate, formatCurrency } from './constants';
@@ -34,7 +34,7 @@ import { Preferences } from '@capacitor/preferences';
 import { App as CapacitorApp } from '@capacitor/app'; 
 import { PushNotifications } from '@capacitor/push-notifications'; 
 import { LocalNotifications } from '@capacitor/local-notifications'; 
-import { sendNotification, hasNotificationBeenShown, markNotificationAsShown, syncNativeShownNotifications, clearAllActiveNotifications, setupNativePushNotifications } from './services/notificationService';
+import { sendNotification, hasNotificationBeenShown, markNotificationAsShown, syncNativeShownNotifications, syncServiceWorkerShownNotifications, clearAllActiveNotifications, setupNativePushNotifications } from './services/notificationService';
 import { motion, AnimatePresence } from 'motion/react';
 
 function App() {
@@ -540,6 +540,7 @@ function App() {
     const user = getCurrentUser(); 
     if (user) setCurrentUser(user); 
     syncNativeShownNotifications().catch(console.error);
+    syncServiceWorkerShownNotifications().catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -557,15 +558,24 @@ function App() {
 
   const handleLogout = async () => { 
       const endpoint = localStorage.getItem('push_endpoint');
-      if (endpoint) {
-          try {
-              await apiCall('/unsubscribe', 'POST', { endpoint });
-          } catch(e) {}
-      }
+      const user = currentUser;
+      
+      // SYNCHRONOUS FIRST: Clear local session records immediately to prevent any auto-login or state leaks
+      authLogout(); // Securely delete actual localStorage session user record
       localStorage.removeItem('push_endpoint');
       setCurrentUser(null); 
       isFirstLoad.current = true; 
       if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); 
+
+      // FIRE AND FORGET: Execute unsubscription in the background
+      if (endpoint || user?.username) {
+          apiCall('/unsubscribe', 'POST', { 
+              endpoint: endpoint || undefined,
+              username: user?.username || undefined
+          }).catch(e => {
+              console.error("Unregister push token failed on logout", e);
+          });
+      }
   };
 
   useEffect(() => {
@@ -678,6 +688,16 @@ function App() {
   const loadData = async (silent = false) => {
     if (!currentUser || isSyncingRef.current) return;
     isSyncingRef.current = true;
+
+    // Deduplicate background push shown alerts dynamically
+    try {
+        await Promise.all([
+            syncNativeShownNotifications().catch(() => {}),
+            syncServiceWorkerShownNotifications().catch(() => {})
+        ]);
+    } catch (e) {
+        console.warn("Deduplication sync failed", e);
+    }
     
     if (!silent && isFirstLoad.current) {
         const cachedOrders = getLocalData<PaymentOrder[]>(LS_KEYS.ORDERS, []);

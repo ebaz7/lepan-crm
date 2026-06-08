@@ -122,6 +122,9 @@ export const setupNativePushNotifications = async (username: string, role: strin
         await PushNotifications.addListener('registration', async (token) => {
             console.log("FCM registration token achieved:", token.value);
             try {
+                // Save token value to push_endpoint so logout can unregister it nicely
+                localStorage.setItem('push_endpoint', token.value);
+
                 // Post to /api/subscribe so the server caches this native token securely
                 await apiCall('/subscribe', 'POST', {
                     endpoint: token.value,
@@ -210,12 +213,17 @@ export const subscribeToPushNotifications = async () => {
         const userStr = localStorage.getItem('app_current_user');
         const user = userStr ? JSON.parse(userStr) : null;
 
+        const subData = subscription.toJSON();
         await apiCall('/subscribe', 'POST', {
-            ...subscription.toJSON(),
+            ...subData,
             username: user?.username,
             role: user?.role,
             type: 'web'
         });
+
+        if (subscription.endpoint) {
+            localStorage.setItem('push_endpoint', subscription.endpoint);
+        }
 
         console.log("✅ Web Push Subscribed Successfully");
     } catch (e) {
@@ -224,6 +232,39 @@ export const subscribeToPushNotifications = async () => {
 };
 
 const shownInMemory = new Set<string>();
+
+export const syncServiceWorkerShownNotifications = async () => {
+    try {
+        if ('caches' in window) {
+            const cache = await caches.open('shown-notifications-v1');
+            const requests = await cache.keys();
+            const key = 'shown_notifications_log';
+            const raw = localStorage.getItem(key);
+            const list: string[] = raw ? JSON.parse(raw) : [];
+            let updated = false;
+
+            for (const req of requests) {
+                const parts = req.url.split('/notification-shown/');
+                if (parts.length > 1) {
+                    const id = parts[1];
+                    shownInMemory.add(id);
+                    if (!list.includes(id)) {
+                        list.push(id);
+                        updated = true;
+                    }
+                }
+            }
+
+            if (updated) {
+                if (list.length > 500) list.splice(0, list.length - 500);
+                localStorage.setItem(key, JSON.stringify(list));
+                console.log('[SWSync] Synchronized service worker shown notifications. New database count:', list.length);
+            }
+        }
+    } catch (e) {
+        console.error('Error synchronizing service worker shown notifications', e);
+    }
+};
 
 export const syncNativeShownNotifications = async () => {
     if (!Capacitor.isNativePlatform()) return;
@@ -293,6 +334,16 @@ export const markNotificationAsShown = (id: string) => {
             // Sync to native SharedPreferences as well so background worker can see it!
             if (Capacitor.isNativePlatform()) {
                 Preferences.set({ key: `shown_${id}`, value: 'true' }).catch(console.error);
+            }
+
+            // Sync to Service Worker CacheStorage
+            if ('caches' in window) {
+                caches.open('shown-notifications-v1').then(cache => {
+                    cache.put(
+                        new Request(`/notification-shown/${id}`),
+                        new Response('true', { headers: { 'Content-Type': 'text/plain' } })
+                    ).catch(() => {});
+                }).catch(() => {});
             }
         }
     } catch (e) {

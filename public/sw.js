@@ -52,12 +52,26 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Function to mark notification as shown in CacheStorage
+async function markAsShownInCache(id) {
+  if (!id) return;
+  try {
+    const cache = await self.caches.open('shown-notifications-v1');
+    await cache.put(
+      new Request(`/notification-shown/${id}`),
+      new Response('true', { headers: { 'Content-Type': 'text/plain' } })
+    );
+  } catch (e) {
+    console.error('Failed to mark shown in service worker cache:', e);
+  }
+}
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   
   try {
     const data = event.data.json();
-      const options = {
+    const options = {
       body: data.body || 'اعلان جدید',
       icon: 'https://cdn-icons-png.flaticon.com/512/3135/3135706.png',
       badge: 'https://cdn-icons-png.flaticon.com/512/3135/3135706.png',
@@ -72,10 +86,13 @@ self.addEventListener('push', (event) => {
       renotify: true
     };
     
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'سامانه مالی', options)
-      .catch(err => console.error('Notification show error:', err))
-  );
+    const showPromise = self.registration.showNotification(data.title || 'سامانه مالی', options);
+    const savePromise = data.id ? markAsShownInCache(data.id) : Promise.resolve();
+    
+    event.waitUntil(
+      Promise.all([showPromise, savePromise])
+        .catch(err => console.error('Notification tasks error:', err))
+    );
   } catch (e) {
     console.error('Push handling error:', e);
   }
