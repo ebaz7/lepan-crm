@@ -47,6 +47,14 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
                       visibility: 1,
                       vibration: true,
                   });
+                  await LocalNotifications.createChannel({
+                      id: 'fcm_default_channel',
+                      name: 'FCM Default Channel',
+                      description: 'FCM Background Alerts',
+                      importance: 5,
+                      visibility: 1,
+                      vibration: true,
+                  });
               } catch (e) {
                   console.error('Create channel failed', e);
               }
@@ -155,7 +163,7 @@ export const setupNativePushNotifications = async (username: string, role: strin
                             id: Math.floor(Math.random() * 2147483647),
                             schedule: { at: new Date(Date.now() + 50) },
                             extra: data || null,
-                            channelId: 'default',
+                            channelId: 'fcm_default_channel',
                             smallIcon: 'res://ic_launcher',
                             sound: 'default'
                         }

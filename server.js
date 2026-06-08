@@ -373,34 +373,10 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             return true;
         });
 
-        // Group subscriptions by username to prioritize Android and prevent duplicates
-        const userSubsMap = {};
-        for (const sub of filteredSubs) {
-            const username = sub.username || 'unknown';
-            if (!userSubsMap[username]) {
-                userSubsMap[username] = [];
-            }
-            userSubsMap[username].push(sub);
-        }
+        // Deliver to all active registered devices of matching subscribers
+        const finalSendSubs = filteredSubs;
 
-        const finalSendSubs = [];
-        for (const username in userSubsMap) {
-            const subsForUser = userSubsMap[username];
-            if (subsForUser.length > 1) {
-                // Sort so that 'android' comes first, then 'web'
-                subsForUser.sort((a, b) => {
-                    const typeA = a.type || a.deviceType || '';
-                    const typeB = b.type || b.deviceType || '';
-                    if (typeA === 'android' && typeB !== 'android') return -1;
-                    if (typeA !== 'android' && typeB === 'android') return 1;
-                    return 0;
-                });
-            }
-            // Only send to the top priority device (e.g., Android if registered, otherwise Web)
-            finalSendSubs.push(subsForUser[0]);
-        }
-
-        console.log(`>>> Broadcasting Notification: "${title}" (ID: ${notifId}) to ${finalSendSubs.length} unique/prioritized users (Filtered from ${subs.length} total active devices).`);
+        console.log(`>>> Broadcasting Notification: "${title}" (ID: ${notifId}) to ${finalSendSubs.length} unique devices (Filtered from ${subs.length} total active devices).`);
 
         const payload = JSON.stringify({ id: notifId, title, body, url, tab: url.replace('/', '') });
 
