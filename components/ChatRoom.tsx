@@ -25,6 +25,8 @@ interface ChatRoomProps {
     sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
     onClearSharedData?: () => void;
     onMessagesRead?: (msgIds: string[]) => void;
+    directChatTarget?: { type: 'private' | 'group' | 'public', id: string } | null;
+    onClearDirectChatTarget?: () => void;
 }
 
 type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
@@ -153,7 +155,7 @@ const AudioPlayer: React.FC<{ url: string; isMe: boolean; duration?: number }> =
     );
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData, onMessagesRead }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onRefresh, sharedData, onClearSharedData, onMessagesRead, directChatTarget, onClearDirectChatTarget }) => {
     // --- Data State ---
     const [messages, setMessages] = useState<ChatMessage[]>(Array.isArray(preloadedMessages) ? preloadedMessages : []);
     const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
@@ -205,26 +207,41 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
     
-    // Check URL parameters for direct Chat Navigation
+    const notifiedMessageIdsRef = useRef<Set<string>>(new Set());
+
+    // Initialize the ref with existing messages so they don't trigger new notifications on mount
     useEffect(() => {
-        const checkUrl = () => {
-            const params = new URLSearchParams(window.location.search);
-            const pvUser = params.get('pv');
-            const groupUser = params.get('group');
-            if (pvUser) {
-                setActiveTab('CHATS');
-                setActiveChannel({ type: 'private', id: pvUser });
-                window.history.replaceState({}, '', window.location.pathname);
-            } else if (groupUser) {
-                setActiveTab('CHATS');
-                setActiveChannel({ type: 'group', id: groupUser });
-                window.history.replaceState({}, '', window.location.pathname);
-            }
-        };
-        checkUrl();
-        const interval = setInterval(checkUrl, 1000);
-        return () => clearInterval(interval);
+        if (messages.length > 0 && notifiedMessageIdsRef.current.size === 0) {
+            messages.forEach(m => notifiedMessageIdsRef.current.add(m.id));
+        }
+    }, [messages]);
+
+    // Check URL parameters for direct Chat Navigation on first load
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const pvUser = params.get('pv');
+        const groupUser = params.get('group');
+        if (pvUser) {
+            setActiveTab('CHATS');
+            setActiveChannel({ type: 'private', id: pvUser });
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (groupUser) {
+            setActiveTab('CHATS');
+            setActiveChannel({ type: 'group', id: groupUser });
+            window.history.replaceState({}, '', window.location.pathname);
+        }
     }, []);
+
+    // Handle directChatTarget updates dynamically
+    useEffect(() => {
+        if (directChatTarget && directChatTarget.id) {
+            setActiveTab('CHATS');
+            setActiveChannel({ type: directChatTarget.type as 'private' | 'group' | 'public' | 'task_group', id: directChatTarget.id });
+            if (onClearDirectChatTarget) {
+                onClearDirectChatTarget();
+            }
+        }
+    }, [directChatTarget, onClearDirectChatTarget]);
     
     // --- File Progress & Management ---
     const [fileProgress, setFileProgress] = useState<{ [key: string]: number }>({});
@@ -452,37 +469,50 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // Notification Trigger
     useEffect(() => {
-        if (messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
+        if (messages.length === 0 || !currentUser) return;
+
+        // Find genuinely new messages that have not been registered in notifiedMessageIdsRef
+        const newMessages = messages.filter(m => !notifiedMessageIdsRef.current.has(m.id));
+
+        // Mark them as processed instantly
+        newMessages.forEach(m => notifiedMessageIdsRef.current.add(m.id));
+
+        // If the window is hidden, process the last newly arrived message
+        const lastNewMsg = newMessages[newMessages.length - 1];
+        if (lastNewMsg && lastNewMsg.senderUsername !== currentUser.username && document.hidden) {
+            const channelId = lastNewMsg.groupId || lastNewMsg.senderUsername;
             
             // Validate if message is intended for the current user
-            const isPublic = !lastMsg.groupId && (!lastMsg.recipient || lastMsg.recipient.trim() === '');
-            const isGroupForMe = lastMsg.groupId && groups.some(g => g.id === lastMsg.groupId);
-            const isPrivateForMe = lastMsg.recipient && lastMsg.recipient.trim() !== '' && lastMsg.recipient === currentUser.username;
+            const isPublic = !lastNewMsg.groupId && (!lastNewMsg.recipient || lastNewMsg.recipient.trim() === '');
+            const isGroupForMe = lastNewMsg.groupId && groups.some(g => g.id === lastNewMsg.groupId);
+            const isPrivateForMe = lastNewMsg.recipient && lastNewMsg.recipient.trim() !== '' && lastNewMsg.recipient === currentUser.username;
             const isIntendedForMe = isPublic || isGroupForMe || isPrivateForMe;
-            
-            const channelId = lastMsg.groupId || lastMsg.senderUsername;
-            
-            if (lastMsg.senderUsername !== currentUser.username && document.hidden && !mutedChannels.has(channelId) && isIntendedForMe) {
-                let title = lastMsg.sender;
-                if (lastMsg.groupId) {
-                    const grp = groups.find(g => g.id === lastMsg.groupId);
-                    if (grp) title = `${lastMsg.sender} @ ${grp.name}`;
+
+            if (!mutedChannels.has(channelId) && isIntendedForMe) {
+                let title = lastNewMsg.sender;
+                if (lastNewMsg.groupId) {
+                    const grp = groups.find(g => g.id === lastNewMsg.groupId);
+                    if (grp) title = `${lastNewMsg.sender} @ ${grp.name}`;
                 }
                 
                 let bodyText = 'پیام جدید';
-                if (lastMsg.message && lastMsg.message.trim() !== '') {
-                    bodyText = lastMsg.message;
-                } else if (lastMsg.attachment) {
-                    bodyText = `📎 فایل ضمیمه: ${lastMsg.attachment.fileName || 'بدون نام'}`;
-                } else if (lastMsg.audioUrl) {
-                    bodyText = `🎤 پیام صوتی ${lastMsg.audioDuration ? `(${lastMsg.audioDuration} ثانیه)` : ''}`;
+                if (lastNewMsg.message && lastNewMsg.message.trim() !== '') {
+                    bodyText = lastNewMsg.message;
+                } else if (lastNewMsg.attachment) {
+                    bodyText = `📎 فایل ضمیمه: ${lastNewMsg.attachment.fileName || 'بدون نام'}`;
+                } else if (lastNewMsg.audioUrl) {
+                    bodyText = `🎤 پیام صوتی ${lastNewMsg.audioDuration ? `(${lastNewMsg.audioDuration} ثانیه)` : ''}`;
                 }
                 
-                sendNotification(title, bodyText, { tab: 'chat' });
+                const targetUrl = lastNewMsg.groupId 
+                    ? `/chat?group=${lastNewMsg.groupId}` 
+                    : `/chat?pv=${lastNewMsg.senderUsername}`;
+                
+                // Pass precise unique message ID to allow reliable deduplication on client and native platforms
+                sendNotification(title, bodyText, { id: lastNewMsg.id, url: targetUrl, tab: 'chat' });
             }
         }
-    }, [messages.length, mutedChannels, groups]);
+    }, [messages, mutedChannels, groups, currentUser]);
 
     const loadMeta = async () => {
         try {

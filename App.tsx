@@ -42,6 +42,7 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
+  const [directChatTarget, setDirectChatTarget] = useState<{ type: 'private' | 'group' | 'public', id: string } | null>(null);
 
   const activeTabRef = useRef(activeTab);
   const tabHistoryRef = useRef(tabHistory);
@@ -246,12 +247,29 @@ function App() {
                 return null;
             };
 
+            const mapNotificationToChatTarget = (urlStr: string | undefined) => {
+                if (!urlStr) return null;
+                try {
+                    const searchPart = urlStr.includes('?') ? urlStr.substring(urlStr.indexOf('?')) : '';
+                    const params = new URLSearchParams(searchPart);
+                    const pv = params.get('pv');
+                    const group = params.get('group');
+                    if (pv) return { type: 'private' as const, id: pv };
+                    if (group) return { type: 'group' as const, id: group };
+                } catch (e) {}
+                return null;
+            };
+
             PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                 const data = notification.notification.data;
                 console.log("Push Action Data:", data);
                 if (data && data.url) {
                     const mappedTab = mapNotificationUrlToTab(data.url);
                     if (mappedTab) setActiveTab(mappedTab);
+                    
+                    const chatTarget = mapNotificationToChatTarget(data.url);
+                    if (chatTarget) setDirectChatTarget(chatTarget);
+                    
                     if (data.url.includes('?')) {
                         const searchStr = data.url.substring(data.url.indexOf('?'));
                         if (searchStr.length > 1) window.history.pushState({}, '', window.location.pathname + searchStr);
@@ -265,6 +283,10 @@ function App() {
                 if (data && data.url) {
                     const mappedTab = mapNotificationUrlToTab(data.url);
                     if (mappedTab) setActiveTab(mappedTab);
+                    
+                    const chatTarget = mapNotificationToChatTarget(data.url);
+                    if (chatTarget) setDirectChatTarget(chatTarget);
+                    
                     if (data.url.includes('?')) {
                         const searchStr = data.url.substring(data.url.indexOf('?'));
                         if (searchStr.length > 1) window.history.pushState({}, '', window.location.pathname + searchStr);
@@ -425,6 +447,17 @@ function App() {
                 setSharedData({ fileUrl: sUrl || undefined, text: sText || undefined });
                 setActiveTab('chat');
             }
+            
+            // Extract chat direct targeting on deep link opening
+            const pv = params.get('pv');
+            const group = params.get('group');
+            if (pv || group) {
+                setDirectChatTarget({
+                    type: pv ? 'private' : 'group',
+                    id: pv || group || ''
+                });
+                setActiveTab('chat');
+            }
         } catch (e) {}
     };
 
@@ -438,6 +471,19 @@ function App() {
                 const url = new URL(event.data.url);
                 let path = url.pathname.replace(/^\/+/, '');
                 if (!path) path = url.hash.replace(/^#\/?/, '');
+                
+                // Extract search params
+                const params = new URLSearchParams(url.search);
+                const pv = params.get('pv');
+                const group = params.get('group');
+                
+                if (pv || group) {
+                    setDirectChatTarget({
+                        type: pv ? 'private' : 'group',
+                        id: pv || group || ''
+                    });
+                }
+
                 const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti'];
                 if (validTabs.includes(path) || path === '') {
                     setActiveTab(path || 'dashboard');
@@ -457,8 +503,21 @@ function App() {
     const sharedFileUrl = params.get('sharedFileUrl');
     const sharedText = params.get('sharedText');
     const sharedTitle = params.get('sharedTitle');
+    
+    const pv = params.get('pv');
+    const group = params.get('group');
 
-    if (sharedFileUrl || sharedText || sharedTitle) {
+    if (pv || group) {
+        setDirectChatTarget({
+            type: pv ? 'private' : 'group',
+            id: pv || group || ''
+        });
+        setActiveTab('chat');
+        try {
+            const urlWithoutParams = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
+            window.history.replaceState({ path: urlWithoutParams }, '', urlWithoutParams);
+        } catch (e) {}
+    } else if (sharedFileUrl || sharedText || sharedTitle) {
       setSharedData({
         fileUrl: sharedFileUrl || undefined,
         text: sharedText || undefined,
@@ -668,7 +727,15 @@ function App() {
             getSystemAnnouncements(),
             apiCall<any[]>(`/notifications?username=${currentUser.username}&role=${currentUser.role}`).catch(err => {
                 console.error("Notifications fetch failed", err);
-                return [];
+                // Return mapping of cached memory notifications to maintain continuity and prevent loop triggers
+                return notificationsRef.current.map(n => ({
+                    id: n.id,
+                    title: n.title,
+                    body: n.message,
+                    createdAt: n.timestamp,
+                    readBy: n.read ? [currentUser!.username] : [],
+                    url: n.url
+                }));
             })
         ]);
         
@@ -732,7 +799,7 @@ function App() {
                 const isUnread = !n.read;
                 const isNotShown = !hasNotificationBeenShown(n.id);
                 // Alert ONLY if it is a dynamically received completely new notification during active polling session
-                const isDynamicNew = !isFirstLoad.current && !prevIds.includes(n.id);
+                const isDynamicNew = !isFirstLoad.current && prevIds.length > 0 && !prevIds.includes(n.id);
                 
                 return isUnread && isNotShown && isDynamicNew;
             });
@@ -748,7 +815,8 @@ function App() {
                     let isLookingAtSection = false;
                     if (latest.url) {
                         const path = latest.url.replace(/^\//, '').trim();
-                        if (path === 'chat' && activeTabRef.current === 'chat' && document.visibilityState === 'visible') {
+                        const cleanPath = path.split('?')[0];
+                        if (cleanPath === 'chat' && activeTabRef.current === 'chat' && document.visibilityState === 'visible') {
                             isLookingAtSection = true;
                         }
                     }
@@ -1154,6 +1222,8 @@ function App() {
                             const idsSet = new Set(msgIds);
                             setChatMessages(prev => prev.map(m => idsSet.has(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUser.username] } : m));
                         }}
+                        directChatTarget={directChatTarget}
+                        onClearDirectChatTarget={() => setDirectChatTarget(null)}
                     />
                 </div> 
             </div>
