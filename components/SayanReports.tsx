@@ -76,6 +76,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       }
       
       const startTime = Date.now();
+      let proxyResult: any = null;
       
       const response = await fetch('/api/sayan-proxy', {
         method: 'POST',
@@ -85,6 +86,10 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             headers: { 'Authorization': `Bearer ${apiKey}` },
             method: 'GET'
         })
+      }).then(async r => {
+          const isJson = r.headers.get('content-type')?.includes('application/json');
+          proxyResult = isJson ? await r.clone().json().catch(() => null) : null;
+          return r;
       }).catch(err => {
         if (err.name === 'TypeError') {
           throw new Error('خطای ارتباط با سرور برنامه: مطمئن شوید سرور بک‌اِند در حال اجراست.');
@@ -97,21 +102,37 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       setDebugInfo({
         status: response.status,
         statusText: response.statusText,
-        url: response.url,
+        url: targetUrl,
         duration: `${duration}ms`,
-        headers: Array.from(response.headers.entries())
+        isLocal: proxyResult?.isLocalIp
       });
 
       if (!response.ok) {
-        const errorBody = await response.text().catch(() => 'No response body');
+        if (proxyResult?.isLocalIp && response.status === 500) {
+           throw new Error('⚠️ آدرس پل یک IP محلی است. سرور برنامه نمی‌تواند به شبکه داخلی شما وصل شود. \nراه حل: از Ngrok برای ایجاد یک آدرس عمومی (Public) برای پل استفاده کنید.');
+        }
+        
+        const errorBody = proxyResult ? JSON.stringify(proxyResult) : await response.text().catch(() => 'No response body');
         if (response.status === 500) {
-          throw new Error(`خطای داخلی سرور سایان (500): احتمالاً پل به بانک اطلاعاتی SQL متصل نیست.\nجزئیات: ${errorBody.substring(0, 100)}`);
+          throw new Error(`خطای داخلی سرور سایان (500): یا پل به دیتابیس وصل نیست یا آدرس اشتباه است.\nجزئیات: ${errorBody.substring(0, 50)}...`);
         }
         throw new Error(`خطای پاسخ (${response.status}): ${response.statusText}`);
       }
       
       const result = await response.json();
-      setData(Array.isArray(result) ? result : (result.data || []));
+      const finalData = Array.isArray(result) 
+        ? result 
+        : (result.data || result.rows || result.items || result.result || []);
+      
+      setData(finalData);
+      
+      if (!Array.isArray(finalData) || finalData.length === 0) {
+        if (result.message) {
+            setError(`سرور سایان پیام فرستاد: ${result.message}`);
+        } else if (!Array.isArray(finalData)) {
+            setError('فرمت پاسخ سرور سایان نامعتبر است (آرایه یافت نشد)');
+        }
+      }
     } catch (err: any) {
       console.error('Sayan Fetch Error:', err);
       setError(err.message || 'خطا در ارتباط با سرور سایان');
@@ -210,8 +231,9 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               <div className="mt-2 p-3 bg-gray-800 text-green-400 font-mono text-[10px] rounded-lg overflow-x-auto" dir="ltr">
                 <p># Request Diagnostics (via Proxy)</p>
                 <p>Target URL: {debugInfo.url}</p>
-                <p>Status: {debugInfo.status} {debugInfo.statusText}</p>
+                <p>Proxy Status: {debugInfo.status} {debugInfo.statusText}</p>
                 <p>Duration: {debugInfo.duration}</p>
+                {debugInfo.isLocal && <p className="text-yellow-400 font-bold mt-1">⚠️ Warning: Targeted IP is Local (Private). Server-side proxy cannot reach local IPs without a tunnel (Ngrok).</p>}
               </div>
             )}
             

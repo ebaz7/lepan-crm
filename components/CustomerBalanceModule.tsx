@@ -298,11 +298,11 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   // Calculations
   const totalDebtors = balances
     .filter(b => b.type === 'بدهکار')
-    .reduce((sum, b) => sum + b.balance, 0);
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   const totalCreditors = balances
     .filter(b => b.type === 'بستانکار')
-    .reduce((sum, b) => sum + b.balance, 0);
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   const filteredBalances = balances.filter(b => {
     const matchesSearch = 
@@ -358,9 +358,12 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
           <div>
             <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بدهکار (طلب شرکت)</span>
-            <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
-              {totalDebtors.toLocaleString()} <span className="text-xs font-medium text-gray-500">ریال</span>
+            <span className="text-2xl font-black text-emerald-600 leading-none">
+              {totalDebtors.toLocaleString('fa-IR')} <span className="text-[10px] font-medium text-gray-500">ریال</span>
             </span>
+            <div className="text-[11px] font-bold text-gray-500 mt-1">
+              ≈ {(totalDebtors/10).toLocaleString('fa-IR')} <span className="opacity-50">تومان</span>
+            </div>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl text-emerald-600">
             <TrendingUp className="w-6 h-6" />
@@ -370,9 +373,12 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
           <div>
             <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بستانکار (بدهی شرکت)</span>
-            <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
-              {totalCreditors.toLocaleString()} <span className="text-xs font-medium text-gray-500">ریال</span>
+            <span className="text-2xl font-black text-rose-600 leading-none">
+              {totalCreditors.toLocaleString('fa-IR')} <span className="text-[10px] font-medium text-gray-500">ریال</span>
             </span>
+            <div className="text-[11px] font-bold text-gray-500 mt-1">
+              ≈ {(totalCreditors/10).toLocaleString('fa-IR')} <span className="opacity-50">تومان</span>
+            </div>
           </div>
           <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl text-rose-600">
             <TrendingDown className="w-6 h-6" />
