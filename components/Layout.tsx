@@ -293,6 +293,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
   const canSeeCcti = currentUser.role === UserRole.ADMIN || perms.canAccessCcti === true;
+  const canSeeSayan = currentUser.role === UserRole.ADMIN || perms.canViewSayan === true;
   const canSeeNotifications = true;
 
   const navItems = [
@@ -305,6 +306,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   if (canViewInvoices) navItems.push({ id: 'manage-invoices', label: 'مدیریت فاکتورها', icon: FileText });
   if (canViewExit) navItems.push({ id: 'manage-exit', label: 'سوابق خروج', icon: ClipboardList });
   if (canManageWarehouse) navItems.push({ id: 'warehouse', label: 'مدیریت انبار', icon: Package });
+  if (canSeeSayan) navItems.push({ id: 'sayan', label: 'گزارشات سایان', icon: FileText });
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   if (canSeeMeetings) navItems.push({ id: 'meetings', label: 'جلسات تولید', icon: ClipboardList });
   if (canSeePurchase) navItems.push({ id: 'purchase', label: 'درخواست خرید', icon: ShoppingCart });
@@ -474,6 +476,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                                         tickets: 'تیکت‌ها',
                                         users: 'کاربران',
                                         ccti: 'تبدیل CCTI',
+                                        sayan: 'گزارشات سایان',
                                         settings: 'تنظیمات'
                                     }[itemId] || itemId;
 
