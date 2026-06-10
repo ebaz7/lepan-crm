@@ -1685,7 +1685,27 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                         </div>
                                         <div>
                                             <label className="text-xs font-black text-gray-500 block mb-1">توکن امنیتی (Bearer Token)</label>
-                                            <input type="password" placeholder="s_gate_live_..." className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiKey || ''} onChange={(e) => setSettings({...settings, sayanApiKey: e.target.value})} />
+                                            <div className="flex gap-2">
+                                                <input type="password" placeholder="s_gate_live_..." className="flex-1 border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiKey || ''} onChange={(e) => setSettings({...settings, sayanApiKey: e.target.value})} />
+                                                <button 
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if (!settings.sayanApiUrl) return alert('ابتدا آدرس API را وارد کنید');
+                                                        try {
+                                                            const res = await fetch(`${settings.sayanApiUrl.replace(/\/$/, '')}/invoices`, {
+                                                                headers: { 'Authorization': `Bearer ${settings.sayanApiKey}` }
+                                                            });
+                                                            if (res.ok) alert('✅ اتصال برقرار شد! سرور سایان پاسخ داد.');
+                                                            else alert(`❌ خطا در اتصال (${res.status}): ${res.statusText}`);
+                                                        } catch (e) {
+                                                            alert('❌ خطا: سرور در دسترس نیست یا CORS اجازه نمی‌دهد. (اطمینان حاصل کنید که آدرس درست است و http:// دارد)');
+                                                        }
+                                                    }}
+                                                    className="bg-blue-600 text-white px-4 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-blue-700 transition-colors"
+                                                >
+                                                    تست اتصال
+                                                </button>
+                                            </div>
                                             <p className="text-[9px] text-gray-400 mt-1 font-bold">فقط کد توکن را وارد کنید. کلمه Bearer به صورت خودکار اضافه می‌شود.</p>
                                         </div>
                                     </div>
