@@ -152,6 +152,7 @@ export interface RolePermissions {
   canCreateAnnouncements?: boolean;
   canViewCustomerBalances?: boolean;
   canImportCustomerBalances?: boolean;
+  canViewSayan?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -292,6 +293,8 @@ export interface SystemSettings {
   exitPermitNotificationGroup?: string; // Legacy field
   exitPermitFirstGroupConfig?: ExitPermitGroupConfig;
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
+  sayanApiUrl?: string;
+  sayanApiKey?: string;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;

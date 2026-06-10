@@ -38,20 +38,21 @@ const TABLE_DICTIONARY: Record<string, string> = {
   'dbo.AST_TBL_006': 'اسقاط و فروش دارایی‌ها',
 };
 
-const SayanReports: React.FC = () => {
+import { SystemSettings } from '../types';
+
+const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings }) => {
   const [activeTable, setActiveTable] = useState<string>('dbo.ACT_TBL_001');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // تنظیمات اتصال
-  const [baseUrl, setBaseUrl] = useState(localStorage.getItem('sayan_api_url') || 'http://localhost:8000/api');
-  const [apiKey, setApiKey] = useState(localStorage.getItem('sayan_api_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
+  const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://localhost:3000/api/external/v1';
+  const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || '';
 
   const fetchData = async () => {
     if (!baseUrl) {
-      setError('ابتدا آدرس API را در تنظیمات وارد کنید');
+      setError('ابتدا آدرس API را در تنظیمات عمومی برنامه قسمت API وارد کنید');
       return;
     }
     
@@ -105,13 +106,6 @@ const SayanReports: React.FC = () => {
     fetchData();
   }, [activeTable]);
 
-  const saveSettings = () => {
-    localStorage.setItem('sayan_api_url', baseUrl);
-    localStorage.setItem('sayan_api_key', apiKey);
-    setShowSettings(false);
-    fetchData();
-  };
-
   const exportToExcel = () => {
     if (!data.length) return;
     const ws = XLSX.utils.json_to_sheet(data);
@@ -129,9 +123,6 @@ const SayanReports: React.FC = () => {
             <Database className="text-blue-600" size={20} />
             <h2 className="font-bold text-gray-800 dark:text-gray-100">منابع سایان</h2>
           </div>
-          <button onClick={() => setShowSettings(!showSettings)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-            <Settings size={18} className="text-gray-500" />
-          </button>
         </div>
         
         <div className="p-2">
@@ -174,31 +165,6 @@ const SayanReports: React.FC = () => {
             </button>
           </div>
         </header>
-
-        {/* Settings Panel */}
-        {showSettings && (
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-            <div className="max-w-2xl">
-              <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
-                <Settings size={18} />
-                تنظیمات اتصال به API سایان
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">آدرس پایه API (Base URL)</label>
-                  <input type="text" dir="ltr" className="w-full p-2 border rounded-lg text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500" placeholder="http://192.168.1.100/api" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">کلید دسترسی (API Key)</label>
-                  <input type="password" dir="ltr" className="w-full p-2 border rounded-lg text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500" placeholder="Optional Auth Token..." value={apiKey} onChange={e => setApiKey(e.target.value)} />
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button onClick={saveSettings} className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow hover:bg-blue-700">ذخیره تنظیمات</button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Status Messages */}
         {error && (
