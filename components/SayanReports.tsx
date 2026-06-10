@@ -42,13 +42,13 @@ const TABLE_DICTIONARY: Record<string, string> = {
 import { SystemSettings } from '../types';
 
 const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings }) => {
-  const [activeTable, setActiveTable] = useState<string>('dbo.ACT_TBL_001');
+  const [activeTable, setActiveTable] = useState<string>('invoices');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // تنظیمات اتصال
-  const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://localhost:3000/api/external/v1';
+  const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://192.168.41.225:3000/api/external/v1';
   const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || '';
 
   const fetchData = async () => {
@@ -62,7 +62,11 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     setDebugInfo(null);
     
     try {
-      console.log(`Attempting to fetch from: ${baseUrl}/${activeTable.replace('dbo.', '')}`);
+      const url = baseUrl.replace(/\/$/, '');
+      const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
+      const targetUrl = `${url}/${cleanTable}`;
+      
+      console.log(`Fetching Sayan Data from: ${targetUrl}`);
       
       const headers: any = {
         'Accept': 'application/json',
@@ -71,17 +75,15 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
       
-      const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
       const startTime = Date.now();
       
-      const response = await fetch(`${baseUrl}/${cleanTable}`, {
+      const response = await fetch(targetUrl, {
         method: 'GET',
         headers,
         mode: 'cors'
       }).catch(err => {
-        // خطاهای سیستمی مانند DNS یا CORS
-        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
-          throw new Error('خطای شبکه یا CORS: مرورگر اجازه دسترسی مستقیم به این آدرس را نمی‌دهد یا آدرس اشتباه است.');
+        if (err.name === 'TypeError') {
+          throw new Error('عدم دسترسی به سرور: یا آدرس اشتباه است یا سرور سایان اجازه دسترسی (CORS) را به مرورگر نمی‌دهد.');
         }
         throw err;
       });
@@ -97,8 +99,11 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => 'No error body');
-        throw new Error(`خطای سرور (${response.status}): ${response.statusText} - ${errorText.substring(0, 50)}...`);
+        const errorBody = await response.text().catch(() => 'No response body');
+        if (response.status === 500) {
+          throw new Error(`خطای داخلی سرور سایان (500): احتمالاً پل به بانک اطلاعاتی SQL متصل نیست.\nجزئیات: ${errorBody.substring(0, 100)}`);
+        }
+        throw new Error(`خطای پاسخ (${response.status}): ${response.statusText}`);
       }
       
       const result = await response.json();
@@ -106,11 +111,6 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     } catch (err: any) {
       console.error('Sayan Fetch Error:', err);
       setError(err.message || 'خطا در ارتباط با سرور سایان');
-      
-      // اگر دیتایی نداریم و خطا داد، دیتای تستی نشان ندهیم تا کاربر خطا را ببیند
-      if (data.length === 0 && !activeTable.includes('TBL')) { 
-         // Fallback logic if needed
-      }
     } finally {
       setLoading(false);
     }

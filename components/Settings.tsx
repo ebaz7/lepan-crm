@@ -1690,15 +1690,38 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <button 
                                                     type="button"
                                                     onClick={async () => {
-                                                        if (!settings.sayanApiUrl) return alert('ابتدا آدرس API را وارد کنید');
+                                                        if (!settings.sayanApiUrl) return alert('❌ ابتدا آدرس API را وارد کنید');
+                                                        const url = settings.sayanApiUrl.replace(/\/$/, '');
                                                         try {
-                                                            const res = await fetch(`${settings.sayanApiUrl.replace(/\/$/, '')}/invoices`, {
-                                                                headers: { 'Authorization': `Bearer ${settings.sayanApiKey}` }
+                                                            const controller = new AbortController();
+                                                            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec timeout
+                                                            
+                                                            const res = await fetch(`${url}/invoices`, {
+                                                                headers: { 'Authorization': `Bearer ${settings.sayanApiKey}` },
+                                                                signal: controller.signal
                                                             });
-                                                            if (res.ok) alert('✅ اتصال برقرار شد! سرور سایان پاسخ داد.');
-                                                            else alert(`❌ خطا در اتصال (${res.status}): ${res.statusText}`);
-                                                        } catch (e) {
-                                                            alert('❌ خطا: سرور در دسترس نیست یا CORS اجازه نمی‌دهد. (اطمینان حاصل کنید که آدرس درست است و http:// دارد)');
+                                                            
+                                                            clearTimeout(timeoutId);
+
+                                                            if (res.ok) {
+                                                                alert('✅ اتصال کاملاً موفقیت‌آمیز بود!\nسرور سایان پاسخ داد و اطلاعات فاکتورها را ارسال کرد.');
+                                                            } else {
+                                                                const text = await res.text().catch(() => '');
+                                                                if (res.status === 500) {
+                                                                    alert(`⚠️ مشکل در SQL آن سمت:\nبه سرور پل (Bridge) وصل شدیم، اما خودِ پل خطای داخلی (500) داد. احتمالا تنظیمات اتصال به SQL در فایل config پل اشتباه است.\nجزئیات: ${text.substring(0, 100)}`);
+                                                                } else if (res.status === 401 || res.status === 403) {
+                                                                    alert(`❌ خطای احراز هویت (${res.status}):\nتوکن Bearer اشتباه است یا منقضی شده است.`);
+                                                                } else {
+                                                                    alert(`❌ خطای پاسخ سرور (${res.status}): ${res.statusText}\n${text.substring(0, 100)}`);
+                                                                }
+                                                            }
+                                                        } catch (e: any) {
+                                                            if (e.name === 'AbortError') {
+                                                                alert('❌ خطا: مهلت زمانی تمام شد (Timeout). سرور پاسخی نداد.');
+                                                            } else {
+                                                                alert('❌ خطای شبکه یا CORS:\n۱. مطمئن شوید آدرس درست است (http:// دارد).\n۲. اگر کنسول مرورگر خطای CORS می‌دهد، باید در سرور سایان اجازه دسترسی (Origin) داده شود.\n۳. مطمئن شوید فایروال سیستم مقصد پورت ۳۰۰۰ را نبسته است.');
+                                                            }
+                                                            console.error('Test Connection Error:', e);
                                                         }
                                                     }}
                                                     className="bg-blue-600 text-white px-4 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-blue-700 transition-colors"
