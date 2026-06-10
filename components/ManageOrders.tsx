@@ -149,32 +149,37 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
       return current;
   };
 
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
   const handleApprove = async (id: string, currentStatus: OrderStatus) => {
     const nextStatus = getNextStatus(currentStatus);
     const isRevocation = isRevocationStatus(currentStatus);
     
-    let msg = `آیا تایید مرحله "${getStatusLabel(nextStatus)}" را انجام می‌دهید؟`;
+    // For revocation we should still confirm as it's a destructive/critical action
     if (isRevocation) {
-        msg = `⚠️ تایید ابطال:\nوضعیت بعدی: ${getStatusLabel(nextStatus)}\nآیا اطمینان دارید؟`;
+        if (!window.confirm(`⚠️ تایید ابطال:\nوضعیت بعدی: ${getStatusLabel(nextStatus)}\nآیا اطمینان دارید؟`)) return;
     }
     
-    if (window.confirm(msg)) {
-        try {
-            const updatedOrders = await updateOrderStatus(id, nextStatus, currentUser); 
-            refreshData(); 
-            setViewOrder(null); 
-            
-            const order = updatedOrders.find(o => o.id === id);
-            if (order) {
-                const event = new CustomEvent('QUEUE_WHATSAPP_JOB', { 
-                    detail: { order: order, type: 'approve' } 
-                });
-                window.dispatchEvent(event);
-            }
-
-        } catch (e) {
-            alert('خطا در انجام عملیات');
+    setProcessingId(id);
+    try {
+        const updatedOrders = await updateOrderStatus(id, nextStatus, currentUser); 
+        
+        // Find the updated order to dispatch the WhatsApp job
+        // We do this BEFORE refreshData to be "fast"
+        const order = updatedOrders.find(o => o.id === id);
+        if (order) {
+            const event = new CustomEvent('QUEUE_WHATSAPP_JOB', { 
+                detail: { order: order, type: 'approve' } 
+            });
+            window.dispatchEvent(event);
         }
+
+        refreshData(); 
+        setViewOrder(null); 
+    } catch (e) {
+        alert('خطا در انجام عملیات');
+    } finally {
+        setProcessingId(null);
     }
   };
 
@@ -404,7 +409,10 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                             order={order} 
                             onView={setViewOrder} 
                             onDelete={handleDelete}
+                            onApprove={handleApprove}
                             canDelete={canDelete(order)}
+                            canApprove={canApprove(order)}
+                            isProcessing={processingId === order.id}
                         />
                     ))
                 )}
@@ -465,6 +473,16 @@ const ManageOrders: React.FC<ManageOrdersProps> = ({ orders, refreshData, curren
                                 )}
                             </td>
                             <td className="px-6 py-4"><div className="flex justify-center items-center gap-2">
+                                 {canApprove(order) && (
+                                    <button 
+                                       onClick={(e) => { e.stopPropagation(); handleApprove(order.id, order.status); }} 
+                                       disabled={processingId === order.id}
+                                       className="p-1.5 bg-green-50 text-green-600 hover:bg-green-600 hover:text-white rounded-lg transition-all shadow-sm border border-green-100"
+                                       title="تایید سریع"
+                                    >
+                                       {processingId === order.id ? <Loader2 size={16} className="animate-spin" /> : <ListChecks size={16}/>}
+                                    </button>
+                                 )}
                                  <button 
                                     onClick={() => setViewOrder(order)} 
                                     className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs transition-colors shadow-sm ${isRevocation ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'}`}

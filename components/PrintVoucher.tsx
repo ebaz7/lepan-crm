@@ -419,6 +419,8 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
       </div>
   );
 
+  const [approveLoading, setApproveLoading] = useState(false);
+
   const contentToRender = (printMode === 'bank_form' && canPrintBankForm) ? <DynamicBankFormOverlay /> : receiptContent;
   if (embed) return contentToRender;
 
@@ -435,7 +437,19 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
              
              {(onApprove || onReject || onEdit || onRevoke) && (
                 <div className="flex items-center justify-center gap-2 mb-1">
-                    {onApprove && <button onClick={onApprove} className={`px-3 py-1 rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 shadow-sm ${isRevocationProcess ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isRevocationProcess ? <XCircle size={12}/> : <CheckCircle size={12} />} {isRevocationProcess ? 'تایید ابطال' : 'تایید نهایی'}</button>}
+                    {onApprove && (
+                        <button 
+                            onClick={async () => {
+                                setApproveLoading(true);
+                                try { await onApprove(); } finally { setApproveLoading(false); }
+                            }} 
+                            disabled={approveLoading}
+                            className={`px-3 py-1 rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 shadow-sm ${isRevocationProcess ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                        >
+                            {approveLoading ? <Loader2 size={12} className="animate-spin"/> : (isRevocationProcess ? <XCircle size={12}/> : <CheckCircle size={12} />)}
+                            {isRevocationProcess ? 'تایید ابطال' : 'تایید نهایی'}
+                        </button>
+                    )}
                     {onReject && <button onClick={onReject} className="px-3 py-1 bg-white border border-red-200 text-red-600 rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-red-50"><XCircle size={12} /> رد</button>}
                     {onRevoke && !isRevocationProcess && !isRevoked && <button onClick={onRevoke} className="px-3 py-1 bg-white border border-orange-200 text-orange-600 rounded-lg flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 hover:bg-orange-50"><RotateCcw size={12} /> ابطال</button>}
                     {onEdit && !isRevocationProcess && <button onClick={onEdit} className="p-1 bg-white border border-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95"><Pencil size={12} /></button>}

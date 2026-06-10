@@ -14,18 +14,13 @@ export const getOrders = async (): Promise<PaymentOrder[]> => {
 export const saveOrder = async (order: PaymentOrder): Promise<PaymentOrder[]> => { return await apiCall<PaymentOrder[]>('/orders', 'POST', order); };
 export const editOrder = async (updatedOrder: PaymentOrder): Promise<PaymentOrder[]> => { return await apiCall<PaymentOrder[]>(`/orders/${updatedOrder.id}`, 'PUT', updatedOrder); };
 export const updateOrderStatus = async (id: string, status: OrderStatus, approverUser: User, rejectionReason?: string): Promise<PaymentOrder[]> => {
-  const orders = await getOrders();
-  const order = orders.find(o => o.id === id);
-  if (order) {
-      const updates: any = { status };
-      if (status === OrderStatus.APPROVED_FINANCE) updates.approverFinancial = approverUser.fullName;
-      else if (status === OrderStatus.APPROVED_MANAGER) updates.approverManager = approverUser.fullName;
-      else if (status === OrderStatus.APPROVED_CEO) updates.approverCeo = approverUser.fullName;
-      if (status === OrderStatus.REJECTED) { if (rejectionReason) updates.rejectionReason = rejectionReason; updates.rejectedBy = approverUser.fullName; }
-      const updatedOrder = { ...order, ...updates };
-      return await apiCall<PaymentOrder[]>(`/orders/${id}`, 'PUT', updatedOrder);
-  }
-  return orders;
+  const updates: any = { status };
+  if (status === OrderStatus.APPROVED_FINANCE) updates.approverFinancial = approverUser.fullName;
+  else if (status === OrderStatus.APPROVED_MANAGER) updates.approverManager = approverUser.fullName;
+  else if (status === OrderStatus.APPROVED_CEO) updates.approverCeo = approverUser.fullName;
+  if (status === OrderStatus.REJECTED) { if (rejectionReason) updates.rejectionReason = rejectionReason; updates.rejectedBy = approverUser.fullName; }
+  
+  return await apiCall<PaymentOrder[]>(`/orders/${id}`, 'PUT', updates);
 };
 export const deleteOrder = async (id: string): Promise<PaymentOrder[]> => { return await apiCall<PaymentOrder[]>(`/orders/${id}`, 'DELETE'); };
 

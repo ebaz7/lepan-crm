@@ -69,8 +69,8 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       smsSenderNumber: '', 
       googleCalendarId: '', 
       whatsappNumber: '', 
-      sayanApiUrl: '',
-      sayanApiKey: '',
+      sayanApiUrl: 'http://192.168.41.225:3000/api/external/v1',
+      sayanApiKey: 's_gate_live_urp2vvxzpik4',
       geminiApiKey: '',
       warehouseSequences: {},
       companyNotifications: {},
@@ -1694,39 +1694,46 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                         const url = settings.sayanApiUrl.replace(/\/$/, '');
                                                         try {
                                                             const controller = new AbortController();
-                                                            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec timeout
+                                                            const timeoutId = setTimeout(() => controller.abort(), 8000); 
                                                             
-                                                            const res = await fetch(`${url}/invoices`, {
-                                                                headers: { 'Authorization': `Bearer ${settings.sayanApiKey}` },
+                                                            const res = await fetch('/api/sayan-proxy', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({
+                                                                    url: `${url}/invoices`,
+                                                                    headers: { 'Authorization': `Bearer ${settings.sayanApiKey}` },
+                                                                    method: 'GET'
+                                                                }),
                                                                 signal: controller.signal
                                                             });
                                                             
                                                             clearTimeout(timeoutId);
 
+                                                            const data = await res.json();
+
                                                             if (res.ok) {
-                                                                alert('✅ اتصال کاملاً موفقیت‌آمیز بود!\nسرور سایان پاسخ داد و اطلاعات فاکتورها را ارسال کرد.');
+                                                                alert('✅ اتصال از طریق پروکسی موفقیت‌آمیز بود!\nسرور برنامه توانست به پل سایان وصل شود.');
                                                             } else {
-                                                                const text = await res.text().catch(() => '');
                                                                 if (res.status === 500) {
-                                                                    alert(`⚠️ مشکل در SQL آن سمت:\nبه سرور پل (Bridge) وصل شدیم، اما خودِ پل خطای داخلی (500) داد. احتمالا تنظیمات اتصال به SQL در فایل config پل اشتباه است.\nجزئیات: ${text.substring(0, 100)}`);
+                                                                    if (data.isLocalIp) {
+                                                                        alert('⚠️ خطا: آدرس IP وارد شده یک IP محلی (Private) است.\n\nسرور برنامه که در اینترنت قرار دارد نمی‌تواند مستقیم به سیستم شما وصل شود مگر اینکه:\n۱. از یک توکل مانند Ngrok استفاده کنید.\n۲. یا IP استاتیک (Public) داشته باشید و پورت را باز کنید.');
+                                                                    } else {
+                                                                        alert(`⚠️ مشکل در اتصال پل:\n${data.details || 'خطای ناشناخته'}`);
+                                                                    }
                                                                 } else if (res.status === 401 || res.status === 403) {
                                                                     alert(`❌ خطای احراز هویت (${res.status}):\nتوکن Bearer اشتباه است یا منقضی شده است.`);
                                                                 } else {
-                                                                    alert(`❌ خطای پاسخ سرور (${res.status}): ${res.statusText}\n${text.substring(0, 100)}`);
+                                                                    alert(`❌ خطای پاسخ سرور (${res.status}): ${res.statusText}`);
                                                                 }
                                                             }
                                                         } catch (e: any) {
-                                                            if (e.name === 'AbortError') {
-                                                                alert('❌ خطا: مهلت زمانی تمام شد (Timeout). سرور پاسخی نداد.');
-                                                            } else {
-                                                                alert('❌ خطای شبکه یا CORS:\n۱. مطمئن شوید آدرس درست است (http:// دارد).\n۲. اگر کنسول مرورگر خطای CORS می‌دهد، باید در سرور سایان اجازه دسترسی (Origin) داده شود.\n۳. مطمئن شوید فایروال سیستم مقصد پورت ۳۰۰۰ را نبسته است.');
-                                                            }
                                                             console.error('Test Connection Error:', e);
+                                                            alert('❌ خطای ارتباط با سرور برنامه! مطمئن شوید که به اینترنت متصل هستید.');
                                                         }
                                                     }}
                                                     className="bg-blue-600 text-white px-4 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-blue-700 transition-colors"
                                                 >
-                                                    تست اتصال
+                                                    تست اتصال (از طریق سرور)
                                                 </button>
                                             </div>
                                             <p className="text-[9px] text-gray-400 mt-1 font-bold">فقط کد توکن را وارد کنید. کلمه Bearer به صورت خودکار اضافه می‌شود.</p>

@@ -474,6 +474,48 @@ app.get('/api/notifications', (req, res) => {
     res.json(notifs.sort((a,b)=>b.createdAt - a.createdAt).slice(0, 100));
 });
 
+/**
+ * SAYAN API PROXY
+ * Used to bypass CORS and Mixed Content (HTTPS -> HTTP) issues.
+ */
+app.post('/api/sayan-proxy', async (req, res) => {
+    const { url, headers, method = 'GET', body } = req.body;
+    
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+    
+    try {
+        console.log(`[Sayan Proxy] ${method} -> ${url}`);
+        
+        const fetchOptions = {
+            method,
+            headers: {
+                ...headers,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        };
+
+        if (body && (method === 'POST' || method === 'PUT')) {
+            fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+        }
+
+        const response = await fetch(url, fetchOptions);
+        const data = await response.json().catch(async () => {
+            const text = await response.text().catch(() => '');
+            return { rawBody: text };
+        });
+
+        res.status(response.status).json(data);
+    } catch (error) {
+        console.error('[Sayan Proxy Error]', error);
+        res.status(500).json({ 
+            error: 'Sayan Bridge Connection Failed', 
+            details: error.message,
+            isLocalIp: url.includes('192.168.') || url.includes('10.') || url.includes('127.0.0.1')
+        });
+    }
+});
+
 app.post('/api/notifications/read', (req, res) => {
     const { username, id } = req.body;
     const db = getDb();

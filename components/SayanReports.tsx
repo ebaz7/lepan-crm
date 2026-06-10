@@ -49,7 +49,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   
   // تنظیمات اتصال
   const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://192.168.41.225:3000/api/external/v1';
-  const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || '';
+  const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || 's_gate_live_urp2vvxzpik4';
 
   const fetchData = async () => {
     if (!baseUrl) {
@@ -77,13 +77,17 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       
       const startTime = Date.now();
       
-      const response = await fetch(targetUrl, {
-        method: 'GET',
-        headers,
-        mode: 'cors'
+      const response = await fetch('/api/sayan-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            url: targetUrl,
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            method: 'GET'
+        })
       }).catch(err => {
         if (err.name === 'TypeError') {
-          throw new Error('عدم دسترسی به سرور: یا آدرس اشتباه است یا سرور سایان اجازه دسترسی (CORS) را به مرورگر نمی‌دهد.');
+          throw new Error('خطای ارتباط با سرور برنامه: مطمئن شوید سرور بک‌اِند در حال اجراست.');
         }
         throw err;
       });
@@ -204,22 +208,16 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             
             {showDebug && debugInfo && (
               <div className="mt-2 p-3 bg-gray-800 text-green-400 font-mono text-[10px] rounded-lg overflow-x-auto" dir="ltr">
-                <p># Request Diagnostics</p>
-                <p>URL: {debugInfo.url}</p>
+                <p># Request Diagnostics (via Proxy)</p>
+                <p>Target URL: {debugInfo.url}</p>
                 <p>Status: {debugInfo.status} {debugInfo.statusText}</p>
                 <p>Duration: {debugInfo.duration}</p>
-                <p className="mt-2 text-white"># Headers:</p>
-                {debugInfo.headers?.map(([k, v]: any) => (
-                  <p key={k}>{k}: {v}</p>
-                ))}
               </div>
             )}
             
-            {error.includes('CORS') && (
-              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-bold">
-                💡 راهنمایی: اگر API روی سیستم محلی شما (localhost) است، مطمئن شوید که نرم‌افزار "سایان" اجازه دسترسی CORS را به این دامنه داده است. همچنین آدرس را با http:// شروع کنید.
-              </div>
-            )}
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
+              <span className="font-bold">💡 راهنمایی:</span> درخواست‌ها اکنون از طریق سرور (Proxy) ارسال می‌شوند تا مشکل Mixed Content حل شود. اگر همچنان خطا دریافت می‌کنید، مطمئن شوید آدرس IP سیستم مقصد برای سرور برنامه قابل دسترس است (مثلاً از یک تونل Ngrok یا IP استاتیک استفاده کنید).
+            </div>
           </div>
         )}
 

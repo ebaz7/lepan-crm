@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { PaymentOrder, User, OrderStatus, UserRole } from '../../types';
 import MobileOrderCard from './MobileOrderCard';
 import { Search, Filter, RefreshCcw } from 'lucide-react';
-import { deleteOrder } from '../../services/storageService';
+import { deleteOrder, updateOrderStatus } from '../../services/storageService';
 import PrintVoucher from '../PrintVoucher';
 
 interface Props {
@@ -31,6 +31,43 @@ const MobileOrderList: React.FC<Props> = ({ orders, currentUser, refreshData }) 
       await deleteOrder(id);
       refreshData();
     }
+  };
+
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const canApprove = (order: PaymentOrder) => {
+      if (order.status === OrderStatus.APPROVED_CEO || order.status === OrderStatus.PAID || order.status === OrderStatus.REVOKED || order.status === OrderStatus.REJECTED) return false;
+      const role = currentUser.role;
+      if (role === UserRole.FINANCIAL && order.status === OrderStatus.PENDING) return true;
+      if (role === UserRole.MANAGER && order.status === OrderStatus.APPROVED_FINANCE) return true;
+      if (role === UserRole.CEO && order.status === OrderStatus.APPROVED_MANAGER) return true;
+      return false;
+  };
+
+  const handleApprove = async (id: string, currentStatus: OrderStatus) => {
+      const getNextStatus = (s: OrderStatus) => {
+          if (s === OrderStatus.PENDING) return OrderStatus.APPROVED_FINANCE;
+          if (s === OrderStatus.APPROVED_FINANCE) return OrderStatus.APPROVED_MANAGER;
+          if (s === OrderStatus.APPROVED_MANAGER) return OrderStatus.APPROVED_CEO;
+          return s;
+      };
+      
+      setProcessingId(id);
+      try {
+          const updatedOrders = await updateOrderStatus(id, getNextStatus(currentStatus), currentUser);
+          const order = updatedOrders.find(o => o.id === id);
+          if (order) {
+              const event = new CustomEvent('QUEUE_WHATSAPP_JOB', { 
+                  detail: { order: order, type: 'approve' } 
+              });
+              window.dispatchEvent(event);
+          }
+          refreshData();
+      } catch (e) {
+          alert('خطا در انجام عملیات');
+      } finally {
+          setProcessingId(null);
+      }
   };
 
   const canDelete = (order: PaymentOrder) => {
@@ -79,7 +116,10 @@ const MobileOrderList: React.FC<Props> = ({ orders, currentUser, refreshData }) 
               order={order} 
               onView={setSelectedOrder} 
               onDelete={handleDelete}
+              onApprove={handleApprove}
               canDelete={canDelete(order)}
+              canApprove={canApprove(order)}
+              isProcessing={processingId === order.id}
             />
           ))
         )}

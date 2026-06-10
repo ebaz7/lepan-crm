@@ -8,10 +8,13 @@ interface Props {
   order: PaymentOrder;
   onView: (order: PaymentOrder) => void;
   onDelete?: (id: string) => void;
+  onApprove?: (id: string, currentStatus: OrderStatus) => void;
   canDelete: boolean;
+  canApprove: boolean;
+  isProcessing?: boolean;
 }
 
-const MobileOrderCard: React.FC<Props> = ({ order, onView, onDelete, canDelete }) => {
+const MobileOrderCard: React.FC<Props> = ({ order, onView, onDelete, onApprove, canDelete, canApprove, isProcessing }) => {
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
       case OrderStatus.APPROVED_CEO: return 'bg-green-100 text-green-800 border-green-200';
@@ -53,6 +56,15 @@ const MobileOrderCard: React.FC<Props> = ({ order, onView, onDelete, canDelete }
         </span>
 
         <div className="flex gap-2">
+          {canApprove && onApprove && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onApprove(order.id, order.status); }} 
+              disabled={isProcessing}
+              className={`p-2 rounded-xl transition-all ${isProcessing ? 'bg-gray-100 text-gray-400' : 'bg-green-50 text-green-600 active:bg-green-600 active:text-white'}`}
+            >
+              <CheckCircle size={18} className={isProcessing ? 'animate-pulse' : ''} />
+            </button>
+          )}
           {canDelete && onDelete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(order.id); }} 
