@@ -78,6 +78,17 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const normalizeNumber = (val: any): number => {
+      if (val === undefined || val === null || val === '') return 0;
+      let str = String(val).trim();
+      // Replace Persian/Arabic digits with English
+      str = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+               .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      // Remove commas and other common separators
+      str = str.replace(/,/g, '').replace(/،/g, '');
+      return Number(str) || 0;
+    };
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
@@ -97,7 +108,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           const keys = Object.keys(row);
           if (keys.length === 0) continue;
 
-          // Robust column extraction logic mappings
+          // ... (existing mapping)
           const accountCodeRow = 
             row['کد تفصیلی'] || 
             row['کد حساب'] || 
@@ -129,9 +140,9 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           if (name === 'عنوان' || accountCode === 'کد تفصیلی' || accountCode === 'کد') continue;
 
           // Standard distinct Debit vs Credit columns check
-          const debitVal = Number(String(row['بدهکار'] || row['Debit'] || row[keys[2]] || 0).replace(/,/g, ''));
-          const creditVal = Number(String(row['بستانکار'] || row['Credit'] || row[keys[3]] || 0).replace(/,/g, ''));
-          const rawBalance = Number(String(row['مانده'] || row['مانده حساب'] || row['Balance'] || row[keys[5]] || 0).replace(/,/g, ''));
+          const debitVal = normalizeNumber(row['بدهکار'] || row['Debit'] || row[keys[2]]);
+          const creditVal = normalizeNumber(row['بستانکار'] || row['Credit'] || row[keys[3]]);
+          const rawBalance = normalizeNumber(row['مانده'] || row['مانده حساب'] || row['Balance'] || row[keys[5]]);
           const typeStr = String(row['تشخیص'] || row['وضعیت'] || row['نوع'] || row[keys[4]] || '').trim();
 
           let balance = 0;
@@ -359,10 +370,10 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           <div>
             <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بدهکار (طلب شرکت)</span>
             <span className="text-2xl font-black text-emerald-600 leading-none">
-              {totalDebtors.toLocaleString('fa-IR')} <span className="text-[10px] font-medium text-gray-500">ریال</span>
+              {totalDebtors.toLocaleString()} <span className="text-[10px] font-medium text-gray-500">ریال</span>
             </span>
             <div className="text-[11px] font-bold text-gray-500 mt-1">
-              ≈ {(totalDebtors/10).toLocaleString('fa-IR')} <span className="opacity-50">تومان</span>
+              ≈ {(totalDebtors/10).toLocaleString()} <span className="opacity-50">تومان</span>
             </div>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl text-emerald-600">
@@ -374,10 +385,10 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           <div>
             <span className="text-xs font-bold text-gray-400 block mb-1">جمع مشتریان بستانکار (بدهی شرکت)</span>
             <span className="text-2xl font-black text-rose-600 leading-none">
-              {totalCreditors.toLocaleString('fa-IR')} <span className="text-[10px] font-medium text-gray-500">ریال</span>
+              {totalCreditors.toLocaleString()} <span className="text-[10px] font-medium text-gray-500">ریال</span>
             </span>
             <div className="text-[11px] font-bold text-gray-500 mt-1">
-              ≈ {(totalCreditors/10).toLocaleString('fa-IR')} <span className="opacity-50">تومان</span>
+              ≈ {(totalCreditors/10).toLocaleString()} <span className="opacity-50">تومان</span>
             </div>
           </div>
           <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl text-rose-600">

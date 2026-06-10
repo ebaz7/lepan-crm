@@ -1529,6 +1529,10 @@ app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
             'بدهکار'
         ]);
 
+        // Add Total row
+        const total = list.reduce((sum, item) => sum + item.balance, 0);
+        rows.push(['---', 'جمع کل بدهکاران', formatNumber(total), '---']);
+
         const pdf = await Renderer.generateReportPDF(title, columns, rows);
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', 'attachment; filename="Debtors_Report.pdf"');
@@ -1565,6 +1569,10 @@ app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
             formatNumber(item.balance),
             'بستانکار'
         ]);
+
+        // Add Total row
+        const total = list.reduce((sum, item) => sum + item.balance, 0);
+        rows.push(['---', 'جمع کل بستانکاران', formatNumber(total), '---']);
 
         const pdf = await Renderer.generateReportPDF(title, columns, rows);
         res.set('Content-Type', 'application/pdf');

@@ -742,13 +742,29 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         let totalBalance = 0;
         rows.forEach(r => {
             if (r[2]) {
-                const cleanStr = String(r[2])
-                    .replace(/,/g, '')
-                    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Parse Persian numbers
+                // Remove all non-numeric characters except Persian digits and English digits
+                let cleanStr = String(r[2])
+                    .replace(/,/g, '')   // English comma
+                    .replace(/،/g, '')   // Persian comma
+                    .replace(/٬/g, '');  // Persian thousands separator
+                
+                // Convert Persian digits to English
+                cleanStr = cleanStr.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                                   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+                                   
                 const num = parseFloat(cleanStr) || 0;
-                totalBalance += num;
+                // Avoid adding the "Total" row if it was already added by server.js
+                // Usually the total row has '---' or labels in other columns
+                if (r[0] !== '---' && r[1] !== 'جمع کل بدهکاران' && r[1] !== 'جمع کل بستانکاران') {
+                    totalBalance += num;
+                }
             }
         });
+
+        // Helper for formatting large numbers in PDF without depending on full ICU
+        const pdfFormatNumber = (num) => {
+            return Number(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        };
 
         let thead = '<tr>';
         columns.forEach(c => {
@@ -813,17 +829,17 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
                     <div class="text-[10px] font-black text-gray-400 mb-1">جمع کل اقلام ${isDebtor ? 'بدهکار' : 'بستانکار'}</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${totalBalance.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${pdfFormatNumber(totalBalance)} <span class="text-xs font-medium text-gray-400">ریال</span></div>
                 </div>
 
                 <div class="bg-gray-50 border-r-4 border-gray-900 p-5 rounded-xl shadow-sm">
                     <div class="text-[10px] font-black text-gray-400 mb-1">تعداد پرونده‌های مفتوح</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${rows.length.toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">رکورد</span></div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${rows.filter(r => r[0] !== '---').length.toLocaleString()} <span class="text-xs font-medium text-gray-400">رکورد</span></div>
                 </div>
 
                 <div class="bg-gray-50 border-r-4 ${isDebtor ? 'border-red-600' : 'border-emerald-600'} p-5 rounded-xl shadow-sm">
                     <div class="text-[10px] font-black text-gray-400 mb-1">میانگین تراز هر حساب</div>
-                    <div class="text-2xl font-black text-gray-900 font-mono">${(rows.length ? Math.round(totalBalance / rows.length) : 0).toLocaleString('fa-IR')} <span class="text-xs font-medium text-gray-400">ریال</span></div>
+                    <div class="text-2xl font-black text-gray-900 font-mono">${pdfFormatNumber(rows.length > 1 ? Math.round(totalBalance / (rows.length - 1)) : 0)} <span class="text-xs font-medium text-gray-400">ریال</span></div>
                 </div>
             </div>
 
