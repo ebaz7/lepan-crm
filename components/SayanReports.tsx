@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 
 // نقشه حدودی از جداول سایان به نام‌های قابل فهم - این نام‌ها بر اساس استاندارد سیستم‌های مالی حدس زده شده است
 const TABLE_DICTIONARY: Record<string, string> = {
+  'invoices': 'لیست فاکتورها (Invoices)',
   'dbo.ACT_TBL_001': 'سرفصل‌های کل و معین (حسابداری)',
   'dbo.ACT_TBL_002': 'اسناد حسابداری (هدر)',
   'dbo.ACT_TBL_003': 'آرتیکل‌های سند (ردیف‌ها)',
@@ -58,49 +59,65 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     
     setLoading(true);
     setError(null);
+    setDebugInfo(null);
+    
     try {
-      // این متد نیاز به پیاده‌سازی بک‌اند یا Allow-CORS از سمت سایان دارد
-      // فعلا برای دمو و نسخه اجرایی آماده شده
+      console.log(`Attempting to fetch from: ${baseUrl}/${activeTable.replace('dbo.', '')}`);
+      
       const headers: any = {
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
-        headers['ApiKey'] = apiKey; // Common fallback
       }
       
-      const cleanTable = activeTable.replace('dbo.', '');
+      const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
+      const startTime = Date.now();
+      
       const response = await fetch(`${baseUrl}/${cleanTable}`, {
         method: 'GET',
-        headers
+        headers,
+        mode: 'cors'
+      }).catch(err => {
+        // خطاهای سیستمی مانند DNS یا CORS
+        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+          throw new Error('خطای شبکه یا CORS: مرورگر اجازه دسترسی مستقیم به این آدرس را نمی‌دهد یا آدرس اشتباه است.');
+        }
+        throw err;
       });
       
+      const duration = Date.now() - startTime;
+      
+      setDebugInfo({
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+        duration: `${duration}ms`,
+        headers: Array.from(response.headers.entries())
+      });
+
       if (!response.ok) {
-        throw new Error('خطا در دریافت اطلاعات از سرور سایان. ممکن است آدرس API اشتباه باشد یا نیاز به تنظیم CORS داشته باشید.');
+        const errorText = await response.text().catch(() => 'No error body');
+        throw new Error(`خطای سرور (${response.status}): ${response.statusText} - ${errorText.substring(0, 50)}...`);
       }
       
       const result = await response.json();
       setData(Array.isArray(result) ? result : (result.data || []));
     } catch (err: any) {
-      console.error(err);
+      console.error('Sayan Fetch Error:', err);
       setError(err.message || 'خطا در ارتباط با سرور سایان');
-      // ایجاد دیتای تستی برای نمایش ظاهر وقتی سرور در دسترس نیست
-      if (activeTable === 'dbo.ACT_TBL_001') {
-        setTimeout(() => {
-          setData([
-             { Code: '101', Name: 'موجودی نقد و بانک', Type: 'دارایی جاری', Balance: 1540000000 },
-             { Code: '102', Name: 'حسابهای دریافتنی', Type: 'دارایی جاری', Balance: 845000000 },
-             { Code: '103', Name: 'موجودی کالا', Type: 'دارایی جاری', Balance: 2360000000 },
-             { Code: '201', Name: 'حسابهای پرداختنی', Type: 'بدهی جاری', Balance: -1200000000 },
-             { Code: '401', Name: 'فروش محصولات', Type: 'درآمد', Balance: -5400000000 },
-          ]);
-          setError('نمایش داده‌های تستی (سرور واقعی در دسترس نبود)');
-        }, 800);
+      
+      // اگر دیتایی نداریم و خطا داد، دیتای تستی نشان ندهیم تا کاربر خطا را ببیند
+      if (data.length === 0 && !activeTable.includes('TBL')) { 
+         // Fallback logic if needed
       }
     } finally {
       setLoading(false);
     }
   };
+
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -168,9 +185,41 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
         {/* Status Messages */}
         {error && (
-          <div className="m-4 p-4 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl text-orange-800 dark:text-orange-300 flex items-start gap-3">
-            <Database className="shrink-0 mt-0.5" />
-            <div className="text-sm font-medium">{error}</div>
+          <div className="m-4">
+            <div className="p-4 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl text-orange-800 dark:text-orange-300 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <Database className="shrink-0 mt-0.5" />
+                <div className="text-sm font-medium">{error}</div>
+              </div>
+              
+              <div className="flex gap-2 mr-9">
+                <button 
+                  onClick={() => setShowDebug(!showDebug)} 
+                  className="text-[10px] font-bold underline decoration-dotted"
+                >
+                  {showDebug ? 'مخفی‌سازی جزئیات فنی' : 'مشاهده جزئیات فنی خطا'}
+                </button>
+              </div>
+            </div>
+            
+            {showDebug && debugInfo && (
+              <div className="mt-2 p-3 bg-gray-800 text-green-400 font-mono text-[10px] rounded-lg overflow-x-auto" dir="ltr">
+                <p># Request Diagnostics</p>
+                <p>URL: {debugInfo.url}</p>
+                <p>Status: {debugInfo.status} {debugInfo.statusText}</p>
+                <p>Duration: {debugInfo.duration}</p>
+                <p className="mt-2 text-white"># Headers:</p>
+                {debugInfo.headers?.map(([k, v]: any) => (
+                  <p key={k}>{k}: {v}</p>
+                ))}
+              </div>
+            )}
+            
+            {error.includes('CORS') && (
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed font-bold">
+                💡 راهنمایی: اگر API روی سیستم محلی شما (localhost) است، مطمئن شوید که نرم‌افزار "سایان" اجازه دسترسی CORS را به این دامنه داده است. همچنین آدرس را با http:// شروع کنید.
+              </div>
+            )}
           </div>
         )}
 

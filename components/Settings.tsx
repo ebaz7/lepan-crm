@@ -1680,12 +1680,13 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                     <div className="grid grid-cols-1 gap-4">
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 block mb-1">SAYAN API URL</label>
-                                            <input type="text" placeholder="http://localhost:3000/api/external/v1" className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiUrl || ''} onChange={(e) => setSettings({...settings, sayanApiUrl: e.target.value})} />
+                                            <label className="text-xs font-black text-gray-500 block mb-1">آدرس API سرور سایان (SAYAN API URL)</label>
+                                            <input type="text" placeholder="http://192.168.41.225:3000/api/external/v1" className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiUrl || ''} onChange={(e) => setSettings({...settings, sayanApiUrl: e.target.value})} />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 block mb-1">SAYAN API BEARER TOKEN</label>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">توکن امنیتی (Bearer Token)</label>
                                             <input type="password" placeholder="s_gate_live_..." className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiKey || ''} onChange={(e) => setSettings({...settings, sayanApiKey: e.target.value})} />
+                                            <p className="text-[9px] text-gray-400 mt-1 font-bold">فقط کد توکن را وارد کنید. کلمه Bearer به صورت خودکار اضافه می‌شود.</p>
                                         </div>
                                     </div>
                                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 flex gap-3 items-start">
