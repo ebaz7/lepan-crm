@@ -243,6 +243,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         
         let pathList: any[] = [];
         let logMessage = '';
+        let cleanPath = '';
 
         if (reportMode && activeTable.startsWith('REPORT_')) {
           logMessage = `Executing Custom Predefined Report Phase: [${activeTable}]`;
