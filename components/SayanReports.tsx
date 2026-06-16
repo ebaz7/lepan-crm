@@ -46,6 +46,10 @@ const getTableDisplayName = (tblName: string) => {
   const known = TABLE_DICTIONARY[tblName] || TABLE_DICTIONARY[`dbo.${tblName}`];
   if (known) return known;
 
+  if (t === 'REPORT_TRIAL_BALANCE') return 'تراز آزمایشی (محاسبه مقادیر مانده حساب‌ها)';
+  if (t === 'REPORT_ACT_TRANSACTIONS') return 'ریز گردش و لاگ تراکنش‌های حسابداری';
+  if (t === 'REPORT_INVENTORY') return 'گزارش موجودی کالا و انبار';
+
   if (t.startsWith('ACT_')) return 'حسابداری - ' + t;
   if (t.startsWith('AST_')) return 'اموال و دارایی - ' + t;
   if (t.startsWith('BUR_')) return 'خرید و فروش / بازرگانی - ' + t;
@@ -70,11 +74,12 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // حالت‌های کنسول پیشرفته و تست API
+  // حالت‌های کنسول پیشرفته و گزارشات ترکیبی
   const [customMode, setCustomMode] = useState<boolean>(false);
   const [customPath, setCustomPath] = useState<string>('invoices');
   const [method, setMethod] = useState<'GET' | 'POST' | 'PUT'>('GET');
   const [reqBody, setReqBody] = useState<string>('{\n  "query": "SELECT * FROM ACT_TBL_001"\n}');
+  const [reportMode, setReportMode] = useState<boolean>(false);
   const [rawResponse, setRawResponse] = useState<any>(null);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
   const [copiedTables, setCopiedTables] = useState<boolean>(false);
@@ -235,17 +240,46 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
       } else {
         const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
-        console.log(`Auto-fetching table data via Secure Server Proxy: Table=[${cleanTable}]`);
         
-        const attempts = [
-          { path: cleanTable, method: 'GET', body: null },
-          { path: 'query', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
-          { path: 'sql', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
-          { path: 'sql', method: 'POST', body: { sql: `SELECT TOP 200 * FROM ${cleanTable}` } },
-          { path: 'execute', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } }
-        ];
+        let pathList: any[] = [];
+        let logMessage = '';
 
-        for (const attempt of attempts) {
+        if (reportMode && activeTable.startsWith('REPORT_')) {
+          logMessage = `Executing Custom Predefined Report Phase: [${activeTable}]`;
+          
+          let sqlQuery = '';
+          if (activeTable === 'REPORT_TRIAL_BALANCE') {
+             // سعی در دریافت جدول تراز آزمایشی (ACT_TBL_011) یا گردش (ACT_TBL_003)
+             sqlQuery = "SELECT TOP 1000 * FROM ACT_TBL_011";
+          } else if (activeTable === 'REPORT_ACT_TRANSACTIONS') {
+             sqlQuery = "SELECT TOP 1000 * FROM ACT_TBL_003";
+          } else if (activeTable === 'REPORT_INVENTORY') {
+             sqlQuery = "SELECT TOP 1000 * FROM STR_TBL_001";
+          }
+          
+          pathList = [
+            { path: 'sql', method: 'POST', body: { query: sqlQuery } },
+            { path: 'sql', method: 'POST', body: { sql: sqlQuery } },
+            { path: 'query', method: 'POST', body: { query: sqlQuery } },
+            ...((activeTable === 'REPORT_TRIAL_BALANCE') ? [{ path: 'ACT_TBL_011', method: 'GET', body: null }] : [])
+          ];
+          cleanPath = sqlQuery;
+          
+        } else {
+          logMessage = `Auto-fetching table data via Secure Server Proxy: Table=[${cleanTable}]`;
+          pathList = [
+            { path: cleanTable, method: 'GET', body: null },
+            { path: 'query', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
+            { path: 'sql', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
+            { path: 'sql', method: 'POST', body: { sql: `SELECT TOP 200 * FROM ${cleanTable}` } },
+            { path: 'execute', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } }
+          ];
+          cleanPath = cleanTable;
+        }
+
+        console.log(logMessage);
+        
+        for (const attempt of pathList) {
           finalPath = attempt.path;
           const response = await fetch('/api/sayan-proxy', {
             method: 'POST',
@@ -437,16 +471,62 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               </div>
             )}
 
+            {/* گزارش‌های ترکیبی ویژه‌ */}
+            <div className="mb-4 space-y-1">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg mb-2">
+                <BarChart2 className="text-blue-600 dark:text-blue-400" size={13} />
+                <span className="text-[10px] font-black text-blue-800 dark:text-blue-300">گزارشات کاربردی سریع:</span>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setCustomMode(false);
+                  setReportMode(true);
+                  setActiveTable('REPORT_TRIAL_BALANCE');
+                }}
+                className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
+                  !customMode && activeTable === 'REPORT_TRIAL_BALANCE'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'bg-white border border-blue-200 text-blue-800 hover:bg-blue-50'
+                }`}
+              >
+                <span className="font-bold text-[11px] leading-relaxed">تراز آزمایشی / مانده واقعی حساب‌ها</span>
+                <span className="text-[9px] opacity-70 font-mono mt-1" dir="ltr">SQL Custom Join</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCustomMode(false);
+                  setReportMode(true);
+                  setActiveTable('REPORT_ACT_TRANSACTIONS');
+                }}
+                className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
+                  !customMode && activeTable === 'REPORT_ACT_TRANSACTIONS'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'bg-white border border-blue-200 text-blue-800 hover:bg-blue-50'
+                }`}
+              >
+                <span className="font-bold text-[11px] leading-relaxed">ریز گردش و آرتیکل‌های حسابداری</span>
+                <span className="text-[9px] opacity-70 font-mono mt-1" dir="ltr">SQL Transaction Log</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-200 dark:bg-gray-800 rounded-lg mb-2 mt-4 mt-2">
+               <Database className="text-gray-600 dark:text-gray-400" size={13} />
+               <span className="text-[10px] font-black text-gray-700 dark:text-gray-300">جداول استاندارد پایه:</span>
+            </div>
+
             {Object.entries(TABLE_DICTIONARY).map(([tableName, desc]) => (
               <button
                 key={tableName}
                 onClick={() => {
                   setCustomMode(false);
+                  setReportMode(false);
                   setActiveTable(tableName);
                 }}
                 className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
                   !customMode && activeTable === tableName 
-                    ? 'bg-blue-50 dark:bg-blue-900/40 border rtl:border-r-4 border-r-blue-600 border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300' 
+                    ? 'bg-gray-100 dark:bg-gray-700/80 border rtl:border-r-4 border-r-gray-500 border-gray-300 text-gray-800 dark:text-gray-200' 
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 border border-transparent'
                 }`}
               >
@@ -488,9 +568,18 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
           </div>
           
           <div className="flex items-center gap-2">
+            <button onClick={() => {
+                const jsonStr = JSON.stringify(data, null, 2);
+                navigator.clipboard.writeText(jsonStr);
+                setCopiedResponse(true);
+                setTimeout(() => setCopiedResponse(false), 2000);
+            }} disabled={!data.length} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-xs font-semibold disabled:opacity-50">
+              <ClipboardCheck size={14} />
+              {copiedResponse ? 'کپی شد!' : 'کپی جیسون داده‌ها'}
+            </button>
             <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-xs font-semibold">
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              {customMode ? 'ارسال درخواست به سایان' : 'بروزرسانی داده‌ها'}
+              {customMode || reportMode ? 'ارسال درخواست/گزارش' : 'بروزرسانی داده‌ها'}
             </button>
             <button onClick={exportToExcel} disabled={!data.length} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
               <Download size={14} />
@@ -638,6 +727,23 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
              </div>
           )}
 
+          {reportMode && data.length > 0 && (
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 shadow-sm animate-fade-in mb-4 select-text">
+               <div className="flex items-start gap-3">
+                 <div className="text-xl">🤖</div>
+                 <div className="space-y-1.5 text-xs flex-1">
+                   <div className="font-bold text-sm">آموزش ساخت گزارش سفارشی توسط هوش مصنوعی</div>
+                   <div className="leading-relaxed">
+                     ساختار دیتابیس سایان بسیار یکپارچه است. برای دریافت مقادیر دقیق مانده‌ها (از قبیل مانده‌های بانکی و سود و زیان) هوش مصنوعی نیاز دارد بداند که در سیستم شما مانده‌ها در چه ستون‌هایی (مثلاً <code className="bg-indigo-100 px-1 rounded">Field_010</code> یا <code className="bg-indigo-100 px-1 rounded">Field_008</code>) در جداول اصلی ردیف‌ها (مانند گردش یا تراز) ذخیره شده‌اند.
+                   </div>
+                   <div className="font-bold bg-white/60 p-2 rounded border border-indigo-100 mt-2">
+                     📝 برای اینکه دقیق‌ترین و زیباترین داشبورد گزارش را برای شما بسازم، کافیست خروجی همین جدولی که می‌بینید را از طریق دکمه «خروجی جیسون (کپی)» تهیه کرده و در چت برای من بفرستید. سپس بگویید مانده هر ردیف را چگونه استخراج کنم!
+                   </div>
+                 </div>
+               </div>
+            </div>
+          )}
+
           {/* Data Grid Table representation */}
           <div className="relative">
             {loading ? (
@@ -656,10 +762,12 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                          if (key === 'Field_001') displayName = 'شناسه (ID)';
                          if (key === 'Field_002') displayName = 'کد سیستم';
                          if (key === 'Field_003') displayName = 'کد فرعی / مرجع';
-                         if (key === 'Field_005') displayName = 'عنوان / شرح';
-                         if (key === 'Field_006') displayName = 'وضعیت / تایید';
-                         if (key === 'Field_007') displayName = 'یادداشت / نوع';
-                         if (key === 'Field_010') displayName = 'مبلغ / ارزش';
+                         if (key === 'Field_005') displayName = 'عنوان / شرح / نام';
+                         if (key === 'Field_006') displayName = 'وضعیت / نوع';
+                         if (key === 'Field_007') displayName = 'توضیحات / یادداشت';
+                         if (key === 'Field_008') displayName = 'مقدار / تعداد / ماهیت';
+                         if (key === 'Field_010') displayName = 'مبلغ (بدهکار/مانده)';
+                         if (key === 'Field_011') displayName = 'مبلغ (بستانکار/مانده)';
                          return (
                            <th key={key} title={key} className="px-4 py-3 font-bold whitespace-nowrap">
                              {displayName} 
