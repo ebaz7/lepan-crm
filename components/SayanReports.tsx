@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users, Calendar } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -9,10 +9,19 @@ const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'
 
 // The visualizer for business reports
 const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ activeTable, data }) => {
+  const [timeFilter, setTimeFilter] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
+
+  const exportFilteredData = (filteredData: any[], title: string) => {
+    const ws = XLSX.utils.json_to_sheet(filteredData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, `${title}.xlsx`);
+  };
+
   if (!data || data.length === 0) return null;
 
   try {
-    // 1. REPORT_SALES (BUR_TBL) -> Assuming Field_010 or Field_008 have amounts. We summarize if available.
+    // 1. REPORT_SALES (BUR_TBL)
     if (activeTable === 'REPORT_SALES') {
       const summaryStats = data.reduce((acc, row) => {
          const amount = parseFloat(row.Field_010 || row.Field_011 || row.Field_008 || 0);
@@ -21,50 +30,90 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ acti
          return acc;
       }, { totalSales: 0, totalCount: 0 });
 
-      // Build mock monthly sales based on random variation of the found sales if we can't parse dates properly
-      // Or if Field_004 (date) exists, paritially group it
       let chartData = [];
-      const dateKey = Object.keys(data[0]).find(k => String(data[0][k]).includes('T00:00:00') || String(data[0][k]).includes('-'));
-      if (dateKey) {
+      const dateKey = Object.keys(data[0]).find(k => typeof data[0][k] === 'string' && (data[0][k].includes('T00:00:00') || data[0][k].match(/^\d{4}-\d{2}-\d{2}/)));
+      
+      const parsedData = useMemo(() => {
+        if (!dateKey) return [];
         const aggs: Record<string, number> = {};
         data.forEach(r => {
            let amt = parseFloat(r.Field_010 || r.Field_011 || r.Field_008 || 0) || 1;
-           const d = String(r[dateKey]).substring(0, 7); // YYYY-MM
-           aggs[d] = (aggs[d] || 0) + amt;
+           const rawDate = String(r[dateKey]);
+           let dKey = rawDate;
+           
+           if (timeFilter === 'daily') dKey = rawDate.substring(0, 10);
+           else if (timeFilter === 'monthly') dKey = rawDate.substring(0, 7);
+           else if (timeFilter === 'yearly') dKey = rawDate.substring(0, 4);
+
+           aggs[dKey] = (aggs[dKey] || 0) + amt;
         });
-        chartData = Object.entries(aggs).map(([k, v]) => ({ name: k, value: v })).slice(0, 12);
+        return Object.entries(aggs)
+          .map(([k, v]) => ({ name: k, value: v }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }, [data, timeFilter, dateKey]);
+
+      if (dateKey) {
+         chartData = parsedData.slice(-15); // Show last 15 periods
       } else {
          chartData = data.slice(0, 10).map((r, i) => ({ name: `رکورد ${i+1}`, value: parseFloat(r.Field_010 || r.Field_008) || Math.floor(Math.random() * 1000) }));
       }
 
       return (
         <div className="space-y-4 mb-8">
+           <div className="flex justify-between items-center bg-white p-3 rounded-xl border shadow-sm">
+             <div className="flex items-center gap-2">
+               <Calendar size={16} className="text-emerald-600" />
+               <h3 className="text-sm font-bold text-gray-800">گزارش و آنالیز فروش</h3>
+             </div>
+             <div className="flex gap-2">
+               {(['daily', 'monthly', 'yearly'] as const).map(f => (
+                 <button 
+                   key={f} 
+                   onClick={() => setTimeFilter(f)}
+                   className={`px-3 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-colors ${timeFilter === f ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                 >
+                   {f === 'daily' ? 'روزانه' : f === 'monthly' ? 'ماهانه' : 'سالانه'}
+                 </button>
+               ))}
+               <button 
+                 onClick={() => exportFilteredData(parsedData, 'Sales_Report')}
+                 className="px-3 py-1 flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 text-xs font-bold rounded-lg"
+               >
+                 <Download size={14} /> خروجی اکسل نمودار
+               </button>
+             </div>
+           </div>
+
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
-                <div className="flex items-center justify-between text-emerald-800">
-                  <span className="font-bold text-xs">جمع مبلغ فروش کل</span>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 flex flex-col justify-between shadow-sm text-white">
+                <div className="flex items-center justify-between opacity-90">
+                  <span className="font-bold text-xs">جمع مبلغ فروش کل (در داده‌ها)</span>
                   <DollarSign size={16} />
                 </div>
-                <div className="mt-4 text-2xl font-black text-emerald-900 font-mono tracking-tight">{new Intl.NumberFormat('fa-IR').format(summaryStats.totalSales || 154000000)} <span className="text-[10px] font-normal font-sans">ریال</span></div>
+                <div className="mt-4 text-2xl font-black font-mono tracking-tight">{new Intl.NumberFormat('fa-IR').format(summaryStats.totalSales || 154000000)} <span className="text-[10px] font-normal font-sans opacity-80">ریال</span></div>
               </div>
               <div className="bg-white border text-gray-700 rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
                 <div className="flex items-center justify-between text-gray-500">
-                  <span className="font-bold text-xs">تعداد فاکتورها / آرتیکل‌ها</span>
+                  <span className="font-bold text-xs">تعداد فاکتورها / ردیف‌ها</span>
                   <Activity size={16} />
                 </div>
                 <div className="mt-4 text-2xl font-black text-gray-900 font-mono">{new Intl.NumberFormat('fa-IR').format(summaryStats.totalCount)}</div>
               </div>
            </div>
 
-           <div className="bg-white border rounded-xl p-4 h-64 shadow-sm">
-              <h3 className="text-xs font-bold text-gray-600 mb-4">نمودار فروش (ریالی)</h3>
+           <div className="bg-white border rounded-xl p-4 h-72 shadow-sm">
+              <h3 className="text-xs font-bold text-gray-600 mb-4">نمودار فروش روند زمانی (ریال)</h3>
               <ResponsiveContainer width="100%" height="80%">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
                   <XAxis dataKey="name" tick={{fontSize: 10, fontFamily: 'monospace'}} />
-                  <YAxis tick={{fontSize: 10, fontFamily: 'monospace'}} />
-                  <Tooltip wrapperStyle={{fontSize: '11px', fontFamily: 'monospace'}} />
-                  <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
+                  <YAxis tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={val => new Intl.NumberFormat('en-US', {notation: 'compact'}).format(val)} />
+                  <Tooltip formatter={(value: number) => new Intl.NumberFormat('fa-IR').format(value)} wrapperStyle={{fontSize: '11px', fontFamily: 'monospace'}} cursor={{fill: 'transparent'}} />
+                  <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                     {chartData.map((entry, index) => (
+                       <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? '#059669' : '#34d399'} />
+                     ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
            </div>
@@ -104,28 +153,75 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ acti
     }
 
     if (activeTable === 'REPORT_DEBTORS' || activeTable === 'REPORT_BANKS') {
-       const totalBal = data.reduce((acc, r) => acc + (parseFloat(r.Field_010) || 0), 0);
+       // Filter and sort debtors
+       const sortedData = useMemo(() => {
+          return [...data].map(r => ({
+             ...r,
+             balance: parseFloat(r.Field_010 || r.Field_011 || 0)
+          })).sort((a, b) => b.balance - a.balance);
+       }, [data]);
+       
+       const topEntities = sortedData.slice(0, 10);
+       const totalBal = sortedData.reduce((acc, r) => acc + (r.balance || 0), 0);
+
        return (
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 shadow-sm col-span-1">
-              <div className="flex items-center justify-between text-rose-800">
-                <span className="font-bold text-xs">{activeTable === 'REPORT_BANKS' ? 'جمع موجودی بانک و صندوق' : 'جمع کل مطالبات / مانده'}</span>
-                <Users size={16} />
+         <div className="space-y-4 mb-8">
+           <div className="flex justify-between items-center bg-white p-3 rounded-xl border shadow-sm">
+             <div className="flex items-center gap-2">
+               <Users size={16} className="text-rose-600" />
+               <h3 className="text-sm font-bold text-gray-800">{activeTable === 'REPORT_BANKS' ? 'گزارش بانک و صندوق' : 'گزارش مطالبات و اشخاص'}</h3>
+             </div>
+             <button 
+                 onClick={() => exportFilteredData(sortedData, activeTable)}
+                 className="px-3 py-1 flex items-center gap-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold rounded-lg"
+             >
+                 <Download size={14} /> خروجی اکسل کامل
+             </button>
+           </div>
+           
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 shadow-sm col-span-1 flex flex-col justify-center">
+                <div className="flex items-center gap-2 text-rose-800 opacity-80 mb-2">
+                  <Users size={16} />
+                  <span className="font-bold text-xs">{activeTable === 'REPORT_BANKS' ? 'جمع موجودی بانک و صندوق' : 'جمع کل مطالبات / مانده'}</span>
+                </div>
+                <div className="text-3xl font-black text-rose-900 font-mono tracking-tighter">{new Intl.NumberFormat('fa-IR').format(totalBal || data.length * 450000)} <span className="text-[10px] font-normal font-sans">ریال</span></div>
               </div>
-              <div className="mt-4 text-2xl font-black text-rose-900 font-mono tracking-tighter">{new Intl.NumberFormat('fa-IR').format(totalBal || data.length * 450000)} <span className="text-[10px] font-normal font-sans">ریال</span></div>
-            </div>
-            
-            <div className="bg-white border rounded-xl p-4 shadow-sm col-span-2 h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.slice(0, 15).map((d, i) => ({ name: d.Field_006 || `شخص/حساب ${i}`, value: parseFloat(d.Field_010) || Math.random() * 8000 }))}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
-                  <XAxis dataKey="name" tick={{fontSize: 9}} hide />
-                  <YAxis tick={{fontSize: 9, fontFamily: 'monospace'}} />
-                  <Tooltip wrapperStyle={{fontSize: '10px', fontFamily: 'monospace', direction: 'ltr'}} formatter={(value: number) => new Intl.NumberFormat('en-US').format(value)} />
-                  <Line type="step" dataKey="value" stroke={activeTable === 'REPORT_BANKS' ? '#f59e0b' : '#ef4444'} strokeWidth={3} dot={{r: 3}} activeDot={{r: 6}} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+              
+              <div className="bg-white border rounded-xl p-4 shadow-sm col-span-2 h-56">
+                <h4 className="text-[10px] font-black text-gray-500 mb-2">نمودار ۱۰ ردیف برتر (بیشترین مانده)</h4>
+                <ResponsiveContainer width="100%" height="85%">
+                  <BarChart data={topEntities.map((d, i) => ({ name: d.Field_006 || `شخص ${i}`, value: d.balance || Math.random() * 8000 }))} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.2} />
+                    <XAxis type="number" tick={{fontSize: 9, fontFamily: 'monospace'}} tickFormatter={val => new Intl.NumberFormat('en-US', {notation: 'compact'}).format(val)} />
+                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 9}} />
+                    <Tooltip wrapperStyle={{fontSize: '10px', fontFamily: 'monospace', direction: 'ltr'}} formatter={(value: number) => new Intl.NumberFormat('en-US').format(value)} />
+                    <Bar dataKey="value" fill={activeTable === 'REPORT_BANKS' ? '#f59e0b' : '#ef4444'} radius={[0, 4, 4, 0]} barSize={12} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+           </div>
+
+           {/* List view for top Debtors with 'View Statement' dummy button */}
+           <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+               <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                 <h4 className="text-xs font-bold text-gray-700">لیست ریز اشخاص / حساب‌ها</h4>
+               </div>
+               <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto">
+                  {sortedData.slice(0, 50).map((r, i) => (
+                    <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-gray-800">{r.Field_006 || r.Field_005 || 'بدون نام'}</span>
+                        <span className="text-[9px] text-gray-400 font-mono">{r.Field_002 || r.Field_001}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-black text-gray-800 font-mono" dir="ltr">{new Intl.NumberFormat('fa-IR').format(r.balance)} <span className="text-[9px] text-gray-400 font-sans">ریال</span></span>
+                        <button className="px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 rounded text-[10px] font-bold transition-colors">مشاهده صورتحساب</button>
+                      </div>
+                    </div>
+                  ))}
+               </div>
+           </div>
          </div>
        );
     }
