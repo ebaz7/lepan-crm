@@ -54,15 +54,12 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   const [reqBody, setReqBody] = useState<string>('{\n  "query": "SELECT * FROM ACT_TBL_001"\n}');
   const [rawResponse, setRawResponse] = useState<any>(null);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
+  const [copiedTables, setCopiedTables] = useState<boolean>(false);
 
   // حالت‌های پویای کشف جداول SQL
   const [customTableName, setCustomTableName] = useState<string>('');
   const [discoveredTables, setDiscoveredTables] = useState<any[]>([]);
   const [discovering, setDiscovering] = useState<boolean>(false);
-
-  // تنظیمات اتصال
-  const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://192.168.41.225:3000/api/external/v1';
-  const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || 's_gate_live_urp2vvxzpik4';
 
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(true);
@@ -279,6 +276,14 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     setTimeout(() => setCopiedResponse(false), 2000);
   };
 
+  const handleCopyTables = () => {
+    if (!discoveredTables.length) return;
+    const jsonStr = JSON.stringify(discoveredTables, null, 2);
+    navigator.clipboard.writeText(jsonStr);
+    setCopiedTables(true);
+    setTimeout(() => setCopiedTables(false), 2000);
+  };
+
   return (
     <div className="flex bg-gray-50 dark:bg-gray-900 h-full min-h-0">
       {/* Sidebar - Tables List */}
@@ -288,7 +293,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             <Database className="text-blue-600" size={20} />
             <h2 className="font-bold text-sm text-gray-800 dark:text-gray-100">درگاه وب‌سرویس سایان</h2>
           </div>
-          <span className="text-[10px] text-gray-400 font-mono text-left dir-ltr break-all">{baseUrl}</span>
+          <span className="text-[9px] bg-blue-50 text-blue-700 p-1.5 rounded text-justify">ترافیک با توکن امنیتی مستقیماً از طریق پروکسی سرور بک‌اند اصلی به سایان هدایت می‌شود.</span>
         </div>
         
         {/* ابزار بازیابی مستقیم لیست جداول بر اساس فیدبک کاربر */}
@@ -351,6 +356,13 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                   <Database className="text-teal-600 dark:text-teal-400" size={13} />
                   <span className="text-[10px] font-black text-teal-800 dark:text-teal-300">جداول واکشی شده از SQL:</span>
                 </div>
+                <button
+                  onClick={handleCopyTables}
+                  className="w-full mb-2 bg-gray-800 hover:bg-gray-700 text-white text-[10px] py-1.5 rounded flex justify-center items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <ClipboardCheck size={12} />
+                  {copiedTables ? '✅ جداول کپی شد!' : 'کپی جیسون لیست جداول برای پشتیبان'}
+                </button>
                 <div className="max-h-48 overflow-y-auto border border-teal-100 rounded-lg p-1 space-y-1">
                   {discoveredTables.map((tbl, i) => {
                     const fullTableName = `${tbl.schemaName}.${tbl.tableName}`;
@@ -422,7 +434,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               {customMode && <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded font-black">حالت تستر</span>}
             </h1>
             <p className="text-xs text-gray-400 font-mono mt-1" dir="ltr">
-              {customMode ? `${method} ${baseUrl}/${customPath}` : `GET ${baseUrl}/${activeTable}`}
+              {customMode ? `sayan_server_proxy::${method} /${customPath}` : `sayan_server_proxy::GET /${activeTable}`}
             </p>
           </div>
           
@@ -542,13 +554,13 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-400 font-mono text-[9px]">
-                 <div><span className="text-blue-400 font-bold">API Gateway:</span> {debugInfo.url}</div>
-                 <div><span className="text-blue-400 font-bold">Auth Token:</span> {apiKey ? '✅ Bearer Valid token loaded' : '❌ No Bearer token configured'}</div>
+                 <div><span className="text-blue-400 font-bold">API Gateway:</span> {debugInfo.path}</div>
+                 <div><span className="text-blue-400 font-bold">Auth Token:</span> ✅ Appended by Backend Server Proxy automatically</div>
               </div>
 
               {debugInfo.isLocal && (
                  <div className="p-2.5 bg-blue-950/40 border border-blue-900/50 rounded-lg text-blue-300 font-sans leading-relaxed text-[10px]">
-                    ℹ️ <strong>ارتباط محلی (Local-to-Local Connection):</strong> آدرس سرور سایان تعریف شده ({baseUrl}) متعلق به محدوده آی‌پی‌های داخلی است. ترابری درخواست کاملاً ایمن و بصورت مستقیم از وب‌سرور پنل پرداختی شما به سرور دیتابیس سایان انجام می‌گیرد و نیازی به اینترنت یا آی‌پی ولید بیرونی در این نقطه نیست.
+                    ℹ️ <strong>ارتباط محلی امن (Server-to-Server Connection):</strong> آدرس سرور سایان از طریق بک‌اند سرور بصورت داخلی مسیریابی می‌شود. ترابری درخواست توسط وب‌سرور پنل پرداختی انجام گشته و مرورگر واسطه‌ای در آن ندارد.
                  </div>
               )}
             </div>
