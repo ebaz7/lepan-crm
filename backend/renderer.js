@@ -759,12 +759,12 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
                         cleanStr += aIdx.toString();
                         continue;
                     }
-                    if ((char >= '0' && char <= '9') || char === '.' || char === '-') {
+                    if ((char >= '0' && char <= '9') || char === '-') {
                         cleanStr += char;
                     }
                 }
                 
-                const num = parseFloat(cleanStr) || 0;
+                const num = parseInt(cleanStr, 10) || 0;
                 // Avoid adding the "Total" row if it was already added by server.js
                 // Usually the total row has '---' or labels in other columns
                 if (r[0] !== '---' && r[1] !== 'جمع کل بدهکاران' && r[1] !== 'جمع کل بستانکاران') {

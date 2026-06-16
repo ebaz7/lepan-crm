@@ -378,10 +378,13 @@ const broadcastNotification = async (title, body, url = '/', targetRoles = null,
             if (targetUsernames && !targetUsernames.includes(sub.username)) return false;
 
             // 3. ALWAYS NOTIFY ADMIN for general system notifications (where targetUsernames is not specified)
-            if (sub.role === 'admin' && !targetUsernames) return true;
+            if (sub.role && sub.role.toLowerCase() === 'admin' && !targetUsernames) return true;
             
-            // 4. TARGET ROLES
-            if (targetRoles && !targetRoles.includes(sub.role)) return false;
+            // 4. TARGET ROLES (Case-Insensitive match)
+            if (targetRoles) {
+                const lowerTargets = targetRoles.map(r => r.toLowerCase());
+                if (!sub.role || !lowerTargets.includes(sub.role.toLowerCase())) return false;
+            }
             
             return true;
         });
@@ -475,11 +478,11 @@ app.get('/api/notifications', (req, res) => {
          
          // 3. TARGET ROLES: If targeted roles are specified, must be in that list
          if (n.targetRoles) {
-             return n.targetRoles.includes(role);
+             const lowerTargets = n.targetRoles.map(r => r.toLowerCase()); return role ? lowerTargets.includes(role.toLowerCase()) : false;
          }
 
          // 4. ALWAYS ALLOW ADMIN for standard untargeted alerts
-         if (role === 'admin') return true;
+         if (role && role.toLowerCase() === 'admin') return true;
          
          // Non-admin users should NOT receive notifications that are general unless they are specifically targeted
          return false;
@@ -1520,11 +1523,18 @@ app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
     try {
         const db = getDb();
         const hideZero = req.query.hideZero === 'true';
+        const excludeCodesStr = req.query.excludeCodes || '';
+        const excludeCodes = excludeCodesStr ? excludeCodesStr.split(',') : [];
+
         let list = (db.customerBalances || [])
             .filter(b => b.type === 'بدهکار' || b.type?.includes('بدهکار'));
 
         if (hideZero) {
             list = list.filter(b => b.balance !== 0);
+        }
+
+        if (excludeCodes.length > 0) {
+            list = list.filter(b => !excludeCodes.includes(b.accountCode));
         }
 
         list = list.sort((a, b) => b.balance - a.balance);
@@ -1561,11 +1571,18 @@ app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
     try {
         const db = getDb();
         const hideZero = req.query.hideZero === 'true';
+        const excludeCodesStr = req.query.excludeCodes || '';
+        const excludeCodes = excludeCodesStr ? excludeCodesStr.split(',') : [];
+
         let list = (db.customerBalances || [])
             .filter(b => b.type === 'بستانکار' || b.type?.includes('بستانکار'));
 
         if (hideZero) {
             list = list.filter(b => b.balance !== 0);
+        }
+
+        if (excludeCodes.length > 0) {
+            list = list.filter(b => !excludeCodes.includes(b.accountCode));
         }
 
         list = list.sort((a, b) => b.balance - a.balance);

@@ -15,10 +15,10 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
     permit.items && permit.items.length > 0 
       ? permit.items.map(i => ({
           ...i,
-          deliveredCartonCount: i.deliveredCartonCount ?? i.cartonCount,
-          deliveredWeight: i.deliveredWeight ?? i.weight
+          deliveredCartonCount: i.deliveredCartonCount !== undefined && i.deliveredCartonCount !== null ? i.deliveredCartonCount : 0,
+          deliveredWeight: i.deliveredWeight !== undefined && i.deliveredWeight !== null ? i.deliveredWeight : 0
         })) 
-      : [{ id: generateUUID(), goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: permit.cartonCount || 0, deliveredWeight: permit.weight || 0 }]
+      : [{ id: generateUUID(), goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: 0, deliveredWeight: 0 }]
   );
 
   const handleUpdateItem = (index: number, field: keyof ExitPermitItem, value: string | number) => {
@@ -45,6 +45,9 @@ const WarehouseFinalizeModal: React.FC<Props> = ({ permit, onClose, onConfirm })
 
   const handleSave = () => {
     if (items.some(i => !i.goodsName)) return alert("نام کالا نمی‌تواند خالی باشد.");
+    if (items.some(i => i.deliveredCartonCount === undefined || i.deliveredCartonCount === null || i.deliveredCartonCount <= 0)) {
+      return alert("وارد کردن تعداد کارتن خروجی معتبر برای تمامی ردیف‌ها الزامی است.");
+    }
     if (items.some(i => !i.deliveredWeight || i.deliveredWeight <= 0)) return alert("وارد کردن وزن خروجی برای تمامی ردیف‌ها الزامی است.");
     
     const finalizedItems = items.map(i => ({

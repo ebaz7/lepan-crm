@@ -42,6 +42,10 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   const [pdfLoadingDebtors, setPdfLoadingDebtors] = useState(false);
   const [pdfLoadingCreditors, setPdfLoadingCreditors] = useState(false);
 
+  // Excluded account codes from final report
+  const [excludedCodes, setExcludedCodes] = useState<string[]>([]);
+  const [hideExcludedLocally, setHideExcludedLocally] = useState<boolean>(false);
+
   // Manual Mapping Form
   const [mapChatId, setMapChatId] = useState('');
   const [mapPlatform, setMapPlatform] = useState<'telegram' | 'bale'>('telegram');
@@ -98,12 +102,12 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           cleanStr += aIdx.toString();
           continue;
         }
-        if ((char >= '0' && char <= '9') || char === '.' || char === '-') {
+        if ((char >= '0' && char <= '9') || char === '-') {
           cleanStr += char;
         }
       }
       
-      const num = parseFloat(cleanStr);
+      const num = parseInt(cleanStr, 10);
       return isNaN(num) ? 0 : num;
     };
 
@@ -310,7 +314,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     else setPdfLoadingCreditors(true);
 
     try {
-      const url = `/api/customer-balances/reports/${type}/pdf?hideZero=${hideZeroBalances}`;
+      const url = `/api/customer-balances/reports/${type}/pdf?hideZero=${hideZeroBalances}&excludeCodes=${excludedCodes.join(',')}`;
       const fileName = type === 'debtors' 
         ? `Debtors_Balances_${lastUploadTime || 'latest'}.pdf` 
         : `Creditors_Balances_${lastUploadTime || 'latest'}.pdf`;
@@ -325,12 +329,20 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
   };
 
   // Calculations
-  const totalDebtors = balances
+  const rawTotalDebtors = balances
     .filter(b => b.type === 'بدهکار')
     .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
-  const totalCreditors = balances
+  const rawTotalCreditors = balances
     .filter(b => b.type === 'بستانکار')
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
+
+  const totalDebtors = balances
+    .filter(b => b.type === 'بدهکار' && !excludedCodes.includes(b.accountCode))
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
+
+  const totalCreditors = balances
+    .filter(b => b.type === 'بستانکار' && !excludedCodes.includes(b.accountCode))
     .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
 
   const filteredBalances = balances.filter(b => {
@@ -340,6 +352,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
     if (!matchesSearch) return false;
     if (hideZeroBalances && b.balance === 0) return false;
+    if (hideExcludedLocally && excludedCodes.includes(b.accountCode)) return false;
 
     if (filterType === 'all') return true;
     if (filterType === 'debit') return b.type === 'بدهکار';
@@ -393,6 +406,11 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <div className="text-[11px] font-bold text-gray-500 mt-1">
               ≈ {(totalDebtors/10).toLocaleString()} <span className="opacity-50">تومان</span>
             </div>
+            {excludedCodes.length > 0 && (
+              <div className="text-[10px] text-rose-500 font-bold mt-1.5 border-t border-rose-50/50 pt-1">
+                ⚠️ {balances.filter(b => b.type === 'بدهکار' && excludedCodes.includes(b.accountCode)).length} مورد مستثنی شده (مجموع: {rawTotalDebtors.toLocaleString()} ریال)
+              </div>
+            )}
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl text-emerald-600">
             <TrendingUp className="w-6 h-6" />
@@ -408,6 +426,11 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <div className="text-[11px] font-bold text-gray-500 mt-1">
               ≈ {(totalCreditors/10).toLocaleString()} <span className="opacity-50">تومان</span>
             </div>
+            {excludedCodes.length > 0 && (
+              <div className="text-[10px] text-rose-500 font-bold mt-1.5 border-t border-rose-50/50 pt-1">
+                ⚠️ {balances.filter(b => b.type === 'بستانکار' && excludedCodes.includes(b.accountCode)).length} مورد مستثنی شده (مجموع: {rawTotalCreditors.toLocaleString()} ریال)
+              </div>
+            )}
           </div>
           <div className="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl text-rose-600">
             <TrendingDown className="w-6 h-6" />
@@ -420,6 +443,11 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <span className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">
               {balances.length} <span className="text-xs font-medium text-gray-500">سرفصل</span>
             </span>
+            {excludedCodes.length > 0 && (
+              <div className="text-[10px] text-gray-500 font-bold mt-1.5 border-t border-gray-100 pt-1">
+                🚫 {excludedCodes.length} مورد کاملاً استثناء شده از چاپ
+              </div>
+            )}
           </div>
           <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-xl text-blue-600">
             <Landmark className="w-6 h-6" />
@@ -487,7 +515,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
           {/* Controls Bar */}
           <div className="p-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900 flex flex-col lg:flex-row gap-3 items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto items-center">
+            <div className="flex flex-wrap gap-3 w-full lg:w-auto items-center">
               <div className="relative w-full sm:w-80">
                 <Search className="w-4 h-4 absolute right-3 top-3.5 text-gray-400" />
                 <input
@@ -507,13 +535,39 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                 <input
                   type="checkbox"
                   checked={hideZeroBalances}
-                  onChange={() => {}} // Hanled by parent div onClick
+                  onChange={() => {}} // Handled by parent div onClick
                   className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
                 />
                 <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
                   عدم نمایش مانده‌های صفر
                 </span>
               </div>
+
+              {/* Hide excluded locally switcher */}
+              <div 
+                onClick={() => setHideExcludedLocally(!hideExcludedLocally)}
+                className="flex items-center gap-2 select-none bg-white dark:bg-zinc-950 p-2.5 px-4 border border-zinc-200 dark:border-zinc-800 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/40 duration-150 w-full sm:w-auto shrink-0 justify-center sm:justify-start"
+              >
+                <input
+                  type="checkbox"
+                  checked={hideExcludedLocally}
+                  onChange={() => {}} // Handled by parent div onClick
+                  className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
+                />
+                <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
+                  مخفی کردن استثناء شده‌ها از این لیست
+                </span>
+              </div>
+
+              {excludedCodes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setExcludedCodes([])}
+                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 p-2.5 px-4 rounded-xl border border-rose-250 dark:border-rose-900 transition-all cursor-pointer"
+                >
+                  ✕ پاکسازی {excludedCodes.length} استثناء
+                </button>
+              )}
             </div>
 
             <div className="flex gap-2 w-full lg:w-auto">
@@ -523,8 +577,8 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                   onClick={() => setFilterType(t)}
                   className={`flex-1 lg:flex-initial text-xs font-bold px-4 py-2.5 rounded-xl border transition-all ${
                     filterType === t
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400 font-extrabold'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300'
+                      ? 'bg-emerald-50 border-emerald-250 text-emerald-705 dark:bg-emerald-950/20 dark:border-emerald-905 dark:text-emerald-400 font-extrabold'
+                      : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300'
                   }`}
                 >
                   {t === 'all' ? 'همه' : t === 'debit' ? 'بدهکاران (طلب)' : 'بستانکاران'}
@@ -538,6 +592,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs border border-zinc-350 dark:border-zinc-800 rounded-lg overflow-hidden">
               <thead>
                 <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-b border-zinc-300 dark:border-zinc-700">
+                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850 w-24">حذف از PDF</th>
                   <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">کد حسابداری</th>
                   <th className="py-3 px-4 font-black text-right border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">نام حساب حساب تفصیلی / مشتری</th>
                   <th className="py-3 px-4 font-black text-left border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">مانده حساب (ریال)</th>
@@ -549,14 +604,14 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400 hover:text-gray-500 border border-zinc-200 dark:border-zinc-800">
+                    <td colSpan={7} className="py-12 text-center text-gray-400 hover:text-gray-500 border border-zinc-200 dark:border-zinc-800">
                       <Loader2 className="w-7 h-7 animate-spin mx-auto text-emerald-500" />
                       <span className="block mt-3 text-xs font-bold">در حال بارگذاری اطلاعات...</span>
                     </td>
                   </tr>
                 ) : filteredBalances.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400 border border-zinc-200 dark:border-zinc-800">
+                    <td colSpan={7} className="py-12 text-center text-gray-400 border border-zinc-200 dark:border-zinc-800">
                       <AlertCircle className="w-9 h-9 mx-auto text-zinc-400 mb-2" />
                       <span className="block text-xs font-black text-gray-500">موردی یافت نشد. اکسل را وارد کنید یا فیلترها را بررسی نمائید.</span>
                     </td>
@@ -564,11 +619,28 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                 ) : (
                   filteredBalances.map((item) => {
                     const isZero = item.balance === 0;
+                    const isExcluded = excludedCodes.includes(item.accountCode);
                     return (
                       <tr 
                         key={item.id || item.accountCode} 
-                        className="border-b border-zinc-200 dark:border-zinc-800 even:bg-zinc-50/40 dark:even:bg-zinc-850/10 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.04] transition-all font-medium text-gray-700 dark:text-gray-300"
+                        className={`border-b border-zinc-200 dark:border-zinc-800 even:bg-zinc-50/40 dark:even:bg-zinc-850/10 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.04] transition-all font-medium ${
+                          isExcluded ? 'opacity-40 italic line-through bg-rose-50/20 dark:bg-rose-950/10 text-rose-900 dark:text-rose-400' : 'text-gray-700 dark:text-gray-300'
+                        }`}
                       >
+                        <td className="py-3.5 px-4 text-center border-l border-zinc-200 dark:border-zinc-800">
+                          <input
+                            type="checkbox"
+                            checked={isExcluded}
+                            onChange={() => {
+                              if (isExcluded) {
+                                setExcludedCodes(excludedCodes.filter(c => c !== item.accountCode));
+                              } else {
+                                setExcludedCodes([...excludedCodes, item.accountCode]);
+                              }
+                            }}
+                            className="w-4 h-4 cursor-pointer text-rose-600 rounded accent-rose-600"
+                          />
+                        </td>
                         <td className="py-3.5 px-4 text-center select-all font-mono font-bold border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50/20 dark:bg-zinc-900/30">
                           <code>{item.accountCode}</code>
                         </td>
@@ -576,11 +648,13 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                           {item.name}
                         </td>
                         <td className={`py-3.5 px-4 font-mono font-black text-left border-l border-zinc-200 dark:border-zinc-800 text-sm ${
-                          isZero 
+                          isExcluded
+                            ? 'text-zinc-400 dark:text-zinc-500'
+                            : isZero 
                             ? 'text-zinc-400 dark:text-zinc-500' 
                             : item.type === 'بدهکار' 
                             ? 'text-emerald-600 dark:text-emerald-400' 
-                            : 'text-rose-600 dark:text-rose-400'
+                            : 'text-rose-600 dark:text-rose-450'
                         }`}>
                           {item.balance.toLocaleString()}
                         </td>
@@ -628,37 +702,58 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
               ) : (
                 filteredBalances.map((item) => {
                   const isZero = item.balance === 0;
+                  const isExcluded = excludedCodes.includes(item.accountCode);
                   return (
-                    <div key={item.id || item.accountCode} className="bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform">
+                    <div key={item.id || item.accountCode} className={`bg-white dark:bg-zinc-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-700 text-right relative overflow-hidden group active:scale-[0.98] transition-transform ${isExcluded ? 'opacity-50 italic' : ''}`}>
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${
-                        isZero ? 'bg-zinc-400' : item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'
+                        isExcluded ? 'bg-rose-400' : isZero ? 'bg-zinc-400' : item.type === 'بدهکار' ? 'bg-emerald-500' : 'bg-rose-500'
                       }`}></div>
                       
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start mb-3 gap-2">
                         <div className="flex flex-col">
-                            <span className="font-black text-gray-900 dark:text-zinc-100 text-lg leading-tight mb-1">{item.name}</span>
+                            <span className={`font-black text-gray-900 dark:text-zinc-100 text-lg leading-tight mb-1 ${isExcluded ? 'line-through text-rose-900 dark:text-rose-400' : ''}`}>{item.name}</span>
                             <span className="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-zinc-700 px-2 py-0.5 rounded-md self-start">{item.accountCode}</span>
                         </div>
-                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
-                          isZero 
-                            ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300' 
-                            : item.type === 'بدهکار' 
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' 
-                            : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'
-                        }`}>
-                          {isZero ? 'تسویه' : item.type}
-                        </span>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
+                            isZero 
+                              ? 'bg-zinc-100 text-zinc-650 dark:bg-zinc-700 dark:text-zinc-350' 
+                              : item.type === 'بدهکار' 
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' 
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30'
+                          }`}>
+                            {isZero ? 'تسویه' : item.type}
+                          </span>
+                          
+                          <label className="flex items-center gap-1 cursor-pointer text-[10px] font-black text-rose-600 bg-rose-50 dark:bg-rose-950/20 border border-rose-250 dark:border-rose-900 px-2 py-1 rounded-lg">
+                            <input
+                              type="checkbox"
+                              checked={isExcluded}
+                              onChange={() => {
+                                if (isExcluded) {
+                                  setExcludedCodes(excludedCodes.filter(c => c !== item.accountCode));
+                                } else {
+                                  setExcludedCodes([...excludedCodes, item.accountCode]);
+                                }
+                              }}
+                              className="accent-rose-600 rounded w-3 h-3 cursor-pointer"
+                            />
+                            <span>حذف از PDF</span>
+                          </label>
+                        </div>
                       </div>
                       
                       <div className="flex justify-between items-end mt-4 pt-4 border-t border-gray-50 dark:border-zinc-700/50">
                         <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 font-bold mb-1">مانده حساب</span>
                             <span className={`text-xl font-black ${
-                              isZero 
+                              isExcluded
+                                ? 'text-rose-500 line-through'
+                                : isZero 
                                 ? 'text-zinc-400 dark:text-zinc-500' 
                                 : item.type === 'بدهکار' 
                                 ? 'text-emerald-600 dark:text-emerald-400' 
-                                : 'text-rose-600 dark:text-rose-400'
+                                : 'text-rose-600 dark:text-rose-455'
                             }`}>
                                 {item.balance.toLocaleString()} <span className="text-[10px] font-medium opacity-70">ریال</span>
                             </span>
