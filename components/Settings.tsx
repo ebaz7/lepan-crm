@@ -940,10 +940,22 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 contacts={[...(settings.savedContacts || []), ...appContacts]} 
                             />
 
+                            <SecondExitGroupSettings 
+                                title="تنظیمات گروه سوم (ارسال سفارشی)"
+                                configKey="exitPermitThirdGroupConfig"
+                                bgColor="bg-purple-50"
+                                borderColor="border-purple-200"
+                                colorClasses="text-purple-900"
+                                iconColorClass="text-purple-700"
+                                settings={settings} 
+                                setSettings={setSettings} 
+                                contacts={[...(settings.savedContacts || []), ...appContacts]} 
+                            />
+
                             <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 space-y-4 shadow-sm animate-fade-in">
                                 <h4 className="font-bold text-sm text-amber-900 flex items-center gap-2">🚚 تنظیمات تخصصی ارسال گزارش روزانه خروج کارخانه</h4>
                                 <p className="text-xs text-amber-700 leading-relaxed">
-                                    تنظیم کنید که گزارش روزانه تصاویر و مجوزهای خروج کالا از کارخانه به چه گروه‌هایی ارسال شود. می‌توانید یک گروه اختصاصی فقط برای این گزارش معرفی کنید یا آن را به گروه‌های اول و دوم مجوزهای خروج نیز بفرستید.
+                                    تنظیم کنید که گزارش روزانه تصاویر و مجوزهای خروج کالا از کارخانه به چه گروه‌هایی ارسال شود. می‌توانید یک گروه اختصاصی فقط برای این گزارش معرفی کنید یا آن را به گروه‌های اول، دوم یا سوم مجوزهای خروج نیز بفرستید.
                                 </p>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg border border-amber-100">
@@ -995,6 +1007,16 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             className="w-4 h-4 rounded text-blue-600" 
                                         />
                                         <span>ارسال به گروه دوم مجوز خروج</span>
+                                    </label>
+                                    
+                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={settings.dailyExitReportSendToThirdGroup || false} 
+                                            onChange={e => setSettings({...settings, dailyExitReportSendToThirdGroup: e.target.checked})} 
+                                            className="w-4 h-4 rounded text-blue-600" 
+                                        />
+                                        <span>ارسال به گروه سوم مجوز خروج</span>
                                     </label>
 
                                     <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
@@ -1753,9 +1775,17 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                             <input type="text" placeholder="http://192.168.41.225:3000/api/external/v1" className="w-full border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiUrl || ''} onChange={(e) => setSettings({...settings, sayanApiUrl: e.target.value})} />
                                         </div>
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 block mb-1">توکن امنیتی (Bearer Token)</label>
+                                            <label className="text-xs font-black text-gray-500 block mb-1">توکن امنیتی (Bearer Token) - ضد تداخل مرورگر</label>
                                             <div className="flex gap-2">
-                                                <input type="password" placeholder="s_gate_live_..." className="flex-1 border border-gray-200 rounded-xl p-3 text-sm dir-ltr outline-none" value={settings.sayanApiKey || ''} onChange={(e) => setSettings({...settings, sayanApiKey: e.target.value})} />
+                                                <input 
+                                                    type="text" 
+                                                    autoComplete="off"
+                                                    data-lpignore="true"
+                                                    placeholder="s_gate_live_..." 
+                                                    className="flex-1 border border-gray-200 rounded-xl p-3 text-sm dir-ltr bg-slate-50 font-mono text-xs focus:bg-white focus:ring-2 ring-indigo-500 outline-none" 
+                                                    value={settings.sayanApiKey || ''} 
+                                                    onChange={(e) => setSettings({...settings, sayanApiKey: e.target.value})} 
+                                                />
                                                 <button 
                                                     type="button"
                                                     onClick={async () => {

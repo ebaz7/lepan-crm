@@ -102,12 +102,12 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           cleanStr += aIdx.toString();
           continue;
         }
-        if ((char >= '0' && char <= '9') || char === '-') {
+        if ((char >= '0' && char <= '9') || char === '-' || char === '.') {
           cleanStr += char;
         }
       }
       
-      const num = parseInt(cleanStr, 10);
+      const num = parseFloat(cleanStr);
       return isNaN(num) ? 0 : num;
     };
 

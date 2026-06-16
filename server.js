@@ -270,9 +270,10 @@ const setupDailyReports = () => {
         if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
         if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
 
-        // 3. Exit Permit Groups (First, Second, and/or Dedicated based on configuration)
+        // 3. Exit Permit Groups (First, Second, Third, and/or Dedicated based on configuration)
         const sendToFirst = settings.dailyExitReportSendToFirstGroup !== false;
         const sendToSecond = settings.dailyExitReportSendToSecondGroup === true;
+        const sendToThird = settings.dailyExitReportSendToThirdGroup === true;
         const sendToDedicated = settings.dailyExitReportSendToDedicatedGroup === true;
 
         if (sendToFirst) {
@@ -286,6 +287,11 @@ const setupDailyReports = () => {
         if (sendToSecond) {
             if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
             if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
+        }
+
+        if (sendToThird) {
+            if (settings.exitPermitThirdGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitThirdGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitThirdGroupConfig.baleId, type: 'exit' });
         }
 
         if (sendToDedicated) {

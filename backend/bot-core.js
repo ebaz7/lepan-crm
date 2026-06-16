@@ -334,6 +334,7 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
 
     const g1 = settings.exitPermitFirstGroupConfig || {};
     const g2 = settings.exitPermitSecondGroupConfig || {};
+    const g3 = settings.exitPermitThirdGroupConfig || {};
 
     const isKnownAccounting = 
         (platform === 'telegram' && (matchesId(chatId, settings.botAccountingGroupIdTele) || matchesId(chatId, settings.botAccountingGroupId))) ||
@@ -346,9 +347,9 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         (platform === 'whatsapp' && matchesId(chatId, settings.botBijakGroupIdWhatsApp));
 
     const isKnownLogistics = 
-        (platform === 'telegram' && (matchesId(chatId, settings.exitPermitNotificationTelegramId) || matchesId(chatId, settings.botSecurityGroupId) || matchesId(chatId, g1.telegramId) || matchesId(chatId, g2.telegramId) || matchesId(chatId, settings.dailyExitReportDedicatedTelegramId))) ||
-        (platform === 'bale' && (matchesId(chatId, settings.exitPermitNotificationBaleId) || matchesId(chatId, g1.baleId) || matchesId(chatId, g2.baleId) || matchesId(chatId, settings.dailyExitReportDedicatedBaleId))) ||
-        (platform === 'whatsapp' && (matchesId(chatId, settings.exitPermitNotificationGroup) || matchesId(chatId, g1.groupId) || matchesId(chatId, g2.groupId) || matchesId(chatId, settings.dailyExitReportDedicatedWhatsAppId)));
+        (platform === 'telegram' && (matchesId(chatId, settings.exitPermitNotificationTelegramId) || matchesId(chatId, settings.botSecurityGroupId) || matchesId(chatId, g1.telegramId) || matchesId(chatId, g2.telegramId) || matchesId(chatId, g3.telegramId) || matchesId(chatId, settings.dailyExitReportDedicatedTelegramId))) ||
+        (platform === 'bale' && (matchesId(chatId, settings.exitPermitNotificationBaleId) || matchesId(chatId, g1.baleId) || matchesId(chatId, g2.baleId) || matchesId(chatId, g3.baleId) || matchesId(chatId, settings.dailyExitReportDedicatedBaleId))) ||
+        (platform === 'whatsapp' && (matchesId(chatId, settings.exitPermitNotificationGroup) || matchesId(chatId, g1.groupId) || matchesId(chatId, g2.groupId) || matchesId(chatId, g3.groupId) || matchesId(chatId, settings.dailyExitReportDedicatedWhatsAppId)));
 
     const isRecognized = isKnownAccounting || isKnownBijak || isKnownLogistics;
 
@@ -1582,6 +1583,12 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             targetGroups.push(2);
         }
 
+        // Group 3 logic (Settings-based routing)
+        const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
+        if (g3Config.activeStatuses && g3Config.activeStatuses.includes(statusKey)) {
+            targetGroups.push(3);
+        }
+
         // --- NEW: Customer Notification with Proforma Image ---
         if (p.status === 'خارج شده (بایگانی)' && !isEdit && !isDelete) {
             const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : (p.driverPhone || null);
@@ -1634,10 +1641,15 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
                 tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || '';
                 baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || '';
                 waGroupId = g1Config.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
-            } else {
+            } else if (gNum === 2) {
                 tgGroupId = g2Config.telegramId;
                 baleGroupId = g2Config.baleId;
                 waGroupId = g2Config.groupId;
+            } else if (gNum === 3) {
+                const g3Config = settings.exitPermitThirdGroupConfig || {};
+                tgGroupId = g3Config.telegramId;
+                baleGroupId = g3Config.baleId;
+                waGroupId = g3Config.groupId;
             }
 
             // Fire Telegram

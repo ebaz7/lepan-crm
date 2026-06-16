@@ -7,7 +7,7 @@ interface Props {
     settings: SystemSettings;
     setSettings: (s: SystemSettings) => void;
     contacts: Contact[];
-    configKey: 'exitPermitFirstGroupConfig' | 'exitPermitSecondGroupConfig';
+    configKey: 'exitPermitFirstGroupConfig' | 'exitPermitSecondGroupConfig' | 'exitPermitThirdGroupConfig';
     title: string;
     bgColor?: string;
     borderColor?: string;

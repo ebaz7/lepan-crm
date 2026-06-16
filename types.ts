@@ -293,6 +293,7 @@ export interface SystemSettings {
   exitPermitNotificationGroup?: string; // Legacy field
   exitPermitFirstGroupConfig?: ExitPermitGroupConfig;
   exitPermitSecondGroupConfig?: ExitPermitGroupConfig;
+  exitPermitThirdGroupConfig?: ExitPermitGroupConfig;
   sayanApiUrl?: string;
   sayanApiKey?: string;
   printTemplates?: PrintTemplate[];
@@ -327,6 +328,7 @@ export interface SystemSettings {
   dailyExitReportDedicatedWhatsAppId?: string;
   dailyExitReportSendToFirstGroup?: boolean;
   dailyExitReportSendToSecondGroup?: boolean;
+  dailyExitReportSendToThirdGroup?: boolean;
   dailyExitReportSendToDedicatedGroup?: boolean;
   
   salesNotificationUsers?: { username: string; platforms: string[]; name?: string }[]; // Usernames and their active platforms (telegram, bale)
