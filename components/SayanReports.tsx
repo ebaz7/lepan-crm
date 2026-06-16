@@ -41,7 +41,30 @@ const TABLE_DICTIONARY: Record<string, string> = {
 
 import { SystemSettings } from '../types';
 
+const getTableDisplayName = (tblName: string) => {
+  const t = tblName.toUpperCase();
+  const known = TABLE_DICTIONARY[tblName] || TABLE_DICTIONARY[`dbo.${tblName}`];
+  if (known) return known;
+
+  if (t.startsWith('ACT_')) return 'حسابداری - ' + t;
+  if (t.startsWith('AST_')) return 'اموال و دارایی - ' + t;
+  if (t.startsWith('BUR_')) return 'خرید و فروش / بازرگانی - ' + t;
+  if (t.startsWith('CMS_')) return 'محتوا / سیستم - ' + t;
+  if (t.startsWith('COM_')) return 'اطلاعات پایه - ' + t;
+  if (t.startsWith('CRM_')) return 'ارتباط با مشتریان - ' + t;
+  if (t.startsWith('GNR_')) return 'اطلاعات عمومی - ' + t;
+  if (t.startsWith('IND_')) return 'تولید و صنعت - ' + t;
+  if (t.startsWith('LON_')) return 'وام و تسهیلات - ' + t;
+  if (t.startsWith('PAY_')) return 'حقوق و دستمزد - ' + t;
+  if (t.startsWith('PRC_')) return 'فرآیندها / قیمت‌گذاری - ' + t;
+  if (t.startsWith('STR_')) return 'انبار و کالا - ' + t;
+  if (t.startsWith('TRC_')) return 'خزانه‌داری و چک - ' + t;
+  if (t.startsWith('TBL_')) return 'سایر جداول - ' + t;
+  return tblName;
+};
+
 const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings }) => {
+
   const [activeTable, setActiveTable] = useState<string>('invoices');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,22 +102,22 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         { 
           path: 'query', 
           method: 'POST', 
-          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+          body: { query: "SELECT TOP 2000 TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
         },
         { 
           path: 'sql', 
           method: 'POST', 
-          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+          body: { query: "SELECT TOP 2000 TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
         },
         { 
           path: 'sql', 
           method: 'POST', 
-          body: { sql: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+          body: { sql: "SELECT TOP 2000 TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
         },
         { 
           path: 'execute', 
           method: 'POST', 
-          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+          body: { query: "SELECT TOP 2000 TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
         }
       ];
       
@@ -405,8 +428,8 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                             : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
                         }`}
                       >
-                        <span className="text-[10px] font-mono leading-tight" dir="ltr">{tbl.tableName}</span>
-                        <span className="text-[8px] text-gray-400 font-mono mt-0.5" dir="ltr">{tbl.schemaName}</span>
+                        <span className="text-[10px] font-bold leading-tight border-b pb-1 mb-1 border-teal-100/50">{getTableDisplayName(tbl.tableName)}</span>
+                        <span className="text-[9px] font-mono text-gray-500" dir="ltr">{tbl.tableName}</span>
                       </button>
                     );
                   })}
@@ -456,7 +479,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex gap-4 items-center justify-between flex-shrink-0">
           <div>
             <h1 className="text-base font-bold font-sans text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              <span>{customMode ? 'کنسول مدیریت و اجرای کوئری پیشرفته' : (TABLE_DICTIONARY[activeTable] || 'گزارش و پردازش جدول دیتابیس')}</span>
+              <span>{customMode ? 'کنسول مدیریت و اجرای کوئری پیشرفته' : getTableDisplayName(activeTable)}</span>
               {customMode && <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded font-black">حالت تستر</span>}
             </h1>
             <p className="text-xs text-gray-400 font-mono mt-1" dir="ltr">
@@ -628,9 +651,22 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                 <table className="w-full text-xs text-right">
                   <thead className="bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 font-sans font-bold">
                     <tr>
-                      {Object.keys(data[0]).map((key) => (
-                        <th key={key} className="px-4 py-3 font-bold whitespace-nowrap">{key}</th>
-                      ))}
+                      {Object.keys(data[0]).map((key) => {
+                         let displayName = key;
+                         if (key === 'Field_001') displayName = 'شناسه (ID)';
+                         if (key === 'Field_002') displayName = 'کد سیستم';
+                         if (key === 'Field_003') displayName = 'کد فرعی / مرجع';
+                         if (key === 'Field_005') displayName = 'عنوان / شرح';
+                         if (key === 'Field_006') displayName = 'وضعیت / تایید';
+                         if (key === 'Field_007') displayName = 'یادداشت / نوع';
+                         if (key === 'Field_010') displayName = 'مبلغ / ارزش';
+                         return (
+                           <th key={key} title={key} className="px-4 py-3 font-bold whitespace-nowrap">
+                             {displayName} 
+                             <span className="text-[9px] text-gray-400 font-mono block font-normal">{key}</span>
+                           </th>
+                         );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700 font-mono">
