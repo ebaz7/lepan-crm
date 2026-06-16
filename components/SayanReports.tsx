@@ -760,19 +760,36 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                     <tr>
                       {Object.keys(data[0]).map((key) => {
                          let displayName = key;
+                         
+                         // Smart guesswork based on activeTable and sample values
+                         const isActTbl001 = activeTable.includes('ACT_TBL_001');
+                         
                          if (key === 'Field_001') displayName = 'شناسه (ID)';
-                         if (key === 'Field_002') displayName = 'کد سیستم';
-                         if (key === 'Field_003') displayName = 'کد فرعی / مرجع';
-                         if (key === 'Field_005') displayName = 'عنوان / شرح / نام';
-                         if (key === 'Field_006') displayName = 'وضعیت / نوع';
-                         if (key === 'Field_007') displayName = 'توضیحات / یادداشت';
-                         if (key === 'Field_008') displayName = 'مقدار / تعداد / ماهیت';
-                         if (key === 'Field_010') displayName = 'مبلغ (بدهکار/مانده)';
-                         if (key === 'Field_011') displayName = 'مبلغ (بستانکار/مانده)';
+                         else if (key === 'Field_002') displayName = 'کد سیستم';
+                         else if (key === 'Field_003') displayName = 'کد فرعی / نوع';
+                         else if (key === 'Field_004') displayName = 'شماره / ردیف';
+                         
+                         // In ACT_TBL_001, Field_005 is Account Code (101, 102...) and Field_006 is Account Name (موجودی نزد بانکها)
+                         else if (key === 'Field_005') {
+                            displayName = isActTbl001 ? 'کد حساب / سرفصل' : 'عنوان / شرح / کد';
+                         }
+                         else if (key === 'Field_006') {
+                            displayName = isActTbl001 ? 'نام حساب / عنوان' : 'وضعیت / عنوان';
+                         }
+                         
+                         else if (key === 'Field_007') displayName = 'توضیحات / ماهیت';
+                         else if (key === 'Field_008') displayName = 'فعال / وضعیت';
+                         else if (key === 'Field_009') displayName = 'ویژگی / مقدار';
+                         else if (key === 'Field_010') displayName = 'مبلغ (بدهکار / اصلی)';
+                         else if (key === 'Field_011') displayName = 'مبلغ (بستانکار / فرعی)';
+                         else if (key === 'Field_012') displayName = 'مانده / تاریخ';
+                         
                          return (
                            <th key={key} title={key} className="px-4 py-3 font-bold whitespace-nowrap">
-                             {displayName} 
-                             <span className="text-[9px] text-gray-400 font-mono block font-normal">{key}</span>
+                             <div className="flex flex-col gap-0.5">
+                               <span className="text-[11px] font-extrabold">{displayName}</span>
+                               <span className="text-[9px] text-gray-400 font-mono font-normal tracking-wider">{key}</span>
+                             </div>
                            </th>
                          );
                       })}
