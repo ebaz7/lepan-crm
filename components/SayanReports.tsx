@@ -69,36 +69,51 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
   // واکشی خودکار لیست جداول اس‌کیو‌ال سرور جهت راحتی کاربر
   const discoverTablesFromSql = async () => {
-    if (!baseUrl) {
-      setError('ابتدا آدرس API را در تنظیمات عمومی برنامه قسمت API وارد کنید');
-      return;
-    }
     setDiscovering(true);
     setError(null);
+    setDiscoveredTables([]);
     try {
-      const url = baseUrl.replace(/\/$/, '');
-      
-      // تلاش برای خواندن اطلاعات ساختار دیتابیس با متدهای استاندارد
-      const endpointsToTry = [
-        { path: 'INFORMATION_SCHEMA.TABLES', method: 'GET' },
+      // تلاش برای کشف لیست جداول اس‌کیو‌ال سرور با استفاده از انواع متدهای استاندارد و کدهای میانی سایان
+      const discoveryAttempts = [
+        { path: 'tables', method: 'GET' },
         { path: 'sys.tables', method: 'GET' },
-        { path: 'tables', method: 'GET' }
+        { path: 'sys/tables', method: 'GET' },
+        { path: 'INFORMATION_SCHEMA.TABLES', method: 'GET' },
+        { 
+          path: 'query', 
+          method: 'POST', 
+          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+        },
+        { 
+          path: 'sql', 
+          method: 'POST', 
+          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+        },
+        { 
+          path: 'sql', 
+          method: 'POST', 
+          body: { sql: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+        },
+        { 
+          path: 'execute', 
+          method: 'POST', 
+          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" } 
+        }
       ];
       
       let foundTables: any[] = [];
       let lastErrMessage = '';
 
-      for (const ep of endpointsToTry) {
+      for (const ep of discoveryAttempts) {
         try {
-          console.log(`Trying discovery on Sayan: ${url}/${ep.path}`);
-          const targetUrl = `${url}/${ep.path}`;
+          console.log(`Trying table discovery via Sayan path: ${ep.path}`);
           const response = await fetch('/api/sayan-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              url: targetUrl,
-              headers: { 'Authorization': `Bearer ${apiKey}` },
-              method: ep.method
+              path: ep.path,
+              method: ep.method,
+              body: ep.body
             })
           });
           
@@ -116,15 +131,17 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                 else if ('TableName' in sampleRow) tableKey = 'TableName';
                 else if ('table_name' in sampleRow) tableKey = 'table_name';
                 else {
-                  const foundKey = Object.keys(sampleRow).find(k => typeof sampleRow[k] === 'string');
-                  if (foundKey) tableKey = foundKey;
+                  tableKey = Object.keys(sampleRow).find(k => 
+                    String(k).toLowerCase().includes('table') || 
+                    String(k).toLowerCase().includes('name')
+                  ) || Object.keys(sampleRow)[0];
                 }
                 
                 if (tableKey) {
                   foundTables = rows.map((r: any) => ({
                     tableName: r[tableKey],
-                    schemaName: r['TABLE_SCHEMA'] || r['schema_name'] || 'dbo'
-                  })).filter(t => t.tableName && !t.tableName.startsWith('sys') && !t.tableName.startsWith('queue'));
+                    schemaName: r['TABLE_SCHEMA'] || r['schema_name'] || r['Schema'] || 'dbo'
+                  })).filter(t => t.tableName && !String(t.tableName).startsWith('sys') && !String(t.tableName).startsWith('queue'));
                   
                   if (foundTables.length > 0) {
                     break;
@@ -143,7 +160,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         setDiscoveredTables(foundTables);
         setError(null);
       } else {
-        setError(`⚠️ امکان دریافت خودکار لیست جداول سیستمی از وب‌سرویس فراهم نشد. احتمالاً درگاه لایه دسترسی به جداول سیستم (سیگنال‌دهی متادیتا) را مسدود کرده است.\nاما می‌توانید هر زمان لازم بود نام جدول واقعی دیتابیس را مستقیماً در کادر "جستجو یا فراخوانی مستقیم جدول" بنویسید.`);
+        setError(`⚠️ برنامه نتوانست ساختار جداول اس‌کیو‌ال را به صورت زنده از درگاه سایان دریافت کند. احتمال دارد دسترسی مستقیم به sys یا INFORMATION_SCHEMA روی درگاه سایان بسته باشد یا این اندپوینت تعریف نشده باشد.\nاما نگران نباشید! می‌توانید هر نام جدولی از دیتابیس خود را (مثلاً Factor یا tblFactor یا هم خانواده‌های ACT_TBL) مستقیماً در کادر "فراخوانی جدول دلخواه دیتابیس" بنویسید و فراخوانی کنید.`);
       }
     } catch (err: any) {
       setError(`خطا در واکشی لیست جداول دیتابیس: ${err.message}`);
@@ -153,25 +170,18 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   };
 
   const fetchData = async () => {
-    if (!baseUrl) {
-      setError('ابتدا آدرس API را در تنظیمات عمومی برنامه قسمت API وارد کنید');
-      return;
-    }
-    
     setLoading(true);
     setError(null);
     setRawResponse(null);
     setDebugInfo(null);
     
     try {
-      const url = baseUrl.replace(/\/$/, '');
-      let targetUrl = '';
       let fetchMethod = 'GET';
       let fetchBody: any = null;
+      let cleanPath = '';
 
       if (customMode) {
-        const cleanPath = customPath.trim().replace(/^\//, '');
-        targetUrl = `${url}/${cleanPath}`;
+        cleanPath = customPath.trim().replace(/^\//, '');
         fetchMethod = method;
         if (method === 'POST' || method === 'PUT') {
           try {
@@ -184,22 +194,19 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         }
       } else {
         const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
-        targetUrl = `${url}/${cleanTable}`;
+        cleanPath = cleanTable;
         fetchMethod = 'GET';
       }
       
-      console.log(`Fetching Sayan Data [${fetchMethod}] from: ${targetUrl}`);
+      console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
       
       const startTime = Date.now();
-      let proxyResult: any = null;
-      let isSuccess = false;
       
       const response = await fetch('/api/sayan-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            url: targetUrl,
-            headers: { 'Authorization': `Bearer ${apiKey}` },
+            path: cleanPath,
             method: fetchMethod,
             body: fetchBody
         })
@@ -215,14 +222,14 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
       // ذخیره پاسخ کامل
       setRawResponse(responseJson || responseText);
-      isSuccess = response.ok;
+      const isSuccess = response.ok;
 
       setDebugInfo({
         status: response.status,
         statusText: response.statusText,
-        url: targetUrl,
+        path: cleanPath,
         duration: `${duration}ms`,
-        isLocal: targetUrl.includes('192.168.') || targetUrl.includes('10.') || targetUrl.includes('127.0.0.1')
+        isLocal: true // به صورت تمام‌پروکسی از طریق سرور مالی لوکال برقرار می‌شود
       });
 
       if (!response.ok) {

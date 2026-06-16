@@ -501,17 +501,39 @@ app.get('/api/notifications', (req, res) => {
  * Used to bypass CORS and Mixed Content (HTTPS -> HTTP) issues.
  */
 app.post('/api/sayan-proxy', async (req, res) => {
-    const { url, headers, method = 'GET', body } = req.body;
+    let { url, path, headers = {}, method = 'GET', body } = req.body;
     
-    if (!url) return res.status(400).json({ error: 'URL is required' });
-    
+    // واکشی مستقیم اطلاعات آدرس و توکن سایان از دیتابیس لوکال سرور بدون اتکا به پی‌لود کلاینت
+    const db = getDb();
+    const settings = db.settings || {};
+    const serverSayanBaseUrl = settings.sayanApiUrl || 'http://192.168.41.225:3000/api/external/v1';
+    const serverSayanApiKey = settings.sayanApiKey || 's_gate_live_urp2vvxzpik4';
+
+    let finalUrl = '';
+    if (path) {
+        const cleanPath = String(path).trim().replace(/^\//, '');
+        finalUrl = `${serverSayanBaseUrl.replace(/\/$/, '')}/${cleanPath}`;
+    } else if (url) {
+        // سازگاری با کدهای قبلی در صورت نیاز
+        if (url.includes('/api/external/v1/')) {
+            const pathPart = url.substring(url.indexOf('/api/external/v1/') + 17);
+            finalUrl = `${serverSayanBaseUrl.replace(/\/$/, '')}/${pathPart}`;
+        } else {
+            finalUrl = url;
+        }
+    } else {
+        finalUrl = serverSayanBaseUrl;
+    }
+
     try {
-        console.log(`[Sayan Proxy] ${method} -> ${url}`);
+        console.log(`[Sayan Server Proxy] ${method} -> ${finalUrl}`);
         
+        // تنظیم هدر احراز هویت با استفاده از توکن ذخیره شده در سمت سرور
         const fetchOptions = {
             method,
             headers: {
                 ...headers,
+                'Authorization': `Bearer ${serverSayanApiKey}`,
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -521,7 +543,7 @@ app.post('/api/sayan-proxy', async (req, res) => {
             fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
         }
 
-        const response = await fetch(url, fetchOptions);
+        const response = await fetch(finalUrl, fetchOptions);
         const data = await response.json().catch(async () => {
             const text = await response.text().catch(() => '');
             return { rawBody: text };
@@ -529,11 +551,11 @@ app.post('/api/sayan-proxy', async (req, res) => {
 
         res.status(response.status).json(data);
     } catch (error) {
-        console.error('[Sayan Proxy Error]', error);
+        console.error('[Sayan Server Proxy Error]', error);
         res.status(500).json({ 
             error: 'Sayan Bridge Connection Failed', 
             details: error.message,
-            isLocalIp: url.includes('192.168.') || url.includes('10.') || url.includes('127.0.0.1')
+            isLocalIp: finalUrl.includes('192.168.') || finalUrl.includes('10.') || finalUrl.includes('127.0.0.1')
         });
     }
 });
