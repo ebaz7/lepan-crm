@@ -939,6 +939,75 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                 setSettings={setSettings} 
                                 contacts={[...(settings.savedContacts || []), ...appContacts]} 
                             />
+
+                            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 space-y-4 shadow-sm animate-fade-in">
+                                <h4 className="font-bold text-sm text-amber-900 flex items-center gap-2">🚚 تنظیمات تخصصی ارسال گزارش روزانه خروج کارخانه</h4>
+                                <p className="text-xs text-amber-700 leading-relaxed">
+                                    تنظیم کنید که گزارش روزانه تصاویر و مجوزهای خروج کالا از کارخانه به چه گروه‌هایی ارسال شود. می‌توانید یک گروه اختصاصی فقط برای این گزارش معرفی کنید یا آن را به گروه‌های اول و دوم مجوزهای خروج نیز بفرستید.
+                                </p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg border border-amber-100">
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">گروه اختصاصی تلگرام (Chat ID)</label>
+                                        <input 
+                                            className="w-full border rounded p-1.5 text-xs dir-ltr" 
+                                            value={settings.dailyExitReportDedicatedTelegramId || ''} 
+                                            onChange={e => setSettings({...settings, dailyExitReportDedicatedTelegramId: e.target.value})} 
+                                            placeholder="-100..." 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">گروه اختصاصی بله (شناسه)</label>
+                                        <input 
+                                            className="w-full border rounded p-1.5 text-xs dir-ltr" 
+                                            value={settings.dailyExitReportDedicatedBaleId || ''} 
+                                            onChange={e => setSettings({...settings, dailyExitReportDedicatedBaleId: e.target.value})} 
+                                            placeholder="ID..." 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">گروه اختصاصی واتساپ (ID)</label>
+                                        <input 
+                                            className="w-full border rounded p-1.5 text-xs dir-ltr" 
+                                            value={settings.dailyExitReportDedicatedWhatsAppId || ''} 
+                                            onChange={e => setSettings({...settings, dailyExitReportDedicatedWhatsAppId: e.target.value})} 
+                                            placeholder="...@g.us" 
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-6 pt-2">
+                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={settings.dailyExitReportSendToFirstGroup !== false}
+                                            onChange={e => setSettings({...settings, dailyExitReportSendToFirstGroup: e.target.checked})} 
+                                            className="w-4 h-4 rounded text-blue-600" 
+                                        />
+                                        <span>ارسال به گروه اول مجوز خروج (پیش‌فرض کارخانه)</span>
+                                    </label>
+                                    
+                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={settings.dailyExitReportSendToSecondGroup || false} 
+                                            onChange={e => setSettings({...settings, dailyExitReportSendToSecondGroup: e.target.checked})} 
+                                            className="w-4 h-4 rounded text-blue-600" 
+                                        />
+                                        <span>ارسال به گروه دوم مجوز خروج</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={settings.dailyExitReportSendToDedicatedGroup || false} 
+                                            onChange={e => setSettings({...settings, dailyExitReportSendToDedicatedGroup: e.target.checked})} 
+                                            className="w-4 h-4 rounded text-blue-600" 
+                                        />
+                                        <span>ارسال به گروه اختصاصی معرفی شده در بالا</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     )}
                     

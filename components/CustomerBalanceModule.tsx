@@ -81,12 +81,30 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     const normalizeNumber = (val: any): number => {
       if (val === undefined || val === null || val === '') return 0;
       let str = String(val).trim();
-      // Replace Persian/Arabic digits with English
-      str = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-               .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
-      // Remove commas and other common separators
-      str = str.replace(/,/g, '').replace(/،/g, '');
-      return Number(str) || 0;
+      
+      const PersianDigits = '۰۱۲۳۴۵۶۷۸۹';
+      const ArabicDigits = '٠١٢٣٤٥٦٧٨٩';
+      
+      let cleanStr = '';
+      for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        const pIdx = PersianDigits.indexOf(char);
+        if (pIdx !== -1) {
+          cleanStr += pIdx.toString();
+          continue;
+        }
+        const aIdx = ArabicDigits.indexOf(char);
+        if (aIdx !== -1) {
+          cleanStr += aIdx.toString();
+          continue;
+        }
+        if ((char >= '0' && char <= '9') || char === '.' || char === '-') {
+          cleanStr += char;
+        }
+      }
+      
+      const num = parseFloat(cleanStr);
+      return isNaN(num) ? 0 : num;
     };
 
     const reader = new FileReader();

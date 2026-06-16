@@ -346,9 +346,9 @@ export const runDailyReport = async (platform, chatId, dateStr, sendFn, sendDocF
         (platform === 'whatsapp' && matchesId(chatId, settings.botBijakGroupIdWhatsApp));
 
     const isKnownLogistics = 
-        (platform === 'telegram' && (matchesId(chatId, settings.exitPermitNotificationTelegramId) || matchesId(chatId, settings.botSecurityGroupId) || matchesId(chatId, g1.telegramId) || matchesId(chatId, g2.telegramId))) ||
-        (platform === 'bale' && (matchesId(chatId, settings.exitPermitNotificationBaleId) || matchesId(chatId, g1.baleId) || matchesId(chatId, g2.baleId))) ||
-        (platform === 'whatsapp' && (matchesId(chatId, settings.exitPermitNotificationGroup) || matchesId(chatId, g1.groupId) || matchesId(chatId, g2.groupId)));
+        (platform === 'telegram' && (matchesId(chatId, settings.exitPermitNotificationTelegramId) || matchesId(chatId, settings.botSecurityGroupId) || matchesId(chatId, g1.telegramId) || matchesId(chatId, g2.telegramId) || matchesId(chatId, settings.dailyExitReportDedicatedTelegramId))) ||
+        (platform === 'bale' && (matchesId(chatId, settings.exitPermitNotificationBaleId) || matchesId(chatId, g1.baleId) || matchesId(chatId, g2.baleId) || matchesId(chatId, settings.dailyExitReportDedicatedBaleId))) ||
+        (platform === 'whatsapp' && (matchesId(chatId, settings.exitPermitNotificationGroup) || matchesId(chatId, g1.groupId) || matchesId(chatId, g2.groupId) || matchesId(chatId, settings.dailyExitReportDedicatedWhatsAppId)));
 
     const isRecognized = isKnownAccounting || isKnownBijak || isKnownLogistics;
 

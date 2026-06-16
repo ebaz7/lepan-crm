@@ -742,16 +742,28 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
         let totalBalance = 0;
         rows.forEach(r => {
             if (r[2]) {
-                // Remove all non-numeric characters except Persian digits and English digits
-                let cleanStr = String(r[2])
-                    .replace(/,/g, '')   // English comma
-                    .replace(/،/g, '')   // Persian comma
-                    .replace(/٬/g, '');  // Persian thousands separator
+                const str = String(r[2]).trim();
+                const PersianDigits = '۰۱۲۳۴۵۶۷۸۹';
+                const ArabicDigits = '٠١٢٣٤٥٦٧٨٩';
                 
-                // Convert Persian digits to English
-                cleanStr = cleanStr.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-                                   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
-                                   
+                let cleanStr = '';
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    const pIdx = PersianDigits.indexOf(char);
+                    if (pIdx !== -1) {
+                        cleanStr += pIdx.toString();
+                        continue;
+                    }
+                    const aIdx = ArabicDigits.indexOf(char);
+                    if (aIdx !== -1) {
+                        cleanStr += aIdx.toString();
+                        continue;
+                    }
+                    if ((char >= '0' && char <= '9') || char === '.' || char === '-') {
+                        cleanStr += char;
+                    }
+                }
+                
                 const num = parseFloat(cleanStr) || 0;
                 // Avoid adding the "Total" row if it was already added by server.js
                 // Usually the total row has '---' or labels in other columns

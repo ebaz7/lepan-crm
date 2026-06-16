@@ -322,6 +322,13 @@ export interface SystemSettings {
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];
   
+  dailyExitReportDedicatedTelegramId?: string;
+  dailyExitReportDedicatedBaleId?: string;
+  dailyExitReportDedicatedWhatsAppId?: string;
+  dailyExitReportSendToFirstGroup?: boolean;
+  dailyExitReportSendToSecondGroup?: boolean;
+  dailyExitReportSendToDedicatedGroup?: boolean;
+  
   salesNotificationUsers?: { username: string; platforms: string[]; name?: string }[]; // Usernames and their active platforms (telegram, bale)
   salesContactMessage?: string;
   defaultMeetingAttendees?: string[];
