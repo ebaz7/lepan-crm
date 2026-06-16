@@ -173,65 +173,91 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     setDebugInfo(null);
     
     try {
-      let fetchMethod = 'GET';
-      let fetchBody: any = null;
-      let cleanPath = '';
+      const startTime = Date.now();
+      
+      let responseText = '';
+      let responseJson: any = null;
+      let isSuccess = false;
+      let finalStatus = 0;
+      let finalStatusText = '';
+      let finalPath = '';
 
       if (customMode) {
-        cleanPath = customPath.trim().replace(/^\//, '');
-        fetchMethod = method;
+        let fetchMethod = method;
+        let fetchBody: any = null;
+        let cleanPath = customPath.trim().replace(/^\//, '');
+        
         if (method === 'POST' || method === 'PUT') {
           try {
-            if (reqBody.trim()) {
-              fetchBody = JSON.parse(reqBody);
-            }
+            if (reqBody.trim()) fetchBody = JSON.parse(reqBody);
           } catch (e: any) {
             throw new Error(`خطای سینتکس در بدنه JSON درخواست: ${e.message}`);
           }
         }
+        
+        console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
+        finalPath = cleanPath;
+        
+        const response = await fetch('/api/sayan-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: cleanPath, method: fetchMethod, body: fetchBody })
+        });
+        
+        finalStatus = response.status;
+        finalStatusText = response.statusText;
+        responseText = await response.text();
+        try { responseJson = JSON.parse(responseText); } catch (e) {}
+        isSuccess = response.ok;
+
       } else {
         const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
-        cleanPath = cleanTable;
-        fetchMethod = 'GET';
+        console.log(`Auto-fetching table data via Secure Server Proxy: Table=[${cleanTable}]`);
+        
+        const attempts = [
+          { path: cleanTable, method: 'GET', body: null },
+          { path: 'query', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
+          { path: 'sql', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } },
+          { path: 'sql', method: 'POST', body: { sql: `SELECT TOP 200 * FROM ${cleanTable}` } },
+          { path: 'execute', method: 'POST', body: { query: `SELECT TOP 200 * FROM ${cleanTable}` } }
+        ];
+
+        for (const attempt of attempts) {
+          finalPath = attempt.path;
+          const response = await fetch('/api/sayan-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: attempt.path, method: attempt.method, body: attempt.body })
+          });
+          
+          finalStatus = response.status;
+          finalStatusText = response.statusText;
+          responseText = await response.text();
+          try { responseJson = JSON.parse(responseText); } catch (e) {}
+          
+          if (response.ok) {
+            isSuccess = true;
+            break;
+          }
+        }
       }
       
-      console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
-      
-      const startTime = Date.now();
-      
-      const response = await fetch('/api/sayan-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            path: cleanPath,
-            method: fetchMethod,
-            body: fetchBody
-        })
-      });
-      
       const duration = Date.now() - startTime;
-      
-      const responseText = await response.text();
-      let responseJson: any = null;
-      try {
-        responseJson = JSON.parse(responseText);
-      } catch (e) {}
 
       // ذخیره پاسخ کامل
       setRawResponse(responseJson || responseText);
-      const isSuccess = response.ok;
 
       setDebugInfo({
-        status: response.status,
-        statusText: response.statusText,
-        path: cleanPath,
+        status: finalStatus,
+        statusText: finalStatusText,
+        path: finalPath,
         duration: `${duration}ms`,
         isLocal: true // به صورت تمام‌پروکسی از طریق سرور مالی لوکال برقرار می‌شود
       });
 
-      if (!response.ok) {
+      if (!isSuccess) {
         const detailedErr = responseJson ? JSON.stringify(responseJson, null, 2) : responseText;
-        throw new Error(`🔴 خطای پاسخ وب‌سرویس سایان (HTTP ${response.status} - ${response.statusText}):\n${detailedErr}`);
+        throw new Error(`🔴 خطای پاسخ وب‌سرویس سایان (HTTP ${finalStatus} - ${finalStatusText}):\n${detailedErr}`);
       }
       
       const result = responseJson || {};
