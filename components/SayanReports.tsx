@@ -55,12 +55,102 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   const [rawResponse, setRawResponse] = useState<any>(null);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
 
+  // حالت‌های پویای کشف جداول SQL
+  const [customTableName, setCustomTableName] = useState<string>('');
+  const [discoveredTables, setDiscoveredTables] = useState<any[]>([]);
+  const [discovering, setDiscovering] = useState<boolean>(false);
+
   // تنظیمات اتصال
   const baseUrl = settings?.sayanApiUrl || localStorage.getItem('sayan_api_url') || 'http://192.168.41.225:3000/api/external/v1';
   const apiKey = settings?.sayanApiKey || localStorage.getItem('sayan_api_key') || 's_gate_live_urp2vvxzpik4';
 
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(true);
+
+  // واکشی خودکار لیست جداول اس‌کیو‌ال سرور جهت راحتی کاربر
+  const discoverTablesFromSql = async () => {
+    if (!baseUrl) {
+      setError('ابتدا آدرس API را در تنظیمات عمومی برنامه قسمت API وارد کنید');
+      return;
+    }
+    setDiscovering(true);
+    setError(null);
+    try {
+      const url = baseUrl.replace(/\/$/, '');
+      
+      // تلاش برای خواندن اطلاعات ساختار دیتابیس با متدهای استاندارد
+      const endpointsToTry = [
+        { path: 'INFORMATION_SCHEMA.TABLES', method: 'GET' },
+        { path: 'sys.tables', method: 'GET' },
+        { path: 'tables', method: 'GET' }
+      ];
+      
+      let foundTables: any[] = [];
+      let lastErrMessage = '';
+
+      for (const ep of endpointsToTry) {
+        try {
+          console.log(`Trying discovery on Sayan: ${url}/${ep.path}`);
+          const targetUrl = `${url}/${ep.path}`;
+          const response = await fetch('/api/sayan-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: targetUrl,
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+              method: ep.method
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json().catch(() => null);
+            if (result) {
+              const rows = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+              if (Array.isArray(rows) && rows.length > 0) {
+                const sampleRow = rows[0];
+                let tableKey = '';
+                
+                // حدس زدن فیلد حاوی نام جدول
+                if ('TABLE_NAME' in sampleRow) tableKey = 'TABLE_NAME';
+                else if ('name' in sampleRow) tableKey = 'name';
+                else if ('TableName' in sampleRow) tableKey = 'TableName';
+                else if ('table_name' in sampleRow) tableKey = 'table_name';
+                else {
+                  const foundKey = Object.keys(sampleRow).find(k => typeof sampleRow[k] === 'string');
+                  if (foundKey) tableKey = foundKey;
+                }
+                
+                if (tableKey) {
+                  foundTables = rows.map((r: any) => ({
+                    tableName: r[tableKey],
+                    schemaName: r['TABLE_SCHEMA'] || r['schema_name'] || 'dbo'
+                  })).filter(t => t.tableName && !t.tableName.startsWith('sys') && !t.tableName.startsWith('queue'));
+                  
+                  if (foundTables.length > 0) {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } catch (subErr: any) {
+          console.warn(`Discovery failed for ${ep.path}:`, subErr);
+          lastErrMessage = subErr.message;
+        }
+      }
+      
+      if (foundTables.length > 0) {
+        setDiscoveredTables(foundTables);
+        setError(null);
+      } else {
+        setError(`⚠️ امکان دریافت خودکار لیست جداول سیستمی از وب‌سرویس فراهم نشد. احتمالاً درگاه لایه دسترسی به جداول سیستم (سیگنال‌دهی متادیتا) را مسدود کرده است.\nاما می‌توانید هر زمان لازم بود نام جدول واقعی دیتابیس را مستقیماً در کادر "جستجو یا فراخوانی مستقیم جدول" بنویسید.`);
+      }
+    } catch (err: any) {
+      setError(`خطا در واکشی لیست جداول دیتابیس: ${err.message}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!baseUrl) {
@@ -136,12 +226,6 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       });
 
       if (!response.ok) {
-        if (targetUrl.includes('192.168.') || targetUrl.includes('10.') || targetUrl.includes('127.0.0.1')) {
-          if (response.status === 500) {
-             throw new Error(`⚠️ خطا ارتباط (کد ۵۰۰): آدرس پل یک آی‌پی محلی (لوکال) است و سرور کلود برنامه نمی‌تواند سیستم محلی شما را ببیند.\n\nراه حل: حتماً برنامه Ngrok یا تونل بگیرید تا آدرس پابلیک به شما بدهد و آن را ذخیره کنید.\n\nپاسخ جزئی سرور: ${JSON.stringify(responseJson || responseText)}`);
-          }
-        }
-        
         const detailedErr = responseJson ? JSON.stringify(responseJson, null, 2) : responseText;
         throw new Error(`🔴 خطای پاسخ وب‌سرویس سایان (HTTP ${response.status} - ${response.statusText}):\n${detailedErr}`);
       }
@@ -200,6 +284,41 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
           <span className="text-[10px] text-gray-400 font-mono text-left dir-ltr break-all">{baseUrl}</span>
         </div>
         
+        {/* ابزار بازیابی مستقیم لیست جداول بر اساس فیدبک کاربر */}
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-blue-50/30 space-y-2.5">
+           <div>
+             <label className="text-[10px] font-bold text-gray-500 block mb-1">فراخوانی جدول دلخواه دیتابیس:</label>
+             <form onSubmit={(e) => {
+               e.preventDefault();
+               if (customTableName.trim()) {
+                 setCustomMode(false);
+                 setActiveTable(customTableName.trim());
+               }
+             }} className="flex gap-1.5">
+               <input 
+                 type="text" 
+                 className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs font-mono dir-ltr outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+                 placeholder="dbo.Factor یا Factor"
+                 value={customTableName}
+                 onChange={(e) => setCustomTableName(e.target.value)}
+               />
+               <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-2.5 text-xs font-bold transition-all shadow-sm">
+                 فراخوانی
+               </button>
+             </form>
+           </div>
+           
+           <button 
+             type="button"
+             onClick={discoverTablesFromSql}
+             disabled={discovering}
+             className="w-full py-2 px-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+           >
+             {discovering ? <Loader2 size={12} className="animate-spin" /> : <TableIcon size={12} />}
+             دریافت زنده جداول از اس‌کیو‌ال (SQL)
+           </button>
+        </div>
+
         {/* API Tester Navigation Button */}
         <div className="p-2 border-b bg-gray-50/50">
           <button 
@@ -217,7 +336,39 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         </div>
 
         {!customMode ? (
-          <div className="p-2">
+          <div className="p-2 space-y-1">
+            {/* لیست جداول کشف شده از دیتابیس */}
+            {discoveredTables.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 px-2 py-1.5 bg-teal-50 dark:bg-teal-900/40 rounded-lg mb-2">
+                  <Database className="text-teal-600 dark:text-teal-400" size={13} />
+                  <span className="text-[10px] font-black text-teal-800 dark:text-teal-300">جداول واکشی شده از SQL:</span>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-teal-100 rounded-lg p-1 space-y-1">
+                  {discoveredTables.map((tbl, i) => {
+                    const fullTableName = `${tbl.schemaName}.${tbl.tableName}`;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setCustomMode(false);
+                          setActiveTable(fullTableName);
+                        }}
+                        className={`w-full text-right p-2 rounded-md transition-all flex flex-col ${
+                          activeTable === fullTableName 
+                            ? 'bg-teal-100 dark:bg-teal-900 text-teal-900 dark:text-teal-100 font-extrabold' 
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        <span className="text-[10px] font-mono leading-tight" dir="ltr">{tbl.tableName}</span>
+                        <span className="text-[8px] text-gray-400 font-mono mt-0.5" dir="ltr">{tbl.schemaName}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {Object.entries(TABLE_DICTIONARY).map(([tableName, desc]) => (
               <button
                 key={tableName}
@@ -225,7 +376,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                   setCustomMode(false);
                   setActiveTable(tableName);
                 }}
-                className={`w-full text-right p-3 rounded-lg mb-1 transition-all flex flex-col ${
+                className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
                   !customMode && activeTable === tableName 
                     ? 'bg-blue-50 dark:bg-blue-900/40 border rtl:border-r-4 border-r-blue-600 border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300' 
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 border border-transparent'
@@ -260,7 +411,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex gap-4 items-center justify-between flex-shrink-0">
           <div>
             <h1 className="text-base font-bold font-sans text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              <span>{customMode ? 'کنسول مدیریت و اجرای کوئری پیشرفته' : (TABLE_DICTIONARY[activeTable] || 'گزارش')}</span>
+              <span>{customMode ? 'کنسول مدیریت و اجرای کوئری پیشرفته' : (TABLE_DICTIONARY[activeTable] || 'گزارش و پردازش جدول دیتابیس')}</span>
               {customMode && <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded font-black">حالت تستر</span>}
             </h1>
             <p className="text-xs text-gray-400 font-mono mt-1" dir="ltr">
@@ -298,8 +449,8 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                                  }}
                                  className={`flex-1 p-2 text-center text-xs font-bold rounded-lg border transition-all ${
                                       method === m 
-                                         ? 'bg-blue-600 text-white border-blue-500 shadow' 
-                                         : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
+                                           ? 'bg-blue-600 text-white border-blue-500 shadow' 
+                                           : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
                                  }`}
                              >
                                  {m}
@@ -348,7 +499,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-900 flex flex-col gap-4 animate-fade-in shadow-sm">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="shrink-0 mt-0.5 text-red-600" size={20} />
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1">
                   <div className="text-xs font-black">خطای پردازش یا ارتباط با سایان رخ داد:</div>
                   <div className="text-xs font-mono font-bold leading-relaxed whitespace-pre-wrap">{error}</div>
                 </div>
@@ -360,7 +511,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                       <button onClick={handleCopyResponse} className="bg-gray-800 hover:bg-gray-700 text-white p-1 rounded transition-all text-[9.5px] px-2 flex items-center gap-1">
                            <ClipboardCheck size={11} />
                            {copiedResponse ? 'کپی شد!' : 'کپی خطا'}
-                      </button>
+                       </button>
                   </div>
                   <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed">
                       {rawResponse ? (typeof rawResponse === 'object' ? JSON.stringify(rawResponse, null, 2) : String(rawResponse)) : '// خروجی پاسخی ثبت نشده است (خطای کانکشن)'}
@@ -389,8 +540,8 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               </div>
 
               {debugInfo.isLocal && (
-                 <div className="p-2.5 bg-amber-950/40 border border-amber-900/50 rounded-lg text-amber-300 font-sans leading-relaxed text-[10px]">
-                    ⚠️ <strong>تذکر مهم درباره IP لوکال:</strong> آدرس سرور سایان تعریف شده ({baseUrl}) جزو رنج آی‌پی‌های داخلی/محلی شماست. از آنجا که سیستم ما کلاودبیس است، سرور اصلی نمی‌تواند مستقیماً به آی‌پی سیستم محلی ویندوز دسکتاپ شما در داخل شبکه داخلی شرکت وصل شود. لطفاً حتماً برنامه Ngrok یا تونل بگذارید و آدرس عمومی یا دامین آی‌پی ولید موقت را در تنظیمات عمومی برنامه جایگزین کنید.
+                 <div className="p-2.5 bg-blue-950/40 border border-blue-900/50 rounded-lg text-blue-300 font-sans leading-relaxed text-[10px]">
+                    ℹ️ <strong>ارتباط محلی (Local-to-Local Connection):</strong> آدرس سرور سایان تعریف شده ({baseUrl}) متعلق به محدوده آی‌پی‌های داخلی است. ترابری درخواست کاملاً ایمن و بصورت مستقیم از وب‌سرور پنل پرداختی شما به سرور دیتابیس سایان انجام می‌گیرد و نیازی به اینترنت یا آی‌پی ولید بیرونی در این نقطه نیست.
                  </div>
               )}
             </div>
