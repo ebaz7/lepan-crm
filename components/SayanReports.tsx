@@ -84,13 +84,13 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[], onStatement
              </div>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 flex flex-col justify-between shadow-sm text-white">
                 <div className="flex items-center justify-between opacity-90">
                   <span className="font-bold text-xs">جمع مبلغ فروش کل (در داده‌ها)</span>
                   <DollarSign size={16} />
                 </div>
-                <div className="mt-4 text-2xl font-black font-mono tracking-tight">{new Intl.NumberFormat('fa-IR').format(summaryStats.totalSales || 154000000)} <span className="text-[10px] font-normal font-sans opacity-80">ریال</span></div>
+                <div className="mt-4 text-2xl font-black font-mono tracking-tight">{new Intl.NumberFormat('fa-IR').format(summaryStats.totalSales)} <span className="text-[10px] font-normal font-sans opacity-80">ریال</span></div>
               </div>
               <div className="bg-white border text-gray-700 rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
                 <div className="flex items-center justify-between text-gray-500">
@@ -208,7 +208,7 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[], onStatement
                   <Users size={16} />
                   <span className="font-bold text-xs">{activeTable === 'REPORT_BANKS' ? 'جمع موجودی بانک و صندوق' : 'جمع کل مطالبات / مانده'}</span>
                 </div>
-                <div className="text-3xl font-black text-rose-900 font-mono tracking-tighter">{new Intl.NumberFormat('fa-IR').format(totalBal || data.length * 450000)} <span className="text-[10px] font-normal font-sans">ریال</span></div>
+                <div className="text-3xl font-black text-rose-900 font-mono tracking-tighter">{new Intl.NumberFormat('fa-IR').format(totalBal)} <span className="text-[10px] font-normal font-sans">ریال</span></div>
               </div>
               
               <div className="bg-white border rounded-xl p-4 shadow-sm col-span-2 h-56">
@@ -345,6 +345,131 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   const [showDebug, setShowDebug] = useState(true);
 
   // واکشی خودکار لیست جداول اس‌کیو‌ال سرور جهت راحتی کاربر
+  const [extractingIntelligence, setExtractingIntelligence] = useState(false);
+
+  const extractSayanIntelligence = async () => {
+    setExtractingIntelligence(true);
+    let intelligenceReport = "SAYAN DATABASE INTELLIGENCE REPORT\n";
+    intelligenceReport += `Generated: ${new Date().toLocaleString()}\n`;
+    intelligenceReport += "========================================\n\n";
+
+    const tablesToProbe = [
+      'ACT_TBL_001', 'ACT_TBL_002', 'ACT_TBL_003', 'ACT_TBL_004',
+      'BUR_TBL_008', 'BUR_TBL_015', 'STR_TBL_001', 'ACT_TBL_011'
+    ];
+
+    try {
+      for (const table of tablesToProbe) {
+        intelligenceReport += `[TABLE: ${table}]\n`;
+        try {
+          const result: any = await apiCall('/api/sayan-proxy', 'POST', { query: `SELECT TOP 5 * FROM ${table}` });
+          if (result && result.data && result.data.length > 0) {
+            intelligenceReport += `Columns: ${Object.keys(result.data[0]).join(', ')}\n`;
+            intelligenceReport += "Sample Data (JSON):\n";
+            intelligenceReport += JSON.stringify(result.data, null, 2) + "\n";
+          } else {
+            intelligenceReport += "No data found or table inaccessible.\n";
+          }
+        } catch (err) {
+          intelligenceReport += `Error reading table: ${err}\n`;
+        }
+        intelligenceReport += "----------------------------------------\n\n";
+      }
+
+      const blob = new Blob([intelligenceReport], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Sayan_DB_Intelligence_${new Date().getTime()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Intelligence Extraction Failed", error);
+      alert("خطا در استخراج اطلاعات دیتابیس");
+    } finally {
+      setExtractingIntelligence(false);
+    }
+  };
+
+  const [diagnosing, setDiagnosing] = useState<boolean>(false);
+
+  const runDeepDiagnostic = async () => {
+    setDiagnosing(true);
+    let log = `SAYAN DATABASE DEEP DIAGNOSTIC REPORT\n`;
+    log += `Generated at: ${new Date().toLocaleString('fa-IR')}\n`;
+    log += `==========================================\n\n`;
+
+    try {
+      // 1. Get all tables info
+      log += `PHASE 1: TABLE DISCOVERY\n`;
+      const tablesRes = await fetch('/api/sayan-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: 'sql-direct',
+          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'" }
+        })
+      });
+      const tablesData = await tablesRes.json();
+      const tables = tablesData.data || [];
+      log += `Found ${tables.length} tables.\n\n`;
+
+      // 2. Sample data from key prefixes
+      const prefixes = ['ACT_', 'BUR_', 'STR_', 'IND_', 'AST_'];
+      for (const prefix of prefixes) {
+        const filtered = tables.filter((t: any) => t.TABLE_NAME.includes(prefix));
+        log += `--- PREFIX: ${prefix} (${filtered.length} tables) ---\n`;
+        
+        for (const tInfo of filtered.slice(0, 15)) { // Limit to first 15 per prefix to avoid timeout
+          const tName = tInfo.TABLE_NAME;
+          log += `\n>> Table: ${tName}\n`;
+          
+          // Get Columns
+          const colRes = await fetch('/api/sayan-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path: 'sql-direct',
+              body: { query: `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tName}'` }
+            })
+          });
+          const colsData = await colRes.json();
+          log += `Columns: ${(colsData.data || []).map((c: any) => `${c.COLUMN_NAME}(${c.DATA_TYPE})`).join(', ')}\n`;
+
+          // Get Samples (Top 3)
+          const sampleRes = await fetch('/api/sayan-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path: 'sql-direct',
+              body: { query: `SELECT TOP 3 * FROM ${tName}` }
+            })
+          });
+          const samples = await sampleRes.json();
+          log += `Sample Rows (Count: ${samples.data?.length || 0}):\n`;
+          log += JSON.stringify(samples.data || [], null, 2) + "\n";
+        }
+        log += `\n`;
+      }
+
+      // Download the log
+      const blob = new Blob([log], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Sayan_DB_Diagnostic_${new Date().getTime()}.txt`;
+      a.click();
+      
+      alert("گزارش تشخیصی با موفقیت آماده شد. لطفاً فایل دانلود شده را برای بررسی دقیق‌تر در چت ارسال کنید.");
+    } catch (err: any) {
+      alert("خطا در اجرای عیب‌یابی: " + err.message);
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   const discoverTablesFromSql = async () => {
     setDiscovering(true);
     setError(null);
@@ -671,6 +796,16 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
            >
              {discovering ? <Loader2 size={12} className="animate-spin" /> : <TableIcon size={12} />}
              دریافت زنده جداول از اس‌کیو‌ال (SQL)
+           </button>
+
+           <button 
+             type="button"
+             onClick={runDeepDiagnostic}
+             disabled={diagnosing}
+             className="w-full py-2 mt-2 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+           >
+             {diagnosing ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+             عیب‌یابی عمیق و استخراج دیتابیس (Deep Diagnostic)
            </button>
         </div>
 
