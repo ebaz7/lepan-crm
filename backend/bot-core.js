@@ -3154,27 +3154,28 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     </thead>
                     <tbody>
                         <tr>
-                            ${reportData.map((group, index) => `
-                                <td style="border-left: 2px solid black; vertical-align: top; padding: 0;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-                                        <tbody>
-                                            ${group.items.map((item, i) => `
-                                                <tr style="border-bottom: 1px solid #d1d5db;">
-                                                    <td style="width: 40%; border-left: 1px solid black; padding: 4px; text-align: right; font-weight: bold; overflow: hidden; white-space: nowrap;">${item.name}</td>
-                                                    <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace; font-weight: bold;">${item.quantity.toFixed(2)}</td>
-                                                    <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace;">${item.weight > 0 ? item.weight.toFixed(2) : '0.00'}</td>
-                                                    <td style="width: 20%; padding: 4px; text-align: center; font-family: monospace; color: #6b7280;">
-                                                        ${item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}
-                                                    </td>
-                                                </tr>
-                                            `).join('')}
-                                            ${group.items.length > 0 ? `
-                                                <tr style="background-color: #f9fafb; border-top: 2px solid black;">
-                                                    <td style="width: 40%; border-left: 1px solid black; padding: 6px; text-align: right; font-weight: 900; font-size: 12px;">جمع کل موجودی</td>
-                                                    <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
-                                                        ${group.items.reduce((sum, i) => sum + (i.quantity || 0), 0).toFixed(2)}
-                                                    </td>
-                                                    <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
+                            ${reportData.map((group, index) => {
+                                return `
+                                    <td style="border-left: 2px solid black; vertical-align: top; padding: 0;">
+                                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                            <tbody>
+                                                ${group.items.map((item, i) => `
+                                                    <tr style="border-bottom: 1px solid #d1d5db;">
+                                                        <td style="width: 40%; border-left: 1px solid black; padding: 4px; text-align: right; font-weight: bold; overflow: hidden; white-space: nowrap;">${item.name}</td>
+                                                        <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace; font-weight: bold;">${item.quantity.toFixed(2)}</td>
+                                                        <td style="width: 20%; border-left: 1px solid black; padding: 4px; text-align: center; font-family: monospace;">${item.weight > 0 ? item.weight.toFixed(2) : '0.00'}</td>
+                                                        <td style="width: 20%; padding: 4px; text-align: center; font-family: monospace; color: #6b7280;">
+                                                            ${item.containerCount > 0 ? item.containerCount.toFixed(2) : '-'}
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                                ${group.items.length > 0 ? `
+                                                    <tr style="background-color: #f9fafb; border-top: 2px solid black;">
+                                                        <td style="width: 40%; border-left: 1px solid black; padding: 6px; text-align: right; font-weight: 900; font-size: 12px;">جمع کل</td>
+                                                        <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
+                                                            ${group.items.reduce((sum, i) => sum + (i.quantity || 0), 0).toFixed(2)}
+                                                        </td>
+                                                        <td style="width: 20%; border-left: 1px solid black; padding: 6px; text-align: center; font-weight: 900; font-size: 12px; border-bottom: 2px double black;">
                                                         ${group.items.reduce((sum, i) => sum + (i.weight || 0), 0).toFixed(2)}
                                                     </td>
                                                     <td style="width: 20%; padding: 6px; text-align: center;"></td>
@@ -3392,18 +3393,35 @@ export const notifyMeetingMinutes = async (meeting, db) => {
     const s = db.settings;
     if (!s) return;
 
-    let resolutionsText = (meeting.items || []).map((item, idx) => {
-        let text = `${idx + 1}. ${item.description}`;
-        if (item.responsiblePerson) text += ` (👤 مسئول: ${item.responsiblePerson})`;
-        if (item.duration) text += ` [⏳ مهلت: ${item.duration}]`;
-        return text;
-    }).join('\n');
+    const generateResolutionsText = (platform) => {
+        return (meeting.items || []).map((item, idx) => {
+            let text = `${idx + 1}. ${item.description}`;
+            if (item.responsiblePerson) {
+                const user = (db.users || []).find(u => u.fullName === item.responsiblePerson || u.username === item.responsiblePerson);
+                if (user) {
+                    if (platform === 'telegram' && user.telegramChatId) {
+                        text += ` (👤 مسئول: [${user.fullName}](tg://user?id=${user.telegramChatId}))`;
+                    } else if (platform === 'bale' && user.baleChatId) {
+                        text += ` (👤 مسئول: [${user.fullName}](bale://user/${user.baleChatId}))`;
+                    } else {
+                        text += ` (👤 مسئول: ${item.responsiblePerson})`;
+                    }
+                } else {
+                    text += ` (👤 مسئول: ${item.responsiblePerson})`;
+                }
+            }
+            if (item.duration) text += ` [⏳ مهلت: ${item.duration}]`;
+            return text;
+        }).join('\n');
+    };
 
-    if (resolutionsText.length > 900) {
-        resolutionsText = resolutionsText.substring(0, 900) + '... (ادامه در فایل پیوست)';
-    }
-
-    const message = `🏁 *صورتجلسه نهایی و مصوبات تایید شده* 🏁\n\n📄 شماره: *${meeting.meetingNumber}*\n📅 تاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید الکترونیکی تمامی حاضرین رسیده است.\n\n📝 *لیست مصوبات و تصمیمات*:\n${resolutionsText}\n\n📎 فایل PDF پیوست جهت بایگانی ارسال شد.`;
+    const generateFullMessage = (platform) => {
+        let resolutionsText = generateResolutionsText(platform);
+        if (resolutionsText.length > 900) {
+            resolutionsText = resolutionsText.substring(0, 900) + '... (ادامه در فایل پیوست)';
+        }
+        return `🏁 *صورتجلسه نهایی و مصوبات تایید شده* 🏁\n\n📄 شماره: *${meeting.meetingNumber}*\n📅 تاریخ: *${meeting.date}*\n\n✅ این صورتجلسه به تایید الکترونیکی تمامی حاضرین رسیده است.\n\n📝 *لیست مصوبات و تصمیمات*:\n${resolutionsText}\n\n📎 فایل PDF پیوست جهت بایگانی ارسال شد.`;
+    };
 
     try {
         const pdfBuffer = await Renderer.generateMeetingMinutesPDF(meeting);
@@ -3411,28 +3429,37 @@ export const notifyMeetingMinutes = async (meeting, db) => {
 
         // Send to Production Group (Tele/Bale/WA)
         const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
-        if (teleId) {
-            import('./telegram.js').then(m => m.sendBotDocument(teleId, pdfBuffer, fileName, message)).catch(e => {});
+        if (teleId && s.telegramBotToken) {
+            const msg = generateFullMessage('telegram');
+            const cleanId = sanitizeGroupId(teleId);
+            import('./telegram.js').then(m => m.sendBotDocument(cleanId, pdfBuffer, fileName, msg, { parse_mode: 'Markdown' })).catch(e => {});
         }
 
         const teleId2 = s.botMeetingMinutesSecondGroupIdTele;
-        if (teleId2) {
-            import('./telegram.js').then(m => m.sendBotDocument(teleId2, pdfBuffer, fileName, message)).catch(e => {});
+        if (teleId2 && s.telegramBotToken) {
+            const msg = generateFullMessage('telegram');
+            const cleanId = sanitizeGroupId(teleId2);
+            import('./telegram.js').then(m => m.sendBotDocument(cleanId, pdfBuffer, fileName, msg, { parse_mode: 'Markdown' })).catch(e => {});
         }
 
         const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
-        if (baleId) {
-            import('./bale.js').then(m => m.sendBotDocument(baleId, pdfBuffer, fileName, message)).catch(e => {});
+        if (baleId && s.baleBotToken) {
+            const msg = generateFullMessage('bale');
+            const cleanId = sanitizeGroupId(baleId);
+            import('./bale.js').then(m => m.sendBotDocument(cleanId, pdfBuffer, fileName, msg)).catch(e => {});
         }
 
         const baleId2 = s.botMeetingMinutesSecondGroupIdBale;
-        if (baleId2) {
-            import('./bale.js').then(m => m.sendBotDocument(baleId2, pdfBuffer, fileName, message)).catch(e => {});
+        if (baleId2 && s.baleBotToken) {
+            const msg = generateFullMessage('bale');
+            const cleanId = sanitizeGroupId(baleId2);
+            import('./bale.js').then(m => m.sendBotDocument(cleanId, pdfBuffer, fileName, msg)).catch(e => {});
         }
 
         const waId = s.botMeetingMinutesWhatsAppId || s.botMeetingMinutesGroupId;
-        if (waId) {
-            import('./whatsapp.js').then(m => m.sendMessage(waId, message, {
+        if (waId && s.whatsappEnabled) {
+            const msg = generateFullMessage('whatsapp');
+            import('./whatsapp.js').then(m => m.sendMessage(waId, msg, {
                 data: pdfBuffer.toString('base64'),
                 mimeType: 'application/pdf',
                 filename: fileName
@@ -3440,8 +3467,9 @@ export const notifyMeetingMinutes = async (meeting, db) => {
         }
 
         const waId2 = s.botMeetingMinutesSecondGroupIdWhatsApp;
-        if (waId2) {
-            import('./whatsapp.js').then(m => m.sendMessage(waId2, message, {
+        if (waId2 && s.whatsappEnabled) {
+            const msg = generateFullMessage('whatsapp');
+            import('./whatsapp.js').then(m => m.sendMessage(waId2, msg, {
                 data: pdfBuffer.toString('base64'),
                 mimeType: 'application/pdf',
                 filename: fileName
@@ -3451,19 +3479,37 @@ export const notifyMeetingMinutes = async (meeting, db) => {
         console.error("Meeting PDF Generation/Sending Error:", err);
         // Fallback to text message if PDF fails
         const teleId = s.botMeetingMinutesTelegramId || s.botMeetingMinutesGroupId;
-        if (teleId) import('./telegram.js').then(m => m.sendMessage(teleId, message)).catch(e => {});
+        if (teleId) {
+            const msg = generateFullMessage('telegram');
+            import('./telegram.js').then(m => m.sendMessage(teleId, msg, { parse_mode: 'Markdown' })).catch(e => {});
+        }
         const teleId2 = s.botMeetingMinutesSecondGroupIdTele;
-        if (teleId2) import('./telegram.js').then(m => m.sendMessage(teleId2, message)).catch(e => {});
+        if (teleId2) {
+            const msg = generateFullMessage('telegram');
+            import('./telegram.js').then(m => m.sendMessage(teleId2, msg, { parse_mode: 'Markdown' })).catch(e => {});
+        }
 
         const baleId = s.botMeetingMinutesBaleId || s.botMeetingMinutesGroupId;
-        if (baleId) import('./bale.js').then(m => m.sendMessage(baleId, message)).catch(e => {});
+        if (baleId) {
+            const msg = generateFullMessage('bale');
+            import('./bale.js').then(m => m.sendMessage(baleId, msg)).catch(e => {});
+        }
         const baleId2 = s.botMeetingMinutesSecondGroupIdBale;
-        if (baleId2) import('./bale.js').then(m => m.sendMessage(baleId2, message)).catch(e => {});
+        if (baleId2) {
+            const msg = generateFullMessage('bale');
+            import('./bale.js').then(m => m.sendMessage(baleId2, msg)).catch(e => {});
+        }
 
         const waId = s.botMeetingMinutesGroupId;
-        if (waId) import('./whatsapp.js').then(m => m.sendMessage(waId, message)).catch(e => {});
+        if (waId) {
+            const msg = generateFullMessage('whatsapp');
+            import('./whatsapp.js').then(m => m.sendMessage(waId, msg)).catch(e => {});
+        }
         const waId2 = s.botMeetingMinutesSecondGroupIdWhatsApp;
-        if (waId2) import('./whatsapp.js').then(m => m.sendMessage(waId2, message)).catch(e => {});
+        if (waId2) {
+            const msg = generateFullMessage('whatsapp');
+            import('./whatsapp.js').then(m => m.sendMessage(waId2, msg)).catch(e => {});
+        }
     }
 };
 

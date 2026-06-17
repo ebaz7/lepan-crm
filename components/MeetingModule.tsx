@@ -833,18 +833,28 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     }}
                                                 />
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 relative">
                                                         <span className="text-[10px] font-bold text-gray-400 shrink-0">مسئول اجرا:</span>
-                                                        <input
-                                                            type="text"
-                                                            className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg text-xs font-bold outline-none"
-                                                            value={item.responsiblePerson}
-                                                            onChange={e => {
-                                                                const newItems = [...(meetingForm.items || [])];
-                                                                newItems[idx].responsiblePerson = e.target.value;
-                                                                setMeetingForm({...meetingForm, items: newItems});
-                                                            }}
-                                                        />
+                                                        <div className="relative flex-1">
+                                                            <input
+                                                                type="text"
+                                                                list={`user-suggestions-${idx}`}
+                                                                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg text-xs font-bold outline-none"
+                                                                value={item.responsiblePerson}
+                                                                onChange={e => {
+                                                                    const newItems = [...(meetingForm.items || [])];
+                                                                    newItems[idx].responsiblePerson = e.target.value;
+                                                                    setMeetingForm({...meetingForm, items: newItems});
+                                                                }}
+                                                            />
+                                                            <datalist id={`user-suggestions-${idx}`}>
+                                                                {users.map(u => (
+                                                                    <option key={u.id} value={u.fullName}>
+                                                                        {u.role}
+                                                                    </option>
+                                                                ))}
+                                                            </datalist>
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-gray-400 shrink-0">مدت زمان:</span>

@@ -44,6 +44,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
 
   // Excluded account codes from final report
   const [excludedCodes, setExcludedCodes] = useState<string[]>([]);
+  const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
   const [hideExcludedLocally, setHideExcludedLocally] = useState<boolean>(false);
 
   // Manual Mapping Form
@@ -360,6 +361,23 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     return true;
   });
 
+  const toggleBulkSelection = (code: string) => {
+    if (selectedForBulk.includes(code)) {
+      setSelectedForBulk(selectedForBulk.filter(c => c !== code));
+    } else {
+      setSelectedForBulk([...selectedForBulk, code]);
+    }
+  };
+
+  const applyBulkExclusion = (exclude: boolean) => {
+    if (exclude) {
+      setExcludedCodes([...new Set([...excludedCodes, ...selectedForBulk])]);
+    } else {
+      setExcludedCodes(excludedCodes.filter(c => !selectedForBulk.includes(c)));
+    }
+    setSelectedForBulk([]);
+  };
+
   const toggleAllExclusion = () => {
     const visibleCodes = filteredBalances.map(b => b.accountCode);
     const allVisibleExcluded = visibleCodes.every(code => excludedCodes.includes(code));
@@ -369,6 +387,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
       setExcludedCodes(excludedCodes.filter(c => !visibleCodes.includes(c)));
     } else {
       // Otherwise, exclude all visible
+      if (visibleCodes.length > 50 && !confirm(`آیا از استثناء کردن ${visibleCodes.length} مورد از خروجی PDF اطمینان دارید؟`)) return;
       const newExcluded = [...new Set([...excludedCodes, ...visibleCodes])];
       setExcludedCodes(newExcluded);
     }
@@ -616,6 +635,17 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs border border-zinc-350 dark:border-zinc-800 rounded-lg overflow-hidden">
               <thead>
                 <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-b border-zinc-300 dark:border-zinc-700">
+                  <th className="py-3 px-2 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850 w-10">
+                    <input
+                      type="checkbox"
+                      checked={filteredBalances.length > 0 && filteredBalances.every(b => selectedForBulk.includes(b.accountCode))}
+                      onChange={() => {
+                        if (selectedForBulk.length >= filteredBalances.length) setSelectedForBulk([]);
+                        else setSelectedForBulk(filteredBalances.map(b => b.accountCode));
+                      }}
+                      className="w-4 h-4 cursor-pointer accent-emerald-600"
+                    />
+                  </th>
                   <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850 w-24">
                     <div className="flex flex-col items-center gap-1">
                       <input
@@ -660,8 +690,16 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                         key={item.id || item.accountCode} 
                         className={`border-b border-zinc-200 dark:border-zinc-800 even:bg-zinc-50/40 dark:even:bg-zinc-850/10 hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.04] transition-all font-medium ${
                           isExcluded ? 'opacity-40 italic line-through bg-rose-50/20 dark:bg-rose-950/10 text-rose-900 dark:text-rose-400' : 'text-gray-700 dark:text-gray-300'
-                        }`}
+                        } ${selectedForBulk.includes(item.accountCode) ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''}`}
                       >
+                        <td className="py-3.5 px-2 text-center border-l border-zinc-200 dark:border-zinc-800">
+                          <input
+                            type="checkbox"
+                            checked={selectedForBulk.includes(item.accountCode)}
+                            onChange={() => toggleBulkSelection(item.accountCode)}
+                            className="w-4 h-4 cursor-pointer accent-emerald-600"
+                          />
+                        </td>
                         <td className="py-3.5 px-4 text-center border-l border-zinc-200 dark:border-zinc-800">
                           <input
                             type="checkbox"
@@ -1021,6 +1059,38 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
           </div>
         );
       })()}
+      {/* Bulk Action Bar */}
+      {selectedForBulk.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-zinc-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-[90vw] overflow-x-auto">
+          <div className="flex items-center gap-2 border-l border-white/20 pl-4 whitespace-nowrap">
+            <span className="bg-emerald-500 text-zinc-950 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black">
+              {selectedForBulk.length}
+            </span>
+            <span className="text-xs font-bold">مورد انتخاب شده</span>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => applyBulkExclusion(true)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black rounded-xl transition-all whitespace-nowrap"
+            >
+              استثناء از PDF
+            </button>
+            <button
+              onClick={() => applyBulkExclusion(false)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black rounded-xl transition-all whitespace-nowrap"
+            >
+              درج در PDF
+            </button>
+            <button
+              onClick={() => setSelectedForBulk([])}
+              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-[10px] font-black rounded-xl transition-all whitespace-nowrap"
+            >
+              لغو انتخاب
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

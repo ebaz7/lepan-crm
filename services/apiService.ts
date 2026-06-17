@@ -109,11 +109,17 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         });
         clearTimeout(timeoutId);
 
+        const contentType = response.headers.get("content-type");
+        const isJson = contentType && contentType.includes("application/json");
+
         if (response.ok) {
-            const contentType = response.headers.get("content-type");
             let data;
-            if (contentType && contentType.includes("application/json")) {
-                data = await response.json();
+            if (isJson) {
+                try {
+                    data = await response.json();
+                } catch (jsonErr) {
+                    throw new Error("پاسخ سرور در قالب معتبر JSON نبود. احتمالاً مشکلی در پروکسی یا شبکه وجود دارد.");
+                }
             } else {
                 data = { success: true } as unknown as T;
             }
@@ -147,14 +153,23 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             return data;
         } else {
             // Attempt to parse server error message
-            let serverErrorMsg = `Server Error: ${response.status}`;
-            try {
-                const errData = await response.json();
-                if (errData && errData.error) {
-                    serverErrorMsg = errData.error;
+            let serverErrorMsg = `خطای سرور: ${response.status}`;
+            if (isJson) {
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) {
+                        serverErrorMsg = errData.error;
+                    }
+                } catch (e) {
+                    // Fallback to text if JSON parse failed
                 }
-            } catch (e) {
-                // Response was not JSON or failed to parse
+            } else {
+                try {
+                    const text = await response.text();
+                    if (text && text.length < 500 && !text.startsWith('<!')) {
+                        serverErrorMsg = text;
+                    }
+                } catch (e) {}
             }
             throw new Error(serverErrorMsg);
         }

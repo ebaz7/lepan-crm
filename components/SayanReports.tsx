@@ -523,20 +523,14 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       for (const ep of discoveryAttempts) {
         try {
           console.log(`Trying table discovery via Sayan path: ${ep.path}`);
-          const response = await fetch('/api/sayan-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              path: ep.path,
-              method: ep.method,
-              body: ep.body
-            })
+          const result: any = await apiCall('/sayan-proxy', 'POST', {
+            path: ep.path,
+            method: ep.method,
+            body: ep.body
           });
           
-          if (response.ok) {
-            const result = await response.json().catch(() => null);
-            if (result) {
-              const rows = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+          if (result) {
+            const rows = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
               if (Array.isArray(rows) && rows.length > 0) {
                 const sampleRow = rows[0];
                 let tableKey = '';
@@ -565,7 +559,6 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                 }
               }
             }
-          }
         } catch (subErr: any) {
           console.warn(`Discovery failed for ${ep.path}:`, subErr);
           lastErrMessage = subErr.message;
@@ -617,17 +610,19 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
         finalPath = cleanPath;
         
-        const response = await fetch('/api/sayan-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: cleanPath, method: fetchMethod, body: fetchBody })
-        });
-        
-        finalStatus = response.status;
-        finalStatusText = response.statusText;
-        responseText = await response.text();
-        try { responseJson = JSON.parse(responseText); } catch (e) {}
-        isSuccess = response.ok;
+        try {
+          const result: any = await apiCall('/sayan-proxy', 'POST', { path: cleanPath, method: fetchMethod, body: fetchBody });
+          responseJson = result;
+          isSuccess = true;
+          finalStatus = 200;
+          finalStatusText = 'OK';
+        } catch (err: any) {
+          isSuccess = false;
+          responseText = err.message;
+          const statusMatch = err.message.match(/خطای سرور: (\d+)/);
+          finalStatus = statusMatch ? parseInt(statusMatch[1]) : 500;
+          finalStatusText = 'Error';
+        }
 
       } else {
         const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
@@ -680,20 +675,17 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         
         for (const attempt of pathList) {
           finalPath = attempt.path;
-          const response = await fetch('/api/sayan-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: attempt.path, method: attempt.method, body: attempt.body })
-          });
-          
-          finalStatus = response.status;
-          finalStatusText = response.statusText;
-          responseText = await response.text();
-          try { responseJson = JSON.parse(responseText); } catch (e) {}
-          
-          if (response.ok) {
+          try {
+            const result: any = await apiCall('/sayan-proxy', 'POST', { path: attempt.path, method: attempt.method, body: attempt.body });
+            responseJson = result;
             isSuccess = true;
+            finalStatus = 200;
+            finalStatusText = 'OK';
             break;
+          } catch (err: any) {
+             finalStatus = 500;
+             finalStatusText = 'Attempt Failed';
+             responseText = err.message;
           }
         }
       }
