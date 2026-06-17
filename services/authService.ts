@@ -86,7 +86,11 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
             canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
             canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true,
-            canViewCustomerBalances: true, canImportCustomerBalances: true
+            canViewCustomerBalances: true, canImportCustomerBalances: true,
+            // Purchase-specific permissions hardwired for administrator:
+            canView: true, canCreate: true, canApproveTechnical: true, canApproveFactory: true, canApproveCEO: true,
+            canManageProformas: true, canSelectProforma: true, canRegisterEntry: true, canCheckQC: true,
+            canApproveFactoryFinal: true, canWarehouseFinalize: true, canCommercialFinalize: true
         };
     }
 
@@ -170,6 +174,21 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             
         case UserRole.USER:
             perms.canCreatePaymentOrder = true;
+            break;
+
+        case UserRole.COMMERCIAL:
+            perms.canManagePurchase = true;
+            perms.canViewAll = true; // Needs to view requests to see and take action
+            // Assign specific default purchase-flow permissions for Commercial role
+            perms.canView = true;
+            perms.canCommercialFinalize = true;
+            perms.canManageProformas = true;
+            perms.canSelectProforma = true;
+            break;
+
+        case UserRole.QC:
+            perms.canView = true;
+            perms.canCheckQC = true;
             break;
     }
 
