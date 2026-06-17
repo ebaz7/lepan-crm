@@ -404,52 +404,38 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
     try {
       // 1. Get all tables info
       log += `PHASE 1: TABLE DISCOVERY\n`;
-      const tablesRes = await fetch('/api/sayan-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: 'sql-direct',
-          body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'" }
-        })
+      const tablesData: any = await apiCall('/api/sayan-proxy', 'POST', { 
+        path: 'sql-direct',
+        body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'" }
       });
-      const tablesData = await tablesRes.json();
-      const tables = tablesData.data || [];
+      
+      const tables = tablesData?.data || [];
       log += `Found ${tables.length} tables.\n\n`;
 
       // 2. Sample data from key prefixes
       const prefixes = ['ACT_', 'BUR_', 'STR_', 'IND_', 'AST_'];
       for (const prefix of prefixes) {
-        const filtered = tables.filter((t: any) => t.TABLE_NAME.includes(prefix));
+        const filtered = tables.filter((t: any) => t.TABLE_NAME && t.TABLE_NAME.includes(prefix));
         log += `--- PREFIX: ${prefix} (${filtered.length} tables) ---\n`;
         
-        for (const tInfo of filtered.slice(0, 15)) { // Limit to first 15 per prefix to avoid timeout
+        for (const tInfo of filtered.slice(0, 10)) { // Limit per prefix to avoid heavy load
           const tName = tInfo.TABLE_NAME;
           log += `\n>> Table: ${tName}\n`;
           
           // Get Columns
-          const colRes = await fetch('/api/sayan-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              path: 'sql-direct',
-              body: { query: `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tName}'` }
-            })
+          const colsData: any = await apiCall('/api/sayan-proxy', 'POST', {
+            path: 'sql-direct',
+            body: { query: `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tName}'` }
           });
-          const colsData = await colRes.json();
-          log += `Columns: ${(colsData.data || []).map((c: any) => `${c.COLUMN_NAME}(${c.DATA_TYPE})`).join(', ')}\n`;
+          log += `Columns: ${(colsData?.data || []).map((c: any) => `${c.COLUMN_NAME}(${c.DATA_TYPE})`).join(', ')}\n`;
 
-          // Get Samples (Top 3)
-          const sampleRes = await fetch('/api/sayan-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              path: 'sql-direct',
-              body: { query: `SELECT TOP 3 * FROM ${tName}` }
-            })
+          // Get Samples (Top 5)
+          const samples: any = await apiCall('/api/sayan-proxy', 'POST', {
+            path: 'sql-direct',
+            body: { query: `SELECT TOP 5 * FROM ${tName}` }
           });
-          const samples = await sampleRes.json();
-          log += `Sample Rows (Count: ${samples.data?.length || 0}):\n`;
-          log += JSON.stringify(samples.data || [], null, 2) + "\n";
+          log += `Sample Rows (Count: ${samples?.data?.length || 0}):\n`;
+          log += JSON.stringify(samples?.data || [], null, 2) + "\n";
         }
         log += `\n`;
       }
@@ -459,12 +445,13 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Sayan_DB_Diagnostic_${new Date().getTime()}.txt`;
+      a.download = `Sayan_DB_Intelligence_${new Date().getTime()}.txt`;
       a.click();
       
-      alert("گزارش تشخیصی با موفقیت آماده شد. لطفاً فایل دانلود شده را برای بررسی دقیق‌تر در چت ارسال کنید.");
+      alert("گزارش هوشمند دیتابیس با موفقیت استخراج شد. لطفاً این فایل را جهت تحلیل ساختار فاکتورها برای من ارسال کنید.");
     } catch (err: any) {
-      alert("خطا در اجرای عیب‌یابی: " + err.message);
+      console.error("Diagnostic Error:", err);
+      alert("خطا در اجرای استخراج: " + (err.message || "پاسخ نامعتبر از سرور"));
     } finally {
       setDiagnosing(false);
     }
