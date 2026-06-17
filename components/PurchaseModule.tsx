@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     PurchaseRequest, PurchaseRequestStatus, User, UserRole, 
     SystemSettings, PurchaseProforma, PartMasterData, PartKardex 
@@ -490,8 +491,8 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
         finally { setLoading(false); }
     };
 
-    return (
-        <div className="fixed inset-0 z-[9999999] flex items-start justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto pt-16 md:pt-20">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000000] flex items-start justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto pt-16 md:pt-20">
             <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-scale-in relative shadow-2xl border-4 border-indigo-500/20 mb-10">
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-4">
@@ -526,7 +527,8 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
                     </button>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -596,8 +598,8 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
 
     const isAdmin = currentUser.role === UserRole.ADMIN;
 
-    return (
-        <div className="fixed inset-0 z-[9999999] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-20">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000005] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-20">
             <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[92vh] flex flex-col relative mb-10">
                 <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-900 text-white shrink-0 z-20 shadow-lg">
                     <div className="flex items-center gap-3">
@@ -980,7 +982,8 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, data)}
                 />}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1028,8 +1031,8 @@ const ProfessionalProformaModal = ({ request, onClose, onSuccess, currentUser }:
         onSuccess([...request.proformas, newP]);
     };
 
-    return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm shadow-2xl">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm shadow-2xl">
             <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in">
                 <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
                     <h3 className="font-black text-xl text-gray-800">ثبت پیش‌فاکتور حرفه‌ای</h3>
@@ -1094,7 +1097,8 @@ const ProfessionalProformaModal = ({ request, onClose, onSuccess, currentUser }:
                     <button onClick={onClose} className="px-8 bg-white border border-gray-300 text-gray-600 font-bold rounded-2xl hover:bg-gray-100 transition-all">انصراف</button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1102,8 +1106,8 @@ const QCApprovalModal = ({ onClose, onConfirm }: any) => {
     const [result, setResult] = useState<'تایید' | 'مشروط' | 'رد'>('تایید');
     const [desc, setDesc] = useState('');
 
-    return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in text-right">
                 <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><ShieldCheck className="text-green-600"/> بررسی کیفی (QC)</h3>
                 <div className="space-y-6">
@@ -1122,7 +1126,8 @@ const QCApprovalModal = ({ onClose, onConfirm }: any) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1131,8 +1136,8 @@ const WarehouseReceiptModal = ({ onClose, onConfirm }: any) => {
     const shamsi = getCurrentShamsiDate();
     const [date, setDate] = useState(`${shamsi.year}/${shamsi.month}/${shamsi.day}`);
 
-    return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
                 <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><Warehouse className="text-indigo-600"/> صدور رسید انبار</h3>
                 <div className="space-y-6">
@@ -1150,7 +1155,8 @@ const WarehouseReceiptModal = ({ onClose, onConfirm }: any) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1158,8 +1164,8 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
     const [qty, setQty] = useState(0);
     const [weight, setWeight] = useState(0);
 
-    return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 shadow-2xl">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 shadow-2xl">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md">
                 <h3 className="font-black text-lg mb-4">ثبت ورود کالا (انتظامات)</h3>
                 <div className="space-y-4">
@@ -1169,7 +1175,8 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
                     <button onClick={onClose} className="w-full text-gray-500 font-bold border rounded-xl py-2 mt-2">انصراف</button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1431,8 +1438,8 @@ const PartsTab = ({ parts, currentUser, onPartUpdate, settings }: any) => {
 };
 
 const DataSheetModal = ({ part, onClose }: { part: PartMasterData, onClose: () => void }) => {
-    return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-900 text-white">
                     <div className="flex items-center gap-3">
@@ -1458,7 +1465,8 @@ const DataSheetModal = ({ part, onClose }: { part: PartMasterData, onClose: () =
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1510,8 +1518,8 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-[999999] flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm pt-16 md:pt-20 overflow-y-auto">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm pt-16 md:pt-20 overflow-y-auto">
             <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in max-h-[92vh] overflow-y-auto no-scrollbar mb-10 relative">
                 <div className="flex justify-between items-center mb-8">
                     <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><Layers className="text-indigo-600"/> {initialData ? 'ویرایش کالا / قطعه' : 'معرفی کالا جدید'}</h2>
@@ -1582,7 +1590,8 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1721,8 +1730,8 @@ const AdminEditRequestModal = ({ request, onClose, onSuccess, parts }: any) => {
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-[10000000] flex items-start justify-center p-4 bg-black/90 backdrop-blur-2xl transition-all pt-20 md:pt-24 overflow-y-auto">
+    return createPortal(
+        <div className="fixed inset-0 z-[100000010] flex items-start justify-center p-4 bg-black/90 backdrop-blur-2xl transition-all pt-20 md:pt-24 overflow-y-auto">
             <div className="bg-white rounded-[3rem] w-full max-w-lg p-10 animate-scale-in shadow-2xl border-4 border-indigo-600/30 relative mb-10">
                 <div className="absolute -top-3 -right-3">
                     <button onClick={onClose} className="w-12 h-12 bg-red-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:rotate-90 transition-all hover:bg-red-700">
@@ -1756,7 +1765,8 @@ const AdminEditRequestModal = ({ request, onClose, onSuccess, parts }: any) => {
                     </button>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
