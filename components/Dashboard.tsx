@@ -238,22 +238,22 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   let pendingPurchaseCount = 0;
   if (hasPurchaseAccess) {
       if (currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === UserRole.ADMIN || permissions.canApprovePurchaseFactory) {
-          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_TECHNICAL || p.status === PurchaseRequestStatus.PENDING_FACTORY || p.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL).length;
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_TECHNICAL || p.status === PurchaseRequestStatus.PENDING_FACTORY || p.status === PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE).length;
       }
       if (currentUser.role === UserRole.CEO || currentUser.role === UserRole.ADMIN || permissions.canApprovePurchaseCeo) {
-          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_CEO || p.status === PurchaseRequestStatus.PENDING_CEO_SELECTION).length;
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_CEO_INITIAL || p.status === PurchaseRequestStatus.PENDING_CEO_SELECTION).length;
       }
       if (currentUser.role === UserRole.COMMERCIAL || currentUser.role === UserRole.ADMIN || permissions.canManagePurchase) {
-          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA || p.status === PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL).length;
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA || p.status === PurchaseRequestStatus.PENDING_FACTORY_PROFORMA).length;
       }
-      if (currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.ADMIN) {
+      if (currentUser.role === UserRole.SECURITY_HEAD || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SECURITY_GUARD) {
           pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_SECURITY_ENTRY).length;
       }
       if (currentUser.role === UserRole.QC || currentUser.role === UserRole.ADMIN) {
           pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_QC).length;
       }
       if (currentUser.role === UserRole.WAREHOUSE_KEEPER || currentUser.role === UserRole.ADMIN) {
-          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL).length;
+          pendingPurchaseCount += purchaseReqs.filter(p => p.status === PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT).length;
       }
   }
 
@@ -616,8 +616,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
         {/* Bank Report Modal */}
         {showBankReport && hasPaymentAccess && (
-            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="fixed inset-0 bg-black/50 z-[100] flex items-start justify-center p-4 animate-fade-in backdrop-blur-sm pt-10 md:pt-20">
+                <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
                     <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><Banknote size={20}/> گزارش تفصیلی بانک‌ها</h3>
                         <button onClick={() => setShowBankReport(false)} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={20} className="text-gray-500"/></button>
@@ -657,7 +657,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         {/* Announce Modal */}
         {showAnnounceModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div role="dialog" aria-label="ثبت اعلان" className="glass-panel rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
+            <div role="dialog" aria-label="ثبت اعلان" className="glass-panel rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                     <div className="p-4 border-b flex justify-between items-center bg-blue-50/50">
                         <div className="flex items-center gap-2 text-blue-800">
                             <Activity size={20} />

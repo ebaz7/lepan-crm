@@ -1042,29 +1042,54 @@ export interface MeetingMinutes {
 }
 
 export enum PurchaseRequestStatus {
-    PENDING_TECHNICAL = 'در انتظار فنی کارخانه',
+    PENDING_TECHNICAL = 'در انتظار تایید فنی',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
-    PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی',
-    PENDING_CEO = 'در انتظار مدیرعامل',
-    PENDING_COMMERCIAL_PROFORMA = 'در انتظار ثبت پیش‌فاکتور',
-    PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور',
-    PENDING_SECURITY_ENTRY = 'در انتظار ورود (انتظامات)',
+    PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی (محل خرید)',
+    
+    // Tehran Branch
+    PENDING_TEHRAN_PURCHASING = 'در انتظار مسئول خرید تهران',
+    PENDING_CEO_INITIAL = 'در انتظار تایید اولیه مدیرعامل (تهران)',
+    PENDING_TEHRAN_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (تهران)',
+    PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیرعامل)',
+    
+    // Factory Branch
+    PENDING_FACTORY_PURCHASING = 'در انتظار مسئول خرید کارخانه',
+    PENDING_FACTORY_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (کارخانه)',
+    PENDING_FACTORY_MANAGER_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیر کارخانه)',
+    
+    // Common Arrival Flow
+    PENDING_SECURITY_ENTRY = 'در انتظار ورود کالا (انتظامات)',
     PENDING_QC = 'در انتظار کنترل کیفی',
-    PENDING_FACTORY_FINAL = 'در انتظار تایید نهایی مدیر کارخانه',
-    PENDING_WAREHOUSE_FINAL = 'در انتظار رسید انبار',
-    PENDING_COMMERCIAL_FINAL = 'در انتظار تایید بازرگانی',
-    COMPLETED = 'تکمیل شده',
+    PENDING_FACTORY_FINAL_APPROVE = 'در انتظار تایید نهایی مدیر کارخانه',
+    PENDING_WAREHOUSE_RECEIPT = 'در انتظار صدور رسید انبار',
+    PENDING_FACTORY_FINAL_SIGN = 'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)',
+    
+    COMPLETED = 'تکمیل و بایگانی شده',
     REJECTED = 'رد شده'
+}
+
+export interface PurchaseProformaItem {
+    id: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    totalPrice: number;
 }
 
 export interface PurchaseProforma {
     id: string;
     vendorName: string;
+    vendorPhone?: string;
     number: string;
     date: string;
+    items?: PurchaseProformaItem[]; // Professional details
     totalAmount: number;
+    taxAmount?: number;
+    discountAmount?: number;
     attachments: { fileName: string, url: string }[];
     isChosen?: boolean;
+    registeredBy?: string;
 }
 
 export interface PurchaseRequest {
@@ -1078,30 +1103,40 @@ export interface PurchaseRequest {
     dimensions?: string;
     specifications?: string;
     image?: string;
-    pdfAttachment?: string; // NEW
+    pdfAttachment?: string;
     quantity: number;
     unit: string;
     status: PurchaseRequestStatus;
     proformas: PurchaseProforma[];
     
     // Approval trails
-    approverTechnical?: string; // NEW
+    approverTechnical?: string;
     approverFactory?: string;
-    approverCeo?: string;
     approverCommercial?: string;
+    approverCeoInitial?: string;
+    approverCeoSelection?: string;
+    approverFactorySelection?: string;
     approverQc?: string;
-    approverWarehouse?: string;
-    approverCommercialFinal?: string;
     approverFactoryFinal?: string;
+    approverWarehouseReceipt?: string;
+    approverFactoryArchive?: string;
     
     // Entry data from security
     entryQuantity?: number;
     entryWeight?: number;
     entryDate?: string;
     entryTime?: string;
+    entryRegistrant?: string;
     
-    purchaseLocation?: 'Tehran' | 'Zanjan';
-    
+    // QC details
+    qcResult?: 'تایید' | 'مشروط' | 'رد';
+    qcDescription?: string;
+
+    // Warehouse Receipt details
+    warehouseReceiptNumber?: string;
+    warehouseReceiptDate?: string;
+
+    location?: 'Tehran' | 'Factory';
     rejectionReason?: string;
     createdAt: number;
     updatedAt: number;

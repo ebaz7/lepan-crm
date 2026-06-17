@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { PurchaseRequest } from '../types';
 import { formatDate } from '../constants';
 
@@ -8,70 +8,65 @@ interface Props {
 
 const PrintPurchaseRequest: React.FC<Props> = ({ request }) => {
     return (
-        <div className="bg-white p-8 w-full max-w-[800px] mx-auto text-black print-only-section" dir="rtl" style={{ direction: 'rtl' }}>
-            <div className="border-2 border-black p-4 mb-4 flex justify-between items-center text-center">
+        <div className="bg-white p-6 w-full h-full text-black print-only-section font-serif" dir="rtl" style={{ direction: 'rtl' }}>
+            <div className="border-4 border-double border-black p-4 mb-4 flex justify-between items-center text-center bg-gray-50/50">
                 <div className="w-1/3 text-right">
-                    <p className="text-sm font-bold">شماره درخواست: {request.requestNumber}</p>
-                    <p className="text-sm font-bold">تاریخ درخواست: {formatDate(request.date)}</p>
+                    <p className="text-[12px] font-bold">شماره: {request.requestNumber}</p>
+                    <p className="text-[12px] font-bold">تاریخ: {formatDate(request.date)}</p>
                 </div>
                 <div className="w-1/3">
-                    <h2 className="text-lg font-black underline">فرم درخواست خرید کالا</h2>
+                    <h2 className="text-xl font-black border-b-2 border-black inline-block pb-1">فرم درخواست خرید قطعه / کالا</h2>
+                    <p className="text-[10px] font-bold mt-1">واحد تدارکات و پشتیبانی</p>
                 </div>
                 <div className="w-1/3 text-left">
-                    <p className="text-sm font-bold">درخواست کننده: {request.requester}</p>
+                     <div className="border-2 border-black p-2 font-black text-sm inline-block">
+                        A5 LANDSCAPE
+                    </div>
                 </div>
             </div>
 
-            <table className="w-full border-collapse border border-black mb-4">
+            <table className="w-full border-collapse border-2 border-black mb-6">
                 <thead>
                     <tr className="bg-gray-200">
-                        <th className="border border-black p-2 font-bold text-sm">ردیف</th>
-                        <th className="border border-black p-2 font-bold text-sm">شرح کالا</th>
-                        <th className="border border-black p-2 font-bold text-sm">گروه/زیرگروه</th>
-                        <th className="border border-black p-2 font-bold text-sm">مشخصات فنی</th>
-                        <th className="border border-black p-2 font-bold text-sm">مقدار</th>
-                        <th className="border border-black p-2 font-bold text-sm">واحد</th>
+                        <th className="border border-black p-2 font-bold text-[12px]">ردیف</th>
+                        <th className="border border-black p-2 font-bold text-[12px]">نام قطعه / شرح کالا</th>
+                        <th className="border border-black p-2 font-bold text-[12px]">گروه کالا</th>
+                        <th className="border border-black p-2 font-bold text-[12px]">تعداد</th>
+                        <th className="border border-black p-2 font-bold text-[12px]">واحد</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
+                    <tr className="h-16">
                         <td className="border border-black p-2 text-center text-sm">۱</td>
-                        <td className="border border-black p-2 text-center text-sm font-bold">{request.itemName}</td>
+                        <td className="border border-black p-2 text-right px-4 text-sm font-black">{request.itemName}</td>
                         <td className="border border-black p-2 text-center text-sm">{request.category}{request.subCategory ? ` / ${request.subCategory}` : ''}</td>
-                        <td className="border border-black p-2 text-center text-sm max-w-[200px] whitespace-pre-wrap">{request.specifications || '-'}</td>
-                        <td className="border border-black p-2 text-center text-sm">{request.quantity}</td>
+                        <td className="border border-black p-2 text-center text-[16px] font-black">{request.quantity}</td>
                         <td className="border border-black p-2 text-center text-sm">{request.unit}</td>
                     </tr>
                 </tbody>
             </table>
 
-            {request.entryQuantity && (
-                <div className="border border-black p-4 mb-4">
-                    <h3 className="font-bold underline mb-2">رسید ورود کالا (انتظامات / انبار)</h3>
-                    <div className="flex justify-between">
-                        <span className="text-sm font-bold">مقدار ورودی: {request.entryQuantity} {request.unit}</span>
-                        <span className="text-sm font-bold">وزن ورودی: {request.entryWeight ? `${request.entryWeight} کیلوگرم` : '-'}</span>
-                        <span className="text-sm font-bold">زمان ورود: {request.entryTime || '-'}</span>
-                    </div>
-                </div>
-            )}
+            <div className="border border-black p-3 mb-6 bg-gray-50/30">
+                <h3 className="text-[11px] font-black underline mb-2">مشخصات فنی و ملاحظات درخواستی:</h3>
+                <p className="text-[12px] leading-relaxed py-2 min-h-[40px]">{request.specifications || '---'}</p>
+            </div>
 
-            <div className="border border-black p-4 mb-4 grid grid-cols-4 gap-4 text-center">
-                <div>
-                    <h4 className="text-sm font-bold mb-8">درخواست کننده</h4>
-                    <p className="text-xs">{request.requester}</p>
+            <div className="grid grid-cols-4 gap-2 text-center mt-auto">
+                <div className="border border-black p-2">
+                    <h4 className="text-[11px] font-black mb-10">درخواست کننده (انبار)</h4>
+                    <p className="text-[10px] font-bold border-t border-black/10 pt-1">{request.requester}</p>
                 </div>
-                <div>
-                    <h4 className="text-sm font-bold mb-8">تایید فنی</h4>
-                    <p className="text-xs">{request.approverTechnical || '-'}</p>
+                <div className="border border-black p-2">
+                    <h4 className="text-[11px] font-black mb-10">تایید فنی</h4>
+                    <p className="text-[10px] font-bold border-t border-black/10 pt-1">{request.approverTechnical || '-'}</p>
                 </div>
-                <div>
-                    <h4 className="text-sm font-bold mb-8">تایید مدیر کارخانه</h4>
-                    <p className="text-xs">{request.approverFactory || '-'}</p>
+                <div className="border border-black p-2">
+                    <h4 className="text-[11px] font-black mb-10">مدیر کارخانه</h4>
+                    <p className="text-[10px] font-bold border-t border-black/10 pt-1">{request.approverFactory || '-'}</p>
                 </div>
-                <div>
-                    <h4 className="text-sm font-bold mb-8">تایید مدیرعامل</h4>
-                    <p className="text-xs">{request.approverCeo || '-'}</p>
+                <div className="border border-black p-2">
+                    <h4 className="text-[11px] font-black mb-10">مدیر بازرگانی</h4>
+                    <p className="text-[10px] font-bold border-t border-black/10 pt-1">{request.approverCommercial || '-'}</p>
                 </div>
             </div>
             
@@ -98,6 +93,6 @@ const PrintPurchaseRequest: React.FC<Props> = ({ request }) => {
             `}} />
         </div>
     );
-}
+};
 
 export default PrintPurchaseRequest;

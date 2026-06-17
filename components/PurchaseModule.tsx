@@ -21,6 +21,8 @@ import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '
 import useIsMobile from '../hooks/useIsMobile';
 import * as XLSX from 'xlsx';
 import PrintPurchaseRequest from './PrintPurchaseRequest';
+import PrintPurchaseProforma from './PrintPurchaseProforma';
+import PrintWarehouseReceipt from './PrintWarehouseReceipt';
 import PrintPartDataSheet from './PrintPartDataSheet';
 import { generatePdf } from '../utils/pdfGenerator';
 import { getRolePermissions } from '../services/authService';
@@ -232,14 +234,29 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_CEO: return hasPurchasePerm('canApproveCEO');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA: return hasPurchasePerm('canManageProformas');
-            case PurchaseRequestStatus.PENDING_CEO_SELECTION: return hasPurchasePerm('canSelectProforma');
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_FACTORY_FINAL: return hasPurchasePerm('canApproveFactoryFinal');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL: return hasPurchasePerm('canWarehouseFinalize');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL: return hasPurchasePerm('canCommercialFinalize');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || currentUser.role === UserRole.COMMERCIAL;
+            
+            case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
+            case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
+                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+            
+            case PurchaseRequestStatus.PENDING_CEO_INITIAL:
+            case PurchaseRequestStatus.PENDING_CEO_SELECTION:
+                return currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO');
+                
+            case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
+            case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
+                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+                
+            case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
+                return currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory');
+            
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize');
+            
             default: return false;
         }
     });
@@ -349,14 +366,23 @@ const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseReq
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_CEO: return hasPurchasePerm('canApproveCEO');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA: return hasPurchasePerm('canManageProformas');
-            case PurchaseRequestStatus.PENDING_CEO_SELECTION: return hasPurchasePerm('canSelectProforma');
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_FACTORY_FINAL: return hasPurchasePerm('canApproveFactoryFinal');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL: return hasPurchasePerm('canWarehouseFinalize');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL: return hasPurchasePerm('canCommercialFinalize');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || currentUser.role === UserRole.COMMERCIAL;
+            case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
+            case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
+                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+            case PurchaseRequestStatus.PENDING_CEO_INITIAL:
+            case PurchaseRequestStatus.PENDING_CEO_SELECTION:
+                return currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO');
+            case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
+            case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
+                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+            case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
+            case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
+                return currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize');
             default: return false;
         }
     };
@@ -431,7 +457,7 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl w-full max-w-lg p-6 animate-scale-in">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-black text-gray-800">ایجاد درخواست خرید</h2>
@@ -467,23 +493,34 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
     const [pdfLoading, setPdfLoading] = useState(false);
     const [showProformaModal, setShowProformaModal] = useState(false);
     const [showSecurityModal, setShowSecurityModal] = useState(false);
-    const [showDataSheet, setShowDataSheet] = useState(false);
+    const [showQCModal, setShowQCModal] = useState(false);
+    const [showWarehouseModal, setShowWarehouseModal] = useState(false);
+    const [printingProforma, setPrintingProforma] = useState<PurchaseProforma | null>(null);
+    const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT'>('REQUEST');
 
     const handleAction = async (nextStatus: PurchaseRequestStatus, extra: any = {}) => {
         setActionLoading(true);
         try {
             const updated = { ...request, status: nextStatus, updatedAt: Date.now(), ...extra };
             
-            // Logic for workflow transitions
+            // Approval Trails logic
             if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY) updated.approverTechnical = currentUser.fullName;
-            if (nextStatus === PurchaseRequestStatus.PENDING_CEO) updated.approverFactory = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) updated.approverFactory = currentUser.fullName;
             
-            // Commercial Decision
-            if (nextStatus === PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) {
-                updated.approverCommercial = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) updated.approverCommercial = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) updated.approverCommercial = currentUser.fullName;
+            
+            if (nextStatus === PurchaseRequestStatus.PENDING_CEO_INITIAL) updated.approverCommercial = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) updated.approverCeoInitial = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_SECURITY_ENTRY) {
+                if (request.status === PurchaseRequestStatus.PENDING_CEO_SELECTION) updated.approverCeoSelection = currentUser.fullName;
+                if (request.status === PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION) updated.approverFactorySelection = currentUser.fullName;
             }
             
-            if (nextStatus === PurchaseRequestStatus.PENDING_QC) updated.entryDate = new Date().toISOString().split('T')[0];
+            if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) updated.approverQc = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) updated.approverFactoryFinal = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) updated.approverWarehouseReceipt = currentUser.fullName;
+            if (nextStatus === PurchaseRequestStatus.COMPLETED) updated.approverFactoryArchive = currentUser.fullName;
             
             await updatePurchaseRequest(updated);
             onSuccess();
@@ -492,295 +529,522 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
         finally { setActionLoading(false); }
     };
 
-    const handleCommercialDecision = async (location: 'Tehran' | 'Zanjan') => {
-        await handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, { purchaseLocation: location });
+    const handleDelete = async () => {
+        if (!confirm('آیا از حذف این درخواست اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) return;
+        setActionLoading(true);
+        try {
+            await deletePurchaseRequest(request.id);
+            onSuccess();
+            onClose();
+        } catch (e) {
+            alert('خطا در حذف درخواست');
+            console.error(e);
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     const isCurrentStep = (step: PurchaseRequestStatus) => request.status === step;
-
     const hasPurchasePerm = (perm: string) => {
         if (currentUser.role === UserRole.ADMIN) return true;
         const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
         return !!(rolePerms as any)[perm];
     };
 
-    // Permissions check
-    const canApproveTechnical = hasPurchasePerm('canApproveTechnical');
-    const canApproveFactory = hasPurchasePerm('canApproveFactory');
-    const canApproveCEO = hasPurchasePerm('canApproveCEO');
-    const canAddProforma = hasPurchasePerm('canManageProformas');
-    const canSelectProforma = hasPurchasePerm('canSelectProforma');
-    const canSecurityEntry = hasPurchasePerm('canRegisterEntry');
-    const canQC = hasPurchasePerm('canCheckQC');
-    const canApproveFactoryFinal = hasPurchasePerm('canApproveFactoryFinal');
-    const canWarehouseFinalize = hasPurchasePerm('canWarehouseFinalize');
-    const canCommercialFinalize = hasPurchasePerm('canCommercialFinalize');
+    const canSelectProforma = currentUser.role === UserRole.CEO || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canSelectProforma');
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-3xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
-                <div className="p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-md">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[92vh] md:h-[94vh] mt-4 md:mt-0 flex flex-col relative">
+                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white shrink-0">
                     <div className="flex items-center gap-3">
                         <ShoppingCart size={28} />
                         <div>
-                            <h2 className="text-xl font-black">جزئیات درخواست خرید</h2>
-                            <p className="text-[10px] opacity-80 uppercase tracking-widest">{request.requestNumber}</p>
+                            <h2 className="text-lg md:text-xl font-black italic">گردش کار درخواست خرید</h2>
+                            <p className="text-[10px] opacity-80 uppercase tracking-widest">{request.requestNumber} | {request.status}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><XCircle size={24} /></button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={handleDelete} 
+                            disabled={actionLoading}
+                            className="p-2.5 bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl transition-all flex items-center gap-2 text-xs font-bold"
+                            title="حذف درخواست"
+                        >
+                            <Trash2 size={20} />
+                            <span className="hidden md:inline">حذف درخواست</span>
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><XCircle size={24} /></button>
+                    </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-50/50">
-                        {/* Progress Bar */}
-                    <div className="flex justify-between items-center gap-2 no-scrollbar overflow-x-auto pb-4">
-                        {
-                            (() => {
-                                const steps = [
-                                    PurchaseRequestStatus.PENDING_TECHNICAL,
-                                    PurchaseRequestStatus.PENDING_FACTORY,
-                                    PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION,
-                                    PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA,
-                                    PurchaseRequestStatus.PENDING_CEO_SELECTION,
-                                    PurchaseRequestStatus.PENDING_CEO,
-                                    PurchaseRequestStatus.PENDING_SECURITY_ENTRY,
-                                    PurchaseRequestStatus.PENDING_QC,
-                                    PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL,
-                                    PurchaseRequestStatus.PENDING_FACTORY_FINAL,
-                                    PurchaseRequestStatus.COMPLETED
-                                ];
-                                const currentStepIndex = steps.indexOf(request.status);
-                                
-                                return [
-                                    { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'فنی' },
-                                    { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
-                                    { s: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'تصمیم بازرگانی' },
-                                    { s: PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA, label: 'پیش‌فاکتور' },
-                                    { s: PurchaseRequestStatus.PENDING_CEO_SELECTION, label: 'انتخاب' },
-                                    { s: PurchaseRequestStatus.PENDING_CEO, label: 'مدیرعامل' },
-                                    { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود' },
-                                    { s: PurchaseRequestStatus.PENDING_QC, label: 'کیفی' },
-                                    { s: PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL, label: 'انبار' },
-                                    { s: PurchaseRequestStatus.PENDING_FACTORY_FINAL, label: 'تایید نهایی' },
-                                    { s: PurchaseRequestStatus.COMPLETED, label: 'بایگانی' }
-                                ].map((step, idx) => (
-                                    <div key={idx} className="flex flex-col items-center gap-1 min-w-[70px]">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
-                                            request.status === step.s ? 'bg-indigo-600 text-white border-indigo-700 ring-4 ring-indigo-100' :
-                                            (idx < currentStepIndex ? 'bg-green-500 text-white border-green-600' : 'bg-white text-gray-400 border-gray-200')
-                                        }`}>
-                                            {idx + 1}
-                                        </div>
-                                        <span className="text-[8px] font-bold text-gray-500 whitespace-nowrap">{step.label}</span>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50 no-scrollbar">
+                    {/* Workflow Progress */}
+                    <div className="flex justify-between items-center gap-2 no-scrollbar overflow-x-auto pb-6 border-b">
+                        {[
+                            { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'فنی' },
+                            { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
+                            { s: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'تصمیم بازرگانی' },
+                            { s: request.location === 'Tehran' ? PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING : PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, label: 'خرید' },
+                            { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود' },
+                            { s: PurchaseRequestStatus.PENDING_QC, label: 'QC' },
+                            { s: PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, label: 'رسید انبار' },
+                            { s: PurchaseRequestStatus.COMPLETED, label: 'تکمیل' }
+                        ].map((step, idx) => {
+                            const stepsList = Object.values(PurchaseRequestStatus);
+                            const currentIndex = stepsList.indexOf(request.status);
+                            const stepIndex = stepsList.indexOf(step.s);
+                            const isActive = request.status === step.s;
+                            const isPast = currentIndex > stepIndex;
+
+                            return (
+                                <div key={idx} className="flex flex-col items-center gap-2 min-w-[80px]">
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black border-2 transition-all duration-500 ${
+                                        isActive ? 'bg-indigo-600 text-white border-indigo-700 ring-4 ring-indigo-100 scale-110 shadow-lg' :
+                                        isPast ? 'bg-green-500 text-white border-green-600' : 'bg-white text-gray-400 border-gray-100'
+                                    }`}>
+                                        {isPast ? <CheckCircle size={20}/> : idx + 1}
                                     </div>
-                                ));
-                            })()
-                        }
+                                    <span className={`text-[9px] font-black tracking-tight ${isActive ? 'text-indigo-700' : 'text-gray-500'}`}>{step.label}</span>
+                                </div>
+                            );
+                        })}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                             <div className="glass-panel p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
-                                <h3 className="text-xs font-black text-gray-400 uppercase mb-3 flex items-center gap-2"><Package size={14}/> اطلاعات کالا و درخواست</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">نام کالا/قطعه:</span> <span className="text-sm font-black">{request.itemName}</span></div>
-                                    <div className="flex justify-between items-center border-b border-gray-50 pb-2"><span className="text-xs text-gray-500">مربوط به:</span> <span className="text-sm font-bold">{request.category} / {request.subCategory}</span></div>
-                                    <div className="flex justify-between flex-col items-start border-b border-gray-50 pb-2"><span className="text-xs text-gray-500 mb-1">توضیحات و مشخصات (اظهارنامه):</span> <span className="text-xs font-mono text-gray-700">{request.specifications || '-'}</span></div>
-                                    <div className="flex justify-between items-center"><span className="text-xs text-gray-500">تعداد درخواستی:</span> <span className="text-lg font-black text-indigo-600">{request.quantity} {request.unit}</span></div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                            {/* Core Info */}
+                            <div className="glass-panel p-6 rounded-3xl border border-gray-200 bg-white shadow-sm">
+                                <div className="flex justify-between items-start mb-6">
+                                    <h3 className="text-sm font-black text-gray-800 flex items-center gap-2"><Package className="text-indigo-500" size={18}/> اطلاعات کالا</h3>
+                                    <span className="text-[10px] font-mono bg-gray-100 px-3 py-1 rounded-full text-gray-500 font-bold uppercase">{request.requestNumber}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">نام قطعه / کالا:</label><p className="text-sm font-black text-gray-800">{request.itemName}</p></div>
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">دسته بندی:</label><p className="text-sm font-bold text-gray-700">{request.category} {request.subCategory && `| ${request.subCategory}`}</p></div>
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">تعداد درخواستی:</label><p className="text-lg font-black text-indigo-600">{request.quantity} {request.unit}</p></div>
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">تاریخ ثبت:</label><p className="text-sm font-bold text-gray-700">{formatDate(request.date)}</p></div>
+                                    <div className="col-span-2"><label className="text-[10px] font-bold text-gray-400 block mb-1">مشخصات فنی و ملاحظات:</label><p className="text-xs text-gray-600 font-medium leading-relaxed bg-gray-50 p-3 rounded-xl border border-dashed border-gray-200">{request.specifications || '---'}</p></div>
+                                </div>
+                            </div>
+
+                            {/* Proformas */}
+                            <div className="glass-panel p-6 rounded-3xl border border-indigo-100 bg-white shadow-sm overflow-hidden relative">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-sm font-black text-gray-800 flex items-center gap-2"><FileText className="text-indigo-500" size={18}/> پیش‌فاکتورها و استعلام‌ها</h3>
+                                    {(isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) || isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)) && hasPurchasePerm('canManageProformas') && (
+                                        <button onClick={() => setShowProformaModal(true)} className="text-xs font-black bg-indigo-600 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2"><Plus size={14}/> ثبت پیش‌فاکتور</button>
+                                    )}
+                                </div>
+                                
+                                {request.proformas.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-gray-300 gap-2 border-2 border-dashed border-gray-100 rounded-2xl">
+                                        <FileText size={40} className="opacity-20" />
+                                        <p className="text-xs font-bold italic">هنوز پیش‌فاکتوری ثبت نشده است</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {request.proformas.map((p: PurchaseProforma) => (
+                                            <div key={p.id} className={`p-4 rounded-2xl border-2 transition-all ${p.isChosen ? 'border-green-500 bg-green-50/50 shadow-md' : 'border-gray-100 hover:border-indigo-100 bg-gray-50/30'}`}>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-800">{p.vendorName}</p>
+                                                        <p className="text-[10px] text-gray-500 font-bold">{p.number} | {formatDate(p.date)}</p>
+                                                    </div>
+                                                    {p.isChosen && <span className="bg-green-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">انتخاب شده</span>}
+                                                </div>
+                                                <div className="flex justify-between items-center border-t border-gray-100 pt-3">
+                                                    <span className="text-sm font-black text-indigo-700">{formatCurrency(p.totalAmount)} <span className="text-[9px]">ریال</span></span>
+                                                    <div className="flex gap-1">
+                                                        <button 
+                                                            onClick={() => {
+                                                                setPrintingProforma(p);
+                                                                setTimeout(() => window.print(), 100);
+                                                            }}
+                                                            className="p-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50" title="چاپ پیش‌فاکتور"
+                                                        >
+                                                            <Printer size={14}/>
+                                                        </button>
+                                                        {((isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && currentUser.role === UserRole.CEO) || 
+                                                          (isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION) && currentUser.role === UserRole.FACTORY_MANAGER) || 
+                                                          hasPurchasePerm('canSelectProforma')) && !p.isChosen && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if(confirm('آیا این پیش‌فاکتور را برای خرید تایید می‌کنید؟')) {
+                                                                        const updated = request.proformas.map(x => ({ ...x, isChosen: x.id === p.id }));
+                                                                        handleAction(PurchaseRequestStatus.PENDING_SECURITY_ENTRY, { proformas: updated });
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg shadow-sm"
+                                                            >
+                                                                تایید و انتخاب
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Arrival & QC Details */}
+                            {(request.entryQuantity || request.qcResult) && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="glass-panel p-6 rounded-3xl border border-orange-100 bg-white">
+                                        <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2"><Truck className="text-orange-500" size={18}/> اطلاعات ورود (انتظامات)</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-xs border-b pb-2"><span className="text-gray-500">تعداد ورودی:</span> <span className="font-black text-orange-700">{request.entryQuantity} {request.unit}</span></div>
+                                            <div className="flex justify-between text-xs border-b pb-2"><span className="text-gray-500">وزن ورودی:</span> <span className="font-bold">{request.entryWeight || '-'} کیلوگرم</span></div>
+                                            <div className="flex justify-between text-xs"><span className="text-gray-500">زمان ورود:</span> <span className="font-bold">{request.entryDate} {request.entryTime}</span></div>
+                                        </div>
+                                    </div>
+                                    <div className="glass-panel p-6 rounded-3xl border border-green-100 bg-white">
+                                        <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2"><ShieldCheck className="text-green-500" size={18}/> کنترل کیفی (QC)</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-xs border-b pb-2"><span className="text-gray-500">نتیجه بررسی:</span> <span className={`font-black ${request.qcResult === 'تایید' ? 'text-green-600' : 'text-red-500'}`}>{request.qcResult || 'در انتظار'}</span></div>
+                                            <div className="flex flex-col gap-1 text-xs"><span className="text-gray-500">ملاحظات کیفی:</span> <p className="text-[10px] bg-gray-50 p-2 rounded-lg italic">{request.qcDescription || 'فاقد ملاحظات'}</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sidebar Approvals */}
+                        <div className="space-y-6">
+                             <div className="glass-panel p-6 rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                                <h3 className="text-sm font-black text-gray-800 mb-6 border-b pb-3 border-gray-100 flex items-center gap-2"><ClipboardCheck className="text-indigo-500" size={18}/> تاریخچه و تاییدات</h3>
+                                <div className="space-y-6 relative before:absolute before:right-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+                                    {[
+                                        { label: 'ثبت درخواست (انبار)', user: request.requester, date: request.date, done: true },
+                                        { label: 'تایید فنی کارخانه', user: request.approverTechnical, done: !!request.approverTechnical },
+                                        { label: 'تایید مدیر کارخانه (اولیه)', user: request.approverFactory, done: !!request.approverFactory },
+                                        { label: 'تصمیم بازرگانی', user: request.approverCommercial, detail: request.location === 'Tehran' ? 'دفتر تهران' : 'کارخانه', done: !!request.approverCommercial },
+                                        { label: 'تایید نهایی مدیرعامل/مدیرکارخانه', user: request.approverCeoSelection || request.approverFactorySelection, done: !!(request.approverCeoSelection || request.approverFactorySelection) },
+                                        { label: 'کنترل کیفی', user: request.approverQc, done: !!request.approverQc },
+                                        { label: 'رسید انبار', user: request.approverWarehouseReceipt, done: !!request.approverWarehouseReceipt },
+                                        { label: 'بایگانی نهایی', user: request.approverFactoryArchive, done: !!request.approverFactoryArchive }
+                                    ].map((step, idx) => (
+                                        <div key={idx} className="flex gap-4 relative pr-8">
+                                            <div className={`absolute right-0 w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-sm z-10 ${step.done ? 'bg-green-500' : 'bg-gray-200'}`}>
+                                                {step.done ? <CheckCircle size={14}/> : <div className="w-2 h-2 rounded-full bg-white"></div>}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className={`text-[10px] font-black ${step.done ? 'text-gray-800' : 'text-gray-400'}`}>{step.label}</p>
+                                                {step.user && <p className="text-[9px] text-gray-500 font-bold">{step.user}</p>}
+                                                {step.detail && <span className="text-[8px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-bold">{step.detail}</span>}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                              </div>
 
                              {request.image && (
-                                <div className="rounded-2xl border-2 border-gray-200 overflow-hidden shadow-inner group relative h-48">
-                                    <img src={request.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="part" referrerPolicy="no-referrer" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                <div className="rounded-3xl overflow-hidden border-2 border-gray-100 shadow-md group relative h-64">
+                                     <img src={request.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="part" referrerPolicy="no-referrer" />
+                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                                         <p className="text-white text-[10px] font-bold opacity-80 line-clamp-2">{request.itemName}</p>
+                                     </div>
                                 </div>
-                             )}
-                             
-                             {request.pdfAttachment && (
-                                <a href={request.pdfAttachment} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-indigo-600 bg-indigo-50 p-4 rounded-xl border border-indigo-100 font-bold hover:bg-indigo-100 transition-colors">
-                                    <FileText size={20} /> <span className="text-sm">مشاهده فایل ضمیمه (PDF)</span>
-                                </a>
                              )}
                         </div>
+                    </div>
+                </div>
 
-                        <div className="space-y-6">
-                            <div className="glass-panel p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
-                                <h3 className="text-xs font-black text-gray-400 uppercase mb-3 flex items-center gap-2"><ClipboardCheck size={14}/> تاریخچه تاییدات</h3>
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">ثبت اولیه</p><p className="text-[10px] text-gray-400">{request.requester}</p></div></div>
-                                    {request.approverTechnical && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید فنی کارخانه</p><p className="text-[10px] text-gray-400">{request.approverTechnical}</p></div></div>}
-                                    {request.approverFactory && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید مدیر کارخانه</p><p className="text-[10px] text-gray-400">{request.approverFactory}</p></div></div>}
-                                    {request.approverCeo && <div className="flex items-center gap-3"><div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-green-600"><CheckCircle size={12}/></div><div><p className="text-xs font-bold">تایید مدیرعامل</p><p className="text-[10px] text-gray-400">{request.approverCeo}</p></div></div>}
-                                </div>
+                {/* Actions Footer */}
+                <div className="p-6 border-t glass-panel flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/80">
+                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                        {/* Status Based Actions */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && hasPurchasePerm('canApproveTechnical') && (
+                            <>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50" disabled={actionLoading}>تایید فنی و ارسال به مدیر</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-bold border border-red-100 transition-all hover:bg-red-100" disabled={actionLoading}>رد فنی</button>
+                            </>
+                        )}
+                        
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105" disabled={actionLoading}>تایید مدیر کارخانه و ارسال به بازرگانی</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canCommercialFinalize')) && (
+                            <>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING, { location: 'Tehran' })} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-blue-100" disabled={actionLoading}>خرید در تهران</button>
+                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, { location: 'Factory' })} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-teal-100" disabled={actionLoading}>خرید در کارخانه</button>
+                            </>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_INITIAL)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت تایید استعلام (مدیرعامل)</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید اولیه و اجازه ثبت پروفرما</button>
+                        )}
+                        
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال لیست پروفرما جهت انتخاب توسط مدیرعامل</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>مجوز ثبت پروفرما توسط کارخانه</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت انتخاب توسط مدیر کارخانه</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry')) && (
+                            <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC')) && (
+                            <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105">بررسی و تایید کنترل کیفی (QC)</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize')) && (
+                            <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all">صدور رسید انبار نهایی</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black">امضا، تکمیل و بایگانی نهایی پرونده</button>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.REJECTED) && (
+                            <span className="text-red-600 font-bold bg-red-50 px-4 py-2 rounded-xl border border-red-200 italic">این درخواست رد شده است</span>
+                        )}
+                    </div>
+
+                    <div className="flex gap-4 border-r pr-4 border-gray-200">
+                         <div className="relative group">
+                            <button className="flex items-center gap-2 p-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm font-black text-xs">
+                                <Printer size={16} /> چاپ اسناد
+                            </button>
+                            <div className="absolute bottom-full mb-2 left-0 w-48 bg-white rounded-2xl shadow-2xl border border-gray-200 p-2 hidden group-hover:block animate-in slide-in-from-bottom-2 fade-in">
+                                <button onClick={() => { setPrintType('REQUEST'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ درخواست اولیه (A5)</button>
+                                {request.proformas.find(p => p.isChosen) && (
+                                    <button onClick={() => { setPrintType('PROFORMA'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ پیش‌فاکتور منتخب (A5)</button>
+                                )}
+                                {request.warehouseReceiptNumber && (
+                                    <button onClick={() => { setPrintType('RECEIPT'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold">چاپ رسید انبار نهایی (A5)</button>
+                                )}
                             </div>
-
-
-                            {/* Proformas Section */}
-                            {(request.status !== PurchaseRequestStatus.PENDING_FACTORY && request.status !== PurchaseRequestStatus.PENDING_CEO) && (
-                                <div className="glass-panel p-4 rounded-2xl border border-indigo-200 bg-white shadow-sm">
-                                    <h3 className="text-xs font-black text-indigo-400 uppercase mb-3 flex items-center justify-between">
-                                        <span className="flex items-center gap-2"><FileText size={14}/> لیست پیش‌فاکتورها</span>
-                                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) && canAddProforma && (
-                                            <button onClick={() => setShowProformaModal(true)} className="text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors">+ افزودن</button>
-                                        )}
-                                    </h3>
-                                    {request.proformas.length === 0 ? (
-                                        <p className="text-[10px] text-center py-4 text-gray-400 italic">هنوز پیش‌فاکتوری ثبت نشده است.</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {request.proformas.map((p: PurchaseProforma) => (
-                                                <div key={p.id} className={`p-2 rounded-xl border flex justify-between items-center ${p.isChosen ? 'border-green-500 bg-green-50' : 'border-gray-100'}`}>
-                                                    <div>
-                                                        <p className="text-xs font-bold">{p.vendorName}</p>
-                                                        <p className="text-[10px] text-gray-500">{formatCurrency(p.totalAmount)} ریال</p>
-                                                    </div>
-                                                    {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && (canApproveCEO || canSelectProforma) && (
-                                                        <button 
-                                                            onClick={async () => {
-                                                                if(confirm('آیا این نهایی این پیش‌فاکتور تایید می‌گردد؟')) {
-                                                                    const updatedProformas = request.proformas.map(x => ({ ...x, isChosen: x.id === p.id }));
-                                                                    handleAction(PurchaseRequestStatus.PENDING_SECURITY_ENTRY, { proformas: updatedProformas });
-                                                                }
-                                                            }}
-                                                            className="bg-indigo-600 text-white text-[10px] px-3 py-1 rounded-lg"
-                                                        >
-                                                            انتخاب و تایید
-                                                        </button>
-                                                    )}
-                                                    {p.isChosen && <CheckCircle className="text-green-600" size={16}/>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                         </div>
                     </div>
                 </div>
 
-                <div className="p-6 border-t glass-panel flex flex-wrap justify-between items-center gap-3 bg-gray-100/50">
-                    <div className="flex gap-2">
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && canApproveTechnical && (
-                            <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20}/>} تایید فنی (ارسال به مدیر کارخانه)</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <XCircle size={18}/>} رد فنی</button>
-                            </>
-                        )}
-
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && canAddProforma && (
-                            <>
-                                <button onClick={() => handleCommercialDecision('Tehran')} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <Truck size={20}/>} خرید در تهران</button>
-                                <button onClick={() => handleCommercialDecision('Zanjan')} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <Warehouse size={20}/>} خرید در زنجان</button>
-                            </>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && canApproveFactory && (
-                            <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <CheckCircle size={20}/>} تایید مدیر کارخانه</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="px-5 py-3 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : <XCircle size={18}/>} رد درخواست</button>
-                            </>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO) && canApproveCEO && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی جهت استعلام'}</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_PROFORMA) && canAddProforma && request.proformas.length > 0 && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'ارسال لیست جهت تایید نهایی'}</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && canSecurityEntry && (
-                            <button onClick={() => setShowSecurityModal(true)} className="px-8 py-3 bg-orange-600 text-white rounded-2xl font-black transition-all active:scale-95">ثبت ورود کالا</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && canQC && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL)} className="px-8 py-3 bg-green-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید کنترل کیفی (QC)'}</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL) && canApproveFactoryFinal && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی مدیر کارخانه'}</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_FINAL) && canWarehouseFinalize && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'صدور رسید انبار'}</button>
-                        )}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_FINAL) && canCommercialFinalize && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black transition-all active:scale-95 disabled:opacity-50" disabled={actionLoading}>{actionLoading ? <Loader2 className="animate-spin" /> : 'تایید نهایی و بایگانی'}</button>
-                        )}
-                    </div>
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={async () => {
-                                window.print();
-                            }}
-                            className="flex items-center gap-2 p-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm" title="چاپ فرم"
-                        >
-                            <Printer size={18} /> <span className="text-sm font-bold">چاپ</span>
-                        </button>
-                        <button 
-                            onClick={async () => {
-                                setPdfLoading(true);
-                                try {
-                                    await generatePdf({
-                                        elementId: 'print-purchase-request-section',
-                                        filename: `purchase_request_${request.requestNumber}.pdf`
-                                    });
-                                } finally {
-                                    setPdfLoading(false);
-                                }
-                            }}
-                            className="flex items-center gap-2 p-3 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="دریافت PDF"
-                        >
-                            {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />} <span className="text-sm font-bold">دانلود PDF</span>
-                        </button>
-                    </div>
-                </div>
-
+                {/* Print Sections */}
                 <div className="hidden">
                     <div id="print-purchase-request-section">
-                        <PrintPurchaseRequest request={request} />
+                        {printType === 'REQUEST' && <PrintPurchaseRequest request={request} />}
+                        {printType === 'PROFORMA' && <PrintPurchaseProforma request={request} proforma={request.proformas.find(p => p.isChosen) || request.proformas[0]} />}
+                        {printType === 'RECEIPT' && <PrintWarehouseReceipt request={request} />}
                     </div>
+                    {/* Multi-print for custom proforma */}
+                    {printingProforma && (
+                        <div id="print-specific-proforma">
+                            <PrintPurchaseProforma request={request} proforma={printingProforma} />
+                        </div>
+                    )}
                 </div>
 
-                {showProformaModal && <AddProformaModal 
+                {/* Submodals */}
+                {showProformaModal && <ProfessionalProformaModal 
                     request={request} 
-                    onClose={() => setShowProformaModal(false)} 
-                    onSuccess={(updatedProformas: any) => { 
-                        updatePurchaseRequest({ ...request, proformas: updatedProformas }); 
-                        onSuccess();
-                        onClose();
-                    }} 
+                    onClose={() => setShowProformaModal(false)}
+                    onSuccess={(updatedProformas: any) => {
+                        handleAction(request.status, { proformas: updatedProformas });
+                        setShowProformaModal(false);
+                    }}
+                    currentUser={currentUser}
                 />}
 
                 {showSecurityModal && <SecurityEntryModal 
                     onClose={() => setShowSecurityModal(false)}
                     onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_QC, data)}
                 />}
+                
+                {showQCModal && <QCApprovalModal 
+                    onClose={() => setShowQCModal(false)}
+                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE, data)}
+                />}
+
+                {showWarehouseModal && <WarehouseReceiptModal 
+                   onClose={() => setShowWarehouseModal(false)}
+                   onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, data)}
+                />}
             </div>
         </div>
     );
 };
 
-const AddProformaModal = ({ request, onClose, onSuccess }: any) => {
+const ProfessionalProformaModal = ({ request, onClose, onSuccess, currentUser }: any) => {
     const [vendor, setVendor] = useState('');
+    const [phone, setPhone] = useState('');
     const [num, setNum] = useState('');
-    const [amount, setAmount] = useState(0);
+    const [items, setItems] = useState([{ id: generateUUID(), description: request.itemName, quantity: request.quantity, unit: request.unit, unitPrice: 0, totalPrice: 0 }]);
+    const [tax, setTax] = useState(0);
+    const [discount, setDiscount] = useState(0);
+
+    const updateItem = (id: string, field: string, val: any) => {
+        setItems(items.map(it => {
+            if (it.id === id) {
+                const updated = { ...it, [field]: val };
+                if (field === 'quantity' || field === 'unitPrice') {
+                    updated.totalPrice = updated.quantity * updated.unitPrice;
+                }
+                return updated;
+            }
+            return it;
+        }));
+    };
+
+    const addItem = () => setItems([...items, { id: generateUUID(), description: '', quantity: 1, unit: 'عدد', unitPrice: 0, totalPrice: 0 }]);
+    const removeItem = (id: string) => setItems(items.filter(it => it.id !== id));
+
+    const totalItems = items.reduce((sum, it) => sum + it.totalPrice, 0);
+    const finalTotal = totalItems + tax - discount;
 
     const handleAdd = () => {
         const newP: PurchaseProforma = {
             id: generateUUID(),
             vendorName: vendor,
+            vendorPhone: phone,
             number: num,
-            date: new Date().toISOString(),
-            totalAmount: amount,
-            attachments: []
+            date: new Date().toISOString().split('T')[0],
+            items: items,
+            totalAmount: finalTotal,
+            taxAmount: tax,
+            discountAmount: discount,
+            attachments: [],
+            registeredBy: currentUser.fullName
         };
         onSuccess([...request.proformas, newP]);
     };
 
     return (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-                <h3 className="font-black text-lg mb-4">ثبت پیش‌فاکتور جدید</h3>
-                <div className="space-y-4">
-                    <input className="w-full border rounded-xl p-3 text-sm" placeholder="نام تامین کننده" value={vendor} onChange={e=>setVendor(e.target.value)} />
-                    <input className="w-full border rounded-xl p-3 text-sm" placeholder="شماره پیش‌فاکتور" value={num} onChange={e=>setNum(e.target.value)} />
-                    <input type="number" className="w-full border rounded-xl p-3 text-sm" placeholder="مبلغ کل" value={amount} onChange={e=>setAmount(+e.target.value)} />
-                    <button onClick={handleAdd} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl">افزودن به لیست</button>
-                    <button onClick={onClose} className="w-full text-gray-500 font-bold">انصراف</button>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm shadow-2xl">
+            <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in">
+                <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-black text-xl text-gray-800">ثبت پیش‌فاکتور حرفه‌ای</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><XCircle/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label className="text-xs font-bold text-gray-500 block mb-1">نام فروشنده/تامین کننده</label><input className="w-full border rounded-xl p-3 text-sm" value={vendor} onChange={e=>setVendor(e.target.value)} /></div>
+                        <div><label className="text-xs font-bold text-gray-500 block mb-1">تلفن تماس</label><input className="w-full border rounded-xl p-3 text-sm" value={phone} onChange={e=>setPhone(e.target.value)} /></div>
+                        <div><label className="text-xs font-bold text-gray-500 block mb-1">شماره پیش‌فاکتور</label><input className="w-full border rounded-xl p-3 text-sm" value={num} onChange={e=>setNum(e.target.value)} /></div>
+                    </div>
+
+                    <div className="border rounded-2xl overflow-hidden">
+                        <table className="w-full text-xs">
+                            <thead className="bg-gray-100">
+                                <tr>
+                                    <th className="p-3 text-right">شرح کالا/خدمات</th>
+                                    <th className="p-3 w-20">تعداد</th>
+                                    <th className="p-3 w-24">واحد</th>
+                                    <th className="p-3 w-32">فی (ریال)</th>
+                                    <th className="p-3 w-32">جمع کل</th>
+                                    <th className="p-3 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {items.map(it => (
+                                    <tr key={it.id}>
+                                        <td className="p-2"><input className="w-full p-2 bg-transparent" value={it.description} onChange={e=>updateItem(it.id, 'description', e.target.value)} /></td>
+                                        <td className="p-2"><input type="number" className="w-full p-2 bg-transparent text-center font-bold" value={it.quantity} onChange={e=>updateItem(it.id, 'quantity', +e.target.value)} /></td>
+                                        <td className="p-2"><input className="w-full p-2 bg-transparent text-center" value={it.unit} onChange={e=>updateItem(it.id, 'unit', e.target.value)} /></td>
+                                        <td className="p-2"><input type="number" className="w-full p-2 bg-transparent text-center font-bold text-indigo-600" value={it.unitPrice} onChange={e=>updateItem(it.id, 'unitPrice', +e.target.value)} /></td>
+                                        <td className="p-2 text-center font-black">{formatCurrency(it.totalPrice)}</td>
+                                        <td className="p-2"><button onClick={()=>removeItem(it.id)} className="text-red-500"><Trash2 size={16}/></button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <button onClick={addItem} className="w-full py-3 bg-gray-50 text-indigo-600 font-bold hover:bg-indigo-50 border-t border-dashed">+ افزودن ردیف جدید</button>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-3 pt-4 border-t">
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs font-bold text-gray-500">جمع ردیف‌ها:</span>
+                            <span className="text-sm font-black">{formatCurrency(totalItems)} ریال</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs font-bold text-gray-500">مالیات / عوارض:</span>
+                            <input type="number" className="w-32 border rounded-lg p-2 text-xs font-bold" value={tax} onChange={e=>setTax(+e.target.value)} />
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs font-bold text-red-400">تخفیف:</span>
+                            <input type="number" className="w-32 border rounded-lg p-2 text-xs font-bold text-red-500" value={discount} onChange={e=>setDiscount(+e.target.value)} />
+                        </div>
+                        <div className="flex items-center gap-4 bg-indigo-50 px-6 py-4 rounded-2xl border border-indigo-200">
+                            <span className="text-sm font-black text-indigo-900">مبلغ نهایی قابل پرداخت:</span>
+                            <span className="text-xl font-black text-indigo-700">{formatCurrency(finalTotal)} ریال</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-6 bg-gray-50 flex gap-3">
+                    <button onClick={handleAdd} className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 active:scale-95 transition-all">تایید و ثبت نهایی پیش‌فاکتور</button>
+                    <button onClick={onClose} className="px-8 bg-white border border-gray-300 text-gray-600 font-bold rounded-2xl hover:bg-gray-100 transition-all">انصراف</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const QCApprovalModal = ({ onClose, onConfirm }: any) => {
+    const [result, setResult] = useState<'تایید' | 'مشروط' | 'رد'>('تایید');
+    const [desc, setDesc] = useState('');
+
+    return (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in text-right">
+                <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><ShieldCheck className="text-green-600"/> بررسی کیفی (QC)</h3>
+                <div className="space-y-6">
+                    <div className="flex p-1 bg-gray-100 rounded-2xl">
+                        {(['تایید', 'مشروط', 'رد'] as any[]).map(r => (
+                            <button key={r} onClick={()=>setResult(r)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${result === r ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-gray-400'}`}>{r}</button>
+                        ))}
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-2">ملاحظات و گزارش کیفی</label>
+                        <textarea className="w-full border rounded-xl p-4 text-sm h-32 focus:ring-2 focus:ring-indigo-100 outline-none" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="شرح وضعیت ظاهری، فنی و تطابق با استانداردهای کارخانه..."/>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                        <button onClick={() => onConfirm({ qcResult: result, qcDescription: desc })} className="flex-1 bg-green-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">تایید گزارش QC</button>
+                        <button onClick={onClose} className="px-6 bg-white border border-gray-300 text-gray-500 font-bold rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const WarehouseReceiptModal = ({ onClose, onConfirm }: any) => {
+    const [num, setNum] = useState('');
+    const shamsi = getCurrentShamsiDate();
+    const [date, setDate] = useState(`${shamsi.year}/${shamsi.month}/${shamsi.day}`);
+
+    return (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
+                <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><Warehouse className="text-indigo-600"/> صدور رسید انبار</h3>
+                <div className="space-y-6">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-2">شماره رسید انبار (سیستمی یا اسنادی)</label>
+                        <input className="w-full border rounded-xl p-4 text-sm font-black focus:ring-2 focus:ring-indigo-100 outline-none" value={num} onChange={e=>setNum(e.target.value)} placeholder="مثلاً: RI-1402/100" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-2">تاریخ رسید</label>
+                        <input className="w-full border rounded-xl p-4 text-sm font-black text-center" value={date} onChange={e=>setDate(e.target.value)} />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                        <button onClick={() => onConfirm({ warehouseReceiptNumber: num, warehouseReceiptDate: date })} className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">صدور و تایید نهایی رسید</button>
+                        <button onClick={onClose} className="px-6 bg-white border border-gray-300 text-gray-500 font-bold rounded-2xl">انصراف</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -792,7 +1056,7 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
     const [weight, setWeight] = useState(0);
 
     return (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/50">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 shadow-2xl">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md">
                 <h3 className="font-black text-lg mb-4">ثبت ورود کالا (انتظامات)</h3>
                 <div className="space-y-4">
@@ -1065,7 +1329,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate, settings }: any) => {
 
 const DataSheetModal = ({ part, onClose }: { part: PartMasterData, onClose: () => void }) => {
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-900 text-white">
                     <div className="flex items-center gap-3">
@@ -1144,7 +1408,7 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in max-h-[90vh] overflow-y-auto no-scrollbar">
                 <div className="flex justify-between items-center mb-8">
                     <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><Layers className="text-indigo-600"/> {initialData ? 'ویرایش کالا / قطعه' : 'معرفی کالا جدید'}</h2>
