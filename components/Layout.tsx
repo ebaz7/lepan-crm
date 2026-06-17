@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, LayoutDashboard, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Sparkles } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Search, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
@@ -31,10 +31,24 @@ interface LayoutProps {
   unreadChatCount?: number;
 }
 
+import { SearchModal } from './SearchModal';
+
 const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveTab, currentUser, onLogout, notifications, clearNotifications, markAllNotificationsAsRead, onDeleteNotification, onAddNotification, onRemoveNotification, financialYear, setFinancialYear, settings: propSettings, theme, toggleTheme, unreadChatCount = 0 }) => {
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            setIsSearchOpen(true);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const handleGlobalClose = () => {
@@ -790,6 +804,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                 </div>
             </div>
             <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsSearchOpen(true)}
+                  className="p-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 rounded-xl text-gray-700 dark:text-gray-300 shadow-sm"
+                  title="جستجو (Ctrl+K)"
+                >
+                    <Search size={20} />
+                </button>
                 {financialYear && setFinancialYear && (
                     <select 
                         value={financialYear} 
@@ -834,6 +855,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
         
         <div className={`flex-1 ${activeTab === 'chat' ? 'flex flex-col overflow-hidden pb-0 min-h-0' : `overflow-y-auto ${activeTab === 'dashboard' ? 'pb-[calc(140px+env(safe-area-inset-bottom))]' : 'pb-[calc(80px+env(safe-area-inset-bottom))]'}`} bg-transparent md:pb-0 min-w-0 ${isUpdateAvailable ? 'pt-12' : ''} custom-scrollbar`} id="main-scroll-container">
                     <div className={`${activeTab === 'chat' ? 'hidden' : 'hidden md:flex'} justify-end p-4 bg-transparent border-b border-gray-200/50 dark:border-white/10 z-40 shadow-sm no-print items-center glass-header`}>
+                <button 
+                  onClick={() => setIsSearchOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all mr-auto ml-4 group"
+                  title="جستجو (Ctrl+K)"
+                >
+                    <Search size={16} className="group-hover:text-blue-500 transition-colors" />
+                    <span className="text-xs font-bold">جستجو در کل سیستم...</span>
+                    <span className="bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-[9px] font-black">Ctrl K</span>
+                </button>
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
                 {settings?.fiscalYears && (
                     <select 
@@ -859,6 +889,19 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
             </div>
         </div>
       </main>
+
+      <AnimatePresence>
+        {isSearchOpen && (
+            <SearchModal 
+                isOpen={isSearchOpen} 
+                onClose={() => setIsSearchOpen(false)} 
+                onNavigate={(tab) => {
+                    setActiveTab(tab);
+                    setIsSearchOpen(false);
+                }} 
+            />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

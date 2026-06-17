@@ -1297,6 +1297,86 @@ app.get('/api/next-meeting-number', (req, res) => {
     res.json({ nextNumber: `M-${lastNum + 1}` });
 });
 
+// 6.6 SEARCH EVERYTHING
+const deepSearch = (obj, searchStr) => {
+    if (!obj || !searchStr) return false;
+    const lowerSearch = searchStr.toLowerCase();
+    
+    const check = (val) => {
+        if (val === null || val === undefined) return false;
+        if (typeof val === 'string') return val.toLowerCase().includes(lowerSearch);
+        if (typeof val === 'number') return val.toString().includes(searchStr);
+        if (Array.isArray(val)) return val.some(item => check(item));
+        if (typeof val === 'object') {
+            try {
+                return Object.values(val).some(item => check(item));
+            } catch(e) { return false; }
+        }
+        return false;
+    };
+    
+    return check(obj);
+};
+
+app.get('/api/search-everything', async (req, res) => {
+    const { query } = req.query;
+    if (!query) return res.json({ results: [] });
+
+    try {
+        const results = [];
+        const searchStr = query.toString();
+        const db = getDb();
+
+        // 1. Payment Orders
+        (db.orders || []).forEach(o => {
+            if (deepSearch(o, searchStr)) {
+                results.push({ type: 'payment_order', id: o.id, title: `دستور پرداخت: ${o.payee}`, subtitle: `شماره ردیابی: ${o.trackingNumber} - مبلغ: ${o.totalAmount.toLocaleString('fa-IR')}`, data: o, url: 'manage' });
+            }
+        });
+
+        // 2. Exit Permits
+        (db.exitPermits || []).forEach(e => {
+            if (deepSearch(e, searchStr)) {
+                results.push({ type: 'exit_permit', id: e.id, title: `مجوز خروج: ${e.permitNumber}`, subtitle: `راننده: ${e.driverName} - کالا: ${e.goodsName || ''}`, data: e, url: 'manage-exit' });
+            }
+        });
+
+        // 3. Users
+        (db.users || []).forEach(u => {
+            if (deepSearch(u, searchStr)) {
+                results.push({ type: 'user', id: u.id, title: `کاربر: ${u.fullName}`, subtitle: `نقش: ${u.role} - نام کاربری: ${u.username}`, data: u, url: 'users' });
+            }
+        });
+
+        // 4. Meetings
+        (db.meetings || []).forEach(m => {
+            if (deepSearch(m, searchStr)) {
+                results.push({ type: 'meeting', id: m.id, title: `صورتجلسه: ${m.meetingNumber}`, subtitle: `تاریخ: ${m.date} - مکان: ${m.location}`, data: m, url: 'meetings' });
+            }
+        });
+
+        // 5. Warehouse
+        (db.warehouseTx || []).forEach(t => {
+            if (deepSearch(t, searchStr)) {
+                results.push({ type: 'warehouse_tx', id: t.id, title: `${t.type === 'IN' ? 'رسید' : 'بیجک'} انبار: ${t.number}`, subtitle: `تاریخ: ${t.date} - شرکت: ${t.company}`, data: t, url: 'warehouse' });
+            }
+        });
+
+        // 6. Purchase Requests
+        (db.purchaseRequests || []).forEach(p => {
+            if (deepSearch(p, searchStr)) {
+                results.push({ type: 'purchase_request', id: p.id, title: `درخواست خرید: ${p.itemName}`, subtitle: `شماره: ${p.requestNumber} - درخواست کننده: ${p.requester}`, data: p, url: 'purchase' });
+            }
+        });
+
+        // Limit results
+        res.json({ results: results.slice(0, 50) });
+    } catch (e) {
+        console.error("Search API Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // BOT SENDING ENDPOINTS
 app.get('/api/meetings/:id/pdf', async (req, res) => {
     const db = getDb();

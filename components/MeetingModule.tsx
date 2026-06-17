@@ -162,9 +162,16 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             } else {
                 await saveMeeting(meetingData);
             }
+
+            // TRIGGER NOTIFICATIONS: If final or pending approval, notify those tagged
+            if (meetingData.status !== MeetingStatus.DRAFT) {
+                await sendPvNotificationsOnApproval(meetingData);
+            }
+
             setShowModal(false);
             loadData();
         } catch (error) {
+            console.error("Save meeting error:", error);
             alert('خطا در ذخیره جلسه');
         }
     };
@@ -212,11 +219,11 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         
         users.forEach(user => {
             const mentions: string[] = [];
-            m.items.forEach((item, idx) => {
+            (m.items || []).forEach((item, idx) => {
                 const isMentioned = 
-                    (item.responsiblePerson || '').includes(user.fullName) || 
+                    (item.responsiblePerson || '') === user.fullName || 
+                    (item.responsiblePerson || '') === user.username ||
                     (item.description || '').includes(user.fullName) ||
-                    (item.responsiblePerson || '').includes(user.username) ||
                     (item.description || '').includes(user.username);
                 
                 if (isMentioned) {
@@ -232,16 +239,26 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         for (const [username, mentions] of Array.from(notifiedUsernames)) {
             try {
                 const mentionText = mentions.join('\n');
+                
+                // 1. Chat Message
                 await sendMessage({ 
                     id: generateUUID(), 
-                    sender: 'system', 
+                    sender: 'سیستم', 
                     senderUsername: 'system', 
                     role: 'system', 
-                    message: `📌 تگ در صورتجلسه شماره ${m.meetingNumber}\n\nباسلام، شما در موارد زیر از صورتجلسه نهایی شده تگ شده‌اید:\n\n${mentionText}\n\nجهت مشاهده جزئیات کامل به سامانه مراجعه کنید.`, 
+                    message: `📌 تگ در صورتجلسه شماره ${m.meetingNumber}\n\nباسلام، شما در موارد زیر از صورتجلسه تگ شده‌اید:\n\n${mentionText}\n\nجهت مشاهده جزئیات کامل به سامانه مراجعه کنید.`, 
                     recipient: username, 
                     timestamp: Date.now() 
                 });
-            } catch (e) { console.error(e); }
+
+                // 2. System Notification
+                await apiCall('/notifications/add', 'POST', {
+                    username: username,
+                    title: `تگ در صورتجلسه ${m.meetingNumber}`,
+                    body: `شما در صورتجلسه شماره ${m.meetingNumber} تگ شده‌اید. مسئولیت یا موردی به شما ارجاع شده است.`,
+                    url: 'meetings'
+                });
+            } catch (e) { console.error("PV notification failed", e); }
         }
     };
 

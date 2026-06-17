@@ -3185,10 +3185,11 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                                         </tbody>
                                     </table>
                                 </td>
-                            `).join('')}
-                        </tr>
-                    </tbody>
-                </table>
+                            `;
+                        }).join('')}
+                    </tr>
+                </tbody>
+            </table>
                 <div style="text-align: center; background-color: #fde047; border: 2px solid black; border-top: none; padding: 4px; font-weight: bold; font-size: 12px;">
                     گزارش سیستم مدیریت انبار - تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}
                 </div>
@@ -3402,7 +3403,9 @@ export const notifyMeetingMinutes = async (meeting, db) => {
                     if (platform === 'telegram' && user.telegramChatId) {
                         text += ` (👤 مسئول: [${user.fullName}](tg://user?id=${user.telegramChatId}))`;
                     } else if (platform === 'bale' && user.baleChatId) {
-                        text += ` (👤 مسئول: [${user.fullName}](bale://user/${user.baleChatId}))`;
+                        // Bale sometimes supports tagging with [name](id) but the deep link tg:// is also common
+                        // We will use the common approach first
+                        text += ` (👤 مسئول: [${user.fullName}](tg://user?id=${user.baleChatId}))`;
                     } else {
                         text += ` (👤 مسئول: ${item.responsiblePerson})`;
                     }
