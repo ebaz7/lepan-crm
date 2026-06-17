@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1', '#ec4899'];
 
 // The visualizer for business reports
-const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ activeTable, data }) => {
+const ReportVisualizer: React.FC<{ activeTable: string, data: any[], onStatementClick?: (accountId: string, name: string) => void }> = ({ activeTable, data, onStatementClick }) => {
   const [timeFilter, setTimeFilter] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
 
   const exportFilteredData = (filteredData: any[], title: string) => {
@@ -31,10 +31,10 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ acti
       }, { totalSales: 0, totalCount: 0 });
 
       let chartData = [];
-      const dateKey = Object.keys(data[0]).find(k => typeof data[0][k] === 'string' && (data[0][k].includes('T00:00:00') || data[0][k].match(/^\d{4}-\d{2}-\d{2}/)));
+      const dateKey = Object.keys(data[0]).find(k => typeof data[0][k] === 'string' && (data[0][k].includes('T00:00') || data[0][k].match(/^\d{4}[/-]\d{2}[/-]\d{2}/))) || 'Field_004';
       
       const parsedData = useMemo(() => {
-        if (!dateKey) return [];
+        if (!dateKey || !data[0][dateKey]) return [];
         const aggs: Record<string, number> = {};
         data.forEach(r => {
            let amt = parseFloat(r.Field_010 || r.Field_011 || r.Field_008 || 0) || 1;
@@ -116,6 +116,29 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ acti
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+           </div>
+           
+           <div className="bg-white border rounded-xl shadow-sm overflow-hidden mt-6">
+               <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                 <h4 className="text-xs font-bold text-gray-700">لیست ریز فاکتورها / آرتیکل‌های فروش</h4>
+               </div>
+               <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                  {data.slice(0, 150).map((r, i) => (
+                    <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-gray-800">{r.Field_005 || r.Field_006 || `فاکتور سیستمی`} {r.Field_001 && `(کد: ${r.Field_001})`}</span>
+                        <div className="flex items-center gap-2">
+                           {dateKey && r[dateKey] && <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-mono">{r[dateKey]}</span>}
+                           {r.Field_007 && <span className="text-[9px] text-gray-400 max-w-[200px] truncate">{r.Field_007}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-black text-emerald-600 font-mono" dir="ltr">{new Intl.NumberFormat('fa-IR').format(parseFloat(r.Field_010 || r.Field_011 || r.Field_008 || 0))} <span className="text-[9px] text-gray-400 font-sans">ریال</span></span>
+                        <button onClick={() => onStatementClick?.(r.Field_001 || '', r.Field_005 || '')} className="px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 rounded text-[10px] font-bold transition-colors">جزئیات فاکتور</button>
+                      </div>
+                    </div>
+                  ))}
+               </div>
            </div>
         </div>
       );
@@ -207,16 +230,16 @@ const ReportVisualizer: React.FC<{ activeTable: string, data: any[] }> = ({ acti
                <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
                  <h4 className="text-xs font-bold text-gray-700">لیست ریز اشخاص / حساب‌ها</h4>
                </div>
-               <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto">
-                  {sortedData.slice(0, 50).map((r, i) => (
+               <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                  {sortedData.map((r, i) => (
                     <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors">
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-gray-800">{r.Field_006 || r.Field_005 || 'بدون نام'}</span>
-                        <span className="text-[9px] text-gray-400 font-mono">{r.Field_002 || r.Field_001}</span>
+                        <span className="text-[9px] text-gray-400 font-mono">{r.Field_004 || r.Field_002 || r.Field_001}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-black text-gray-800 font-mono" dir="ltr">{new Intl.NumberFormat('fa-IR').format(r.balance)} <span className="text-[9px] text-gray-400 font-sans">ریال</span></span>
-                        <button className="px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 rounded text-[10px] font-bold transition-colors">مشاهده صورتحساب</button>
+                        <button onClick={() => onStatementClick?.(r.Field_001 || r.Field_004 || '', r.Field_006 || r.Field_005 || '')} className="px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 rounded text-[10px] font-bold transition-colors">مشاهده صورتحساب</button>
                       </div>
                     </div>
                   ))}
@@ -1061,11 +1084,12 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             </div>
           )}
 
-          {reportMode && data.length > 0 && (
-             <ReportVisualizer activeTable={activeTable} data={data} />
-          )}
-
-          {/* Data Grid Table representation */}
+          {reportMode && data.length > 0 && activeTable.startsWith('REPORT_') ? (
+             <ReportVisualizer activeTable={activeTable} data={data}  onStatementClick={(accountId, accountName) => {
+                // A mock function for Statement Click
+                alert(`در حال فراخوانی صورتحساب برای حساب: ${accountName || accountId}\nدسترسی مستقیم به ریز گردش (ACT_TBL_003) از طریق توکن سوپروایزر در سرور لوکال امکان‌پذیر است.`);
+             }} />
+          ) : (
           <div className="relative">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm rounded-xl">
@@ -1078,7 +1102,10 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                 <table className="w-full text-xs text-right">
                   <thead className="bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 font-sans font-bold">
                     <tr>
-                      {Object.keys(data[0]).map((key) => {
+                      {Object.keys(data[0])
+                        // Skip empty columns across all data to make it clean
+                        .filter(key => data.some(row => row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== ''))
+                        .map((key) => {
                          let displayName = key;
                          
                          // Smart guesswork based on activeTable and sample values
@@ -1087,7 +1114,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                          if (key === 'Field_001') displayName = 'شناسه (ID)';
                          else if (key === 'Field_002') displayName = 'کد سیستم';
                          else if (key === 'Field_003') displayName = 'کد فرعی / نوع';
-                         else if (key === 'Field_004') displayName = 'شماره / ردیف';
+                         else if (key === 'Field_004') displayName = 'شماره / ردیف / تاریخ';
                          
                          // In ACT_TBL_001, Field_005 is Account Code (101, 102...) and Field_006 is Account Name (موجودی نزد بانکها)
                          else if (key === 'Field_005') {
@@ -1118,11 +1145,16 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700 font-mono">
                     {data.slice(0, 1000).map((row, idx) => (
                       <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        {Object.values(row).map((val: any, vIdx) => (
-                          <td key={vIdx} className="px-4 py-2.5 text-gray-600 dark:text-gray-400 whitespace-nowrap text-[11px]">
-                            {typeof val === 'number' ? new Intl.NumberFormat('fa-IR').format(val) : String(val ?? '')}
-                          </td>
-                        ))}
+                        {Object.keys(data[0])
+                          .filter(k => data.some(r => r[k] !== null && r[k] !== undefined && String(r[k]).trim() !== ''))
+                          .map((k, vIdx) => {
+                            const val = row[k];
+                            return (
+                              <td key={vIdx} className="px-4 py-2.5 text-gray-600 dark:text-gray-400 whitespace-nowrap text-[11px]">
+                                {typeof val === 'number' ? new Intl.NumberFormat('fa-IR').format(val) : String(val ?? '')}
+                              </td>
+                            );
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -1141,6 +1173,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               </div>
             )}
           </div>
+          )}
 
         </div>
       </div>
