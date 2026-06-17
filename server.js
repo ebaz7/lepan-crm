@@ -1552,7 +1552,9 @@ app.get('/api/customer-balances/reports/debtors/pdf', async (req, res) => {
         const db = getDb();
         const hideZero = req.query.hideZero === 'true';
         const excludeCodesStr = req.query.excludeCodes || '';
-        const excludeCodes = excludeCodesStr ? excludeCodesStr.split(',') : [];
+        const excludeCodes = excludeCodesStr 
+            ? excludeCodesStr.split(',').map(s => s.trim()).filter(s => s !== '') 
+            : [];
 
         let list = (db.customerBalances || [])
             .filter(b => b.type === 'بدهکار' || b.type?.includes('بدهکار'));
@@ -1600,7 +1602,9 @@ app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
         const db = getDb();
         const hideZero = req.query.hideZero === 'true';
         const excludeCodesStr = req.query.excludeCodes || '';
-        const excludeCodes = excludeCodesStr ? excludeCodesStr.split(',') : [];
+        const excludeCodes = excludeCodesStr 
+            ? excludeCodesStr.split(',').map(s => s.trim()).filter(s => s !== '') 
+            : [];
 
         let list = (db.customerBalances || [])
             .filter(b => b.type === 'بستانکار' || b.type?.includes('بستانکار'));

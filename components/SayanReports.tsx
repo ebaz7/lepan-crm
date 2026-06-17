@@ -397,61 +397,88 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
   const runDeepDiagnostic = async () => {
     setDiagnosing(true);
-    let log = `SAYAN DATABASE DEEP DIAGNOSTIC REPORT\n`;
+    let log = `SAYAN MASTER DATABASE INTELLIGENCE REPORT\n`;
     log += `Generated at: ${new Date().toLocaleString('fa-IR')}\n`;
-    log += `==========================================\n\n`;
+    log += `Scope: Full Database Scan (Tables, Views, Row Counts, Samples)\n`;
+    log += `================================================================\n\n`;
 
     try {
-      // 1. Get all tables info
-      log += `PHASE 1: TABLE DISCOVERY\n`;
-      const tablesData: any = await apiCall('/api/sayan-proxy', 'POST', { 
+      // 1. Get ALL entities
+      log += `PHASE 1: ENTITY DISCOVERY\n`;
+      const entitiesData: any = await apiCall('/api/sayan-proxy', 'POST', { 
         path: 'sql-direct',
-        body: { query: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'" }
+        body: { query: "SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_TYPE, TABLE_NAME" }
       });
       
-      const tables = tablesData?.data || [];
-      log += `Found ${tables.length} tables.\n\n`;
+      const entities = entitiesData?.data || [];
+      log += `Found ${entities.length} total entities in database.\n\n`;
 
-      // 2. Sample data from key prefixes
-      const prefixes = ['ACT_', 'BUR_', 'STR_', 'IND_', 'AST_'];
-      for (const prefix of prefixes) {
-        const filtered = tables.filter((t: any) => t.TABLE_NAME && t.TABLE_NAME.includes(prefix));
-        log += `--- PREFIX: ${prefix} (${filtered.length} tables) ---\n`;
+      // 2. Map all columns in one/two bulk queries to be efficient
+      log += `PHASE 2: SCHEMA ANALYSIS\n`;
+      log += `----------------------------------------------------------------\n`;
+
+      for (let i = 0; i < entities.length; i += 20) {
+        const batch = entities.slice(i, i + 20);
+        log += `Scanning Batch ${Math.floor(i/20) + 1}/${Math.ceil(entities.length/20)}...\n`;
         
-        for (const tInfo of filtered.slice(0, 10)) { // Limit per prefix to avoid heavy load
-          const tName = tInfo.TABLE_NAME;
-          log += `\n>> Table: ${tName}\n`;
+        for (const entity of batch) {
+          const name = entity.TABLE_NAME;
+          const type = entity.TABLE_TYPE;
           
-          // Get Columns
-          const colsData: any = await apiCall('/api/sayan-proxy', 'POST', {
-            path: 'sql-direct',
-            body: { query: `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tName}'` }
-          });
-          log += `Columns: ${(colsData?.data || []).map((c: any) => `${c.COLUMN_NAME}(${c.DATA_TYPE})`).join(', ')}\n`;
+          try {
+            // Get Row Count
+            const countData: any = await apiCall('/api/sayan-proxy', 'POST', {
+              path: 'sql-direct',
+              body: { query: `SELECT COUNT(*) as total FROM ${name}` }
+            });
+            const rowCount = countData?.data?.[0]?.total || 0;
 
-          // Get Samples (Top 5)
-          const samples: any = await apiCall('/api/sayan-proxy', 'POST', {
-            path: 'sql-direct',
-            body: { query: `SELECT TOP 5 * FROM ${tName}` }
-          });
-          log += `Sample Rows (Count: ${samples?.data?.length || 0}):\n`;
-          log += JSON.stringify(samples?.data || [], null, 2) + "\n";
+            log += `\n[${type}] ${name} (Rows: ${rowCount})\n`;
+
+            // Get Columns
+            const colsData: any = await apiCall('/api/sayan-proxy', 'POST', {
+              path: 'sql-direct',
+              body: { query: `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${name}'` }
+            });
+            const cols = (colsData?.data || []).map((c: any) => `${c.COLUMN_NAME}(${c.DATA_TYPE})`).join(', ');
+            log += `Columns: ${cols}\n`;
+
+            // If has data, get a small sample
+            if (rowCount > 0) {
+              const sample: any = await apiCall('/api/sayan-proxy', 'POST', {
+                path: 'sql-direct',
+                body: { query: `SELECT TOP 3 * FROM ${name}` }
+              });
+              if (sample?.data?.length > 0) {
+                log += `Sample:\n${JSON.stringify(sample.data, null, 2)}\n`;
+              }
+            }
+          } catch (e: any) {
+            log += `Error scanning ${name}: ${e.message}\n`;
+          }
         }
-        log += `\n`;
       }
 
-      // Download the log
-      const blob = new Blob([log], { type: 'text/plain' });
+      // 3. Environment & Meta
+      log += `\n\nPHASE 3: SYSTEM ENVIRONMENT\n`;
+      const sysInfo: any = await apiCall('/api/sayan-proxy', 'POST', {
+        path: 'sql-direct',
+        body: { query: "SELECT @@VERSION as version, DB_NAME() as db, GETDATE() as server_time" }
+      });
+      log += JSON.stringify(sysInfo?.data || { info: "Not available" }, null, 2);
+
+      // Finalizing File
+      const blob = new Blob([log], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Sayan_DB_Intelligence_${new Date().getTime()}.txt`;
+      a.download = `Sayan_Full_DB_Snapshot_${new Date().getTime()}.txt`;
       a.click();
       
-      alert("گزارش هوشمند دیتابیس با موفقیت استخراج شد. لطفاً این فایل را جهت تحلیل ساختار فاکتورها برای من ارسال کنید.");
+      alert("اسکن کامل دیتابیس با موفقیت انجام شد. تمام جداول، تعداد ردیف‌ها و نمونه داده‌ها در فایل ذخیره شده‌اند. لطفاً این فایل را برای من ارسال کنید.");
     } catch (err: any) {
-      console.error("Diagnostic Error:", err);
-      alert("خطا در اجرای استخراج: " + (err.message || "پاسخ نامعتبر از سرور"));
+      console.error("Full Scan Error:", err);
+      alert("خطا در اسکن کامل: " + (err.message || "خطای ناشناخته"));
     } finally {
       setDiagnosing(false);
     }

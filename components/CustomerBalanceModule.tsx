@@ -360,6 +360,20 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
     return true;
   });
 
+  const toggleAllExclusion = () => {
+    const visibleCodes = filteredBalances.map(b => b.accountCode);
+    const allVisibleExcluded = visibleCodes.every(code => excludedCodes.includes(code));
+
+    if (allVisibleExcluded) {
+      // If all visible are already excluded, remove them from exclusion list
+      setExcludedCodes(excludedCodes.filter(c => !visibleCodes.includes(c)));
+    } else {
+      // Otherwise, exclude all visible
+      const newExcluded = [...new Set([...excludedCodes, ...visibleCodes])];
+      setExcludedCodes(newExcluded);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 text-right max-w-7xl mx-auto" dir="rtl">
       {/* Header Panel */}
@@ -563,11 +577,21 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
                 <button
                   type="button"
                   onClick={() => setExcludedCodes([])}
-                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 p-2.5 px-4 rounded-xl border border-rose-250 dark:border-rose-900 transition-all cursor-pointer"
+                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 p-2.5 px-4 rounded-xl border border-rose-250 dark:border-rose-900 transition-all cursor-pointer flex items-center gap-1.5"
                 >
-                  ✕ پاکسازی {excludedCodes.length} استثناء
+                  <Trash2 className="w-4 h-4" />
+                  لغو {excludedCodes.length} استثناء
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={toggleAllExclusion}
+                className="text-xs font-bold text-zinc-600 bg-white hover:bg-gray-50 dark:bg-zinc-900 dark:text-zinc-300 p-2.5 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <UserCheck className="w-4 h-4" />
+                انتخاب/لغو دسته‌جمعی
+              </button>
             </div>
 
             <div className="flex gap-2 w-full lg:w-auto">
@@ -592,7 +616,18 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
             <table className="hidden md:table w-full min-w-[700px] text-right border-collapse text-xs border border-zinc-350 dark:border-zinc-800 rounded-lg overflow-hidden">
               <thead>
                 <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-b border-zinc-300 dark:border-zinc-700">
-                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850 w-24">حذف از PDF</th>
+                  <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850 w-24">
+                    <div className="flex flex-col items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={filteredBalances.length > 0 && filteredBalances.every(b => excludedCodes.includes(b.accountCode))}
+                        onChange={toggleAllExclusion}
+                        className="w-4 h-4 cursor-pointer accent-rose-600"
+                        title="انتخاب همه برای عدم چاپ"
+                      />
+                      <span className="text-[9px]">حذف از PDF</span>
+                    </div>
+                  </th>
                   <th className="py-3 px-4 font-black text-center border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">کد حسابداری</th>
                   <th className="py-3 px-4 font-black text-right border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">نام حساب حساب تفصیلی / مشتری</th>
                   <th className="py-3 px-4 font-black text-left border-l border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-850">مانده حساب (ریال)</th>
