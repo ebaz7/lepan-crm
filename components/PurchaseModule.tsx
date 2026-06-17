@@ -15,7 +15,7 @@ import {
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
-    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown
+    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
@@ -554,9 +554,9 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
     const canSelectProforma = currentUser.role === UserRole.CEO || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canSelectProforma');
 
     return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 md:p-4 bg-black/70 backdrop-blur-md">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[92vh] md:h-[94vh] mt-4 md:mt-0 flex flex-col relative">
-                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white shrink-0">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 md:p-6 bg-black/70 backdrop-blur-md">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[88vh] md:h-[94vh] flex flex-col relative">
+                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white shrink-0 z-20">
                     <div className="flex items-center gap-3">
                         <ShoppingCart size={28} />
                         <div>
@@ -659,7 +659,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                                                         <button 
                                                             onClick={() => {
                                                                 setPrintingProforma(p);
-                                                                setTimeout(() => window.print(), 100);
+                                                                setTimeout(() => window.print(), 300);
                                                             }}
                                                             className="p-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50" title="چاپ پیش‌فاکتور"
                                                         >
@@ -816,6 +816,27 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                         {isCurrentStep(PurchaseRequestStatus.REJECTED) && (
                             <span className="text-red-600 font-bold bg-red-50 px-4 py-2 rounded-xl border border-red-200 italic">این درخواست رد شده است</span>
                         )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length === 0 && (
+                            <div className="bg-blue-50 text-blue-700 px-6 py-3 rounded-2xl font-bold border border-blue-100 flex items-center gap-2">
+                                <FileText size={20}/>
+                                <span className="text-xs md:text-sm">لطفاً ابتدا حداقل یک پیش‌فاکتور در بخش بالا ثبت کنید</span>
+                            </div>
+                        )}
+
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length === 0 && (
+                            <div className="bg-blue-50 text-blue-700 px-6 py-3 rounded-2xl font-bold border border-blue-100 flex items-center gap-2">
+                                <FileText size={20}/>
+                                <span className="text-xs md:text-sm">لطفاً ابتدا حداقل یک پیش‌فاکتور در بخش بالا ثبت کنید</span>
+                            </div>
+                        )}
+
+                        {(isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) || isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)) && (
+                            <div className="bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-bold border border-amber-100 flex items-center gap-2 animate-pulse">
+                                <AlertCircle size={20}/>
+                                <span className="text-xs md:text-sm">لطفاً یکی از پیش‌فاکتورهای لیست بالا را تایید و انتخاب کنید</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-4 border-r pr-4 border-gray-200">
@@ -824,12 +845,12 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                                 <Printer size={16} /> چاپ اسناد
                             </button>
                             <div className="absolute bottom-full mb-2 left-0 w-48 bg-white rounded-2xl shadow-2xl border border-gray-200 p-2 hidden group-hover:block animate-in slide-in-from-bottom-2 fade-in">
-                                <button onClick={() => { setPrintType('REQUEST'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ درخواست اولیه (A5)</button>
+                                <button onClick={() => { setPrintType('REQUEST'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ درخواست اولیه (A5)</button>
                                 {request.proformas.find(p => p.isChosen) && (
-                                    <button onClick={() => { setPrintType('PROFORMA'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ پیش‌فاکتور منتخب (A5)</button>
+                                    <button onClick={() => { setPrintType('PROFORMA'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ پیش‌فاکتور منتخب (A5)</button>
                                 )}
                                 {request.warehouseReceiptNumber && (
-                                    <button onClick={() => { setPrintType('RECEIPT'); setTimeout(() => window.print(), 100); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold">چاپ رسید انبار نهایی (A5)</button>
+                                    <button onClick={() => { setPrintType('RECEIPT'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold">چاپ رسید انبار نهایی (A5)</button>
                                 )}
                             </div>
                          </div>
@@ -837,7 +858,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                 </div>
 
                 {/* Print Sections */}
-                <div className="hidden">
+                <div className="print-render-wrapper opacity-0 pointer-events-none absolute -z-50 overflow-hidden h-0 w-0" aria-hidden="true">
                     <div id="print-purchase-request-section">
                         {printType === 'REQUEST' && <PrintPurchaseRequest request={request} />}
                         {printType === 'PROFORMA' && <PrintPurchaseProforma request={request} proforma={request.proformas.find(p => p.isChosen) || request.proformas[0]} />}
