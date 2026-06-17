@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -656,19 +656,19 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
         {/* Announce Modal */}
         {showAnnounceModal && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-                <div role="dialog" aria-label="ثبت اعلان" className="glass-panel rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] my-auto scale-100 animate-in zoom-in-95 duration-200">
-                    <div className="p-5 border-b flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="fixed inset-0 z-[999999] flex items-start justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto pt-10 md:pt-20">
+                <div role="dialog" aria-label="ثبت اعلان" className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] scale-100 animate-in zoom-in-95 duration-200 border border-white/20">
+                    <div className="p-5 border-b flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 shrink-0">
                         <div className="flex items-center gap-3 text-indigo-800">
                             <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-indigo-100">
                                 <Activity size={20} className="text-indigo-600" />
                             </div>
                             <div>
                                 <h3 className="font-black text-lg">ثبت {announceType === 'task' ? 'تسک' : 'اعلامیه'} جدید</h3>
-                                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Internal Communication</p>
+                                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono">Internal Communication</p>
                             </div>
                         </div>
-                        <button onClick={() => setShowAnnounceModal(false)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all" data-close-modal="true" data-close-announcement="true" aria-label="بستن"><XCircle size={22}/></button>
+                        <button onClick={() => setShowAnnounceModal(false)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all" data-close-modal="true" aria-label="بستن"><X size={24} strokeWidth={3} /></button>
                     </div>
                     <div className="p-4 flex flex-col gap-4">
                         <div className="flex bg-gray-100 p-1 rounded-xl">

@@ -15,7 +15,7 @@ import {
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
-    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle
+    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle, X
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
@@ -344,7 +344,7 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, is
             </div>
 
             {showCreate && <CreateRequestModal onClose={() => setShowCreate(false)} currentUser={currentUser} onSuccess={onRequestUpdate} parts={parts} />}
-            {viewingRequest && <ViewRequestModal request={viewingRequest} onClose={() => setViewingRequest(null)} currentUser={currentUser} onSuccess={onRequestUpdate} settings={settings} />}
+            {viewingRequest && <ViewRequestModal request={viewingRequest} onClose={() => setViewingRequest(null)} currentUser={currentUser} onSuccess={onRequestUpdate} settings={settings} parts={parts} />}
         </div>
     );
 };
@@ -488,13 +488,14 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     );
 };
 
-const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }: { request: PurchaseRequest, onClose: () => void, currentUser: User, onSuccess: () => void, settings?: SystemSettings }) => {
+const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, parts }: { request: PurchaseRequest, onClose: () => void, currentUser: User, onSuccess: () => void, settings?: SystemSettings, parts: PartMasterData[] }) => {
     const [actionLoading, setActionLoading] = useState(false);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [showProformaModal, setShowProformaModal] = useState(false);
     const [showSecurityModal, setShowSecurityModal] = useState(false);
     const [showQCModal, setShowQCModal] = useState(false);
     const [showWarehouseModal, setShowWarehouseModal] = useState(false);
+    const [showAdminEditModal, setShowAdminEditModal] = useState(false);
     const [printingProforma, setPrintingProforma] = useState<PurchaseProforma | null>(null);
     const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT'>('REQUEST');
 
@@ -551,32 +552,53 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
         return !!(rolePerms as any)[perm];
     };
 
-    const canSelectProforma = currentUser.role === UserRole.CEO || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canSelectProforma');
+    const isAdmin = currentUser.role === UserRole.ADMIN;
 
     return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 md:p-6 bg-black/70 backdrop-blur-md">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[88vh] md:h-[94vh] flex flex-col relative">
-                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 to-purple-800 text-white shrink-0 z-20">
+        <div className="fixed inset-0 z-[999999] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-24">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[85vh] md:h-[88vh] flex flex-col relative">
+                <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-900 text-white shrink-0 z-20 shadow-lg">
                     <div className="flex items-center gap-3">
-                        <ShoppingCart size={28} />
+                        <div className="p-2 md:p-3 bg-white/10 rounded-2xl">
+                             <ShoppingCart size={window.innerWidth < 768 ? 22 : 28} />
+                        </div>
                         <div>
-                            <h2 className="text-lg md:text-xl font-black italic">گردش کار درخواست خرید</h2>
-                            <p className="text-[10px] opacity-80 uppercase tracking-widest">{request.requestNumber} | {request.status}</p>
+                            <h2 className="text-base md:text-xl font-black italic">گردش کار درخواست خرید</h2>
+                            <p className="text-[9px] md:text-[10px] opacity-80 uppercase tracking-widest font-mono">{request.requestNumber} | {request.status}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setShowAdminEditModal(true)}
+                                className="p-2 md:p-2.5 bg-blue-500/20 hover:bg-blue-500/40 text-white rounded-xl transition-all flex items-center gap-2 text-[10px] md:text-xs font-bold ring-1 ring-white/20"
+                            >
+                                <Edit size={window.innerWidth < 768 ? 16 : 18} />
+                                <span className="hidden md:inline">ویرایش مدیریت</span>
+                            </button>
+                        )}
                         <button 
                             onClick={handleDelete} 
                             disabled={actionLoading}
-                            className="p-2.5 bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl transition-all flex items-center gap-2 text-xs font-bold"
+                            className="p-2 md:p-2.5 bg-red-500/20 hover:bg-red-500/40 text-white rounded-xl transition-all flex items-center gap-2 text-[10px] md:text-xs font-bold ring-1 ring-white/20"
                             title="حذف درخواست"
                         >
-                            <Trash2 size={20} />
-                            <span className="hidden md:inline">حذف درخواست</span>
+                            <Trash2 size={window.innerWidth < 768 ? 16 : 20} />
+                            <span className="hidden md:inline">حذف</span>
                         </button>
-                        <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><XCircle size={24} /></button>
+                        <button onClick={onClose} className="p-1 md:p-2 bg-white/10 hover:bg-red-500 hover:rotate-90 rounded-full transition-all text-white"><X size={window.innerWidth < 768 ? 24 : 28} strokeWidth={3} /></button>
                     </div>
                 </div>
+                
+                {showAdminEditModal && (
+                    <AdminEditRequestModal 
+                        request={request} 
+                        onClose={() => setShowAdminEditModal(false)} 
+                        onSuccess={() => { onSuccess(); onClose(); }}
+                        parts={parts}
+                    />
+                )}
+
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50 no-scrollbar">
                     {/* Workflow Progress */}
@@ -755,61 +777,61 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings }
                 <div className="p-6 border-t glass-panel flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/80">
                     <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                         {/* Status Based Actions */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && hasPurchasePerm('canApproveTechnical') && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && (isAdmin || hasPurchasePerm('canApproveTechnical')) && (
                             <>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50" disabled={actionLoading}>تایید فنی و ارسال به مدیر</button>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-bold border border-red-100 transition-all hover:bg-red-100" disabled={actionLoading}>رد فنی</button>
                             </>
                         )}
                         
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105" disabled={actionLoading}>تایید مدیر کارخانه و ارسال به بازرگانی</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canCommercialFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canCommercialFinalize')) && (
                             <>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING, { location: 'Tehran' })} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-blue-100" disabled={actionLoading}>خرید در تهران</button>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, { location: 'Factory' })} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-teal-100" disabled={actionLoading}>خرید در کارخانه</button>
                             </>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_INITIAL)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت تایید استعلام (مدیرعامل)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید اولیه و اجازه ثبت پروفرما</button>
                         )}
                         
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال لیست پروفرما جهت انتخاب توسط مدیرعامل</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>مجوز ثبت پروفرما توسط کارخانه</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت انتخاب توسط مدیر کارخانه</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry')) && (
                             <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC')) && (
                             <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105">بررسی و تایید کنترل کیفی (QC)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize')) && (
                             <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all">صدور رسید انبار نهایی</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black">امضا، تکمیل و بایگانی نهایی پرونده</button>
                         )}
 
@@ -1607,6 +1629,68 @@ const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKa
                     <p className="font-bold">لطفاً برای مشاهده گردش موجودی، یک قطعه انتخاب کنید.</p>
                 </div>
             )}
+        </div>
+    );
+};
+
+const AdminEditRequestModal = ({ request, onClose, onSuccess, parts }: any) => {
+    const [loading, setLoading] = useState(false);
+    const [quantity, setQuantity] = useState(request.quantity);
+    const [description, setDescription] = useState(request.specifications);
+    const [status, setStatus] = useState(request.status);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const updated = { 
+                ...request, 
+                quantity, 
+                specifications: description,
+                status,
+                updatedAt: Date.now() 
+            };
+            await updatePurchaseRequest(updated);
+            onSuccess();
+            onClose();
+        } catch (e) {
+            alert('خطا در بروزرسانی');
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-scale-in shadow-2xl border border-white/20">
+                <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-2xl font-black text-gray-800 flex items-center gap-3">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl italic">ADMIN</div>
+                        ویرایش مستقیم مدیریت
+                    </h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-6 text-right" dir="rtl">
+                    <div>
+                        <label className="text-xs font-black text-gray-400 block mb-2 uppercase tracking-widest">تعداد مورد نیاز</label>
+                        <input type="number" className="w-full border-2 border-gray-100 rounded-2xl p-4 text-lg font-black focus:border-indigo-500 outline-none transition-all" value={quantity} onChange={e => setQuantity(+e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-black text-gray-400 block mb-2 uppercase tracking-widest">توضیحات و مشخصات فنی</label>
+                        <textarea className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm h-32 focus:border-indigo-500 outline-none transition-all font-medium" value={description} onChange={e => setDescription(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-black text-gray-400 block mb-2 uppercase tracking-widest">تغییر وضعیت مرحله کاری</label>
+                        <select className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-indigo-500 outline-none appearance-none bg-gray-50" value={status} onChange={e => setStatus(e.target.value as PurchaseRequestStatus)}>
+                            {Object.values(PurchaseRequestStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <button disabled={loading} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50">
+                        {loading ? <Loader2 className="animate-spin"/> : <ShieldCheck size={20}/>} ثبت تغییرات سیستمی (مدیریت)
+                    </button>
+                </form>
+            </div>
         </div>
     );
 };

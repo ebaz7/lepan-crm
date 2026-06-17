@@ -341,10 +341,24 @@ body {
   .no-print, .hidden-print-export { 
     display: none !important; 
   }
-  #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content, #meeting-print-area {
+  #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content, #meeting-print-area, #print-purchase-request-section {
       transform: none !important;
       width: 100% !important;
       height: auto !important;
+      visibility: visible !important;
+  }
+  #print-purchase-request-section * {
+      visibility: visible !important;
+  }
+  .print-render-wrapper {
+      opacity: 1 !important;
+      position: static !important;
+      height: auto !important;
+      width: 100% !important;
+      overflow: visible !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+      z-index: 9999 !important;
   }
 }
 
