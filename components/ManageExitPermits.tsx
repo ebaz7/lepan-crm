@@ -288,7 +288,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             
             // Managers too
             const allUsers = await getUsers();
-            const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+            const managers = allUsers.filter(u => 
+                u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN ||
+                u.roles?.includes(UserRole.CEO) || u.roles?.includes(UserRole.SALES_MANAGER) || u.roles?.includes(UserRole.ADMIN)
+            );
             const priceInfo = `\n💰 مبلغ: ${Number(permit.price || 0).toLocaleString()} ریال`;
             
             const mediaWithPrice = base64WithPrice ? { data: base64WithPrice, mimeType: 'image/png', filename: `Permit_Canceled_${permit.permitNumber}.png` } : undefined;
@@ -555,7 +558,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             }
             
             // Explicitly send WITH PRICE to CEO, SALES_MANAGER, ADMIN (unless they are groups)
-            const managers = allUsers.filter(u => u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN);
+            const managers = allUsers.filter(u => 
+                u.role === UserRole.CEO || u.role === UserRole.SALES_MANAGER || u.role === UserRole.ADMIN ||
+                u.roles?.includes(UserRole.CEO) || u.roles?.includes(UserRole.SALES_MANAGER) || u.roles?.includes(UserRole.ADMIN)
+            );
             const priceInfo = `\n💰 مبلغ: ${Number(permit.price || 0).toLocaleString()} ریال`;
             
             for (const m of managers) {

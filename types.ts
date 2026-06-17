@@ -20,6 +20,7 @@ export interface User {
   password?: string;
   fullName: string;
   role: UserRole | string;
+  roles?: string[];
   avatar?: string;
   phoneNumber?: string;
   telegramChatId?: string;

@@ -37,13 +37,47 @@ export const getCurrentUser = (): User | null => {
 
 export const hasPermission = (user: User | null, permissionType: string): boolean => {
   if (!user) return false;
-  if (permissionType === 'manage_users') return user.role === UserRole.ADMIN;
+  if (permissionType === 'manage_users') {
+    return user.role === UserRole.ADMIN || (Array.isArray(user.roles) && user.roles.includes(UserRole.ADMIN));
+  }
   return false;
 };
 
 // --- REWRITTEN PERMISSION LOGIC (STRICT MODE & FAILSAFE) ---
 export const getRolePermissions = (userRole: string, settings: SystemSettings | null, userObject?: User): RolePermissions => {
     
+    // If the user has multiple roles, compile a composite set of permissions
+    if (userObject && Array.isArray(userObject.roles) && userObject.roles.length > 0) {
+        // If any of the roles is ADMIN, they get everything (highest priority)
+        if (userObject.roles.includes(UserRole.ADMIN)) {
+            return {
+                canViewAll: true, canCreatePaymentOrder: true, canViewPaymentOrders: true, canApproveFinancial: true, canApproveManager: true, canApproveCeo: true, canEditOwn: true, canEditAll: true, canDeleteOwn: true, canDeleteAll: true, canManageTrade: true, canManageSettings: true,
+                canCreateExitPermit: true, canViewExitPermits: true, canApproveExitCeo: true, canApproveExitFactory: true, canApproveExitWarehouse: true, canApproveExitSecurity: true, canViewExitArchive: true, canEditExitArchive: true,
+                canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
+                canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
+                canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true,
+                canViewCustomerBalances: true, canImportCustomerBalances: true
+            };
+        }
+
+        // Get permissions for each role
+        const permissionsList = userObject.roles.map(role => 
+            getRolePermissions(role, settings, { ...userObject, roles: undefined })
+        );
+
+        // Merge permissions
+        const mergedPerms = { ...permissionsList[0] };
+        for (let i = 1; i < permissionsList.length; i++) {
+            const currentPerms = permissionsList[i];
+            for (const key of Object.keys(currentPerms) as Array<keyof RolePermissions>) {
+                if (currentPerms[key] === true) {
+                    mergedPerms[key] = true;
+                }
+            }
+        }
+        return mergedPerms;
+    }
+
     // 1. ADMIN GETS EVERYTHING (Hard Override)
     if (userRole === UserRole.ADMIN) {
         return {

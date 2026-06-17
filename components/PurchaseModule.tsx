@@ -212,6 +212,14 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 
 // --- DASHBOARD TAB ---
 const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: any) => {
+    const isRole = (roleName: string) => {
+        if (currentUser.role === roleName) return true;
+        if (currentUser.roles && currentUser.roles.includes(roleName)) return true;
+        return false;
+    };
+
+    const isAdmin = isRole(UserRole.ADMIN);
+
     const perms = React.useMemo(() => {
         return getRolePermissions(currentUser.role, settings || null, currentUser);
     }, [currentUser, settings]);
@@ -224,39 +232,48 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
     ];
 
     const hasPurchasePerm = (perm: string) => {
-        if (currentUser.role === UserRole.ADMIN) return true;
-        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
-        return !!(rolePerms as any)[perm];
+        if (isAdmin) return true;
+        
+        let hasPerm = false;
+        const rolesList = currentUser.roles && currentUser.roles.length > 0 ? currentUser.roles : [currentUser.role];
+        for (const r of rolesList) {
+            if (r === UserRole.ADMIN) return true;
+            const rolePerms = settings?.purchaseRolePermissions?.[r] || {};
+            if (!!(rolePerms as any)[perm]) {
+                hasPerm = true;
+            }
+        }
+        return hasPerm;
     };
 
     const myTasks = requests.filter((r: any) => {
-        if (currentUser.role === UserRole.ADMIN) return r.status !== PurchaseRequestStatus.COMPLETED && r.status !== PurchaseRequestStatus.REJECTED;
+        if (isAdmin) return r.status !== PurchaseRequestStatus.COMPLETED && r.status !== PurchaseRequestStatus.REJECTED;
         
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || currentUser.role === UserRole.COMMERCIAL;
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL);
             
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
-                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
             
             case PurchaseRequestStatus.PENDING_CEO_INITIAL:
             case PurchaseRequestStatus.PENDING_CEO_SELECTION:
-                return currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO');
+                return isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO');
                 
             case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
-                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
                 
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
-                return currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory');
+                return isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory');
             
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return isRole(UserRole.QC) || hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize');
             
             default: return false;
         }
@@ -385,39 +402,53 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, is
 };
 
 const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseRequest, currentUser: User, onClick: () => void, settings?: SystemSettings }) => {
-    const perms = React.useMemo(() => {
-        return getRolePermissions(currentUser.role, settings || null, currentUser);
-    }, [currentUser, settings]);
+    const isRole = (roleName: string) => {
+        if (currentUser.role === roleName) return true;
+        if (currentUser.roles && currentUser.roles.includes(roleName)) return true;
+        return false;
+    };
+
+    const isAdmin = isRole(UserRole.ADMIN);
 
     const hasPurchasePerm = (perm: string) => {
-        if (currentUser.role === UserRole.ADMIN) return true;
-        return !!(perms as any)[perm];
+        if (isAdmin) return true;
+        
+        let hasPerm = false;
+        const rolesList = currentUser.roles && currentUser.roles.length > 0 ? currentUser.roles : [currentUser.role];
+        for (const r of rolesList) {
+            if (r === UserRole.ADMIN) return true;
+            const rolePerms = settings?.purchaseRolePermissions?.[r] || {};
+            if (!!(rolePerms as any)[perm]) {
+                hasPerm = true;
+            }
+        }
+        return hasPerm;
     };
 
     const isMyTurn = (r: PurchaseRequest) => {
         if (r.status === PurchaseRequestStatus.COMPLETED || r.status === PurchaseRequestStatus.REJECTED) return false;
-        if (currentUser.role === UserRole.ADMIN) return true;
+        if (isAdmin) return true;
 
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || currentUser.role === UserRole.COMMERCIAL;
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL);
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
-                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
             case PurchaseRequestStatus.PENDING_CEO_INITIAL:
             case PurchaseRequestStatus.PENDING_CEO_SELECTION:
-                return currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO');
+                return isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO');
             case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
-                return (currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
-                return currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize');
+                return isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return isRole(UserRole.QC) || hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize');
             default: return false;
         }
     };
@@ -590,17 +621,33 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
     };
 
     const isCurrentStep = (step: PurchaseRequestStatus) => request.status === step;
-    const hasPurchasePerm = (perm: string) => {
-        if (currentUser.role === UserRole.ADMIN) return true;
-        const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
-        return !!(rolePerms as any)[perm];
+
+    const isRole = (roleName: string) => {
+        if (currentUser.role === roleName) return true;
+        if (currentUser.roles && currentUser.roles.includes(roleName)) return true;
+        return false;
     };
 
-    const isAdmin = currentUser.role === UserRole.ADMIN;
+    const isAdmin = isRole(UserRole.ADMIN);
+
+    const hasPurchasePerm = (perm: string) => {
+        if (isAdmin) return true;
+        
+        let hasPerm = false;
+        const rolesList = currentUser.roles && currentUser.roles.length > 0 ? currentUser.roles : [currentUser.role];
+        for (const r of rolesList) {
+            if (r === UserRole.ADMIN) return true;
+            const rolePerms = settings?.purchaseRolePermissions?.[r] || {};
+            if (!!(rolePerms as any)[perm]) {
+                hasPerm = true;
+            }
+        }
+        return hasPerm;
+    };
 
     return createPortal(
         <div className="fixed inset-0 z-[100000005] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-20">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[92vh] flex flex-col relative mb-10">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-[94vw] lg:max-w-6xl xl:max-w-7xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[96vh] md:max-h-[94vh] flex flex-col relative mb-10">
                 <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-900 text-white shrink-0 z-20 shadow-lg">
                     <div className="flex items-center gap-3">
                         <div className="p-2 md:p-3 bg-white/10 rounded-2xl">
@@ -731,8 +778,9 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                                                         >
                                                             <Printer size={14}/>
                                                         </button>
-                                                        {((isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && currentUser.role === UserRole.CEO) || 
-                                                          (isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION) && currentUser.role === UserRole.FACTORY_MANAGER) || 
+                                                        {((isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && (isRole(UserRole.CEO) || isAdmin)) || 
+                                                          (isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION) && (isRole(UserRole.FACTORY_MANAGER) || isAdmin)) || 
+                                                          isAdmin ||
                                                           hasPurchasePerm('canSelectProforma')) && !p.isChosen && (
                                                             <button 
                                                                 onClick={() => {
@@ -846,54 +894,54 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                             </>
                         )}
                         
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105" disabled={actionLoading}>تایید مدیر کارخانه و ارسال به بازرگانی</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canCommercialFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
                             <>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING, { location: 'Tehran' })} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-blue-100" disabled={actionLoading}>خرید در تهران</button>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, { location: 'Factory' })} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-teal-100" disabled={actionLoading}>خرید در کارخانه</button>
                             </>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_INITIAL)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت تایید استعلام (مدیرعامل)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || currentUser.role === UserRole.CEO || hasPurchasePerm('canApproveCEO')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید اولیه و اجازه ثبت پروفرما</button>
                         )}
                         
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || isRole(UserRole.COMMERCIAL)) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال لیست پروفرما جهت انتخاب توسط مدیرعامل</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (isAdmin || currentUser.role === UserRole.COMMERCIAL || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>مجوز ثبت پروفرما توسط کارخانه</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || currentUser.role === UserRole.COMMERCIAL) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || isRole(UserRole.COMMERCIAL)) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت انتخاب توسط مدیر کارخانه</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || currentUser.role === UserRole.SECURITY_GUARD || hasPurchasePerm('canRegisterEntry')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry')) && (
                             <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || currentUser.role === UserRole.QC || hasPurchasePerm('canCheckQC')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || isRole(UserRole.QC) || hasPurchasePerm('canCheckQC')) && (
                             <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105">بررسی و تایید کنترل کیفی (QC)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || currentUser.role === UserRole.WAREHOUSE_KEEPER || hasPurchasePerm('canWarehouseFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize')) && (
                             <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all">صدور رسید انبار نهایی</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || currentUser.role === UserRole.FACTORY_MANAGER || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black">امضا، تکمیل و بایگانی نهایی پرونده</button>
                         )}
 
