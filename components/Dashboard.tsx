@@ -656,8 +656,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
         {/* Announce Modal */}
         {showAnnounceModal && (
-            <div className="fixed inset-0 z-[999999] flex items-start justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto pt-10 md:pt-20">
-                <div role="dialog" aria-label="ثبت اعلان" className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] scale-100 animate-in zoom-in-95 duration-200 border border-white/20">
+            <div className="fixed inset-0 z-[9999999] flex items-start justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto pt-10 md:pt-14">
+                <div role="dialog" aria-label="ثبت اعلان" className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200 border border-white/20 relative mb-10">
                     <div className="p-5 border-b flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 shrink-0">
                         <div className="flex items-center gap-3 text-indigo-800">
                             <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-indigo-100">

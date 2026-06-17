@@ -27,7 +27,7 @@ import PrintPartDataSheet from './PrintPartDataSheet';
 import { generatePdf } from '../utils/pdfGenerator';
 import { getRolePermissions } from '../services/authService';
 
-const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'DASHBOARD' }) => {
+const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, initialTab?: 'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE' }> = ({ currentUser, settings, initialTab = 'REQUESTS' }) => {
     const isMobile = useIsMobile();
     const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'REQUESTS' | 'PARTS' | 'KARDEX' | 'ARCHIVE'>(initialTab);
     const [loading, setLoading] = useState(false);
@@ -275,10 +275,10 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
                 ))}
             </div>
 
-            <div className="glass-panel p-6 rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+            <div className="glass-panel p-6 rounded-[2.5rem] border border-gray-100 bg-white shadow-sm mb-6">
                 <h3 className="font-black text-indigo-900 border-b pb-4 mb-4 flex items-center gap-2"><ClipboardCheck /> کارتابل وظایف من</h3>
                 {myTasks.length === 0 ? (
-                    <div className="py-12 text-center text-gray-300 italic">موردی جهت اقدام شما یافت نشد.</div>
+                    <div className="py-8 text-center text-gray-300 italic">موردی جهت اقدام شما یافت نشد.</div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {myTasks.slice(0, 6).map((req: any) => (
@@ -289,9 +289,30 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
                                 </div>
                                 <h4 className="font-black text-gray-800 text-sm group-hover:text-indigo-700 transition-colors uppercase tracking-tight line-clamp-1">{req.itemName}</h4>
                                 <div className="mt-2 flex items-center justify-between">
-                                    <span className="text-[10px] font-bold text-gray-400">{req.status}</span>
+                                    <span className="text-[10px] font-black text-indigo-600">{req.status}</span>
                                     <div className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-indigo-600 shadow-sm"><ArrowRight size={14}/></div>
                                 </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="glass-panel p-6 rounded-[2.5rem] border border-gray-100 bg-gray-50 shadow-inner">
+                <h3 className="font-black text-gray-700 border-b pb-4 mb-4 flex items-center gap-2"><ShoppingCart className="text-gray-400" size={18}/> درخواست‌های اخیراً ثبت شده من</h3>
+                {requests.filter((r: any) => r.requester === currentUser.fullName).length === 0 ? (
+                    <div className="py-8 text-center text-gray-400 italic text-xs">شما هنوز درخواستی ثبت نکرده‌اید.</div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {requests.filter((r: any) => r.requester === currentUser.fullName).slice(0, 3).map((req: any) => (
+                            <div key={req.id} onClick={() => setActiveTab('REQUESTS')} className="p-4 bg-white rounded-2xl border border-gray-200 hover:shadow-md transition-all cursor-pointer">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[8px] font-mono text-gray-400">{req.requestNumber}</span>
+                                    <span className={`text-[8px] font-bold px-2 py-0.5 rounded ${req.status === PurchaseRequestStatus.REJECTED ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
+                                        {req.status}
+                                    </span>
+                                </div>
+                                <h4 className="font-black text-gray-800 text-xs line-clamp-1">{req.itemName}</h4>
                             </div>
                         ))}
                     </div>
@@ -303,20 +324,23 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
 
 // --- REQUESTS TAB ---
 const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, isArchive, settings }: any) => {
-    const perms = React.useMemo(() => {
-        return getRolePermissions(currentUser.role, settings || null, currentUser);
-    }, [currentUser, settings]);
-
+    const isAdmin = currentUser.role === UserRole.ADMIN;
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [viewingRequest, setViewingRequest] = useState<PurchaseRequest | null>(null);
 
-    const filtered = requests.filter((r: PurchaseRequest) => 
-        r.itemName.includes(searchTerm) || r.requestNumber.includes(searchTerm)
-    );
+    const filtered = requests.filter((r: PurchaseRequest) => {
+        const search = searchTerm.toLowerCase();
+        return (
+            (r.itemName?.toLowerCase() || '').includes(search) || 
+            (r.requestNumber?.toLowerCase() || '').includes(search) ||
+            (r.requester?.toLowerCase() || '').includes(search) ||
+            (r.specifications?.toLowerCase() || '').includes(search)
+        );
+    });
 
     const hasPurchasePerm = (perm: string) => {
-        if (currentUser.role === UserRole.ADMIN) return true;
+        if (isAdmin) return true;
         const rolePerms = settings?.purchaseRolePermissions?.[currentUser.role] || {};
         return !!(rolePerms as any)[perm];
     };
@@ -325,23 +349,33 @@ const PurchaseRequestsTab = ({ requests, currentUser, onRequestUpdate, parts, is
 
     return (
         <div className="space-y-4">
-            <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-2">
                 <div className="relative flex-1">
-                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی درخواست..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input className="w-full glass-panel border border-gray-200 rounded-xl p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="جستجوی در کالا، شماره درخواست یا درخواست‌کننده..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     <Search className="absolute right-3 top-3.5 text-gray-400" size={18}/>
                 </div>
                 {canCreate && !isArchive && (
-                    <button onClick={() => setShowCreate(true)} className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-bold text-sm">
-                        <Plus size={20}/> جدید
+                    <button onClick={() => setShowCreate(true)} className="bg-indigo-600 text-white p-3 px-6 rounded-xl shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 font-bold text-sm">
+                        <Plus size={20}/> ثبت درخواست جدید
                     </button>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filtered.map((req: PurchaseRequest) => (
-                    <RequestCard key={req.id} req={req} currentUser={currentUser} settings={settings} onClick={() => setViewingRequest(req)} />
-                ))}
-            </div>
+            {filtered.length === 0 ? (
+                <div className="glass-panel p-12 text-center border-2 border-dashed border-gray-200 rounded-[2.5rem]">
+                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                        <ShoppingCart size={40} />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-400">موردی یافت نشد</h3>
+                    <p className="text-xs text-gray-300 mt-2">هیچ درخواست خریدی در این بخش وجود ندارد</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filtered.map((req: PurchaseRequest) => (
+                        <RequestCard key={req.id} req={req} currentUser={currentUser} settings={settings} onClick={() => setViewingRequest(req)} />
+                    ))}
+                </div>
+            )}
 
             {showCreate && <CreateRequestModal onClose={() => setShowCreate(false)} currentUser={currentUser} onSuccess={onRequestUpdate} parts={parts} />}
             {viewingRequest && <ViewRequestModal request={viewingRequest} onClose={() => setViewingRequest(null)} currentUser={currentUser} onSuccess={onRequestUpdate} settings={settings} parts={parts} />}
@@ -457,11 +491,19 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     };
 
     return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl w-full max-w-lg p-6 animate-scale-in">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-black text-gray-800">ایجاد درخواست خرید</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><XCircle size={24}/></button>
+        <div className="fixed inset-0 z-[9999999] flex items-start justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto pt-16 md:pt-20">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-scale-in relative shadow-2xl border-4 border-indigo-500/20 mb-10">
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                            <Plus size={28} />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-800">ایجاد درخواست جدید</h2>
+                            <p className="text-[10px] text-gray-400 font-bold">فرم ثبت سفارش خرید کالا و خدمات</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-all bg-gray-50"><XCircle size={32}/></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -555,8 +597,8 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
     const isAdmin = currentUser.role === UserRole.ADMIN;
 
     return (
-        <div className="fixed inset-0 z-[999999] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-24">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[85vh] md:h-[88vh] flex flex-col relative">
+        <div className="fixed inset-0 z-[9999999] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto pt-16 md:pt-20">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-auto min-h-[60vh] max-h-[92vh] flex flex-col relative mb-10">
                 <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gradient-to-r from-indigo-700 via-indigo-800 to-purple-900 text-white shrink-0 z-20 shadow-lg">
                     <div className="flex items-center gap-3">
                         <div className="p-2 md:p-3 bg-white/10 rounded-2xl">
@@ -586,7 +628,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                             <Trash2 size={window.innerWidth < 768 ? 16 : 20} />
                             <span className="hidden md:inline">حذف</span>
                         </button>
-                        <button onClick={onClose} className="p-1 md:p-2 bg-white/10 hover:bg-red-500 hover:rotate-90 rounded-full transition-all text-white"><X size={window.innerWidth < 768 ? 24 : 28} strokeWidth={3} /></button>
+                        <button onClick={onClose} className="p-1 md:p-2 bg-red-500/20 hover:bg-red-500 hover:rotate-90 rounded-xl transition-all text-white border border-white/20"><X size={window.innerWidth < 768 ? 24 : 28} strokeWidth={3} /></button>
                     </div>
                 </div>
                 
@@ -777,6 +819,24 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 <div className="p-6 border-t glass-panel flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/80">
                     <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                         {/* Status Based Actions */}
+                        {isAdmin && (
+                            <button 
+                                onClick={async () => { if(confirm('آیا از حذف این درخواست اطمینان دارید؟')) { await deletePurchaseRequest(request.id); onSuccess(); onClose(); } }} 
+                                className="bg-red-600 text-white px-4 py-3 rounded-2xl font-black shadow-lg hover:bg-red-700 transition-all flex items-center gap-2"
+                            >
+                                <Trash2 size={18}/> حذف نهایی
+                            </button>
+                        )}
+
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setShowAdminEditModal(true)} 
+                                className="bg-amber-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-amber-600 transition-all flex items-center gap-2"
+                            >
+                                <Edit size={18}/> ویرایش مدیریتی
+                            </button>
+                        )}
+
                         {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && (isAdmin || hasPurchasePerm('canApproveTechnical')) && (
                             <>
                                 <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50" disabled={actionLoading}>تایید فنی و ارسال به مدیر</button>
@@ -1451,8 +1511,8 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in max-h-[90vh] overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-[999999] flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm pt-16 md:pt-20 overflow-y-auto">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-8 animate-scale-in max-h-[92vh] overflow-y-auto no-scrollbar mb-10 relative">
                 <div className="flex justify-between items-center mb-8">
                     <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><Layers className="text-indigo-600"/> {initialData ? 'ویرایش کالا / قطعه' : 'معرفی کالا جدید'}</h2>
                     <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><XCircle size={28} className="text-gray-400"/></button>
@@ -1662,14 +1722,19 @@ const AdminEditRequestModal = ({ request, onClose, onSuccess, parts }: any) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-scale-in shadow-2xl border border-white/20">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-black text-gray-800 flex items-center gap-3">
-                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl italic">ADMIN</div>
-                        ویرایش مستقیم مدیریت
-                    </h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
+        <div className="fixed inset-0 z-[10000000] flex items-start justify-center p-4 bg-black/90 backdrop-blur-2xl transition-all pt-20 md:pt-24 overflow-y-auto">
+            <div className="bg-white rounded-[3rem] w-full max-w-lg p-10 animate-scale-in shadow-2xl border-4 border-indigo-600/30 relative mb-10">
+                <div className="absolute -top-3 -right-3">
+                    <button onClick={onClose} className="w-12 h-12 bg-red-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:rotate-90 transition-all hover:bg-red-700">
+                        <X size={28} strokeWidth={3} />
+                    </button>
+                </div>
+                <div className="flex items-center gap-4 mb-10 border-b-2 border-gray-100 pb-8">
+                    <div className="p-4 bg-indigo-50 text-indigo-700 rounded-[1.5rem] italic font-black text-xl shadow-inner">ADM</div>
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">ویرایش سیستمی</h2>
+                        <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">مدیریت مستقیم دیتا‌بیس</p>
+                    </div>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-6 text-right" dir="rtl">
                     <div>
