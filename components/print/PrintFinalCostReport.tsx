@@ -123,7 +123,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
 
   const content = (
       <div id="final-cost-print-area" className="printable-content glass-panel p-8 shadow-2xl relative text-black" 
-        style={{ width: '210mm', minHeight: '297mm', direction: 'rtl', boxSizing: 'border-box' }}>
+        style={{ width: '210mm', minHeight: '290mm', direction: 'rtl', boxSizing: 'border-box' }}>
         
         {/* Header */}
         <div className="border-b-4 border-double border-gray-800 pb-4 mb-6 flex justify-between items-end">

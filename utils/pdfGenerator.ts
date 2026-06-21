@@ -135,7 +135,8 @@ export const generatePdf = async ({
         pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
 
-        while (heightLeft >= 0) {
+        // Only add a new page if the overflow is significant (> 12mm) to prevent trailing white space or empty pages
+        while (heightLeft > 12) {
             position = heightLeft - imgHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);

@@ -966,7 +966,25 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             case 'allocation_queue':
                 return <AllocationReport records={currentList.filter(r => !reportFilterCompany || r.company === reportFilterCompany)} onUpdateRecord={async (r, u) => { const updated = {...r, ...u}; await updateTradeRecord(updated); setRecords(prev => prev.map(rec => rec.id === updated.id ? updated : rec)); }} settings={safeSettings} />;
             case 'currency':
-                return <CurrencyReport records={currentList.filter(r => !reportFilterCompany || r.company === reportFilterCompany)} />;
+                return (
+                    <CurrencyReport 
+                        records={currentList.filter(r => !reportFilterCompany || r.company === reportFilterCompany)} 
+                        onSelectTranche={(recordId, trancheId) => {
+                            const rec = records.find(r => r.id === recordId);
+                            if (rec) {
+                                setSelectedRecord(rec);
+                                setViewMode('details');
+                                setActiveTab('currency_purchase');
+                                if (trancheId && trancheId !== 'main') {
+                                    setTimeout(() => {
+                                        setSelectedTrancheForDeliveries(trancheId);
+                                        setNewDeliveryForm({ amount: '', date: '', recipientName: '', description: '' });
+                                    }, 150);
+                                }
+                            }
+                        }}
+                    />
+                );
             case 'company_performance':
                 return <CompanyPerformanceReport records={currentList} />;
             case 'insurance_ledger':
@@ -1517,7 +1535,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </td>
                                                     <td className="p-3 font-mono font-bold text-indigo-700 bg-indigo-50">{effectiveRateDisplay > 0 ? formatCurrency(effectiveRateDisplay) : '-'}</td>
                                                     <td className="p-3 flex gap-1">
-                                                        <button onClick={() => { setSelectedTrancheForDeliveries(t.id); setNewDeliveryForm({ amount: '', date: '', recipientName: '', description: '' }); }} className="text-green-600 hover:text-green-800 p-1 flex items-center" title="مدیریت تحویل‌ها"><Truck size={16} className="ml-1"/></button><button onClick={() => handleEditTranche(t)} className="text-amber-500 hover:text-amber-700 p-1"><Edit2 size={16}/></button>
+                                                        <button onClick={() => { setSelectedTrancheForDeliveries(t.id); setNewDeliveryForm({ amount: '', date: '', recipientName: '', description: '' }); }} className="text-green-600 hover:text-green-800 p-1 flex items-center" title="مدیریت تحویل‌ها"><Coins size={16} className="ml-1"/></button><button onClick={() => handleEditTranche(t)} className="text-amber-500 hover:text-amber-700 p-1"><Edit2 size={16}/></button>
                                                         <button onClick={() => handleRemoveTranche(t.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16}/></button>
                                                     </td>
                                                 </tr>
@@ -2299,7 +2317,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                         <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl bg-white p-6 animate-scale-in max-h-[90vh] overflow-y-auto text-right" dir="rtl">
                             <div className="flex justify-between items-center mb-6 border-b pb-3">
                                 <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                                    <Truck size={22} className="text-green-600"/>
+                                    <Coins size={22} className="text-green-600"/>
                                     ثبت و مدیریت تحویل‌های پارت
                                 </h3>
                                 <button onClick={() => setSelectedTrancheForDeliveries(null)} className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} className="text-gray-400 hover:text-red-500" /></button>

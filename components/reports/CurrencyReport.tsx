@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TradeRecord } from '../../types';
+import { TradeRecord, TradeStage } from '../../types';
 import { formatNumberString, deformatNumberString, parsePersianDate, getCurrentShamsiDate, formatCurrency } from '../../constants';
 import { FileSpreadsheet, Printer, FileDown, Filter, RefreshCw, X, Loader2, Eye, LayoutGrid, Smartphone, ChevronLeft, ChevronRight, CheckCircle2, Clock, Info, HelpCircle, Activity, DollarSign, Building2, Coins, ArrowLeftRight } from 'lucide-react';
 import { generatePdf } from '../../utils/pdfGenerator'; 
 
 interface CurrencyReportProps {
     records: TradeRecord[];
+    onSelectTranche?: (recordId: string, trancheId?: string | null) => void;
 }
 
 interface ExchangeRates {
@@ -17,7 +18,7 @@ interface ExchangeRates {
 
 const STORAGE_KEY_RATES = 'currency_report_rates_v1';
 
-const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
+const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche }) => {
     // -- State --
     const [viewMode, setViewMode] = useState<'web' | 'print'>('web');
     const [rates, setRates] = useState<ExchangeRates>({
@@ -128,11 +129,12 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                     else if (cType === 'TRY') usdRate = rates.tryToUsd;
 
                     recordTranches.push({
+                        id: 'main',
                         currencyType: cType,
                         originalAmount: r.currencyPurchaseData?.purchasedAmount || 0,
                         usdAmount: (r.currencyPurchaseData?.purchasedAmount || 0) * usdRate,
                         purchaseDate: pDate,
-                        rialAmount: 0,
+                        rialAmount: r.stages[TradeStage.CURRENCY_PURCHASE]?.costRial || 0,
                         exchangeName: r.currencyPurchaseData?.exchangeName || '-',
                         brokerName: r.currencyPurchaseData?.brokerName || '-',
                         isDelivered: r.currencyPurchaseData?.isDelivered,
@@ -152,16 +154,21 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                         else if (t.currencyType === 'CNY') usdRate = rates.cnyToUsd;
                         else if (t.currencyType === 'TRY') usdRate = rates.tryToUsd;
 
+                        const trancheDeliveredAmount = (t.deliveries && t.deliveries.length > 0) 
+                            ? t.deliveries.reduce((sum: number, d: any) => sum + d.amount, 0) 
+                            : (t.receivedAmount || (t.isDelivered ? t.amount : 0));
+
                         recordTranches.push({
+                            id: t.id,
                             currencyType: t.currencyType,
                             originalAmount: t.amount,
                             usdAmount: t.amount * usdRate,
                             purchaseDate: t.date,
-                            rialAmount: t.amount * (t.rate || 0),
+                            rialAmount: t.rialAmount || (t.amount * (t.rate || 0)),
                             exchangeName: t.exchangeName || '-',
                             brokerName: t.brokerName || '-',
                             isDelivered: t.isDelivered,
-                            deliveredAmount: t.isDelivered ? t.amount : 0,
+                            deliveredAmount: trancheDeliveredAmount,
                             // @ts-ignore
                             returnAmount: t.returnAmount || 0,
                             // @ts-ignore
@@ -173,7 +180,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
 
             if (recordTranches.length > 0) {
                 groups.push({
-                    recordInfo: { goodsName: r.goodsName, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
+                    recordInfo: { recordId: r.id, goodsName: r.goodsName, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
                     tranches: recordTranches
                 });
             }
@@ -182,9 +189,14 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
     }, [records, filters, searchTerm, rates, selectedYear]);
 
     const tableTotals = processedGroups.reduce((acc, group) => {
-        group.tranches.forEach((t: any) => { acc.usd += t.usdAmount; acc.original += t.originalAmount; acc.rial += t.rialAmount; });
+        group.tranches.forEach((t: any) => { 
+            acc.usd += t.usdAmount; 
+            acc.original += t.originalAmount; 
+            acc.rial += t.rialAmount; 
+            acc.delivered += t.deliveredAmount || 0;
+        });
         return acc;
-    }, { usd: 0, original: 0, rial: 0 });
+    }, { usd: 0, original: 0, rial: 0, delivered: 0 });
 
     const elementId = 'currency-report-print-area';
 
@@ -340,7 +352,9 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                         <td className="border border-black p-1 bg-gray-200 text-black">-</td>
                         <td className="border border-black p-1 bg-gray-200 text-black">-</td>
                         <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.rial)}</td>
-                        <td colSpan={7} className="border border-black p-1 bg-gray-200 text-black"></td>
+                        <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
+                        <td className="border border-black p-1 font-mono bg-green-100/50 text-center font-black text-black">{formatNumberString(tableTotals.delivered)}</td>
+                        <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
                     </tr>
                 </tbody>
             </table>
@@ -634,7 +648,13 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                                                 return (
                                                     <tr 
                                                         key={`web_row_${gIndex}_${tIndex}`} 
-                                                        onClick={() => setSelectedRowDetail({ group, tranche: t, index: currentIdx })}
+                                                        onClick={() => {
+                                                             if (onSelectTranche && group.recordInfo.recordId) {
+                                                                 onSelectTranche(group.recordInfo.recordId, t.id);
+                                                             } else {
+                                                                 setSelectedRowDetail({ group, tranche: t, index: currentIdx });
+                                                             }
+                                                         }}
                                                         className="hover:bg-blue-50/40 dark:hover:bg-slate-800/40 cursor-pointer active:bg-blue-100/30 dark:active:bg-slate-800/60 transition-colors group text-slate-800 dark:text-slate-200 font-semibold"
                                                     >
                                                         {tIndex === 0 && (
@@ -705,7 +725,9 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                                         <td className="p-4 font-mono font-bold">{formatNumberString(tableTotals.original)}</td>
                                         <td colSpan={2}></td>
                                         <td className="p-4 font-mono font-black text-indigo-700 dark:text-indigo-400">{formatNumberString(tableTotals.rial)}</td>
-                                        <td colSpan={7}></td>
+                                        <td colSpan={3}></td>
+                                        <td className="p-4 font-mono font-black text-green-700 dark:text-green-400 bg-green-50/50 dark:bg-green-950/20">{formatNumberString(tableTotals.delivered)}</td>
+                                        <td colSpan={3}></td>
                                     </tr>
                                 </tfoot>
                             )}
@@ -854,10 +876,24 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                         </div>
 
                         {/* Drawer Footer */}
-                        <div className="bg-slate-50 dark:bg-slate-850 p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end select-none">
+                        <div className="bg-slate-50 dark:bg-slate-850 p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between select-none items-center">
+                            {onSelectTranche && selectedRowDetail.group.recordInfo.recordId && (
+                                <button 
+                                    onClick={() => {
+                                        const recId = selectedRowDetail.group.recordInfo.recordId;
+                                        const trId = selectedRowDetail.tranche.id;
+                                        setSelectedRowDetail(null);
+                                        onSelectTranche(recId, trId);
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-black px-4 py-2 rounded-xl transition-colors shadow-sm text-xs flex items-center gap-1.5"
+                                >
+                                    <Coins size={14} />
+                                    <span>ثبت و ویرایش تحویل‌ها</span>
+                                </button>
+                            )}
                             <button 
                                 onClick={() => setSelectedRowDetail(null)}
-                                className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black px-6 py-2.5 rounded-xl transition-colors shadow-sm text-xs"
+                                className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black px-6 py-2 rounded-xl transition-colors shadow-sm text-xs"
                             >
                                 بستن جزئیات تراکنش
                             </button>
