@@ -60,8 +60,8 @@ const GuaranteeReport: React.FC<Props> = ({ records }) => {
                             fileNumber: r.fileNumber,
                             company: r.company || '-',
                             section: 'گمرک (برگ سبز)',
-                            bank: g.chequeBank || g.guaranteeBank || '-',
-                            chequeNumber: g.chequeNumber || g.guaranteeNumber, // Use guarantee number if cheque is missing
+                            bank: g.guaranteeBank || g.chequeBank || '-',
+                            chequeNumber: (g.chequeNumber || g.guaranteeNumber) + (g.sepamNumber ? ` [سپام: ${g.sepamNumber}]` : ''), // Use guarantee number if cheque is missing + SEPAM if exists
                             amount: (g.chequeAmount || 0) + (g.cashAmount || 0), // Total guarantee value
                             dueDate: g.chequeDate || g.cashDate || '-',
                             isDelivered: !!g.isDelivered,

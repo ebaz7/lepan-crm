@@ -761,6 +761,7 @@ export interface CurrencyPurchaseData {
     deliveredAmount?: number;
     remittedAmount?: number;
     guaranteeCheque?: GuaranteeCheque;
+    guaranteeCheques?: GuaranteeCheque[];
     purchaseDate?: string;
     brokerName?: string;
     exchangeName?: string;
@@ -898,6 +899,7 @@ export interface GreenLeafGuarantee {
     id: string;
     relatedDutyId: string;
     guaranteeNumber: string;
+    sepamNumber?: string;
     chequeNumber?: string;
     chequeBank?: string;
     chequeDate?: string;

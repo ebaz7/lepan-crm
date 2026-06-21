@@ -304,12 +304,17 @@ body {
   padding-top: env(safe-area-inset-top) !important;
 }
 
+.print-only-element {
+  display: none !important;
+}
+
 /* PDF Generation & Print Optimization */
 .printable-content {
   box-sizing: border-box !important;
   background-color: white !important;
   color: black !important;
-  font-variant-ligatures: no-common-ligatures; 
+  direction: rtl !important;
+  font-family: 'Vazirmatn', sans-serif !important;
   -webkit-print-color-adjust: exact !important; 
   print-color-adjust: exact !important;
 }
@@ -340,6 +345,16 @@ body {
   }
   .no-print, .hidden-print-export { 
     display: none !important; 
+  }
+  .print-only-element {
+    display: block !important;
+    position: static !important;
+    visibility: visible !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  .print-only-element * {
+    visibility: visible !important;
   }
   #stock-report-content, #print-voucher-content, #exit-permit-print-content, #bijak-print-content, #meeting-print-area, #print-purchase-request-section {
       transform: none !important;

@@ -57,16 +57,50 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
       return acc + (cost - ret);
   }, 0);
 
-  const expenses = [
+  const expenses: { name: string; amount: number }[] = [
       { name: 'هزینه خرید ارز (خالص ریالی)', amount: netCurrencyRialCost },
       { name: 'هزینه‌های ثبت سفارش و بانکی', amount: record.stages[TradeStage.LICENSES]?.costRial || 0 },
       { name: 'هزینه بیمه باربری', amount: record.stages[TradeStage.INSURANCE]?.costRial || 0 },
       { name: 'هزینه بازرسی (COI)', amount: record.stages[TradeStage.INSPECTION]?.costRial || 0 },
       { name: 'هزینه‌های ترخیصیه و انبارداری', amount: record.stages[TradeStage.CLEARANCE_DOCS]?.costRial || 0 },
-      { name: 'حقوق و عوارض گمرکی', amount: record.stages[TradeStage.GREEN_LEAF]?.costRial || 0 },
-      { name: 'هزینه حمل داخلی', amount: record.stages[TradeStage.INTERNAL_SHIPPING]?.costRial || 0 },
-      { name: 'کارمزد و هزینه‌های ترخیص', amount: record.stages[TradeStage.AGENT_FEES]?.costRial || 0 },
-  ].filter(e => e.amount > 0);
+  ];
+
+  const greenLeaf = record.greenLeafData;
+  const hasGreenLeafBreakdown = greenLeaf && (greenLeaf.duties?.length || greenLeaf.taxes?.length || greenLeaf.roadTolls?.length);
+
+  if (hasGreenLeafBreakdown) {
+      if (greenLeaf.duties?.length) {
+          greenLeaf.duties.forEach((d, i) => {
+              expenses.push({ 
+                  name: `حقوق ورودی - ${d.part ? `پارت ${d.part}` : `ردیف ${i + 1}`} (کوتاژ ${d.cottageNumber})`, 
+                  amount: d.amount 
+              });
+          });
+      }
+      if (greenLeaf.taxes?.length) {
+          greenLeaf.taxes.forEach((t, i) => {
+              expenses.push({ 
+                  name: `مالیات ارزش افزوده - ${t.part ? `پارت ${t.part}` : `ردیف ${i + 1}`}`, 
+                  amount: t.amount 
+              });
+          });
+      }
+      if (greenLeaf.roadTolls?.length) {
+          greenLeaf.roadTolls.forEach((r, i) => {
+              expenses.push({ 
+                  name: `عوارض راهداری - ${r.part ? `پارت ${r.part}` : `ردیف ${i + 1}`}`, 
+                  amount: r.amount 
+              });
+          });
+      }
+  } else {
+      expenses.push({ name: 'حقوق و عوارض گمرکی', amount: record.stages[TradeStage.GREEN_LEAF]?.costRial || 0 });
+  }
+
+  expenses.push({ name: 'هزینه حمل داخلی', amount: record.stages[TradeStage.INTERNAL_SHIPPING]?.costRial || 0 });
+  expenses.push({ name: 'کارمزد و هزینه‌های ترخیص', amount: record.stages[TradeStage.AGENT_FEES]?.costRial || 0 });
+
+  const activeExpenses = expenses.filter(e => e.amount > 0);
 
   const handleDownloadPDF = async () => {
       setProcessing(true);
@@ -119,7 +153,7 @@ const PrintFinalCostReport: React.FC<Props> = ({ record, totalRial, totalCurrenc
                 </tr>
             </thead>
             <tbody>
-                {expenses.map((exp, idx) => (
+                {activeExpenses.map((exp, idx) => (
                     <tr key={idx}>
                         <td className="border border-black p-2">{idx + 1}</td>
                         <td className="border border-black p-2 text-right">{exp.name}</td>

@@ -259,46 +259,41 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                 <colgroup>
                     <col style={{width: '30px'}} /> {/* Row */}
                     <col /> {/* Goods */}
-                    <col style={{width: '70px'}} /> {/* File No */}
-                    <col style={{width: '70px'}} /> {/* Reg No */}
-                    <col style={{width: '80px'}} /> {/* Company */}
-                    <col style={{width: '60px'}} /> {/* USD */}
-                    <col style={{width: '60px'}} /> {/* Orig Amount */}
+                    <col style={{width: '75px'}} /> {/* File No */}
+                    <col style={{width: '75px'}} /> {/* Reg No */}
+                    <col style={{width: '85px'}} /> {/* Company */}
+                    <col style={{width: '65px'}} /> {/* USD */}
+                    <col style={{width: '65px'}} /> {/* Orig Amount */}
                     <col style={{width: '40px'}} /> {/* Currency */}
-                    <col style={{width: '60px'}} /> {/* Date */}
-                    <col style={{width: '80px'}} /> {/* Rial */}
-                    <col style={{width: '60px'}} /> {/* Exchange */}
-                    <col style={{width: '60px'}} /> {/* Broker */}
-                    <col style={{width: '70px'}} /> {/* Bank */}
-                    <col style={{width: '60px'}} /> {/* Delivered */}
-                    <col style={{width: '40px'}} /> {/* Status */}
-                    <col style={{width: '70px'}} /> {/* Return Amt */}
-                    <col style={{width: '60px'}} /> {/* Return Date */}
+                    <col style={{width: '65px'}} /> {/* Date */}
+                    <col style={{width: '85px'}} /> {/* Rial */}
+                    <col style={{width: '70px'}} /> {/* Exchange */}
+                    <col style={{width: '65px'}} /> {/* Broker */}
+                    <col style={{width: '75px'}} /> {/* Bank */}
+                    <col style={{width: '65px'}} /> {/* Delivered */}
+                    <col style={{width: '45px'}} /> {/* Status */}
+                    <col style={{width: '75px'}} /> {/* Return Amt */}
+                    <col style={{width: '65px'}} /> {/* Return Date */}
                 </colgroup>
                 <thead>
-                    <tr className="bg-gray-100 text-gray-800 text-black">
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">ردیف</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">شرح کالا</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">شماره سفارش<br/>(پرونده)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">شماره ثبت<br/>سفارش</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">نام شرکت</th>
-                        <th colSpan={3} className="border border-black p-1 bg-blue-100/50 font-black text-center">ارز خریداری شده</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">تاریخ<br/>خرید ارز</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">ارز خریداری شده<br/>(ریال)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">محل ارسال<br/>(صرافی)</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">کارگزار</th>
-                        <th rowSpan={2} className="border border-black p-1 font-black text-center">ارز موجود<br/>نزد هر بانک</th>
-                        <th colSpan={2} className="border border-black p-1 bg-green-100/50 font-black text-center">وضعیت تحویل</th>
-                        <th colSpan={2} className="border border-black p-1 bg-red-100/50 font-black text-center">عودت</th>
-                    </tr>
-                    <tr className="bg-gray-100 text-black">
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">(دلار آمریکا)</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">مقدار</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">نوع</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">مقدار تحویل شده</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">وضعیت</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">مبلغ</th>
-                        <th className="border border-black p-1 text-[9px] font-bold text-center">تاریخ</th>
+                    <tr className="bg-gray-100 text-black text-[9px] h-10 select-none">
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ردیف</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شرح کالا</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شماره سفارش (پرونده)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ثبت سفارش</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">نام شرکت</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (دلار آمریکا)</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (مقدار)</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (نوع)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">تاریخ خرید</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بهای ارز (ریال)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">محل ارسال</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">کارگزار</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بانک عامل</th>
+                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">مقدار تحویل</th>
+                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">وضعیت تصفیه</th>
+                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">مبلغ عودتی</th>
+                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">تاریخ عودتی</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -736,9 +731,9 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records }) => {
                 </div>
             )}
 
-            {/* --- OFF-SCREEN HIDDEN RENDER (ALWAYS MOUNTED FOR EXPORT/PDF ALIGNMENT IN WEB MODE) --- */}
+            {/* --- OFF-SCREEN AND PRINT PORTAL (VISIBLE TO PRINT BUT HIDDEN TO SCREEN) --- */}
             {viewMode === 'web' && (
-                <div style={{ position: 'absolute', left: '-10000px', top: '-10000px', width: '296mm', height: '210mm', overflow: 'hidden' }} className="no-print">
+                <div className="print-only-element">
                     {printContent}
                 </div>
             )}
