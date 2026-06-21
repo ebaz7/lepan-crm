@@ -912,6 +912,7 @@ export interface GreenLeafGuarantee {
     guaranteeBank?: string;
     guaranteeType?: 'cheque' | 'credit';
     guaranteeAmount?: number;
+    dutyCashAmount?: number;
 }
 
 export interface GreenLeafTax {

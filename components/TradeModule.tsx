@@ -88,7 +88,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
     const [greenLeafForm, setGreenLeafForm] = useState<GreenLeafData>({ duties: [], guarantees: [], taxes: [], roadTolls: [] });
     const [newCustomsDuty, setNewCustomsDuty] = useState<Partial<GreenLeafCustomsDuty>>({ cottageNumber: '', part: '', amount: 0, paymentMethod: 'Bank', bank: '', date: '' });
-    const [newGuaranteeDetails, setNewGuaranteeDetails] = useState<Partial<GreenLeafGuarantee>>({ guaranteeNumber: '', sepamNumber: '', guaranteeBank: '', chequeNumber: '', chequeBank: '', chequeDate: '', cashAmount: 0, cashBank: '', cashDate: '', chequeAmount: 0 });
+    const [newGuaranteeDetails, setNewGuaranteeDetails] = useState<Partial<GreenLeafGuarantee>>({ guaranteeNumber: '', sepamNumber: '', guaranteeBank: '', chequeNumber: '', chequeBank: '', chequeDate: '', cashAmount: 0, dutyCashAmount: 0, cashBank: '', cashDate: '', chequeAmount: 0 });
     const [selectedDutyForGuarantee, setSelectedDutyForGuarantee] = useState<string>('');
     const [newTax, setNewTax] = useState<Partial<GreenLeafTax>>({ part: '', amount: 0, bank: '', date: '' });
     const [newRoadToll, setNewRoadToll] = useState<Partial<GreenLeafRoadToll>>({ part: '', amount: 0, bank: '', date: '' });
@@ -164,12 +164,18 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
     // Filter banks based on the selected company
     const companySpecificBanks = useMemo(() => {
-        if (!selectedRecord || !settings) return [];
-        const targetCompany = settings.companies?.find(c => c.name === selectedRecord.company);
-        if (targetCompany && targetCompany.banks && targetCompany.banks.length > 0) {
-            return targetCompany.banks.map(b => b.bankName);
+        const fallbacks = ['ملی', 'ملت', 'تجارت', 'صادرات', 'سپه', 'سامان', 'پارسیان', 'پاسارگاد', 'کارآفرین', 'سینا', 'شهر', 'مسکن', 'کشاورزی', 'توسعه صادرات', 'صنعت و معدن', 'خاورمیانه', 'رفاه'];
+        if (!settings) return fallbacks;
+        if (selectedRecord) {
+            const targetCompany = settings.companies?.find(c => c.name === selectedRecord.company);
+            if (targetCompany && targetCompany.banks && targetCompany.banks.length > 0) {
+                return targetCompany.banks.map(b => b.bankName);
+            }
         }
-        return availableBanks;
+        if (availableBanks && availableBanks.length > 0) {
+            return availableBanks;
+        }
+        return fallbacks;
     }, [selectedRecord, settings, availableBanks]);
 
     useEffect(() => {
@@ -507,6 +513,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         
         const rawGuaranteeAmt = Number(newGuaranteeDetails.guaranteeAmount) || 0;
         const rawCashAmt = Number(newGuaranteeDetails.cashAmount) || 0;
+        const rawDutyCashAmt = Number(newGuaranteeDetails.dutyCashAmount) || 0;
         
         const guarantee: GreenLeafGuarantee = { 
             id: generateUUID(), 
@@ -516,6 +523,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             guaranteeBank: newGuaranteeDetails.guaranteeBank || '',
             guaranteeType: newGuaranteeDetails.guaranteeType || 'cheque',
             guaranteeAmount: rawGuaranteeAmt,
+            dutyCashAmount: rawDutyCashAmt,
             chequeNumber: newGuaranteeDetails.chequeNumber || '', 
             chequeBank: newGuaranteeDetails.chequeBank || '', 
             chequeDate: newGuaranteeDetails.chequeDate || '', 
@@ -535,6 +543,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             guaranteeBank: '',
             guaranteeType: 'cheque',
             guaranteeAmount: 0,
+            dutyCashAmount: 0,
             chequeNumber: '', 
             chequeBank: '', 
             chequeDate: '', 
@@ -1049,8 +1058,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             TradeStage.CLEARANCE_DOCS, TradeStage.GREEN_LEAF,
             TradeStage.INTERNAL_SHIPPING, TradeStage.AGENT_FEES
         ];
-        const totalOverheadsRial = overheadStages.reduce((sum, stage) => 
+        const guaranteeDepositsTotal = selectedRecord.greenLeafData?.guarantees?.reduce((acc: number, g: any) => acc + (g.cashAmount || 0), 0) || 0;
+        const totalOverheadsRialWithoutDeposits = overheadStages.reduce((sum, stage) => 
             sum + (selectedRecord.stages[stage]?.costRial || 0), 0);
+        const totalOverheadsRial = totalOverheadsRialWithoutDeposits + guaranteeDepositsTotal;
 
         const grandTotalRialProject = netCurrencyRialCost + totalOverheadsRial;
         const totalWeight = selectedRecord.items.reduce((sum, item) => sum + item.weight, 0);
@@ -1403,7 +1414,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             form={insuranceForm} 
                             setForm={setInsuranceForm} 
                             companies={settings?.insuranceCompanies || []} 
-                            banks={availableBanks} 
+                            banks={companySpecificBanks} 
                             onSave={handleSaveInsurance}
                             newEndorsement={newEndorsement}
                             setNewEndorsement={setNewEndorsement}
@@ -1654,7 +1665,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800">پرداخت‌های بازرسی</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-gray-50 p-4 rounded-lg">
-                                    <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newInspectionPayment.bank} onChange={e => setNewInspectionPayment({...newInspectionPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                    <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newInspectionPayment.bank} onChange={e => setNewInspectionPayment({...newInspectionPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newInspectionPayment.amount)} onChange={e => setNewInspectionPayment({...newInspectionPayment, amount: deformatNumberString(e.target.value)})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">تاریخ</label><input className="w-full border rounded p-2 text-sm dir-ltr" placeholder="1403/xx/xx" value={newInspectionPayment.date} onChange={e => setNewInspectionPayment({...newInspectionPayment, date: e.target.value})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">پارت</label><div className="flex gap-1"><input className="w-full border rounded p-2 text-sm" value={newInspectionPayment.part} onChange={e => setNewInspectionPayment({...newInspectionPayment, part: e.target.value})} /><button onClick={handleAddInspectionPayment} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700"><Plus size={16}/></button></div></div>
@@ -1691,7 +1702,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                             <div className="glass-panel p-6 rounded-xl shadow-sm border space-y-4">
                                 <h3 className="font-bold text-gray-800">هزینه‌های ترخیصیه ( کشتیرانی / ایجنت )</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-gray-50 p-4 rounded-lg">
-                                    <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newClearancePayment.bank} onChange={e => setNewClearancePayment({...newClearancePayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                    <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-gray-700">بانک پرداخت کننده</label><select className="w-full border rounded p-2 text-sm" value={newClearancePayment.bank} onChange={e => setNewClearancePayment({...newClearancePayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newClearancePayment.amount)} onChange={e => setNewClearancePayment({...newClearancePayment, amount: deformatNumberString(e.target.value)})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">تاریخ</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={newClearancePayment.date} onChange={e => setNewClearancePayment({...newClearancePayment, date: e.target.value})} /></div>
                                     <button onClick={handleAddClearancePayment} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 h-[38px]"><Plus size={16} className="mx-auto"/></button>
@@ -1723,11 +1734,11 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مربوط به کوتاژ</label><select className="w-full border rounded p-2 text-sm glass-panel" value={selectedDutyForGuarantee} onChange={e => setSelectedDutyForGuarantee(e.target.value)}><option value="">انتخاب کوتاژ</option>{greenLeafForm.duties.map(d => <option key={d.id} value={d.id}>{d.cottageNumber} ({formatCurrency(d.amount)})</option>)}</select></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره ضمانت‌نامه</label><input className="w-full border rounded p-2 text-sm dir-ltr text-center font-mono font-bold" value={newGuaranteeDetails.guaranteeNumber} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeNumber: e.target.value})} /></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شناسه سپام (سامانه سپام)</label><input className="w-full border rounded p-2 text-sm dir-ltr text-center font-mono placeholder:font-sans" value={newGuaranteeDetails.sepamNumber || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, sepamNumber: e.target.value})} placeholder="شماره سپام..." /></div>
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک صادرکننده ضمانت‌نامه</label><select className="w-full border rounded p-2 text-sm glass-panel text-center font-bold" value={newGuaranteeDetails.guaranteeBank || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeBank: e.target.value})}><option value="">انتخاب بانک...</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک صادرکننده ضمانت‌نامه</label><select className="w-full border rounded p-2 text-sm glass-panel text-center font-bold" value={newGuaranteeDetails.guaranteeBank || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeBank: e.target.value})}><option value="">انتخاب بانک...</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                     </div>
 
                                     {/* Guarantee Type selection and Amount */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                         <div className="space-y-1">
                                             <label className="text-xs font-bold text-gray-700">نوع ضمانت‌نامه</label>
                                             <select 
@@ -1752,11 +1763,24 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-bold text-gray-700">سپرده نقدی (ریال)</label>
+                                            <label className="text-xs font-bold text-purple-700">بخش نقدی کوتاژ (ریال)</label>
                                             <input 
-                                                className="w-full border rounded p-2 text-sm dir-ltr" 
+                                                className="w-full border rounded p-2 text-sm dir-ltr bg-purple-50 border-purple-200" 
+                                                value={formatNumberString(newGuaranteeDetails.dutyCashAmount)} 
+                                                onChange={e => {
+                                                    const val = deformatNumberString(e.target.value);
+                                                    setNewGuaranteeDetails({...newGuaranteeDetails, dutyCashAmount: val});
+                                                }}
+                                                placeholder="پرداخت نقدی کوتاژ..."
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-green-700">سپرده نقدی ضمانت‌نامه (هزینه سوا)</label>
+                                            <input 
+                                                className="w-full border rounded p-2 text-sm dir-ltr bg-green-50 border-green-200" 
                                                 value={formatNumberString(newGuaranteeDetails.cashAmount)} 
                                                 onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, cashAmount: deformatNumberString(e.target.value)})} 
+                                                placeholder="سپرده نقدی به بانک..."
                                             />
                                         </div>
                                     </div>
@@ -1765,7 +1789,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     {(newGuaranteeDetails.guaranteeType || 'cheque') === 'cheque' && (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white p-3 rounded border border-orange-200">
                                             <div className="space-y-1"><label className="text-xs font-bold text-gray-600">شماره چک تضمین</label><input className="w-full border rounded p-1.5 text-xs dir-ltr" value={newGuaranteeDetails.chequeNumber || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeNumber: e.target.value})} placeholder="شماره چک..." /></div>
-                                            <div className="space-y-1"><label className="text-xs font-bold text-gray-600">بانک صادرکننده چک</label><select className="w-full border rounded p-1.5 text-xs glass-panel" value={newGuaranteeDetails.chequeBank || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                            <div className="space-y-1"><label className="text-xs font-bold text-gray-600">بانک صادرکننده چک</label><select className="w-full border rounded p-1.5 text-xs glass-panel" value={newGuaranteeDetails.chequeBank || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                         </div>
                                     )}
 
@@ -1773,12 +1797,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     {selectedDutyForGuarantee && (() => {
                                         const duty = greenLeafForm.duties.find(d => d.id === selectedDutyForGuarantee);
                                         if (!duty) return null;
-                                        const totalAllocated = (Number(newGuaranteeDetails.guaranteeAmount) || 0) + (Number(newGuaranteeDetails.cashAmount) || 0);
+                                        const totalAllocated = (Number(newGuaranteeDetails.guaranteeAmount) || 0) + (Number(newGuaranteeDetails.dutyCashAmount) || 0);
                                         const diff = duty.amount - totalAllocated;
                                         return (
                                             <div className={`text-xs p-2.5 rounded-lg font-bold flex justify-between items-center transition-all ${diff === 0 ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
                                                 <span>مبلغ کوتاژ: <span className="font-mono">{formatNumberString(duty.amount)}</span></span>
-                                                <span>مجموع ثبت‌شده: <span className="font-mono">{formatNumberString(totalAllocated)}</span></span>
+                                                <span>مجموع مبالغ ثبت‌شده (ضمانت + نقدی): <span className="font-mono">{formatNumberString(totalAllocated)}</span></span>
                                                 <span>باقیمانده: <span className={`font-mono ${diff !== 0 ? 'text-red-700' : ''}`}>{formatNumberString(diff)}</span></span>
                                             </div>
                                         );
@@ -1795,10 +1819,11 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     {g.sepamNumber && <span className="text-xs text-blue-600 font-sans font-medium">(شناسه سپام: <span className="font-mono bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{g.sepamNumber}</span>)</span>}
                                                     {g.guaranteeBank && <span className="text-xs text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 font-bold">بانک صادرکننده: {g.guaranteeBank}</span>}
                                                 </div>
-                                                <div className="text-xs text-gray-600 flex flex-wrap gap-x-3">
+                                                <div className="text-xs text-gray-600 flex flex-wrap gap-x-3 gap-y-1">
                                                     <span>نوع: {g.guaranteeType === 'credit' ? '💡 حد اعتبار بانکی' : '🎫 چک ضمانت‌نامه'}</span>
                                                     {g.guaranteeAmount ? <span>مبلغ ضمانت: <span className="font-mono font-bold text-orange-700">{formatCurrency(g.guaranteeAmount)}</span></span> : null}
-                                                    {g.cashAmount && g.cashAmount > 0 ? <span>سپرده نقدی: <span className="font-mono font-bold text-green-700">{formatCurrency(g.cashAmount)}</span></span> : null}
+                                                    {g.dutyCashAmount ? <span>بخش نقدی کوتاژ: <span className="font-mono font-bold text-purple-700">{formatCurrency(g.dutyCashAmount)}</span></span> : null}
+                                                    {g.cashAmount && g.cashAmount > 0 ? <span>سپرده نقدی ضمانت‌نامه (هزینه سوا): <span className="font-mono font-bold text-green-700">{formatCurrency(g.cashAmount)}</span></span> : null}
                                                 </div>
                                                 {g.guaranteeType !== 'credit' && g.chequeNumber && (
                                                     <div className="text-xs text-gray-500">شماره چک: {g.chequeNumber} {g.chequeBank ? `(${g.chequeBank})` : ''}</div>
@@ -1841,7 +1866,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شرح / پارت</label><input className="w-full border rounded p-2 text-sm" placeholder="مثال: کرایه حمل تا انبار" value={newShippingPayment.part} onChange={e => setNewShippingPayment({...newShippingPayment, part: e.target.value})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newShippingPayment.amount)} onChange={e => setNewShippingPayment({...newShippingPayment, amount: deformatNumberString(e.target.value)})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">تاریخ پرداخت</label><input className="w-full border rounded p-2 text-sm dir-ltr" placeholder="1403/01/01" value={newShippingPayment.date} onChange={e => setNewShippingPayment({...newShippingPayment, date: e.target.value})} /></div>
-                                    <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک</label><select className="w-full border rounded p-2 text-sm" value={newShippingPayment.bank} onChange={e => setNewShippingPayment({...newShippingPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                    <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک</label><select className="w-full border rounded p-2 text-sm" value={newShippingPayment.bank} onChange={e => setNewShippingPayment({...newShippingPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                     <div className="md:col-span-4 space-y-1"><label className="text-xs font-bold text-gray-700">توضیحات تکمیلی</label><input className="w-full border rounded p-2 text-sm" placeholder="توضیحات..." value={newShippingPayment.description} onChange={e => setNewShippingPayment({...newShippingPayment, description: e.target.value})} /></div>
                                     <div className="md:col-span-4 flex justify-end"><button onClick={handleAddShippingPayment} className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 flex items-center gap-2"><Plus size={16}/> افزودن پرداخت</button></div>
                                 </div>
@@ -1881,7 +1906,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">نام ترخیص‌کار</label><input className="w-full border rounded p-2 text-sm" placeholder="نام شخص یا شرکت" value={newAgentPayment.agentName} onChange={e => setNewAgentPayment({...newAgentPayment,agentName: e.target.value})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ ترخیص (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newAgentPayment.amount)} onChange={e => setNewAgentPayment({...newAgentPayment, amount: deformatNumberString(e.target.value)})} /></div>
                                     <div className="space-y-1"><label className="text-xs font-bold text-gray-700">تاریخ پرداخت</label><input className="w-full border rounded p-2 text-sm dir-ltr" placeholder="1403/01/01" value={newAgentPayment.date} onChange={e => setNewAgentPayment({...newAgentPayment, date: e.target.value})} /></div>
-                                    <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک</label><select className="w-full border rounded p-2 text-sm" value={newAgentPayment.bank} onChange={e => setNewAgentPayment({...newAgentPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                    <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک</label><select className="w-full border rounded p-2 text-sm" value={newAgentPayment.bank} onChange={e => setNewAgentPayment({...newAgentPayment, bank: e.target.value})}><option value="">انتخاب بانک</option>{companySpecificBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
                                     <div className="md:col-span-2 space-y-1"><label className="text-xs font-bold text-gray-700">پارت / مرحله</label><input className="w-full border rounded p-2 text-sm" placeholder="مثال: پیش پرداخت" value={newAgentPayment.part} onChange={e => setNewAgentPayment({...newAgentPayment, part: e.target.value})} /></div>
                                     <div className="md:col-span-2 space-y-1"><label className="text-xs font-bold text-gray-700">توضیحات</label><input className="w-full border rounded p-2 text-sm" placeholder="..." value={newAgentPayment.description} onChange={e => setNewAgentPayment({...newAgentPayment, description: e.target.value})} /></div>
                                     <div className="md:col-span-4 flex justify-end"><button onClick={handleAddAgentPayment} className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-teal-700 flex items-center gap-2"><Plus size={16}/> ثبت پرداخت</button></div>
@@ -1966,7 +1991,8 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                     sum + (selectedRecord.stages[stage]?.costRial || 0), 0);
 
                                 // 4. Grand Total Rial Cost (Total Project Cost)
-                                const grandTotalRialProject = netCurrencyRialCost + totalOverheadsRial;
+                                const guaranteeDepositsTotal = selectedRecord.greenLeafData?.guarantees?.reduce((acc: number, g: any) => acc + (g.cashAmount || 0), 0) || 0;
+                                const grandTotalRialProject = netCurrencyRialCost + totalOverheadsRial + guaranteeDepositsTotal;
 
                                 // 5. Total Weight
                                 const totalWeight = selectedRecord.items.reduce((sum, item) => sum + item.weight, 0);
@@ -2004,6 +2030,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                                 if (!data || data.costRial === 0) return null;
                                                                 return (<tr key={stage}><td className="p-3 text-gray-600">{stage}</td><td className="p-3 font-mono">{formatCurrency(data.costRial)}</td></tr>);
                                                             })}
+                                                            {guaranteeDepositsTotal > 0 && (
+                                                                <tr className="bg-green-50/50">
+                                                                    <td className="p-3 text-green-800 font-bold">سپرده نقدی ضمانت‌نامه‌ها (هزینه سوا)</td>
+                                                                    <td className="p-3 font-mono text-green-800 font-bold">{formatCurrency(guaranteeDepositsTotal)}</td>
+                                                                </tr>
+                                                            )}
                                                             <tr className="bg-rose-50 font-bold border-t-2 border-rose-200">
                                                                 <td className="p-3">جمع کل هزینه نهایی پروژه (ریالی)</td>
                                                                 <td className="p-3 font-mono dir-ltr">{formatCurrency(grandTotalRialProject)}</td>
