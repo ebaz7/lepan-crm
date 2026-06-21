@@ -2,11 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TradeRecord, TradeStage } from '../../types';
 import { formatNumberString, deformatNumberString, parsePersianDate, getCurrentShamsiDate, formatCurrency } from '../../constants';
 import { FileSpreadsheet, Printer, FileDown, Filter, RefreshCw, X, Loader2, Eye, LayoutGrid, Smartphone, ChevronLeft, ChevronRight, CheckCircle2, Clock, Info, HelpCircle, Activity, DollarSign, Building2, Coins, ArrowLeftRight } from 'lucide-react';
-import { generatePdf } from '../../utils/pdfGenerator'; 
+import { generatePdf } from '../../utils/pdfGenerator';
+import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+// from '../../utils/pdfGenerator'; 
 
 interface CurrencyReportProps {
     records: TradeRecord[];
     onSelectTranche?: (recordId: string, trancheId?: string | null) => void;
+    onUpdateRecord?: (record: TradeRecord) => void;
 }
 
 interface ExchangeRates {
@@ -18,9 +22,19 @@ interface ExchangeRates {
 
 const STORAGE_KEY_RATES = 'currency_report_rates_v1';
 
-const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche }) => {
+const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche, onUpdateRecord }) => {
     // -- State --
     const [viewMode, setViewMode] = useState<'web' | 'print'>('web');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    
+    const handleUpdateRecordField = (recordId: string, field: 'goodsName' | 'description', value: string) => {
+        if(!onUpdateRecord) return;
+        const rec = records.find(r => r.id === recordId);
+        if(!rec) return;
+        if(rec[field] !== value) {
+            onUpdateRecord({ ...rec, [field]: value });
+        }
+    };
     const [rates, setRates] = useState<ExchangeRates>({
         eurToUsd: 1.08,
         aedToUsd: 0.272,
@@ -102,7 +116,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
 
     // processedGroups filters and processes raw trade records into tranches
     const processedGroups = React.useMemo(() => {
-        const groups: any[] = [];
+        const groups: { recordInfo: any, tranches: any[] }[] = [];
         records.forEach(r => {
             if (filters.archiveStatus === 'active' && (r.status === 'Completed' || r.isArchived)) return;
             if (filters.archiveStatus === 'archive' && !(r.status === 'Completed' || r.isArchived)) return;
@@ -180,7 +194,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
 
             if (recordTranches.length > 0) {
                 groups.push({
-                    recordInfo: { recordId: r.id, goodsName: r.goodsName, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
+                    recordInfo: { recordId: r.id, goodsName: r.goodsName, description: r.description, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
                     tranches: recordTranches
                 });
             }
@@ -269,45 +283,47 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
             {/* Main Table */}
             <table className="w-full border-collapse border border-black text-center mb-4 text-black table-fixed">
                 <colgroup>
-                    <col style={{width: '30px'}} /> {/* Row */}
-                    <col /> {/* Goods */}
-                    <col style={{width: '75px'}} /> {/* File No */}
-                    <col style={{width: '75px'}} /> {/* Reg No */}
-                    <col style={{width: '85px'}} /> {/* Company */}
-                    <col style={{width: '65px'}} /> {/* USD */}
-                    <col style={{width: '65px'}} /> {/* Orig Amount */}
-                    <col style={{width: '40px'}} /> {/* Currency */}
-                    <col style={{width: '65px'}} /> {/* Date */}
-                    <col style={{width: '85px'}} /> {/* Rial */}
-                    <col style={{width: '70px'}} /> {/* Exchange */}
-                    <col style={{width: '65px'}} /> {/* Broker */}
-                    <col style={{width: '75px'}} /> {/* Bank */}
-                    <col style={{width: '65px'}} /> {/* Delivered */}
-                    <col style={{width: '45px'}} /> {/* Status */}
-                    <col style={{width: '75px'}} /> {/* Return Amt */}
-                    <col style={{width: '65px'}} /> {/* Return Date */}
-                </colgroup>
-                <thead>
-                    <tr className="bg-gray-100 text-black text-[9px] h-10 select-none">
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ردیف</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شرح کالا</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شماره سفارش (پرونده)</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ثبت سفارش</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">نام شرکت</th>
-                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (دلار آمریکا)</th>
-                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (مقدار)</th>
-                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (نوع)</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">تاریخ خرید</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بهای ارز (ریال)</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">محل ارسال</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">کارگزار</th>
-                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بانک عامل</th>
-                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">مقدار تحویل</th>
-                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">وضعیت تصفیه</th>
-                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">مبلغ عودتی</th>
-                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">تاریخ عودتی</th>
-                    </tr>
-                </thead>
+    <col style={{width: '25px'}} />
+    <col />
+    <col />
+    <col style={{width: '65px'}} />
+    <col style={{width: '65px'}} />
+    <col style={{width: '75px'}} />
+    <col style={{width: '65px'}} />
+    <col style={{width: '60px'}} />
+    <col style={{width: '40px'}} />
+    <col style={{width: '60px'}} />
+    <col style={{width: '75px'}} />
+    <col style={{width: '65px'}} />
+    <col style={{width: '60px'}} />
+    <col style={{width: '65px'}} />
+    <col style={{width: '60px'}} />
+    <col style={{width: '45px'}} />
+    <col style={{width: '60px'}} />
+    <col style={{width: '50px'}} />
+</colgroup>
+<thead>
+    <tr className="bg-[#1e40af] text-white font-black text-[9px] border-black">
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ردیف</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">شرح کالا</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">توضیحات</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">پرونده</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ثبت سفارش</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">نام شرکت</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e3a8a] text-white">معادل دلار</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e3a8a] text-white">مقدار ارز</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e3a8a] text-white">نوع</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">تاریخ خرید</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">بهای ارز (ریال)</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">صرافی</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">کارگزار</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">بانک</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#14532d] text-white">تحویلی</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#14532d] text-white">وضعیت</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">عودت</th>
+        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ت. عودت</th>
+    </tr>
+</thead>
                 <tbody>
                     {processedGroups.map((group, gIndex) => (
                         <React.Fragment key={gIndex}>
@@ -316,28 +332,28 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                     {/* Row Span Logic: Only render details on first tranche */}
                                     {tIndex === 0 && (
                                         <>
-                                            <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{gIndex + 1}</td>
-                                            <td className="border border-black p-1 text-right truncate font-bold text-black" rowSpan={group.tranches.length} title={group.recordInfo.goodsName}>{group.recordInfo.goodsName}</td>
-                                            <td className="border border-black p-1 font-mono font-bold text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.fileNumber}</td>
-                                            <td className="border border-black p-1 font-mono text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.registrationNumber || '-'}</td>
-                                            <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.company}</td>
+                                            <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{gIndex + 1}</td>
+                                            <td className="border border-black p-1 align-middle text-center text-right truncate font-bold text-black" rowSpan={group.tranches.length} title={group.recordInfo.goodsName}>{group.recordInfo.goodsName}</td>
+                                            <td className="border border-black p-1 align-middle text-center font-mono font-bold text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.fileNumber}</td>
+                                            <td className="border border-black p-1 align-middle text-center font-mono text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.registrationNumber || '-'}</td>
+                                            <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.company}</td>
                                         </>
                                     )}
                                     
-                                    <td className="border border-black p-1 font-mono font-black bg-blue-50/50 text-center text-black">{formatUSD(t.usdAmount)}</td>
-                                    <td className="border border-black p-1 font-mono font-bold text-center text-black">{formatNumberString(t.originalAmount)}</td>
-                                    <td className="border border-black p-1 text-center font-bold text-black">{t.currencyType}</td>
-                                    <td className="border border-black p-1 dir-ltr text-center font-bold text-black">{t.purchaseDate}</td>
-                                    <td className="border border-black p-1 font-mono text-center font-bold text-black">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
-                                    <td className="border border-black p-1 text-[9px] truncate text-center font-bold text-black" title={t.exchangeName}>{t.exchangeName}</td>
-                                    <td className="border border-black p-1 font-mono text-[9px] text-center font-bold text-black">{t.brokerName}</td> 
+                                    <td className="border border-black p-1 align-middle text-center font-mono font-black bg-blue-50/50 text-center text-black">{formatUSD(t.usdAmount)}</td>
+                                    <td className="border border-black p-1 align-middle text-center font-mono font-bold text-center text-black">{formatNumberString(t.originalAmount)}</td>
+                                    <td className="border border-black p-1 align-middle text-center text-center font-bold text-black">{t.currencyType}</td>
+                                    <td className="border border-black p-1 align-middle text-center dir-ltr text-center font-bold text-black">{t.purchaseDate}</td>
+                                    <td className="border border-black p-1 align-middle text-center font-mono text-center font-bold text-black">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
+                                    <td className="border border-black p-1 align-middle text-center text-[9px] truncate text-center font-bold text-black" title={t.exchangeName}>{t.exchangeName}</td>
+                                    <td className="border border-black p-1 align-middle text-center font-mono text-[9px] text-center font-bold text-black">{t.brokerName}</td> 
                                     
-                                    {tIndex === 0 && <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.bank}</td>}
+                                    {tIndex === 0 && <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.bank}</td>}
                                     
-                                    <td className="border border-black p-1 font-mono bg-green-50/50 text-center font-black text-black">{formatNumberString(t.deliveredAmount)}</td>
-                                    <td className="border border-black p-1 text-center font-bold text-black">{t.isDelivered ? '✅' : '⏳'}</td>
-                                    <td className="border border-black p-1 bg-red-50/50 text-center font-black text-black">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
-                                    <td className="border border-black p-1 bg-red-50/50 text-center font-bold text-black">{t.returnDate}</td>
+                                    <td className="border border-black p-1 align-middle text-center font-mono bg-green-50/50 text-center font-black text-black">{formatNumberString(t.deliveredAmount)}</td>
+                                    <td className="border border-black p-1 align-middle text-center text-center font-bold text-black">{t.isDelivered ? '✅' : '⏳'}</td>
+                                    <td className="border border-black p-1 align-middle text-center bg-red-50/50 text-center font-black text-black">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
+                                    <td className="border border-black p-1 align-middle text-center bg-red-50/50 text-center font-bold text-black">{t.returnDate}</td>
                                 </tr>
                             ))}
                         </React.Fragment>
@@ -347,13 +363,13 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                     )}
                     <tr className="bg-gray-100 font-black text-[9px] text-black">
                         <td colSpan={5} className="border border-black p-1 text-center bg-gray-200 text-black">جمع کل</td>
-                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatUSD(tableTotals.usd)}</td>
-                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.original)}</td>
-                        <td className="border border-black p-1 bg-gray-200 text-black">-</td>
-                        <td className="border border-black p-1 bg-gray-200 text-black">-</td>
-                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.rial)}</td>
+                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatUSD(tableTotals.usd)}</td>
+                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.original)}</td>
+                        <td className="border border-black p-1 align-middle text-center bg-gray-200 text-black">-</td>
+                        <td className="border border-black p-1 align-middle text-center bg-gray-200 text-black">-</td>
+                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.rial)}</td>
                         <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
-                        <td className="border border-black p-1 font-mono bg-green-100/50 text-center font-black text-black">{formatNumberString(tableTotals.delivered)}</td>
+                        <td className="border border-black p-1 align-middle text-center font-mono bg-green-100/50 text-center font-black text-black">{formatNumberString(tableTotals.delivered)}</td>
                         <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
                     </tr>
                 </tbody>
