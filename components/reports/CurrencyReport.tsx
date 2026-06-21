@@ -649,11 +649,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                                     <tr 
                                                         key={`web_row_${gIndex}_${tIndex}`} 
                                                         onClick={() => {
-                                                             if (onSelectTranche && group.recordInfo.recordId) {
-                                                                 onSelectTranche(group.recordInfo.recordId, t.id);
-                                                             } else {
-                                                                 setSelectedRowDetail({ group, tranche: t, index: currentIdx });
-                                                             }
+                                                             setSelectedRowDetail({ group, tranche: t, index: currentIdx });
                                                          }}
                                                         className="hover:bg-blue-50/40 dark:hover:bg-slate-800/40 cursor-pointer active:bg-blue-100/30 dark:active:bg-slate-800/60 transition-colors group text-slate-800 dark:text-slate-200 font-semibold"
                                                     >
@@ -692,15 +688,30 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                                         )}
                                                         
                                                         <td className="p-3 text-center font-mono font-black bg-green-50/20 dark:bg-green-950/5 text-green-700 dark:text-green-300">{formatNumberString(t.deliveredAmount)}</td>
-                                                        <td className="p-3 text-center">
-                                                            <span className={`inline-flex items-center justify-center p-1.5 rounded-full ${t.isDelivered ? 'bg-green-100 dark:bg-green-900/35 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/35 text-amber-800 dark:text-amber-300'}`} title={t.isDelivered ? 'تحویل شده' : 'در انتظار'}>
-                                                                {t.isDelivered ? (
-                                                                    <CheckCircle2 size={15} className="text-green-600 dark:text-green-400" />
-                                                                ) : (
-                                                                    <Clock size={15} className="text-amber-600 dark:text-amber-400" />
-                                                                )}
-                                                            </span>
-                                                        </td>
+                                                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                             <div className="flex items-center justify-center gap-1.5">
+                                                                 <span className={`inline-flex items-center justify-center p-1.5 rounded-full ${t.isDelivered ? 'bg-green-100 dark:bg-green-900/35 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/35 text-amber-800 dark:text-amber-300'}`} title={t.isDelivered ? 'تحویل شده' : 'در انتظار'}>
+                                                                     {t.isDelivered ? (
+                                                                         <CheckCircle2 size={14} className="text-green-600 dark:text-green-400" />
+                                                                     ) : (
+                                                                         <Clock size={14} className="text-amber-600 dark:text-amber-400" />
+                                                                     )}
+                                                                 </span>
+                                                                 {onSelectTranche && group.recordInfo.recordId && (
+                                                                     <button
+                                                                         onClick={(e) => {
+                                                                             e.stopPropagation();
+                                                                             onSelectTranche(group.recordInfo.recordId!, t.id);
+                                                                         }}
+                                                                         className="p-1 px-1.5 bg-green-50 hover:bg-green-100 dark:bg-green-950/20 dark:hover:bg-green-900/35 text-green-600 dark:text-green-400 rounded-md border border-green-200 dark:border-green-800/80 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                                                         title="ثبت و ویرایش تحویل‌های ارز"
+                                                                     >
+                                                                         <Coins size={12} />
+                                                                         <span className="text-[10px] font-black hidden lg:inline">تحویل</span>
+                                                                     </button>
+                                                                 )}
+                                                             </div>
+                                                         </td>
                                                         <td className="p-3 text-center font-mono font-bold bg-red-50/10 text-red-600 dark:text-red-400">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
                                                         <td className="p-3 text-center font-mono text-slate-500 dark:text-slate-400">{t.returnDate || '-'}</td>
                                                     </tr>
