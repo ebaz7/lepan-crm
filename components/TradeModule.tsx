@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, TradeRecord, TradeStage, TradeItem, SystemSettings, InsuranceEndorsement, CurrencyPurchaseData, TradeTransaction, CurrencyTranche, TradeStageData, ShippingDocument, ShippingDocType, DocStatus, InvoiceItem, InspectionData, InspectionPayment, InspectionCertificate, ClearanceData, WarehouseReceipt, ClearancePayment, GreenLeafData, GreenLeafCustomsDuty, GreenLeafGuarantee, GreenLeafTax, GreenLeafRoadToll, InternalShippingData, ShippingPayment, AgentData, AgentPayment, PackingItem, UserRole } from '../types';
+import { User, TradeRecord, TradeStage, TradeItem, SystemSettings, InsuranceEndorsement, CurrencyPurchaseData, TradeTransaction, CurrencyTranche, CurrencyDelivery, TradeStageData, ShippingDocument, ShippingDocType, DocStatus, InvoiceItem, InspectionData, InspectionPayment, InspectionCertificate, ClearanceData, WarehouseReceipt, ClearancePayment, GreenLeafData, GreenLeafCustomsDuty, GreenLeafGuarantee, GreenLeafTax, GreenLeafRoadToll, InternalShippingData, ShippingPayment, AgentData, AgentPayment, PackingItem, UserRole } from '../types';
 import { getTradeRecords, saveTradeRecord, updateTradeRecord, deleteTradeRecord, getSettings, uploadFile } from '../services/storageService';
 import { generateUUID, formatCurrency, formatNumberString, deformatNumberString, parsePersianDate, formatDate, calculateDaysDiff, getStatusLabel } from '../constants';
 import { Container, Plus, Search, CheckCircle2, Save, Trash2, X, Package, ArrowRight, History, Banknote, Coins, Wallet, FileSpreadsheet, Shield, LayoutDashboard, Printer, FileDown, Paperclip, Building2, FolderOpen, Home, Calculator, FileText, Microscope, ListFilter, Warehouse, Calendar as CalendarIcon, PieChart, BarChart, Clock, Leaf, Scale, ShieldCheck, Percent, Truck, CheckSquare, Square, ToggleLeft, ToggleRight, DollarSign, UserCheck, Check, Archive, AlertCircle, RefreshCw, Box, Loader2, Share2, ChevronLeft, ChevronRight, ExternalLink, CalendarDays, Info, ArrowLeftRight, Edit2, Edit, Undo2 } from 'lucide-react';
@@ -123,6 +123,18 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         currencyFeeStr: ''
     });
     const [editingTrancheId, setEditingTrancheId] = useState<string | null>(null);
+    const [selectedTrancheForDeliveries, setSelectedTrancheForDeliveries] = useState<string | null>(null);
+    const [newDeliveryForm, setNewDeliveryForm] = useState<{
+        amount: string | number;
+        date: string;
+        recipientName: string;
+        description: string;
+    }>({
+        amount: '',
+        date: '',
+        recipientName: '',
+        description: ''
+    });
     const [currencyGuarantee, setCurrencyGuarantee] = useState<{amount: string, bank: string, number: string, date: string, isDelivered: boolean}>({amount: '', bank: '', number: '', date: '', isDelivered: false});
 
     const [activeShippingSubTab, setActiveShippingSubTab] = useState<ShippingDocType>('Commercial Invoice');
@@ -350,9 +362,103 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     };
 
     // --- HANDLERS ---
-    const handleCreateRecord = async () => { if (!newFileNumber || !newGoodsName) return; const newRecord: TradeRecord = { id: generateUUID(), company: newRecordCompany, fileNumber: newFileNumber, orderNumber: newFileNumber, goodsName: newGoodsName, registrationNumber: '', sellerName: newSellerName, commodityGroup: newCommodityGroup, mainCurrency: newMainCurrency, items: [], freightCost: 0, startDate: new Date().toISOString(), status: 'Active', stages: {}, createdAt: Date.now(), createdBy: currentUser.fullName, licenseData: { transactions: [] }, shippingDocuments: [] }; STAGES.forEach(stage => { newRecord.stages[stage] = { stage, isCompleted: false, description: '', costRial: 0, costCurrency: 0, currencyType: newMainCurrency, attachments: [], updatedAt: Date.now(), updatedBy: '' }; }); await saveTradeRecord(newRecord); await loadRecords(); setShowNewModal(false); setNewFileNumber(''); setNewGoodsName(''); setSelectedRecord(newRecord); setActiveTab('proforma'); setViewMode('details'); };
-    const handleDeleteRecord = async (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (confirm("آیا از حذف این پرونده بازرگانی اطمینان دارید؟")) { await deleteTradeRecord(id); if (selectedRecord?.id === id) setSelectedRecord(null); loadRecords(); } };
-    const handleUpdateProforma = async (field: keyof TradeRecord, value: string | number) => { if (!selectedRecord) return; const updatedRecord = { ...selectedRecord, [field]: value }; setSelectedRecord(updatedRecord); await updateTradeRecord(updatedRecord); setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r)); };
+    const isDuplicateTradeRecord = (company: string, fileNumber: string, registrationNumber: string, goodsName: string, excludeId?: string) => {
+        const safeCompany = (company || '').trim().toLowerCase();
+        const safeFileNumber = (fileNumber || '').trim().toLowerCase();
+        const safeRegistrationNumber = (registrationNumber || '').trim().toLowerCase();
+        const safeGoodsName = (goodsName || '').trim().toLowerCase();
+        
+        return (records || []).some(r => {
+            if (excludeId && r.id === excludeId) return false;
+            return (r.company || '').trim().toLowerCase() === safeCompany &&
+                   (r.fileNumber || '').trim().toLowerCase() === safeFileNumber &&
+                   (r.registrationNumber || '').trim().toLowerCase() === safeRegistrationNumber &&
+                   (r.goodsName || '').trim().toLowerCase() === safeGoodsName;
+        });
+    };
+
+    const handleCreateRecord = async () => { 
+        if (!newFileNumber || !newGoodsName || !newRecordCompany) return; 
+        
+        if (isDuplicateTradeRecord(newRecordCompany, newFileNumber, '', newGoodsName)) {
+            alert('خطا: پرونده دیگری با همین مشخصات (نام شرکت، شماره پروفرما و نام کالا) قبلاً ثبت شده است.');
+            return;
+        }
+
+        const newRecord: TradeRecord = { 
+            id: generateUUID(), 
+            company: newRecordCompany, 
+            fileNumber: newFileNumber, 
+            orderNumber: newFileNumber, 
+            goodsName: newGoodsName, 
+            registrationNumber: '', 
+            sellerName: newSellerName, 
+            commodityGroup: newCommodityGroup, 
+            mainCurrency: newMainCurrency, 
+            items: [], 
+            freightCost: 0, 
+            startDate: new Date().toISOString(), 
+            status: 'Active', 
+            stages: {}, 
+            createdAt: Date.now(), 
+            createdBy: currentUser.fullName, 
+            licenseData: { transactions: [] }, 
+            shippingDocuments: [] 
+        }; 
+        
+        STAGES.forEach(stage => { 
+            newRecord.stages[stage] = { 
+                stage, 
+                isCompleted: false, 
+                description: '', 
+                costRial: 0, 
+                costCurrency: 0, 
+                currencyType: newMainCurrency, 
+                attachments: [], 
+                updatedAt: Date.now(), 
+                updatedBy: '' 
+            }; 
+        }); 
+        
+        await saveTradeRecord(newRecord); 
+        await loadRecords(); 
+        setShowNewModal(false); 
+        setNewFileNumber(''); 
+        setNewGoodsName(''); 
+        setSelectedRecord(newRecord); 
+        setActiveTab('proforma'); 
+        setViewMode('details'); 
+    };
+
+    const handleDeleteRecord = async (id: string, e: React.MouseEvent) => { 
+        e.stopPropagation(); 
+        if (confirm("آیا از حذف این پرونده بازرگانی اطمینان دارید؟")) { 
+            await deleteTradeRecord(id); 
+            if (selectedRecord?.id === id) setSelectedRecord(null); 
+            loadRecords(); 
+        } 
+    };
+
+    const handleUpdateProforma = async (field: keyof TradeRecord, value: string | number) => { 
+        if (!selectedRecord) return; 
+        
+        if (['company', 'fileNumber', 'goodsName', 'registrationNumber'].includes(field as string)) {
+            const companyName = (field === 'company' ? value : (selectedRecord.company || '')) as string;
+            const fileNo = (field === 'fileNumber' ? value : (selectedRecord.fileNumber || '')) as string;
+            const regNo = (field === 'registrationNumber' ? value : (selectedRecord.registrationNumber || '')) as string;
+            const gName = (field === 'goodsName' ? value : (selectedRecord.goodsName || '')) as string;
+            
+            if (isDuplicateTradeRecord(companyName, fileNo, regNo, gName, selectedRecord.id)) {
+                alert("خطا: امکان ذخیره وجود ندارد. پرونده دیگری با همین مشخصات (نام شرکت، شماره پرووفرما، شماره ثبت سفارش و نام کالا) قبلاً ثبت شده است.");
+                return;
+            }
+        }
+
+        const updatedRecord = { ...selectedRecord, [field]: value }; 
+        setSelectedRecord(updatedRecord); 
+        await updateTradeRecord(updatedRecord); 
+        setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r)); 
+    };
     
     const handleAddItem = async () => { 
         if (!selectedRecord || !newItem.name) return; 
@@ -402,11 +508,50 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const handleDeleteWarehouseReceipt = async (id: string) => { if (!selectedRecord) return; const updatedReceipts = (clearanceForm.receipts || []).filter(r => r.id !== id); const updatedData = { ...clearanceForm, receipts: updatedReceipts }; setClearanceForm(updatedData); const updatedRecord = { ...selectedRecord, clearanceData: updatedData }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleAddClearancePayment = async () => { if (!selectedRecord || !newClearancePayment.amount) return; const payment: ClearancePayment = { id: generateUUID(), amount: Number(newClearancePayment.amount), part: newClearancePayment.part || '', bank: newClearancePayment.bank || '', date: newClearancePayment.date || '', payingBank: newClearancePayment.payingBank }; const updatedPayments = [...(clearanceForm.payments || []), payment]; const updatedData = { ...clearanceForm, payments: updatedPayments }; setClearanceForm(updatedData); setNewClearancePayment({ amount: 0, part: '', bank: '', date: '', payingBank: '' }); const totalCost = updatedPayments.reduce((acc, p) => acc + p.amount, 0); const updatedRecord = { ...selectedRecord, clearanceData: updatedData }; if (!updatedRecord.stages[TradeStage.CLEARANCE_DOCS]) updatedRecord.stages[TradeStage.CLEARANCE_DOCS] = getStageData(updatedRecord, TradeStage.CLEARANCE_DOCS); updatedRecord.stages[TradeStage.CLEARANCE_DOCS].costRial = totalCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleDeleteClearancePayment = async (id: string) => { if (!selectedRecord) return; const updatedPayments = (clearanceForm.payments || []).filter(p => p.id !== id); const updatedData = { ...clearanceForm, payments: updatedPayments }; setClearanceForm(updatedData); const totalCost = updatedPayments.reduce((acc, p) => acc + p.amount, 0); const updatedRecord = { ...selectedRecord, clearanceData: updatedData }; if (!updatedRecord.stages[TradeStage.CLEARANCE_DOCS]) updatedRecord.stages[TradeStage.CLEARANCE_DOCS] = getStageData(updatedRecord, TradeStage.CLEARANCE_DOCS); updatedRecord.stages[TradeStage.CLEARANCE_DOCS].costRial = totalCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
-    const calculateGreenLeafTotal = (data: GreenLeafData) => { let total = 0; total += data.duties.filter(d => d.paymentMethod === 'Bank').reduce((acc, d) => acc + d.amount, 0); total += data.guarantees.reduce((acc, g) => acc + (g.cashAmount || 0) + (g.chequeAmount || 0), 0); total += data.taxes.reduce((acc, t) => acc + t.amount, 0); total += data.roadTolls.reduce((acc, r) => acc + r.amount, 0); return total; };
+    const calculateGreenLeafTotal = (data: GreenLeafData) => { let total = 0; total += data.duties.reduce((acc, d) => acc + d.amount, 0); total += data.taxes.reduce((acc, t) => acc + t.amount, 0); total += data.roadTolls.reduce((acc, r) => acc + r.amount, 0); return total; };
     const updateGreenLeafRecord = async (newData: GreenLeafData) => { if (!selectedRecord) return; setGreenLeafForm(newData); const totalCost = calculateGreenLeafTotal(newData); const updatedRecord = { ...selectedRecord, greenLeafData: newData }; if (!updatedRecord.stages[TradeStage.GREEN_LEAF]) updatedRecord.stages[TradeStage.GREEN_LEAF] = getStageData(updatedRecord, TradeStage.GREEN_LEAF); updatedRecord.stages[TradeStage.GREEN_LEAF].costRial = totalCost; updatedRecord.stages[TradeStage.GREEN_LEAF].isCompleted = (newData.duties.length > 0); await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleAddCustomsDuty = async () => { if (!newCustomsDuty.cottageNumber || !newCustomsDuty.amount) return; const duty: GreenLeafCustomsDuty = { id: generateUUID(), cottageNumber: newCustomsDuty.cottageNumber, part: newCustomsDuty.part || '', amount: Number(newCustomsDuty.amount), paymentMethod: (newCustomsDuty.paymentMethod as 'Bank' | 'Guarantee') || 'Bank', bank: newCustomsDuty.bank, date: newCustomsDuty.date }; const updatedDuties = [...greenLeafForm.duties, duty]; await updateGreenLeafRecord({ ...greenLeafForm, duties: updatedDuties }); setNewCustomsDuty({ cottageNumber: '', part: '', amount: 0, paymentMethod: 'Bank', bank: '', date: '' }); };
     const handleDeleteCustomsDuty = async (id: string) => { const updatedDuties = greenLeafForm.duties.filter(d => d.id !== id); const updatedGuarantees = greenLeafForm.guarantees.filter(g => g.relatedDutyId !== id); await updateGreenLeafRecord({ ...greenLeafForm, duties: updatedDuties, guarantees: updatedGuarantees }); };
-    const handleAddGuarantee = async () => { if (!selectedDutyForGuarantee || !newGuaranteeDetails.guaranteeNumber) return; const duty = greenLeafForm.duties.find(d => d.id === selectedDutyForGuarantee); const guarantee: GreenLeafGuarantee = { id: generateUUID(), relatedDutyId: selectedDutyForGuarantee, guaranteeNumber: newGuaranteeDetails.guaranteeNumber, chequeNumber: newGuaranteeDetails.chequeNumber, chequeBank: newGuaranteeDetails.chequeBank, chequeDate: newGuaranteeDetails.chequeDate, chequeAmount: Number(newGuaranteeDetails.chequeAmount) || 0, isDelivered: false, cashAmount: Number(newGuaranteeDetails.cashAmount) || 0, cashBank: newGuaranteeDetails.cashBank, cashDate: newGuaranteeDetails.cashDate, part: duty?.part }; const updatedGuarantees = [...greenLeafForm.guarantees, guarantee]; await updateGreenLeafRecord({ ...greenLeafForm, guarantees: updatedGuarantees }); setNewGuaranteeDetails({ guaranteeNumber: '', chequeNumber: '', chequeBank: '', chequeDate: '', cashAmount: 0, cashBank: '', cashDate: '', chequeAmount: 0 }); setSelectedDutyForGuarantee(''); };
+    const handleAddGuarantee = async () => { 
+        if (!selectedDutyForGuarantee || !newGuaranteeDetails.guaranteeNumber) return; 
+        const duty = greenLeafForm.duties.find(d => d.id === selectedDutyForGuarantee); 
+        
+        const rawGuaranteeAmt = Number(newGuaranteeDetails.guaranteeAmount) || 0;
+        const rawCashAmt = Number(newGuaranteeDetails.cashAmount) || 0;
+        
+        const guarantee: GreenLeafGuarantee = { 
+            id: generateUUID(), 
+            relatedDutyId: selectedDutyForGuarantee, 
+            guaranteeNumber: newGuaranteeDetails.guaranteeNumber, 
+            guaranteeType: newGuaranteeDetails.guaranteeType || 'cheque',
+            guaranteeAmount: rawGuaranteeAmt,
+            chequeNumber: newGuaranteeDetails.chequeNumber || '', 
+            chequeBank: newGuaranteeDetails.chequeBank || '', 
+            chequeDate: newGuaranteeDetails.chequeDate || '', 
+            chequeAmount: newGuaranteeDetails.guaranteeType === 'credit' ? 0 : rawGuaranteeAmt, 
+            isDelivered: false, 
+            cashAmount: rawCashAmt, 
+            cashBank: newGuaranteeDetails.cashBank || '', 
+            cashDate: newGuaranteeDetails.cashDate || '', 
+            part: duty?.part 
+        }; 
+        
+        const updatedGuarantees = [...greenLeafForm.guarantees, guarantee]; 
+        await updateGreenLeafRecord({ ...greenLeafForm, guarantees: updatedGuarantees }); 
+        setNewGuaranteeDetails({ 
+            guaranteeNumber: '', 
+            guaranteeType: 'cheque',
+            guaranteeAmount: 0,
+            chequeNumber: '', 
+            chequeBank: '', 
+            chequeDate: '', 
+            cashAmount: 0, 
+            cashBank: '', 
+            cashDate: '', 
+            chequeAmount: 0 
+        }); 
+        setSelectedDutyForGuarantee(''); 
+    };
     const handleDeleteGuarantee = async (id: string) => { const updatedGuarantees = greenLeafForm.guarantees.filter(g => g.id !== id); await updateGreenLeafRecord({ ...greenLeafForm, guarantees: updatedGuarantees }); };
     const handleToggleGuaranteeDelivery = async (id: string) => { const updatedGuarantees = greenLeafForm.guarantees.map(g => g.id === id ? { ...g, isDelivered: !g.isDelivered } : g); await updateGreenLeafRecord({ ...greenLeafForm, guarantees: updatedGuarantees }); };
     const handleAddTax = async () => { if (!newTax.amount) return; const tax: GreenLeafTax = { id: generateUUID(), amount: Number(newTax.amount), part: newTax.part || '', bank: newTax.bank || '', date: newTax.date || '' }; const updatedTaxes = [...greenLeafForm.taxes, tax]; await updateGreenLeafRecord({ ...greenLeafForm, taxes: updatedTaxes }); setNewTax({ part: '', amount: 0, bank: '', date: '' }); };
@@ -450,7 +595,10 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         } 
 
         const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); 
-        const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); 
+        const totalDelivered = updatedTranches.reduce((acc, t) => {
+            const deliveriesSum = t.deliveries && t.deliveries.length > 0 ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : 0;
+            return acc + (deliveriesSum || t.receivedAmount || (t.isDelivered ? t.amount : 0));
+        }, 0); 
         const totalRialCost = updatedTranches.reduce((acc, t) => { 
             return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); 
         }, 0); 
@@ -521,8 +669,122 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         }
     };
 
-    const handleRemoveTranche = async (id: string) => { if (!selectedRecord) return; if (!confirm('آیا از حذف این پارت مطمئن هستید؟')) return; const updatedTranches = (currencyForm.tranches || []).filter(t => t.id !== id); const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const totalRialCost = updatedTranches.reduce((acc, t) => { return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); }, 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
-    const handleToggleTrancheDelivery = async (id: string) => { if (!selectedRecord) return; const updatedTranches = (currencyForm.tranches || []).map(t => { if (t.id === id) return { ...t, isDelivered: !t.isDelivered }; return t; }); const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); const totalDelivered = updatedTranches.reduce((acc, t) => acc + (t.receivedAmount || (t.isDelivered ? t.amount : 0)), 0); const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
+    const handleRemoveTranche = async (id: string) => { 
+        if (!selectedRecord) return; 
+        if (!confirm('آیا از حذف این پارت مطمئن هستید؟')) return; 
+        const updatedTranches = (currencyForm.tranches || []).filter(t => t.id !== id); 
+        const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); 
+        const totalDelivered = updatedTranches.reduce((acc, t) => {
+            const deliveriesSum = t.deliveries && t.deliveries.length > 0 ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : 0;
+            return acc + (deliveriesSum || t.receivedAmount || (t.isDelivered ? t.amount : 0));
+        }, 0); 
+        const totalRialCost = updatedTranches.reduce((acc, t) => { return acc + ((t.rialAmount || 0) - (t.returnAmount || 0)); }, 0); 
+        const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; 
+        setCurrencyForm(updatedForm); 
+        const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; 
+        if (!updatedRecord.stages[TradeStage.CURRENCY_PURCHASE]) updatedRecord.stages[TradeStage.CURRENCY_PURCHASE] = getStageData(updatedRecord, TradeStage.CURRENCY_PURCHASE); 
+        updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costCurrency = totalPurchased; 
+        updatedRecord.stages[TradeStage.CURRENCY_PURCHASE].costRial = totalRialCost; 
+        await updateTradeRecord(updatedRecord); 
+        setSelectedRecord(updatedRecord); 
+    };
+
+    const handleToggleTrancheDelivery = async (id: string) => { 
+        if (!selectedRecord) return; 
+        const updatedTranches = (currencyForm.tranches || []).map(t => { 
+            if (t.id === id) {
+                const isDel = !t.isDelivered;
+                const receivedAmt = isDel ? (t.receivedAmount || t.amount) : 0;
+                return { ...t, isDelivered: isDel, receivedAmount: receivedAmt }; 
+            }
+            return t; 
+        }); 
+        const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0); 
+        const totalDelivered = updatedTranches.reduce((acc, t) => {
+            const deliveriesSum = t.deliveries && t.deliveries.length > 0 ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : 0;
+            return acc + (deliveriesSum || t.receivedAmount || (t.isDelivered ? t.amount : 0));
+        }, 0); 
+        const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered }; 
+        setCurrencyForm(updatedForm); 
+        const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; 
+        await updateTradeRecord(updatedRecord); 
+        setSelectedRecord(updatedRecord); 
+    };
+
+    const handleAddTrancheDelivery = async () => {
+        if (!selectedRecord || !selectedTrancheForDeliveries || !newDeliveryForm.amount) return;
+        const rawAmt = deformatNumberString(String(newDeliveryForm.amount));
+        if (rawAmt <= 0) return;
+
+        const newDelivery: CurrencyDelivery = {
+            id: generateUUID(),
+            amount: rawAmt,
+            date: newDeliveryForm.date || '',
+            recipientName: newDeliveryForm.recipientName || '',
+            description: newDeliveryForm.description || ''
+        };
+
+        const updatedTranches = (currencyForm.tranches || []).map(t => {
+            if (t.id === selectedTrancheForDeliveries) {
+                const currentDeliveries = t.deliveries || [];
+                const updatedD = [...currentDeliveries, newDelivery];
+                const sum = updatedD.reduce((acc, d) => acc + d.amount, 0);
+                return {
+                    ...t,
+                    deliveries: updatedD,
+                    receivedAmount: sum,
+                    isDelivered: sum >= t.amount
+                };
+            }
+            return t;
+        });
+
+        const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0);
+        const totalDelivered = updatedTranches.reduce((acc, t) => {
+            const deliveriesSum = t.deliveries && t.deliveries.length > 0 ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : 0;
+            return acc + (deliveriesSum || t.receivedAmount || (t.isDelivered ? t.amount : 0));
+        }, 0);
+
+        const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered };
+        setCurrencyForm(updatedForm);
+        const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm };
+
+        await updateTradeRecord(updatedRecord);
+        setSelectedRecord(updatedRecord);
+        setNewDeliveryForm({ amount: '', date: '', recipientName: '', description: '' });
+    };
+
+    const handleRemoveTrancheDelivery = async (trancheId: string, deliveryId: string) => {
+        if (!selectedRecord) return;
+        if (!confirm('آیا از حذف این ردیف تحویل مطمئن هستید؟')) return;
+
+        const updatedTranches = (currencyForm.tranches || []).map(t => {
+            if (t.id === trancheId) {
+                const updatedD = (t.deliveries || []).filter(d => d.id !== deliveryId);
+                const sum = updatedD.reduce((acc, d) => acc + d.amount, 0);
+                return {
+                    ...t,
+                    deliveries: updatedD,
+                    receivedAmount: sum,
+                    isDelivered: sum >= t.amount
+                };
+            }
+            return t;
+        });
+
+        const totalPurchased = updatedTranches.reduce((acc, t) => acc + t.amount, 0);
+        const totalDelivered = updatedTranches.reduce((acc, t) => {
+            const deliveriesSum = t.deliveries && t.deliveries.length > 0 ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : 0;
+            return acc + (deliveriesSum || t.receivedAmount || (t.isDelivered ? t.amount : 0));
+        }, 0);
+
+        const updatedForm = { ...currencyForm, tranches: updatedTranches, purchasedAmount: totalPurchased, deliveredAmount: totalDelivered };
+        setCurrencyForm(updatedForm);
+        const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm };
+
+        await updateTradeRecord(updatedRecord);
+        setSelectedRecord(updatedRecord);
+    };
     const handleSaveCurrencyGuarantee = async () => { if (!selectedRecord) return; const gCheck = { amount: deformatNumberString(currencyGuarantee.amount), bank: currencyGuarantee.bank, chequeNumber: currencyGuarantee.number, dueDate: currencyGuarantee.date, isDelivered: currencyGuarantee.isDelivered }; const updatedForm = { ...currencyForm, guaranteeCheque: gCheck }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); alert("اطلاعات چک ضمانت ارزی ذخیره شد."); };
     const handleToggleCurrencyGuaranteeDelivery = async () => { if (!selectedRecord || !selectedRecord.currencyPurchaseData?.guaranteeCheque) return; const currentStatus = selectedRecord.currencyPurchaseData.guaranteeCheque.isDelivered || false; setCurrencyGuarantee(prev => ({ ...prev, isDelivered: !currentStatus })); const updatedForm = { ...currencyForm, guaranteeCheque: { ...currencyForm.guaranteeCheque!, isDelivered: !currentStatus } }; setCurrencyForm(updatedForm); const updatedRecord = { ...selectedRecord, currencyPurchaseData: updatedForm }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleAddInvoiceItem = () => { if (!newInvoiceItem.name) return; const newItem: InvoiceItem = { id: generateUUID(), name: newInvoiceItem.name, weight: Number(newInvoiceItem.weight), unitPrice: Number(newInvoiceItem.unitPrice), totalPrice: Number(newInvoiceItem.totalPrice) || (Number(newInvoiceItem.weight) * Number(newInvoiceItem.unitPrice)), part: newInvoiceItem.part || '' }; setShippingDocForm(prev => ({ ...prev, invoiceItems: [...(prev.invoiceItems || []), newItem] })); setNewInvoiceItem({ name: '', weight: 0, unitPrice: 0, totalPrice: 0, part: '' }); };
@@ -539,7 +801,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const toggleCommitment = async () => { if (!selectedRecord) return; const updatedRecord = { ...selectedRecord, isCommitmentFulfilled: !selectedRecord.isCommitmentFulfilled }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); setSelectedRecord(updatedRecord); };
     const handleArchiveRecord = async () => { if (!selectedRecord) return; if (!confirm('آیا از انتقال این پرونده به بایگانی (ترخیص شده) اطمینان دارید؟')) return; const updatedRecord = { ...selectedRecord, isArchived: true, status: 'Completed' as const }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); alert('پرونده با موفقیت بایگانی شد.'); setViewMode('dashboard'); loadRecords(); };
     const handleUnarchiveRecord = async () => { if (!selectedRecord) return; if (!confirm('آیا از بازگرداندن این پرونده به جریان کاری اطمینان دارید؟')) return; const updatedRecord = { ...selectedRecord, isArchived: false, status: 'Active' as const }; await updateTradeRecord(updatedRecord); setSelectedRecord(updatedRecord); alert('پرونده بازیابی شد.'); };
-    const getAllGuarantees = () => { const list = []; if (selectedRecord && selectedRecord.currencyPurchaseData?.guaranteeCheque) { list.push({ id: 'currency_g', type: 'ارزی', number: selectedRecord.currencyPurchaseData.guaranteeCheque.chequeNumber, bank: selectedRecord.currencyPurchaseData.guaranteeCheque.bank, amount: selectedRecord.currencyPurchaseData.guaranteeCheque.amount, isDelivered: selectedRecord.currencyPurchaseData.guaranteeCheque.isDelivered, toggleFunc: handleToggleCurrencyGuaranteeDelivery }); } if (selectedRecord && selectedRecord.greenLeafData?.guarantees) { selectedRecord.greenLeafData.guarantees.forEach(g => { list.push({ id: g.id, type: 'گمرکی', number: g.guaranteeNumber + (g.chequeNumber ? ` / چک: ${g.chequeNumber}` : ''), bank: g.chequeBank, amount: g.chequeAmount, isDelivered: g.isDelivered, toggleFunc: () => handleToggleGuaranteeDelivery(g.id) }); }); } return list; };
+    const getAllGuarantees = () => { const list = []; if (selectedRecord && selectedRecord.currencyPurchaseData?.guaranteeCheque) { list.push({ id: 'currency_g', type: 'ارزی', number: selectedRecord.currencyPurchaseData.guaranteeCheque.chequeNumber, bank: selectedRecord.currencyPurchaseData.guaranteeCheque.bank, amount: selectedRecord.currencyPurchaseData.guaranteeCheque.amount, isDelivered: selectedRecord.currencyPurchaseData.guaranteeCheque.isDelivered, toggleFunc: handleToggleCurrencyGuaranteeDelivery }); } if (selectedRecord && selectedRecord.greenLeafData?.guarantees) { selectedRecord.greenLeafData.guarantees.forEach(g => { list.push({ id: g.id, type: 'گمرکی', number: g.guaranteeNumber + (g.guaranteeType === 'credit' ? ' (حد اعتبار)' : (g.chequeNumber ? ` / چک: ${g.chequeNumber}` : '')), bank: g.guaranteeType === 'credit' ? 'حد اعتبار بانکی' : (g.chequeBank || 'مشخص‌نشده'), amount: g.guaranteeAmount || g.chequeAmount || 0, isDelivered: g.isDelivered, toggleFunc: () => handleToggleGuaranteeDelivery(g.id) }); }); } return list; };
 
     const openEditMetadata = () => {
         if (!selectedRecord) return;
@@ -1161,7 +1423,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     <td className="p-3 font-mono">{formatNumberString(t.rialAmount || 0)}</td>
                                                     <td className="p-3 font-mono">{t.currencyFee ? t.currencyFee : '-'}</td>
                                                     <td className="p-3 text-xs">{t.exchangeName} {t.brokerName ? `(${t.brokerName})` : ''}</td>
-                                                    <td className="p-3 text-xs font-bold text-green-600 font-mono">{recvAmt ? formatNumberString(recvAmt) : '-'}</td>
+                                                    <td className="p-3 text-xs font-bold text-green-600 font-mono">{(((t.deliveries && t.deliveries.length > 0) ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : recvAmt) ? formatNumberString((t.deliveries && t.deliveries.length > 0) ? t.deliveries.reduce((sum: number, d) => sum + d.amount, 0) : recvAmt) : '-')}{t.deliveries && t.deliveries.length > 0 && <span className="text-[10px] text-gray-500 font-sans block">({t.deliveries.length} تحویل)</span>}</td>
                                                     <td className="p-3 text-xs text-red-600 font-mono">{retAmt ? `${formatNumberString(retAmt)} (${retDate || '-'})` : '-'}</td>
                                                     <td className="p-3 text-center">
                                                         <button onClick={() => handleToggleTrancheDelivery(t.id)} className={`px-2 py-1 rounded text-xs font-bold ${t.isDelivered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -1170,7 +1432,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                                     </td>
                                                     <td className="p-3 font-mono font-bold text-indigo-700 bg-indigo-50">{effectiveRateDisplay > 0 ? formatCurrency(effectiveRateDisplay) : '-'}</td>
                                                     <td className="p-3 flex gap-1">
-                                                        <button onClick={() => handleEditTranche(t)} className="text-amber-500 hover:text-amber-700 p-1"><Edit2 size={16}/></button>
+                                                        <button onClick={() => { setSelectedTrancheForDeliveries(t.id); setNewDeliveryForm({ amount: '', date: '', recipientName: '', description: '' }); }} className="text-green-600 hover:text-green-800 p-1 flex items-center" title="مدیریت تحویل‌ها"><Truck size={16} className="ml-1"/></button><button onClick={() => handleEditTranche(t)} className="text-amber-500 hover:text-amber-700 p-1"><Edit2 size={16}/></button>
                                                         <button onClick={() => handleRemoveTranche(t.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16}/></button>
                                                     </td>
                                                 </tr>
@@ -1387,15 +1649,92 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مربوط به کوتاژ</label><select className="w-full border rounded p-2 text-sm glass-panel" value={selectedDutyForGuarantee} onChange={e => setSelectedDutyForGuarantee(e.target.value)}><option value="">انتخاب کوتاژ</option>{greenLeafForm.duties.map(d => <option key={d.id} value={d.id}>{d.cottageNumber} ({formatCurrency(d.amount)})</option>)}</select></div>
                                         <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره ضمانت‌نامه</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={newGuaranteeDetails.guaranteeNumber} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeNumber: e.target.value})} /></div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">شماره چک تضمین</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={newGuaranteeDetails.chequeNumber} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeNumber: e.target.value})} /></div>
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">مبلغ چک (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newGuaranteeDetails.chequeAmount)} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeAmount: deformatNumberString(e.target.value)})} /></div>
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">بانک چک</label><select className="w-full border rounded p-2 text-sm glass-panel" value={newGuaranteeDetails.chequeBank} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
-                                        <div className="space-y-1"><label className="text-xs font-bold text-gray-700">سپرده نقدی (ریال)</label><input className="w-full border rounded p-2 text-sm dir-ltr" value={formatNumberString(newGuaranteeDetails.cashAmount)} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, cashAmount: deformatNumberString(e.target.value)})} /></div>
+
+                                    {/* Guarantee Type selection and Amount */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700">نوع ضمانت‌نامه</label>
+                                            <select 
+                                                className="w-full border rounded p-2 text-sm glass-panel" 
+                                                value={newGuaranteeDetails.guaranteeType || 'cheque'} 
+                                                onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeType: e.target.value as 'cheque' | 'credit'})}
+                                            >
+                                                <option value="cheque">چک ضمانت‌نامه</option>
+                                                <option value="credit">حد اعتبار</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700">مبلغ ضمانت‌نامه (ریال)</label>
+                                            <input 
+                                                className="w-full border rounded p-2 text-sm dir-ltr" 
+                                                value={formatNumberString(newGuaranteeDetails.guaranteeAmount)} 
+                                                onChange={e => {
+                                                    const val = deformatNumberString(e.target.value);
+                                                    setNewGuaranteeDetails({...newGuaranteeDetails, guaranteeAmount: val, chequeAmount: newGuaranteeDetails.guaranteeType === 'credit' ? 0 : val});
+                                                }} 
+                                                placeholder="وارد کنید..."
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700">سپرده نقدی (ریال)</label>
+                                            <input 
+                                                className="w-full border rounded p-2 text-sm dir-ltr" 
+                                                value={formatNumberString(newGuaranteeDetails.cashAmount)} 
+                                                onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, cashAmount: deformatNumberString(e.target.value)})} 
+                                            />
+                                        </div>
                                     </div>
+
+                                    {/* Cheque specific details (hidden if type is credit) */}
+                                    {(newGuaranteeDetails.guaranteeType || 'cheque') === 'cheque' && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white p-3 rounded border border-orange-200">
+                                            <div className="space-y-1"><label className="text-xs font-bold text-gray-600">شماره چک تضمین</label><input className="w-full border rounded p-1.5 text-xs dir-ltr" value={newGuaranteeDetails.chequeNumber || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeNumber: e.target.value})} placeholder="شماره چک..." /></div>
+                                            <div className="space-y-1"><label className="text-xs font-bold text-gray-600">بانک صادرکننده چک</label><select className="w-full border rounded p-1.5 text-xs glass-panel" value={newGuaranteeDetails.chequeBank || ''} onChange={e => setNewGuaranteeDetails({...newGuaranteeDetails, chequeBank: e.target.value})}><option value="">انتخاب بانک</option>{availableBanks.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
+                                        </div>
+                                    )}
+
+                                    {/* Real-time Validation Warning Indicator */}
+                                    {selectedDutyForGuarantee && (() => {
+                                        const duty = greenLeafForm.duties.find(d => d.id === selectedDutyForGuarantee);
+                                        if (!duty) return null;
+                                        const totalAllocated = (Number(newGuaranteeDetails.guaranteeAmount) || 0) + (Number(newGuaranteeDetails.cashAmount) || 0);
+                                        const diff = duty.amount - totalAllocated;
+                                        return (
+                                            <div className={`text-xs p-2.5 rounded-lg font-bold flex justify-between items-center transition-all ${diff === 0 ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                                                <span>مبلغ کوتاژ: <span className="font-mono">{formatNumberString(duty.amount)}</span></span>
+                                                <span>مجموع ثبت‌شده: <span className="font-mono">{formatNumberString(totalAllocated)}</span></span>
+                                                <span>باقیمانده: <span className={`font-mono ${diff !== 0 ? 'text-red-700' : ''}`}>{formatNumberString(diff)}</span></span>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <button onClick={handleAddGuarantee} className="w-full bg-orange-600 text-white p-2 rounded-lg font-bold hover:bg-orange-700">ثبت ضمانت‌نامه</button>
                                 </div>
-                                <div className="space-y-2">{greenLeafForm.guarantees?.map(g => (<div key={g.id} className="border p-3 rounded-lg bg-gray-50 flex justify-between items-center"><div className="text-sm space-y-1"><div className="font-bold">شماره: {g.guaranteeNumber}</div><div className="text-xs text-gray-600">چک: {g.chequeNumber} ({g.chequeBank}) - مبلغ: {formatCurrency(g.chequeAmount || 0)}</div><div className="text-xs text-gray-600">سپرده نقدی: {formatCurrency(g.cashAmount || 0)}</div></div><div className="flex gap-2 items-center"><button onClick={() => handleToggleGuaranteeDelivery(g.id)} className={`text-xs px-2 py-1 rounded font-bold transition-colors ${g.isDelivered ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{g.isDelivered ? 'عودت شد' : 'نزد سازمان'}</button><button onClick={()=>handleDeleteGuarantee(g.id)} className="text-red-500"><Trash2 size={16}/></button></div></div>))}</div>
+                                <div className="space-y-2">
+                                    {greenLeafForm.guarantees?.map(g => (
+                                        <div key={g.id} className="border p-3 rounded-lg bg-gray-50 flex justify-between items-center text-sm">
+                                            <div className="space-y-1">
+                                                <div className="font-bold text-gray-800">شماره ضمانت‌نامه: <span className="font-mono">{g.guaranteeNumber}</span></div>
+                                                <div className="text-xs text-gray-600 flex flex-wrap gap-x-3">
+                                                    <span>نوع: {g.guaranteeType === 'credit' ? '💡 حد اعتبار بانکی' : '🎫 چک ضمانت‌نامه'}</span>
+                                                    {g.guaranteeAmount ? <span>مبلغ ضمانت: <span className="font-mono font-bold text-orange-700">{formatCurrency(g.guaranteeAmount)}</span></span> : null}
+                                                    {g.cashAmount && g.cashAmount > 0 ? <span>سپرده نقدی: <span className="font-mono font-bold text-green-700">{formatCurrency(g.cashAmount)}</span></span> : null}
+                                                </div>
+                                                {g.guaranteeType !== 'credit' && g.chequeNumber && (
+                                                    <div className="text-xs text-gray-500">شماره چک: {g.chequeNumber} {g.chequeBank ? `(${g.chequeBank})` : ''}</div>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 items-center">
+                                                <button onClick={() => handleToggleGuaranteeDelivery(g.id)} className={`text-xs px-2 py-1 rounded font-bold transition-colors ${g.isDelivered ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {g.isDelivered ? 'عودت شد' : 'نزد سازمان'}
+                                                </button>
+                                                <button onClick={()=>handleDeleteGuarantee(g.id)} className="text-red-500 hover:text-red-700">
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1838,6 +2177,128 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     </div>
                 </div>
             )}
+            {/* Tranche Deliveries Modal */}
+            {selectedTrancheForDeliveries && (() => {
+                const tr = currencyForm.tranches?.find(t => t.id === selectedTrancheForDeliveries);
+                if (!tr) return null;
+                const deliveries = tr.deliveries || [];
+                return (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[220] flex items-center justify-center p-4">
+                        <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl bg-white p-6 animate-scale-in max-h-[90vh] overflow-y-auto text-right" dir="rtl">
+                            <div className="flex justify-between items-center mb-6 border-b pb-3">
+                                <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                                    <Truck size={22} className="text-green-600"/>
+                                    ثبت و مدیریت تحویل‌های پارت
+                                </h3>
+                                <button onClick={() => setSelectedTrancheForDeliveries(null)} className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} className="text-gray-400 hover:text-red-500" /></button>
+                            </div>
+
+                            {/* Tranche Specs Card */}
+                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                <div><span className="text-gray-500 block">مبلغ کل پارت:</span><span className="font-bold font-mono text-amber-800 text-sm">{formatNumberString(tr.amount)} {tr.currencyType}</span></div>
+                                <div><span className="text-gray-500 block">کل هزینه ریالی:</span><span className="font-bold font-mono text-gray-800">{formatNumberString(tr.rialAmount || 0)} ریال</span></div>
+                                <div><span className="text-gray-500 block">صرافی/کارگزار:</span><span className="font-bold">{tr.exchangeName || '-'} {tr.brokerName ? `(${tr.brokerName})` : ''}</span></div>
+                                <div><span className="text-gray-500 block">تاریخ خرید:</span><span className="font-bold">{tr.date || '-'}</span></div>
+                            </div>
+
+                            {/* Add Delivery Form */}
+                            <div className="border p-4 rounded-xl mb-6 bg-gray-50 text-right">
+                                <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-1">افزودن تحویل جدید</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-600">مقدار تحویلی *</label>
+                                        <input 
+                                            className="w-full border rounded-lg p-2 text-sm dir-ltr font-bold text-green-700 bg-white" 
+                                            value={formatNumberString(newDeliveryForm.amount)} 
+                                            onChange={e => setNewDeliveryForm({...newDeliveryForm, amount: deformatNumberString(e.target.value)})} 
+                                            placeholder="مقدار ارز..." 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-600">تاریخ تحویل</label>
+                                        <input 
+                                            className="w-full border rounded-lg p-2 text-sm dir-ltr bg-white" 
+                                            value={newDeliveryForm.date} 
+                                            onChange={e => setNewDeliveryForm({...newDeliveryForm, date: e.target.value})} 
+                                            placeholder="۱۴۰۳/۰۱/۰۱" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-600 font-sans">تحویل‌گیرنده</label>
+                                        <input 
+                                            className="w-full border rounded-lg p-2 text-sm bg-white" 
+                                            value={newDeliveryForm.recipientName} 
+                                            onChange={e => setNewDeliveryForm({...newDeliveryForm, recipientName: e.target.value})} 
+                                            placeholder="نام شخص..." 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold text-gray-600 font-sans">توضیحات</label>
+                                        <input 
+                                            className="w-full border rounded-lg p-2 text-sm bg-white" 
+                                            value={newDeliveryForm.description} 
+                                            onChange={e => setNewDeliveryForm({...newDeliveryForm, description: e.target.value})} 
+                                            placeholder="توضیحات..." 
+                                        />
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={handleAddTrancheDelivery} 
+                                    className="mt-4 w-full bg-green-600 text-white rounded-lg p-2 font-bold hover:bg-green-700 text-sm transition-all flex items-center justify-center gap-1"
+                                >
+                                    <Plus size={16}/> ثبت تحویل
+                                </button>
+                            </div>
+
+                            {/* Deliveries List */}
+                            <h4 className="font-bold text-sm text-gray-700 mb-3">تحویل‌های ثبت شده</h4>
+                            {deliveries.length === 0 ? (
+                                <div className="text-center py-6 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">تحویلی برای این پارت ثبت نشده است.</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs text-right mt-1">
+                                        <thead className="bg-gray-100 text-gray-700">
+                                            <tr>
+                                                <th className="p-3">تاریخ</th>
+                                                <th className="p-3">مقدار تحویلی</th>
+                                                <th className="p-3">تحویل‌گیرنده</th>
+                                                <th className="p-3">توضیحات</th>
+                                                <th className="p-3">حذف</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {deliveries.map((delivery) => (
+                                                <tr key={delivery.id} className="border-b hover:bg-gray-50">
+                                                    <td className="p-3 font-mono">{delivery.date || '-'}</td>
+                                                    <td className="p-3 font-mono font-bold text-green-705">{formatNumberString(delivery.amount)} {tr.currencyType}</td>
+                                                    <td className="p-3">{delivery.recipientName || '-'}</td>
+                                                    <td className="p-3 text-gray-500">{delivery.description || '-'}</td>
+                                                    <td className="p-3">
+                                                        <button 
+                                                            onClick={() => handleRemoveTrancheDelivery(tr.id, delivery.id)} 
+                                                            className="text-red-500 hover:text-red-700"
+                                                        >
+                                                            <Trash2 size={16}/>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="bg-green-50 font-bold">
+                                            <tr>
+                                                <td className="p-3">مجموع تحویل‌ها</td>
+                                                <td className="p-3 font-mono text-green-800">{formatNumberString(deliveries.reduce((sum: number, d) => sum + d.amount, 0))} {tr.currencyType}</td>
+                                                <td colSpan={3}></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Subtab Back Trigger */}
             {viewMode === 'details' ? (
                 <button data-subtab-back="true" onClick={() => { setViewMode('dashboard'); setSelectedRecord(null); }} className="hidden" />

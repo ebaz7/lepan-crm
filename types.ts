@@ -718,6 +718,14 @@ export interface TradeStageData {
     allocationExpiry?: string;
 }
 
+export interface CurrencyDelivery {
+    id: string;
+    amount: number;
+    date: string;
+    recipientName?: string;
+    description?: string;
+}
+
 export interface CurrencyTranche {
     id: string;
     amount: number;
@@ -733,6 +741,7 @@ export interface CurrencyTranche {
     returnAmount?: number;
     returnDate?: string;
     receivedAmount?: number;
+    deliveries?: CurrencyDelivery[];
 }
 
 export interface GuaranteeCheque {
@@ -899,6 +908,8 @@ export interface GreenLeafGuarantee {
     cashDate?: string;
     part?: string;
     guaranteeBank?: string;
+    guaranteeType?: 'cheque' | 'credit';
+    guaranteeAmount?: number;
 }
 
 export interface GreenLeafTax {
