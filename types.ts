@@ -320,9 +320,6 @@ export interface SystemSettings {
   botMeetingMinutesSecondGroupIdWhatsApp?: string;
   botMeetingMinutesNotificationMode?: 'after_approval' | 'immediately';
   botPaymentNotificationMode?: 'after_submit' | 'after_final' | 'step_by_step';
-  botSecurityGroupId?: string;
-  botSecurityGroupIdBale?: string;
-  botSecurityGroupIdWhatsApp?: string;
   botForceJoinChannels?: { name: string; link: string; id: string; platform?: 'telegram' | 'bale' | 'all' }[];
   botForceJoinEnabled?: boolean;
   botStoreLinks?: { title: string; url: string }[];

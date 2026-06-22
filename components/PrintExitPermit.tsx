@@ -244,73 +244,6 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
     u.phoneNumber?.includes(contactSearch)
   );
 
-  const configuredGroups = (() => {
-    if (!settings || !sharePlatform) return [];
-    
-    const groups: { name: string; id: string; type: string }[] = [];
-
-    if (sharePlatform === 'telegram') {
-      if (settings.exitPermitFirstGroupConfig?.telegramId) {
-        groups.push({ name: 'گروه اول خروج کارخانه (تلگرام)', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'EXIT_GROUP_1' });
-      }
-      if (settings.exitPermitSecondGroupConfig?.telegramId) {
-        groups.push({ name: 'گروه دوم خروج کارخانه (تلگرام)', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'EXIT_GROUP_2' });
-      }
-      if (settings.exitPermitThirdGroupConfig?.telegramId) {
-        groups.push({ name: 'گروه سوم خروج کارخانه (تلگرام)', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'EXIT_GROUP_3' });
-      }
-      if (settings.botSecurityGroupId) {
-        groups.push({ name: 'گروه انتظامات (تلگرام)', id: settings.botSecurityGroupId, type: 'SECURITY' });
-      }
-      if (settings.botBijakGroupId) {
-        groups.push({ name: 'گروه انبار/بیجک (تلگرام)', id: settings.botBijakGroupId, type: 'WAREHOUSE' });
-      }
-      if (settings.botAccountingGroupId || settings.botAccountingGroupIdTele) {
-        groups.push({ name: 'گروه مالی/حسابداری (تلگرام)', id: settings.botAccountingGroupId || settings.botAccountingGroupIdTele || '', type: 'ACCOUNTING' });
-      }
-    } else if (sharePlatform === 'bale') {
-      if (settings.exitPermitFirstGroupConfig?.baleId) {
-        groups.push({ name: 'گروه اول خروج کارخانه (بله)', id: settings.exitPermitFirstGroupConfig.baleId, type: 'EXIT_GROUP_1' });
-      }
-      if (settings.exitPermitSecondGroupConfig?.baleId) {
-        groups.push({ name: 'گروه دوم خروج کارخانه (بله)', id: settings.exitPermitSecondGroupConfig.baleId, type: 'EXIT_GROUP_2' });
-      }
-      if (settings.exitPermitThirdGroupConfig?.baleId) {
-        groups.push({ name: 'گروه سوم خروج کارخانه (بله)', id: settings.exitPermitThirdGroupConfig.baleId, type: 'EXIT_GROUP_3' });
-      }
-      if (settings.botSecurityGroupIdBale) {
-        groups.push({ name: 'گروه انتظامات (بله)', id: settings.botSecurityGroupIdBale, type: 'SECURITY' });
-      }
-      if (settings.botBijakGroupIdBale) {
-        groups.push({ name: 'گروه انبار/بیجک (بله)', id: settings.botBijakGroupIdBale, type: 'WAREHOUSE' });
-      }
-      if (settings.botAccountingGroupIdBale) {
-        groups.push({ name: 'گروه مالی/حسابداری (بله)', id: settings.botAccountingGroupIdBale, type: 'ACCOUNTING' });
-      }
-    } else if (sharePlatform === 'whatsapp') {
-      if (settings.exitPermitFirstGroupConfig?.groupId) {
-        groups.push({ name: 'گروه اول خروج کارخانه (واتساپ)', id: settings.exitPermitFirstGroupConfig.groupId, type: 'EXIT_GROUP_1' });
-      }
-      if (settings.exitPermitSecondGroupConfig?.groupId) {
-        groups.push({ name: 'گروه دوم خروج کارخانه (واتساپ)', id: settings.exitPermitSecondGroupConfig.groupId, type: 'EXIT_GROUP_2' });
-      }
-      if (settings.exitPermitThirdGroupConfig?.groupId) {
-        groups.push({ name: 'گروه سوم خروج کارخانه (واتساپ)', id: settings.exitPermitThirdGroupConfig.groupId, type: 'EXIT_GROUP_3' });
-      }
-      if (settings.botSecurityGroupIdWhatsApp) {
-        groups.push({ name: 'گروه انتظامات (واتساپ)', id: settings.botSecurityGroupIdWhatsApp, type: 'SECURITY' });
-      }
-      if (settings.botBijakGroupIdWhatsApp) {
-        groups.push({ name: 'گروه انبار/بیجک (واتساپ)', id: settings.botBijakGroupIdWhatsApp, type: 'WAREHOUSE' });
-      }
-      if (settings.botAccountingGroupIdWhatsApp) {
-        groups.push({ name: 'گروه مالی/حسابداری (واتساپ)', id: settings.botAccountingGroupIdWhatsApp, type: 'ACCOUNTING' });
-      }
-    }
-
-    return groups.filter(g => g.id);
-  })();
-
   const displayItems = permit.items && permit.items.length > 0 ? permit.items : [{ id: 'legacy', goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0, deliveredCartonCount: permit.cartonCount || 0, deliveredWeight: permit.weight || 0 }];
   const displayDestinations = permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: 'legacy', recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }];
   
@@ -649,27 +582,6 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                              </div>
                          </div>
                          <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                             {/* System Configured Groups */}
-                             {configuredGroups.length > 0 && (
-                                 <>
-                                     <div className="px-4 py-2 bg-indigo-50 text-[10px] font-black text-indigo-700 flex items-center gap-1.5 border-b border-indigo-100">👥 گروه‌های اطلاع‌رسانی سیستم</div>
-                                     {configuredGroups.filter(g => g.name.toLowerCase().includes(contactSearch.toLowerCase()) || g.id.includes(contactSearch)).map(g => (
-                                         <button 
-                                             key={`sys_group_${g.id}_${g.type}`} 
-                                             onClick={() => handleShare(g.id)} 
-                                             className="w-full text-right px-4 py-3 hover:bg-indigo-50/25 text-xs flex justify-between items-center border-b border-gray-50 last:border-0 transition-colors group"
-                                         >
-                                             <div className="flex flex-col">
-                                                 <span className="font-bold text-gray-800">{g.name}</span>
-                                                 <span className="text-[9px] text-gray-400 font-mono mt-0.5">{g.id}</span>
-                                             </div>
-                                             <div className="opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
-                                                 <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm flex items-center gap-1 font-sans">ارسال به گروه <Share2 size={10}/></div>
-                                             </div>
-                                         </button>
-                                     ))}
-                                 </>
-                             )}
                              {/* Staff List */}
                              <div className="px-4 py-2 bg-gray-100 text-[10px] font-bold text-gray-400">کاربران نرم افزار (گروه های بله/تلگرام)</div>
                              {filteredStaff.map(u => {

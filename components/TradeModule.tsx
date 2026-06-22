@@ -7,7 +7,6 @@ import { Container, Plus, Search, CheckCircle2, Save, Trash2, X, Package, ArrowR
 import { apiCall } from '../services/apiService';
 import { downloadAndOpenFile } from '../services/fileService';
 import AllocationReport from './AllocationReport';
-import DetailsView from './trade/DetailsView';
 import CurrencyReport from './reports/CurrencyReport';
 import CompanyPerformanceReport from './reports/CompanyPerformanceReport';
 import PrintFinalCostReport from './print/PrintFinalCostReport';
@@ -46,7 +45,6 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
     const [showArchived, setShowArchived] = useState(false);
-    const [dashboardLayout, setDashboardLayout] = useState<'table' | 'folders'>('table');
 
     const [viewMode, setViewMode] = useState<'dashboard' | 'details' | 'reports'>('dashboard');
     const [activeReport, setActiveReport] = useState<ReportType>('general');
@@ -354,24 +352,6 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         }
         return [];
     }, [safeRecords, showArchived, navLevel, selectedCompany]);
-
-    const filteredRecords = useMemo(() => {
-        const currentRecords = safeRecords.filter(r => showArchived ? r.isArchived : !r.isArchived);
-        return currentRecords.filter(r => {
-            const matchSearch = searchTerm.trim() === '' || 
-                (r.goodsName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                (r.fileNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (r.sellerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (r.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (r.registrationNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (r.items || []).some(item => (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
-
-            const matchCompany = !selectedCompany || r.company === selectedCompany;
-            const matchGroup = !selectedGroup || r.commodityGroup === selectedGroup;
-
-            return matchSearch && matchCompany && matchGroup;
-        });
-    }, [safeRecords, showArchived, searchTerm, selectedCompany, selectedGroup]);
 
     const getStageData = (record: TradeRecord | null, stage: TradeStage): TradeStageData => {
         if (!record || !record.stages) return { stage, isCompleted: false, description: '', costRial: 0, costCurrency: 0, currencyType: 'EUR', attachments: [], updatedAt: 0, updatedBy: '' };
@@ -1237,139 +1217,34 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     };
 
     if (selectedRecord && viewMode === 'details') {
+        const CurrentDetailsComponent = tradeFormMap[selectedRecord.commodityGroup] || null;
         return (
-            <DetailsView 
-                selectedRecord={selectedRecord}
-                setSelectedRecord={setSelectedRecord}
-                setViewMode={setViewMode}
-                updateTradeRecord={updateTradeRecord}
-                currentUser={currentUser}
-                settings={settings}
-                availableBanks={availableBanks}
-                operatingBanks={operatingBanks}
-                availableCompanies={availableCompanies}
-                companySpecificBanks={companySpecificBanks}
-                activeTab={activeTab}
-                setActiveTab={(t) => setActiveTab(t as any)}
-                insuranceForm={insuranceForm}
-                setForm={setInsuranceForm}
-                newEndorsement={newEndorsement}
-                setNewEndorsement={setNewEndorsement}
-                endorsementType={endorsementType}
-                setEndorsementType={setEndorsementType}
-                handleAddEndorsement={handleAddEndorsement}
-                handleDeleteEndorsement={handleDeleteEndorsement}
-                handleSaveInsurance={handleSaveInsurance}
-                newItem={newItem}
-                setNewItem={setNewItem}
-                editingItemId={editingItemId}
-                setEditingItemId={setEditingItemId}
-                handleAddItem={handleAddItem}
-                handleEditItem={handleEditItem}
-                handleRemoveItem={handleRemoveItem}
-                newLicenseTx={newLicenseTx}
-                setNewLicenseTx={setNewLicenseTx}
-                handleAddLicenseTx={handleAddLicenseTx}
-                handleRemoveLicenseTx={handleRemoveLicenseTx}
-                inspectionForm={inspectionForm}
-                setInspectionForm={setInspectionForm}
-                newInspectionCertificate={newInspectionCertificate}
-                setNewInspectionCertificate={setNewInspectionCertificate}
-                newInspectionPayment={newInspectionPayment}
-                setNewInspectionPayment={setNewInspectionPayment}
-                handleAddInspectionCertificate={handleAddInspectionCertificate}
-                handleDeleteInspectionCertificate={handleDeleteInspectionCertificate}
-                handleAddInspectionPayment={handleAddInspectionPayment}
-                handleDeleteInspectionPayment={handleDeleteInspectionPayment}
-                clearanceForm={clearanceForm}
-                setClearanceForm={setClearanceForm}
-                newWarehouseReceipt={newWarehouseReceipt}
-                setNewWarehouseReceipt={setNewWarehouseReceipt}
-                newClearancePayment={newClearancePayment}
-                setNewClearancePayment={setNewClearancePayment}
-                handleAddWarehouseReceipt={handleAddWarehouseReceipt}
-                handleDeleteWarehouseReceipt={handleDeleteWarehouseReceipt}
-                handleAddClearancePayment={handleAddClearancePayment}
-                handleDeleteClearancePayment={handleDeleteClearancePayment}
-                greenLeafForm={greenLeafForm}
-                setGreenLeafForm={setGreenLeafForm}
-                newCustomsDuty={newCustomsDuty}
-                setNewCustomsDuty={setNewCustomsDuty}
-                newGuaranteeDetails={newGuaranteeDetails}
-                setNewGuaranteeDetails={setNewGuaranteeDetails}
-                selectedDutyForGuarantee={selectedDutyForGuarantee}
-                setSelectedDutyForGuarantee={setSelectedDutyForGuarantee}
-                newTax={newTax}
-                setNewTax={setNewTax}
-                newRoadToll={newRoadToll}
-                setNewRoadToll={setNewRoadToll}
-                handleAddCustomsDuty={handleAddCustomsDuty}
-                handleDeleteCustomsDuty={handleDeleteCustomsDuty}
-                handleAddGuarantee={handleAddGuarantee}
-                handleDeleteGuarantee={handleDeleteGuarantee}
-                handleToggleGuaranteeDelivery={handleToggleGuaranteeDelivery}
-                handleAddTax={handleAddTax}
-                handleDeleteTax={handleDeleteTax}
-                handleAddRoadToll={handleAddRoadToll}
-                handleDeleteRoadToll={handleDeleteRoadToll}
-                internalShippingForm={internalShippingForm}
-                setInternalShippingForm={setInternalShippingForm}
-                newShippingPayment={newShippingPayment}
-                setNewShippingPayment={setNewShippingPayment}
-                handleAddShippingPayment={handleAddShippingPayment}
-                handleDeleteShippingPayment={handleDeleteShippingPayment}
-                agentForm={agentForm}
-                setAgentForm={setAgentForm}
-                newAgentPayment={newAgentPayment}
-                setNewAgentPayment={setNewAgentPayment}
-                handleAddAgentPayment={handleAddAgentPayment}
-                handleDeleteAgentPayment={handleDeleteAgentPayment}
-                currencyForm={currencyForm}
-                setCurrencyForm={setCurrencyForm}
-                newCurrencyTranche={newCurrencyTranche}
-                setNewCurrencyTranche={setNewCurrencyTranche}
-                handleAddCurrencyTranche={handleAddCurrencyTranche}
-                editingTrancheId={editingTrancheId}
-                setEditingTrancheId={setEditingTrancheId}
-                setSelectedTrancheForDeliveries={setSelectedTrancheForDeliveries}
-                handleAddCurrencyGuarantee={handleAddCurrencyGuarantee}
-                handleDeleteCurrencyGuarantee={handleDeleteCurrencyGuarantee}
-                handleToggleCurrencyGuaranteeDelivery={handleToggleCurrencyGuaranteeDelivery}
-                shippingDocForm={shippingDocForm}
-                setShippingDocForm={setShippingDocForm}
-                activeShippingSubTab={activeShippingSubTab}
-                setActiveShippingSubTab={setActiveShippingSubTab}
-                newInvoiceItem={newInvoiceItem}
-                setNewInvoiceItem={setNewInvoiceItem}
-                newPackingItem={newPackingItem}
-                setNewPackingItem={setNewPackingItem}
-                handleAddInvoiceItem={handleAddInvoiceItem}
-                handleAddPackingItem={handleAddPackingItem}
-                handleSaveShippingDoc={handleSaveShippingDoc}
-                handleDeleteShippingDoc={handleDeleteShippingDoc}
-                handleSyncInvoiceToProforma={handleSyncInvoiceToProforma}
-                docFileInputRef={docFileInputRef}
-                handleDocFileChange={handleDocFileChange}
-                uploadingDocFile={uploadingDocFile}
-                editingStage={editingStage}
-                setEditingStage={setEditingStage}
-                stageFormData={stageFormData}
-                setStageFormData={setStageFormData}
-                handleSaveStage={handleSaveStage}
-                fileInputRef={fileInputRef}
-                handleStageFileChange={handleStageFileChange}
-                uploadingStageFile={uploadingStageFile}
-                handleArchiveRecord={handleArchiveRecord}
-                handleUnarchiveRecord={handleUnarchiveRecord}
-                STAGES={STAGES}
-            />
+            <div className="flex flex-col h-full bg-gray-50/50">
+                <div className="p-4 bg-white border-b sticky top-0 z-30 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <button onClick={() => {setSelectedRecord(null); setViewMode('list');}} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all active:scale-95 text-gray-700">
+                            <ChevronRight size={18}/>
+                        </button>
+                        <div className="border-r pr-3">
+                            <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                                پرونده: {selectedRecord.fileNumber}
+                                {selectedRecord.status === 'Completed' && <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold">پایان یافته</span>}
+                            </h2>
+                            <p className="text-xs text-gray-500 font-medium">{selectedRecord.goodsName} - {selectedRecord.company}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar">
+                    {CurrentDetailsComponent && <CurrentDetailsComponent record={selectedRecord} onUpdateRecord={updateTradeRecord} />}
+                </div>
+            </div>
         );
     }
 
     // Default Dashboard View
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <Container className="text-blue-600" /> پرونده‌های بازرگانی
@@ -1380,48 +1255,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                         {selectedGroup && <><ChevronLeft size={14} className="shrink-0 text-gray-400"/> <span className="shrink-0 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full font-bold">{selectedGroup}</span></>}
                     </div>
                 </div>
-                <div className="flex flex-wrap lg:flex-nowrap gap-2 w-full xl:w-auto justify-end items-center">
-                    {/* View Switcher Toggle */}
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/65">
-                        <button
-                            type="button"
-                            onClick={() => { setDashboardLayout('table'); goRoot(); }}
-                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 ${dashboardLayout === 'table' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}
-                            title="نمای جدولی پرونده‌ها"
-                        >
-                            <ListFilter size={14} /> لیست پرونده‌ها
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setDashboardLayout('folders'); goRoot(); }}
-                            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 ${dashboardLayout === 'folders' ? 'bg-white text-blue-600 shadow' : 'text-slate-500 hover:text-slate-700'}`}
-                            title="نمای پوشه‌ای گروه‌بندی شده"
-                        >
-                            <FolderOpen size={14} /> نمای پوشه‌ای
-                        </button>
-                    </div>
-
-                    {/* Filters for Flat List Mode */}
-                    {dashboardLayout === 'table' && (
-                        <>
-                            <select
-                                value={selectedCompany || ''}
-                                onChange={(e) => setSelectedCompany(e.target.value || null)}
-                                className="border border-gray-300 rounded-xl px-2 py-2 text-xs bg-white dark:bg-slate-850 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 transition-all cursor-pointer h-10"
-                            >
-                                <option value="">همه شرکت‌ها</option>
-                                {availableCompanies.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                            <select
-                                value={selectedGroup || ''}
-                                onChange={(e) => setSelectedGroup(e.target.value || null)}
-                                className="border border-gray-300 rounded-xl px-2 py-2 text-xs bg-white dark:bg-slate-850 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700 transition-all cursor-pointer h-10"
-                            >
-                                <option value="">همه گروه‌ها</option>
-                                {commodityGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                            </select>
-                        </>
-                    )}
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
                     <div className="relative flex-1 sm:flex-none min-w-[120px]">
                         <input className="w-full border rounded-xl pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
@@ -1443,85 +1277,8 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 </div>
             </div>
 
-            {/* Dashboard Workspace */}
-            {dashboardLayout === 'table' ? (
-                filteredRecords.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-gray-200 text-center shadow-sm w-full">
-                        <div className="bg-slate-50 p-4 rounded-full text-slate-400 mb-4 animate-pulse">
-                            <FolderOpen size={48} />
-                        </div>
-                        <h3 className="font-bold text-slate-800 text-lg mb-2">هیچ پرونده بازرگانی یافت نشد</h3>
-                        <p className="text-sm text-slate-500 max-w-sm mb-6 font-sans">
-                            پرونده جدیدی ثبت کنید تا بتوانید مراحل سفارش، پروفرما، تخصیص ارز، گمرک و بهای تمام‌شده را مدیریت و پیگیری نمایید.
-                        </p>
-                        <button
-                            onClick={() => setShowNewModal(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
-                        >
-                            <Plus size={18} /> ثبت پرونده بازرگانی جدید
-                        </button>
-                    </div>
-                ) : (
-                    <div className="overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm w-full">
-                        <div className="overflow-x-auto border-none">
-                            <table className="w-full text-sm text-right border-collapse">
-                                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-rose-200/50">
-                                    <tr>
-                                        <th className="p-4 text-slate-700 text-right">شماره پرونده</th>
-                                        <th className="p-4 text-slate-700 text-right">شرکت</th>
-                                        <th className="p-4 text-slate-700 text-right">نام کالا (شرح کلی)</th>
-                                        <th className="p-4 text-slate-700 text-right">فروشنده</th>
-                                        <th className="p-4 text-slate-700 text-right">تاریخ شروع</th>
-                                        <th className="p-4 text-center text-slate-700">وضعیت</th>
-                                        <th className="p-4 text-center text-slate-700">عملیات</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredRecords.map((record) => (
-                                        <tr 
-                                            key={record.id}
-                                            onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }}
-                                            className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
-                                        >
-                                            <td className="p-4 font-mono font-bold text-blue-600">{record.fileNumber}</td>
-                                            <td className="p-4 font-medium text-slate-600">{record.company}</td>
-                                            <td className="p-4 font-bold text-slate-800 group-hover:text-blue-600 transition-colors text-right">{record.goodsName}</td>
-                                            <td className="p-4 text-slate-600">{record.sellerName || '-'}</td>
-                                            <td className="p-4 text-slate-500 text-xs font-mono">{record.startDate ? new Date(record.startDate).toLocaleDateString('fa-IR') : '-'}</td>
-                                            <td className="p-4 text-center">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    record.status === 'Completed' ? 'bg-emerald-55 text-emerald-700 border border-emerald-250' : 'bg-blue-50 text-blue-700 border border-blue-100'
-                                                }`}>
-                                                    {record.status === 'Completed' ? 'تکمیل شده' : 'جاری'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={() => { setSelectedRecord(record); setViewMode('details'); setActiveTab('timeline'); }}
-                                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="مشاهده پرونده"
-                                                    >
-                                                        <ExternalLink size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => handleDeleteRecord(record.id, e)}
-                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                        title="حذف پرونده"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Dashboard Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {navLevel !== 'GROUP' ? (
                     groupedData.map((item: any) => (
                         <div key={item.name} onClick={() => item.type === 'company' ? goCompany(item.name) : goGroup(item.name)} className="glass-panel p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden">
@@ -1540,12 +1297,12 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                     safeRecords
                         .filter(r => {
                             const matchSearch = searchTerm.trim() === '' || 
-                                (r.goodsName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                (r.fileNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                r.goodsName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                r.fileNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (r.sellerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (r.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (r.registrationNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                (r.items || []).some(item => (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+                                r.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
                             return (showArchived ? r.isArchived : !r.isArchived) && 
                                    ((r.company || 'بدون شرکت') === selectedCompany) && 
@@ -1576,8 +1333,6 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                         ))
                 )}
             </div>
-            
-            )}
             
             {/* New Record Modal */}
             {showNewModal && (
