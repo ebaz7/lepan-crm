@@ -7,7 +7,8 @@ import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText,
+    Send
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
@@ -31,6 +32,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [activeAutoSends, setActiveAutoSends] = useState<ExitPermit[]>([]);
+    const [resendingId, setResendingId] = useState<string | null>(null);
 
     useEffect(() => { loadData(); }, [financialYear]);
     
@@ -356,6 +358,28 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
+    const handleResendNotification = async (p: ExitPermit) => {
+        setResendingId(p.id);
+        try {
+            const res = await fetch(`/api/exit-permits/${p.id}/resend-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUser.id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ اعلان خروج کالا با موفقیت مجدداً ارسال گردید.');
+            } else {
+                alert('❌ خطا در ارسال مجدد: ' + (data.error || 'ناشناخته'));
+            }
+        } catch (err: any) {
+            console.error("Resend error", err);
+            alert('❌ خطای ارتباط با سرور: ' + err.message);
+        } finally {
+            setResendingId(null);
+        }
+    };
+
     const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string; attachments: {fileName: string, data: string}[] }) => {
         if (!securityFinalize) return;
         const currentPermit = securityFinalize;
@@ -649,6 +673,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                      </button>
                 )}
                 <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
+                <button
+                    onClick={() => handleResendNotification(p)}
+                    disabled={resendingId === p.id}
+                    className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg flex items-center hover:bg-emerald-100"
+                    title="ارسال مجدد به گروه‌ها"
+                >
+                    {resendingId === p.id ? (
+                        <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                        <Send size={16} />
+                    )}
+                </button>
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
                 )}
@@ -703,6 +739,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                  </button>
                             )}
                             <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
+                            <button
+                                onClick={() => handleResendNotification(p)}
+                                disabled={resendingId === p.id}
+                                className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 flex items-center gap-1"
+                                title="ارسال مجدد به گروه‌ها"
+                            >
+                                {resendingId === p.id ? (
+                                    <Loader2 size={18} className="animate-spin" />
+                                ) : (
+                                    <Send size={18} />
+                                )}
+                            </button>
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
                                 <>
                                     <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
