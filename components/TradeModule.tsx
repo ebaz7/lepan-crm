@@ -1217,12 +1217,13 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
     };
 
     if (selectedRecord && viewMode === 'details') {
+        const tradeFormMap: Record<string, any> = {};
         const CurrentDetailsComponent = tradeFormMap[selectedRecord.commodityGroup] || null;
         return (
             <div className="flex flex-col h-full bg-gray-50/50">
                 <div className="p-4 bg-white border-b sticky top-0 z-30 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                     <div className="flex items-center gap-3 w-full md:w-auto">
-                        <button onClick={() => {setSelectedRecord(null); setViewMode('list');}} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all active:scale-95 text-gray-700">
+                        <button onClick={() => {setSelectedRecord(null); setViewMode('dashboard' as any);}} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all active:scale-95 text-gray-700">
                             <ChevronRight size={18}/>
                         </button>
                         <div className="border-r pr-3">

@@ -1206,10 +1206,11 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             return sendFn(chatId, resMsg, { reply_markup: { inline_keyboard: buttons } });
         }
         
-        if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
-
-        if (isGroup) return;
-        return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
+        if (session.state === 'IDLE') {
+            if (text === '/start' || text === 'شروع' || text === 'منو') return; // Handled above helper logic
+            if (isGroup) return;
+            return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
+        }
     }
 
     if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
@@ -1562,30 +1563,55 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             statusKey = 'REJECTED'; 
         } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات') {
             statusKey = 'CREATE';
-        } else if (p.status === 'خارج شده (بایگانی)') {
+        } else if (p.status === 'خارج شده (بایگانی)' || p.status === 'خارج شد') {
             // This is the final archived state
             statusKey = 'ARCHIVED'; 
-        } else if (p.status === 'خارج شد') {
-             statusKey = 'ARCHIVED';
         }
 
         let targetGroups = [];
 
-        // Group 1 logic (Settings-based routing)
+        // Define a helper to check if a group is configured and should receive this notification
         const g1Config = settings.exitPermitFirstGroupConfig || { activeStatuses: [] };
-        if (g1Config.activeStatuses && g1Config.activeStatuses.includes(statusKey)) {
+        const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
+        const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
+
+        const checkGroupConfigured = (config) => {
+            return !!(config.telegramId || config.baleId || config.groupId);
+        };
+
+        const checkShouldNotifyGroup = (config, hasGlobalFallback) => {
+            // First check if it's actually configured
+            const isConfigured = checkGroupConfigured(config) || hasGlobalFallback;
+            if (!isConfigured) return false;
+
+            // 1. Deletions and Manual Resend bypasses status check and notifies all active/configured groups
+            if (eventType === 'DELETE' || (stepName && stepName.includes('ارسال مجدد'))) {
+                return true;
+            }
+
+            // 2. Normal status checks
+            const activeStatuses = config.activeStatuses || [];
+            if (activeStatuses.includes(statusKey)) return true;
+
+            // Extra translation maps/fallbacks
+            if (statusKey === 'REJECTED' && (activeStatuses.includes('REJECTED') || activeStatuses.includes('CANCELED'))) return true;
+            if (statusKey === 'CANCELED' && (activeStatuses.includes('CANCELED') || activeStatuses.includes('REJECTED'))) return true;
+
+            return false;
+        };
+
+        const companyConfig = settings.companyNotifications?.[p.company] || {};
+        const g1HasFallback = !!(companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId ||
+                                 companyConfig.baleChannelId || settings.exitPermitNotificationBaleId ||
+                                 companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup);
+
+        if (checkShouldNotifyGroup(g1Config, g1HasFallback)) {
             targetGroups.push(1);
         }
-        
-        // Group 2 logic (Settings-based routing)
-        const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
-        if (g2Config.activeStatuses && g2Config.activeStatuses.includes(statusKey)) {
+        if (checkShouldNotifyGroup(g2Config, false)) {
             targetGroups.push(2);
         }
-
-        // Group 3 logic (Settings-based routing)
-        const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
-        if (g3Config.activeStatuses && g3Config.activeStatuses.includes(statusKey)) {
+        if (checkShouldNotifyGroup(g3Config, false)) {
             targetGroups.push(3);
         }
 

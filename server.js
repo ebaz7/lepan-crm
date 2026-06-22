@@ -2197,23 +2197,26 @@ app.post('/api/restart-bot', async (req, res) => {
 });
 
 app.post('/api/send-bot-message', async (req, res) => {
-    const { platform, chatId, caption, mediaData } = req.body;
+    let { platform, chatId, caption, mediaData } = req.body;
     try {
+        const utils = await safeImport('./backend/utils.js');
+        const cleanChatId = utils && utils.sanitizeGroupId ? utils.sanitizeGroupId(chatId) : chatId;
+
         if (platform === 'telegram') {
             const tg = await safeImport('./backend/telegram.js');
             if (tg && tg.sendBotPhoto && mediaData) {
                 const buffer = Buffer.from(mediaData.data, 'base64');
-                await tg.sendBotPhoto(chatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
+                await tg.sendBotPhoto(cleanChatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
             } else if (tg && tg.sendBotMessage) {
-                await tg.sendBotMessage(chatId, caption);
+                await tg.sendBotMessage(cleanChatId, caption);
             }
         } else if (platform === 'bale') {
             const bale = await safeImport('./backend/bale.js');
             if (bale && bale.sendBotPhoto && mediaData) {
                 const buffer = Buffer.from(mediaData.data, 'base64');
-                await bale.sendBotPhoto(chatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
+                await bale.sendBotPhoto(cleanChatId, buffer, caption, { filename: mediaData.filename || 'image.png' });
             } else if (bale && bale.sendBotMessage) {
-                await bale.sendBotMessage(chatId, caption);
+                await bale.sendBotMessage(cleanChatId, caption);
             }
         }
         res.json({ success: true });
