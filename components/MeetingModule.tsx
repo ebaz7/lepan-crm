@@ -26,7 +26,6 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const [viewMeeting, setViewMeeting] = useState<MeetingMinutes | null>(null);
     const [showPrintModal, setShowPrintModal] = useState<MeetingMinutes | null>(null);
     const [activeAttendeeIndex, setActiveAttendeeIndex] = useState<number | null>(null);
-    const [newCommentText, setNewCommentText] = useState('');
     
     const [meetingForm, setMeetingForm] = useState<Partial<MeetingMinutes>>({
         date: '',
@@ -1089,27 +1088,17 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         {viewMeeting.attendees.filter(a => a.isPresent).map((a, i) => {
                                             const approvalKey = a.username || a.fullName;
                                             const isApproved = viewMeeting.approvals?.[approvalKey]?.approved;
-                                            const matchedUser = users.find(u => u.username === a.username || u.fullName === a.fullName);
-                                            const signatureUrl = matchedUser?.signature;
-                                            
                                             return (
                                                 <div key={i} className="flex flex-col items-center gap-3 p-4 border border-dashed border-gray-200 dark:border-white/10 rounded-2xl bg-gray-50/30 dark:bg-black/5 relative overflow-hidden group">
                                                     <span className="font-black text-[9px] text-gray-400 group-hover:text-gray-600 transition-colors uppercase tracking-tight">{a.role}</span>
                                                     <div className="h-16 flex items-center justify-center italic font-black text-blue-900 dark:text-blue-200 opacity-80 scale-110">
                                                         {isApproved ? (
-                                                            signatureUrl ? (
-                                                                <div className="flex flex-col items-center">
-                                                                    <img src={signatureUrl} alt={a.fullName} className="h-12 object-contain mix-blend-multiply dark:invert dark:mix-blend-normal rounded" referrerPolicy="no-referrer" />
-                                                                    <div className="text-[8px] text-emerald-600 font-black mt-1">تایید امضا شده</div>
+                                                            <div className="flex flex-col items-center animate-bounce-subtle">
+                                                                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-1 border border-emerald-500">
+                                                                    <CheckCircle size={28} />
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex flex-col items-center animate-bounce-subtle">
-                                                                    <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-1 border border-emerald-500">
-                                                                        <CheckCircle size={28} />
-                                                                    </div>
-                                                                    <div className="text-[8px] text-emerald-600 font-black">تایید شده</div>
-                                                                </div>
-                                                            )
+                                                                <div className="text-[8px] text-emerald-600 font-black">تایید شده</div>
+                                                            </div>
                                                         ) : (
                                                             <div className="text-gray-300 dark:text-gray-700 flex flex-col items-center opacity-40">
                                                                 <Loader2 size={32} className="animate-spin mb-1 opacity-20" />
@@ -1203,70 +1192,6 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Comments Section */}
-                                <div className="mt-10 pt-8 border-t border-gray-100 dark:border-white/5 non-print">
-                                    <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 font-black text-xs rounded-xl text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                                        <MessageSquare size={16} /> نظرات و بازخوردها ({viewMeeting.comments?.length || 0})
-                                    </div>
-                                    
-                                    <div className="space-y-3 max-h-60 overflow-y-auto mb-4 pr-1">
-                                        {(viewMeeting.comments || []).map(comm => (
-                                            <div key={comm.id} className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-white/5 rounded-2xl flex flex-col gap-1">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-black text-xs text-blue-800 dark:text-blue-300">{comm.sender}</span>
-                                                        <span className="text-[9px] bg-blue-50 dark:bg-blue-900/40 text-blue-600 px-1.5 py-0.5 rounded font-bold">{comm.senderRole}</span>
-                                                    </div>
-                                                    <span className="text-[9px] text-gray-400 font-mono">{new Date(comm.createdAt).toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                </div>
-                                                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-semibold whitespace-pre-wrap">{comm.text}</p>
-                                            </div>
-                                        ))}
-                                        {(!viewMeeting.comments || viewMeeting.comments.length === 0) && (
-                                            <div className="text-center py-6 text-gray-400 text-xs italic">هنوز نظری برای این صورتجلسه ثبت نشده است. اولین نظر را شما بنویسید!</div>
-                                        )}
-                                    </div>
-
-                                    {/* Add Comment Input */}
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            rows={2}
-                                            placeholder="نظر یا فیدبک خود را برای سایر اعضا بنویسید..."
-                                            className="flex-1 p-3 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-155 dark:border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-950 resize-none font-bold"
-                                            value={newCommentText}
-                                            onChange={e => setNewCommentText(e.target.value)}
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                if (!newCommentText.trim()) return;
-                                                const newComment = {
-                                                    id: generateUUID(),
-                                                    sender: currentUser.fullName,
-                                                    senderRole: currentUser.role,
-                                                    text: newCommentText.trim(),
-                                                    createdAt: Date.now()
-                                                };
-                                                const updated = {
-                                                    ...viewMeeting,
-                                                    comments: [...(viewMeeting.comments || []), newComment],
-                                                    updatedAt: Date.now()
-                                                };
-                                                try {
-                                                    await updateMeeting(updated);
-                                                    setViewMeeting(updated);
-                                                    setNewCommentText('');
-                                                    loadData();
-                                                } catch (error) {
-                                                    alert('خطا در ثبت نظر');
-                                                }
-                                            }}
-                                            className="px-5 bg-blue-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:shadow-xl active:scale-95 transition-all flex items-center justify-center gap-1.5 self-end h-11"
-                                        >
-                                            <Send size={14} /> ثبت نظر
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 

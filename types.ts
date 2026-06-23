@@ -30,7 +30,6 @@ export interface User {
   receiveNotifications?: boolean;
   mobileNavOrder?: string[];
   lastSeen?: number; // New: For online status
-  signature?: string;
 }
 
 export interface AppNotification {
@@ -1055,7 +1054,6 @@ export interface MeetingMinutes {
     approvals?: Record<string, { approved: boolean, date: number, comment?: string }>;
     imageAttachments?: { fileName: string, url: string }[];
     pdfAttachments?: { fileName: string, url: string }[];
-    comments?: { id: string, sender: string, senderRole: string, text: string, createdAt: number }[];
 }
 
 export enum PurchaseRequestStatus {

@@ -28,11 +28,9 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
   const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
-  const [dbUsers, setDbUsers] = useState<User[]>([]);
 
   useEffect(() => {
      apiCall<any[]>('/bot-subscribers').then(setBotSubscribers).catch(() => {});
-     getUsers().then(setDbUsers).catch(() => {});
   }, []);
 
   // Scaling State
@@ -68,30 +66,19 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
     return () => window.removeEventListener('resize', handleResize);
   }, [embed]);
 
-  const Stamp = ({ title, name, date, time, isSecurity }: { title: string, name: string, date?: string, time?: string, isSecurity?: boolean }) => {
-      const matchedUser = dbUsers.find(u => u.fullName === name || u.username === name);
-      const signatureUrl = matchedUser?.signature;
-      
-      return (
-          <div className={`border-2 ${isSecurity ? 'border-black text-black' : 'border-blue-800 text-blue-800'} rounded-xl p-2 rotate-[-5deg] opacity-90 inline-block bg-white dark:bg-gray-900 shadow-sm min-w-[100px] text-center`}>
-              <div className="text-[10px] font-bold border-b border-current mb-1 pb-1 text-center">{title}</div>
-              {signatureUrl ? (
-                  <div className="h-12 w-full flex items-center justify-center p-1 bg-white rounded">
-                      <img src={signatureUrl} alt={name} className="max-h-full max-w-full object-contain mix-blend-multiply" referrerPolicy="no-referrer" />
-                  </div>
-              ) : (
-                  <div className="text-sm font-black text-center px-2">{name}</div>
-              )}
-              {date && <div className="text-[10px] text-center mt-1">{date}</div>}
-              {time && (
-                  <div className="mt-2 border-t border-dashed border-gray-400 pt-1">
-                      <div className="text-[9px] font-bold text-center">ساعت خروج:</div>
-                      <div className="text-2xl font-black text-center font-mono">{time}</div>
-                  </div>
-              )}
-          </div>
-      );
-  };
+  const Stamp = ({ title, name, date, time, isSecurity }: { title: string, name: string, date?: string, time?: string, isSecurity?: boolean }) => (
+      <div className={`border-2 ${isSecurity ? 'border-black text-black' : 'border-blue-800 text-blue-800'} rounded-xl p-2 rotate-[-5deg] opacity-90 inline-block glass-panel/80 print:bg-transparent shadow-sm min-w-[90px]`}>
+          <div className="text-[10px] font-bold border-b border-current mb-1 pb-1 text-center">{title}</div>
+          <div className="text-sm font-black text-center px-2">{name}</div>
+          {date && <div className="text-[10px] text-center mt-1">{date}</div>}
+          {time && (
+              <div className="mt-2 border-t border-dashed border-gray-400 pt-1">
+                  <div className="text-[9px] font-bold text-center">ساعت خروج:</div>
+                  <div className="text-2xl font-black text-center font-mono">{time}</div>
+              </div>
+          )}
+      </div>
+  );
 
   const containerId = embed ? `print-permit-${permit.id}` : "print-area-exit";
 
