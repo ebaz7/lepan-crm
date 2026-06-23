@@ -21,6 +21,7 @@ const ManageUsers: React.FC = () => {
     canManageSales: false, 
     receiveNotifications: true, 
     avatar: '', 
+    signatureBase64: '',
     telegramChatId: '', 
     baleChatId: '', 
     phoneNumber: '' 
@@ -75,6 +76,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           avatar: '', 
+          signatureBase64: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -94,6 +96,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: user.canManageSales || false, 
           receiveNotifications: user.receiveNotifications !== false, 
           avatar: user.avatar || '', 
+          signatureBase64: user.signatureBase64 || '',
           telegramChatId: user.telegramChatId || '', 
           baleChatId: user.baleChatId || '', 
           phoneNumber: user.phoneNumber || '' 
@@ -113,6 +116,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           avatar: '', 
+          signatureBase64: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -121,6 +125,18 @@ const ManageUsers: React.FC = () => {
 
   const handleDeleteUser = async (id: string) => { if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟')) { await deleteUser(id); await loadData(); } };
   const handleBackup = async () => { try { const backupData = await apiCall<any>('/backup'); const jsonString = JSON.stringify(backupData, null, 2); const blob = new Blob([jsonString], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `backup_payment_system_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) { alert('خطا در دریافت فایل پشتیبان'); } };
+
+  const [uploadingSignature, setUploadingSignature] = useState(false);
+  const handleSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]; if (!file) return;
+      setUploadingSignature(true);
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+          const base64 = ev.target?.result as string;
+          try { const result = await uploadFile('sig_' + file.name, base64); setFormData({ ...formData, signatureBase64: result.url }); } catch (error) { alert('خطا در آپلود امضا'); } finally { setUploadingSignature(false); }
+      };
+      reader.readAsDataURL(file);
+  };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]; if (!file) return;
