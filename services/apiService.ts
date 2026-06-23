@@ -59,8 +59,7 @@ export const LS_KEYS = {
     EXIT_PERMITS: 'app_data_exit_permits',
     PURCHASE_REQS: 'app_data_purchase_reqs',
     ANNOUNCEMENTS: 'app_data_announcements',
-    TASK_GROUPS: 'app_data_task_groups',
-    LETTERS: 'app_data_letters'
+    TASK_GROUPS: 'app_data_task_groups'
 };
 
 // Exported so App.tsx can use it for instant load
@@ -146,7 +145,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
                     else if (endpoint === '/groups') localStorage.setItem(LS_KEYS.GROUPS, JSON.stringify(data));
                     else if (endpoint === '/task-groups') localStorage.setItem(LS_KEYS.TASK_GROUPS, JSON.stringify(data));
                     else if (endpoint === '/tasks') localStorage.setItem(LS_KEYS.TASKS, JSON.stringify(data));
-                    else if (endpoint === '/letters') localStorage.setItem(LS_KEYS.LETTERS, JSON.stringify(data));
                 } catch (cacheError) {
                     console.warn("Cache write failed (storage full?)", cacheError);
                 }
@@ -211,7 +209,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
             if (endpoint === '/groups') return getLocalData<any>(LS_KEYS.GROUPS, []);
             if (endpoint === '/task-groups') return getLocalData<any>(LS_KEYS.TASK_GROUPS, []);
             if (endpoint === '/tasks') return getLocalData<any>(LS_KEYS.TASKS, []);
-            if (endpoint === '/letters') return getLocalData<any>(LS_KEYS.LETTERS, []);
         }
         
         throw error;

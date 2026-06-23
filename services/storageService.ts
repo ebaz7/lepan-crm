@@ -1,16 +1,11 @@
 
-import { MeetingMinutes, PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement, OfficialLetter } from '../types';
+import { MeetingMinutes, PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement } from '../types';
 import { apiCall } from './apiService';
 
 // Safely return array
 const safeArray = <T>(data: any): T[] => {
     return Array.isArray(data) ? data : [];
 };
-
-export const getLetters = async (): Promise<OfficialLetter[]> => { return safeArray(await apiCall<OfficialLetter[]>('/letters')); };
-export const saveLetter = async (letter: OfficialLetter): Promise<OfficialLetter[]> => { return await apiCall<OfficialLetter[]>('/letters', 'POST', letter); };
-export const updateLetter = async (letter: OfficialLetter): Promise<OfficialLetter[]> => { return await apiCall<OfficialLetter[]>(`/letters/${letter.id}`, 'PUT', letter); };
-export const deleteLetter = async (id: string): Promise<OfficialLetter[]> => { return await apiCall<OfficialLetter[]>(`/letters/${id}`, 'DELETE'); };
 
 export const getOrders = async (): Promise<PaymentOrder[]> => { 
     const res = await apiCall<PaymentOrder[]>('/orders'); 
