@@ -5,10 +5,9 @@ import { getUsers, getRolePermissions } from '../services/authService';
 import { apiCall } from '../services/apiService';
 import { formatDate, formatIranianPlate } from '../constants';
 import { 
-    Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
+    Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, Send, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText,
-    Send
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
@@ -32,7 +31,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     const [securityFinalize, setSecurityFinalize] = useState<ExitPermit | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [activeAutoSends, setActiveAutoSends] = useState<ExitPermit[]>([]);
-    const [resendingId, setResendingId] = useState<string | null>(null);
 
     useEffect(() => { loadData(); }, [financialYear]);
     
@@ -358,28 +356,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         }
     };
 
-    const handleResendNotification = async (p: ExitPermit) => {
-        setResendingId(p.id);
-        try {
-            const res = await fetch(`/api/exit-permits/${p.id}/resend-notification`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentUser.id })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert('✅ اعلان خروج کالا با موفقیت مجدداً ارسال گردید.');
-            } else {
-                alert('❌ خطا در ارسال مجدد: ' + (data.error || 'ناشناخته'));
-            }
-        } catch (err: any) {
-            console.error("Resend error", err);
-            alert('❌ خطای ارتباط با سرور: ' + err.message);
-        } finally {
-            setResendingId(null);
-        }
-    };
-
     const handleSecuritySubmit = async (data: { driverName: string; driverPhone: string; plateNumber: string; exitTime: string; attachments: {fileName: string, data: string}[] }) => {
         if (!securityFinalize) return;
         const currentPermit = securityFinalize;
@@ -439,6 +415,106 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 loadData();
             }, 2500);
         } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
+    };
+
+    const handleManualResend = async (permit: ExitPermit) => {
+        setProcessingId(permit.id);
+        
+        // 1. Force add the permit to activeAutoSends so html2canvas can find the elements!
+        setActiveAutoSends(prev => {
+            if (!prev.find(x => x.id === permit.id)) {
+                return [...prev, permit];
+            }
+            return prev;
+        });
+        
+        // 2. Wait a split second for React DOM to render the hidden elements
+        setTimeout(async () => {
+            try {
+                const elementNoPrice = document.getElementById(`print-permit-autosend-noprice-${permit.id}`);
+                const elementWithPrice = document.getElementById(`print-permit-autosend-price-${permit.id}`);
+                
+                if (!elementNoPrice || !elementWithPrice) {
+                    alert('خطا در دسترسی به المان چاپ جهت تصویربرداری');
+                    setProcessingId(null);
+                    return;
+                }
+                
+                const canvasNoPrice = await html2canvas(elementNoPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                const base64NoPrice = canvasNoPrice.toDataURL('image/png').split(',')[1];
+                
+                const canvasWithPrice = await html2canvas(elementWithPrice, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                const base64WithPrice = canvasWithPrice.toDataURL('image/png').split(',')[1];
+                
+                // Get targets (Both Group 1 AND Group 2 mandatory)
+                const targets = [];
+                const companyConfig = settings?.companyNotifications?.[permit.company];
+                
+                // Group 1 IDs
+                let g1WA = companyConfig?.warehouseGroup || settings?.exitPermitNotificationGroup || settings?.defaultWarehouseGroup;
+                let g1Bale = companyConfig?.baleChannelId || settings?.exitPermitNotificationBaleId;
+                let g1Tg = companyConfig?.telegramChannelId || settings?.exitPermitNotificationTelegramId;
+
+                // Group 2 IDs
+                const g2Config = settings?.exitPermitSecondGroupConfig;
+                let g2WA = g2Config?.groupId;
+                let g2Bale = g2Config?.baleId;
+                let g2Tg = g2Config?.telegramId;
+                
+                // Push Group 1 explicitly
+                if (g1WA) targets.push({ group: g1WA });
+                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+                
+                // Push Group 2 explicitly
+                if (g2WA) targets.push({ group: g2WA });
+                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
+                
+                let captionTitle = '🔄 ارسال دستی مجوز خروج کالا';
+                let caption = `🚛 *${captionTitle}*\n🔢 شماره: ${permit.permitNumber}\n📅 تاریخ: ${formatDate(permit.date)}\n👤 گیرنده: ${permit.recipientName}\n📦 اقلام:\n`;
+                
+                if (permit.items && permit.items.length > 0) {
+                    permit.items.forEach((it, idx) => {
+                        const q = it.deliveredCartonCount ?? it.cartonCount ?? 0;
+                        const w = it.deliveredWeight ?? it.weight ?? 0;
+                        caption += `${idx + 1}. ${it.goodsName} (${q} عدد | ${Number(Number(w).toFixed(3))} kg)\n`;
+                    });
+                } else {
+                    caption += `📦 کالا: ${permit.goodsName}\n`;
+                }
+                
+                if (permit.plateNumber) caption += `🆔 پلاک: ${formatIranianPlate(permit.plateNumber)}\n`;
+                if (permit.driverName) caption += `👨‍✈️ راننده: ${permit.driverName}\n`;
+                if (permit.driverPhone) caption += `📞 تماس: ${permit.driverPhone}\n`;
+                if (permit.exitTime) caption += `🕒 ساعت خروج: ${permit.exitTime}\n`;
+                
+                caption += `\n👤 کاربر صادرکننده مجدد: ${currentUser.fullName}`;
+                
+                let sentCount = 0;
+                for (const t of targets) {
+                    try {
+                        if (t.group) {
+                            await apiCall('/send-whatsapp', 'POST', { number: t.group, message: caption, mediaData: { data: base64NoPrice, mimeType: 'image/png', filename: `Permit_${permit.permitNumber}.png` } });
+                            sentCount++;
+                        }
+                        if (t.platform) {
+                            await apiCall('/send-bot-message', 'POST', { platform: t.platform, chatId: t.id, caption: caption, mediaData: { data: base64NoPrice, filename: `Permit_${permit.permitNumber}.png` } });
+                            sentCount++;
+                        }
+                    } catch (err) {
+                        console.error('Err sending to target', t, err);
+                    }
+                }
+                
+                alert(`ارسال مجدد با موفقیت به ${sentCount} کانال/گروه تایید شده انجام شد.`);
+            } catch (err: any) {
+                alert('خطا در ارسال مجدد دستی: ' + (err.message || err));
+            } finally {
+                setProcessingId(null);
+                setActiveAutoSends(prev => prev.filter(x => x.id !== permit.id));
+            }
+        }, 300);
     };
 
     const sendNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, extraInfo?: string) => {
@@ -673,18 +749,12 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                      </button>
                 )}
                 <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg"><Eye size={16}/></button>
-                <button
-                    onClick={() => handleResendNotification(p)}
-                    disabled={resendingId === p.id}
-                    className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-lg flex items-center hover:bg-emerald-100"
-                    title="ارسال مجدد به گروه‌ها"
-                >
-                    {resendingId === p.id ? (
-                        <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                        <Send size={16} />
-                    )}
-                </button>
+                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                    <button onClick={() => handleManualResend(p)} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-2.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1" title="ارسال دستی به ۲ گروه">
+                        <Send size={14}/>
+                        <span>ارسال به گروه‌ها</span>
+                    </button>
+                )}
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
                 )}
@@ -739,18 +809,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                  </button>
                             )}
                             <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); setViewPermit(p); }} className="bg-gray-100 text-gray-700 p-2 rounded-xl hover:bg-gray-200"><Eye size={18}/></button>
-                            <button
-                                onClick={() => handleResendNotification(p)}
-                                disabled={resendingId === p.id}
-                                className="bg-emerald-50 text-emerald-600 p-2 rounded-xl hover:bg-emerald-100 flex items-center gap-1"
-                                title="ارسال مجدد به گروه‌ها"
-                            >
-                                {resendingId === p.id ? (
-                                    <Loader2 size={18} className="animate-spin" />
-                                ) : (
-                                    <Send size={18} />
-                                )}
-                            </button>
+                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                                <button
+                                    onClick={() => handleManualResend(p)}
+                                    className="bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-2 rounded-xl border border-purple-200 flex items-center gap-1 text-[10px] font-bold"
+                                    title="ارسال دستی به ۲ گروه"
+                                >
+                                    <Send size={14}/>
+                                    <span>ارسال به گروه‌ها</span>
+                                </button>
+                            )}
                             {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || (currentUser.role === UserRole.SALES_MANAGER && p.status === ExitPermitStatus.PENDING_CEO)) && (
                                 <>
                                     <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>

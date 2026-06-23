@@ -26,6 +26,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     const [viewMeeting, setViewMeeting] = useState<MeetingMinutes | null>(null);
     const [showPrintModal, setShowPrintModal] = useState<MeetingMinutes | null>(null);
     const [activeAttendeeIndex, setActiveAttendeeIndex] = useState<number | null>(null);
+    const [newCommentText, setNewCommentText] = useState('');
     
     const [meetingForm, setMeetingForm] = useState<Partial<MeetingMinutes>>({
         date: '',
@@ -39,9 +40,6 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     });
     
     const [searchTerm, setSearchTerm] = useState('');
-    const [expandedCommentsItem, setExpandedCommentsItem] = useState<Record<string, boolean>>({});
-    const [meetingCommentTexts, setMeetingCommentTexts] = useState<Record<string, string>>({});
-    const [replyingToCommentId, setReplyingToCommentId] = useState<Record<string, string | null>>({});
 
     const canView = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canViewMeetings);
     const canCreate = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canCreateMeeting);
@@ -1066,177 +1064,14 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                 </tr>
                                             </thead>
                                             <tbody className="text-[11px] font-bold">
-                                                {viewMeeting.items.map((item, idx) => {
-                                                    const isCommentsExpanded = !!expandedCommentsItem[item.id];
-                                                    const commentText = meetingCommentTexts[item.id] || '';
-                                                    const activeReplyId = replyingToCommentId[item.id] || null;
-                                                    const commentsList = item.comments || [];
-                                                    const parentComments = commentsList.filter(c => !c.parentId);
-
-                                                    const handleToggleComments = () => {
-                                                        setExpandedCommentsItem(p => ({ ...p, [item.id]: !p[item.id] }));
-                                                    };
-
-                                                    const handleAddComment = async (parentId?: string) => {
-                                                        const text = commentText.trim();
-                                                        if (!text) return;
-
-                                                        const newComment = {
-                                                            id: generateUUID(),
-                                                            userId: currentUser.id,
-                                                            username: currentUser.username,
-                                                            fullName: currentUser.fullName,
-                                                            text: text,
-                                                            date: Date.now(),
-                                                            parentId: parentId
-                                                        };
-
-                                                        const updatedItems = viewMeeting.items.map(it => {
-                                                            if (it.id === item.id) {
-                                                                return {
-                                                                    ...it,
-                                                                    comments: [...(it.comments || []), newComment]
-                                                                };
-                                                            }
-                                                            return it;
-                                                        });
-
-                                                        const updatedMeeting = {
-                                                            ...viewMeeting,
-                                                            items: updatedItems,
-                                                            updatedAt: Date.now()
-                                                        };
-
-                                                        try {
-                                                            await updateMeeting(updatedMeeting);
-                                                            setViewMeeting(updatedMeeting);
-                                                            setMeetingCommentTexts(p => ({ ...p, [item.id]: '' }));
-                                                            setReplyingToCommentId(p => ({ ...p, [item.id]: null }));
-                                                            loadData();
-                                                        } catch (err) {
-                                                            alert('خطا در ثبت کامنت');
-                                                        }
-                                                    };
-
-                                                    return (
-                                                        <React.Fragment key={item.id}>
-                                                            <tr className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
-                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{idx + 1}</td>
-                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 leading-relaxed font-sans">
-                                                                    <div>{item.description}</div>
-                                                                    <div className="mt-2 flex items-center gap-2">
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={handleToggleComments}
-                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-lg text-[10px] font-bold transition-all active:scale-95"
-                                                                        >
-                                                                            <MessageSquare size={12} />
-                                                                            {commentsList.length > 0 ? `${commentsList.length} نظر و پیگیری` : 'ثبت نظر و پیگیری'}
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.responsiblePerson}</td>
-                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.duration}</td>
-                                                            </tr>
-                                                            {isCommentsExpanded && (
-                                                                <tr>
-                                                                    <td colSpan={4} className="border border-gray-300 dark:border-gray-700 bg-gray-50/40 dark:bg-black/15 p-4 text-right">
-                                                                        <div className="max-w-3xl mr-auto space-y-4">
-                                                                            <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                                                                                <MessageSquare size={14} className="text-blue-500" />
-                                                                                <span className="font-black text-xs text-gray-800 dark:text-gray-200">نظرات و پیگیری‌های این مصوبه</span>
-                                                                            </div>
-
-                                                                            <div className="space-y-3 font-sans">
-                                                                                {parentComments.length === 0 ? (
-                                                                                    <p className="text-xs text-gray-400 italic">نظری برای این مصوبه ثبت نشده است. اولین نظر را بنویسید.</p>
-                                                                                ) : (
-                                                                                    parentComments.map(comment => {
-                                                                                        const isReplyingThis = activeReplyId === comment.id;
-                                                                                        const replies = commentsList.filter(r => r.parentId === comment.id);
-
-                                                                                        return (
-                                                                                            <div key={comment.id} className="space-y-2 border-r-2 border-blue-500/50 pr-3 mr-1 py-1">
-                                                                                                <div className="flex justify-between items-start gap-3">
-                                                                                                    <div>
-                                                                                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200">{comment.fullName}</span>
-                                                                                                        <span className="mx-1 text-gray-400 text-[9px]">•</span>
-                                                                                                        <span className="text-[9px] text-gray-400 font-bold">{new Date(comment.date).toLocaleDateString('fa-IR')} - {new Date(comment.date).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                                                                    </div>
-                                                                                                    <button 
-                                                                                                        onClick={() => setReplyingToCommentId(p => ({ ...p, [item.id]: isReplyingThis ? null : comment.id }))}
-                                                                                                        className="text-[9px] text-blue-600 hover:text-blue-800 font-bold"
-                                                                                                    >
-                                                                                                        {isReplyingThis ? 'انصراف' : 'پاسخ'}
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                                <p className="text-xs text-gray-700 dark:text-gray-300 font-medium whitespace-pre-line bg-white dark:bg-gray-800 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60 shadow-sm leading-relaxed">{comment.text}</p>
-
-                                                                                                <div className="mr-4 space-y-2">
-                                                                                                    {replies.map(rep => (
-                                                                                                        <div key={rep.id} className="border-r-2 border-gray-300 dark:border-gray-600 pr-3 py-1 space-y-1">
-                                                                                                            <div className="flex justify-between items-center">
-                                                                                                                <div>
-                                                                                                                    <span className="text-[11px] font-black text-gray-800 dark:text-gray-200">{rep.fullName}</span>
-                                                                                                                    <span className="mx-1 text-gray-400 text-[8px]">•</span>
-                                                                                                                    <span className="text-[8px] text-gray-400 font-bold">{new Date(rep.date).toLocaleDateString('fa-IR')}</span>
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium whitespace-pre-line bg-gray-100/50 dark:bg-black/20 p-2 rounded-xl leading-relaxed">{rep.text}</p>
-                                                                                                        </div>
-                                                                                                    ))}
-                                                                                                </div>
-
-                                                                                                {isReplyingThis && (
-                                                                                                    <div className="mr-4 pt-2 flex gap-2">
-                                                                                                        <input 
-                                                                                                            type="text"
-                                                                                                            value={commentText}
-                                                                                                            onChange={e => setMeetingCommentTexts(p => ({ ...p, [item.id]: e.target.value }))}
-                                                                                                            className="flex-1 text-xs border rounded-lg p-2 dark:bg-gray-800"
-                                                                                                            placeholder={`پاسخ به ${comment.fullName}...`}
-                                                                                                            onKeyDown={e => { if (e.key === 'Enter') handleAddComment(comment.id); }}
-                                                                                                        />
-                                                                                                        <button 
-                                                                                                            onClick={() => handleAddComment(comment.id)}
-                                                                                                            className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-blue-700 transition"
-                                                                                                        >
-                                                                                                            ارسال
-                                                                                                        </button>
-                                                                                                    </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        );
-                                                                                    })
-                                                                                )}
-                                                                            </div>
-
-                                                                            {!activeReplyId && (
-                                                                                <div className="pt-2 flex gap-2">
-                                                                                    <textarea 
-                                                                                        rows={1}
-                                                                                        value={commentText}
-                                                                                        onChange={e => setMeetingCommentTexts(p => ({ ...p, [item.id]: e.target.value }))}
-                                                                                        className="flex-1 text-xs border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 resize-none font-sans"
-                                                                                        placeholder="پیگیری مصوبه، نتایج اقدامات یا نظر جدید..."
-                                                                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
-                                                                                    />
-                                                                                    <button 
-                                                                                        onClick={() => handleAddComment()}
-                                                                                        disabled={!commentText.trim()}
-                                                                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-                                                                                    >
-                                                                                        ارسال <Send size={12} />
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </React.Fragment>
-                                                    );
-                                                })}
+                                                {viewMeeting.items.map((item, idx) => (
+                                                    <tr key={item.id}>
+                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{idx + 1}</td>
+                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 leading-relaxed">{item.description}</td>
+                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.responsiblePerson}</td>
+                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.duration}</td>
+                                                    </tr>
+                                                ))}
                                                 {viewMeeting.items.length === 0 && (
                                                     <tr>
                                                         <td colSpan={4} className="border border-gray-300 dark:border-gray-700 p-8 text-center text-gray-400 italic">موردی ثبت نشده است</td>
@@ -1254,17 +1089,27 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         {viewMeeting.attendees.filter(a => a.isPresent).map((a, i) => {
                                             const approvalKey = a.username || a.fullName;
                                             const isApproved = viewMeeting.approvals?.[approvalKey]?.approved;
+                                            const matchedUser = users.find(u => u.username === a.username || u.fullName === a.fullName);
+                                            const signatureUrl = matchedUser?.signature;
+                                            
                                             return (
                                                 <div key={i} className="flex flex-col items-center gap-3 p-4 border border-dashed border-gray-200 dark:border-white/10 rounded-2xl bg-gray-50/30 dark:bg-black/5 relative overflow-hidden group">
                                                     <span className="font-black text-[9px] text-gray-400 group-hover:text-gray-600 transition-colors uppercase tracking-tight">{a.role}</span>
                                                     <div className="h-16 flex items-center justify-center italic font-black text-blue-900 dark:text-blue-200 opacity-80 scale-110">
                                                         {isApproved ? (
-                                                            <div className="flex flex-col items-center animate-bounce-subtle">
-                                                                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-1 border border-emerald-500">
-                                                                    <CheckCircle size={28} />
+                                                            signatureUrl ? (
+                                                                <div className="flex flex-col items-center">
+                                                                    <img src={signatureUrl} alt={a.fullName} className="h-12 object-contain mix-blend-multiply dark:invert dark:mix-blend-normal rounded" referrerPolicy="no-referrer" />
+                                                                    <div className="text-[8px] text-emerald-600 font-black mt-1">تایید امضا شده</div>
                                                                 </div>
-                                                                <div className="text-[8px] text-emerald-600 font-black">تایید شده</div>
-                                                            </div>
+                                                            ) : (
+                                                                <div className="flex flex-col items-center animate-bounce-subtle">
+                                                                    <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-1 border border-emerald-500">
+                                                                        <CheckCircle size={28} />
+                                                                    </div>
+                                                                    <div className="text-[8px] text-emerald-600 font-black">تایید شده</div>
+                                                                </div>
+                                                            )
                                                         ) : (
                                                             <div className="text-gray-300 dark:text-gray-700 flex flex-col items-center opacity-40">
                                                                 <Loader2 size={32} className="animate-spin mb-1 opacity-20" />
@@ -1358,6 +1203,70 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Comments Section */}
+                                <div className="mt-10 pt-8 border-t border-gray-100 dark:border-white/5 non-print">
+                                    <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 font-black text-xs rounded-xl text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                                        <MessageSquare size={16} /> نظرات و بازخوردها ({viewMeeting.comments?.length || 0})
+                                    </div>
+                                    
+                                    <div className="space-y-3 max-h-60 overflow-y-auto mb-4 pr-1">
+                                        {(viewMeeting.comments || []).map(comm => (
+                                            <div key={comm.id} className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-white/5 rounded-2xl flex flex-col gap-1">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-black text-xs text-blue-800 dark:text-blue-300">{comm.sender}</span>
+                                                        <span className="text-[9px] bg-blue-50 dark:bg-blue-900/40 text-blue-600 px-1.5 py-0.5 rounded font-bold">{comm.senderRole}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-gray-400 font-mono">{new Date(comm.createdAt).toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-semibold whitespace-pre-wrap">{comm.text}</p>
+                                            </div>
+                                        ))}
+                                        {(!viewMeeting.comments || viewMeeting.comments.length === 0) && (
+                                            <div className="text-center py-6 text-gray-400 text-xs italic">هنوز نظری برای این صورتجلسه ثبت نشده است. اولین نظر را شما بنویسید!</div>
+                                        )}
+                                    </div>
+
+                                    {/* Add Comment Input */}
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            rows={2}
+                                            placeholder="نظر یا فیدبک خود را برای سایر اعضا بنویسید..."
+                                            className="flex-1 p-3 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-155 dark:border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-950 resize-none font-bold"
+                                            value={newCommentText}
+                                            onChange={e => setNewCommentText(e.target.value)}
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                if (!newCommentText.trim()) return;
+                                                const newComment = {
+                                                    id: generateUUID(),
+                                                    sender: currentUser.fullName,
+                                                    senderRole: currentUser.role,
+                                                    text: newCommentText.trim(),
+                                                    createdAt: Date.now()
+                                                };
+                                                const updated = {
+                                                    ...viewMeeting,
+                                                    comments: [...(viewMeeting.comments || []), newComment],
+                                                    updatedAt: Date.now()
+                                                };
+                                                try {
+                                                    await updateMeeting(updated);
+                                                    setViewMeeting(updated);
+                                                    setNewCommentText('');
+                                                    loadData();
+                                                } catch (error) {
+                                                    alert('خطا در ثبت نظر');
+                                                }
+                                            }}
+                                            className="px-5 bg-blue-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/10 hover:bg-blue-700 hover:shadow-xl active:scale-95 transition-all flex items-center justify-center gap-1.5 self-end h-11"
+                                        >
+                                            <Send size={14} /> ثبت نظر
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

@@ -1903,8 +1903,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                   (platform === 'bale' && (chatId.toString().length > 10 || chatId.toString().startsWith('g') || chatId.toString().includes('@group'))) ||
                   (userId && userId.toString() !== chatId.toString());
 
-    if (!sessions[chatId]) sessions[chatId] = { state: 'IDLE', data: {} };
-    const session = sessions[chatId];
+    if (!sessions[userId]) sessions[userId] = { state: 'IDLE', data: {} };
+    const session = sessions[userId];
     
     // --- GROUP SILENCE POLICY ---
     if (isGroup && !data.startsWith('APP_') && !data.startsWith('REJ_') && !data.startsWith('GEN_PDF_') && data !== 'CHECK_JOIN') {

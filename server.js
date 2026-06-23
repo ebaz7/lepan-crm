@@ -958,28 +958,6 @@ app.put('/api/exit-permits/:id', (req, res) => {
         res.json(db.exitPermits); 
     } else res.status(404).send('Not Found'); 
 });
-app.post('/api/exit-permits/:id/resend-notification', async (req, res) => {
-    try {
-        const db = getDb();
-        const permit = db.exitPermits?.find(p => p.id === req.params.id);
-        if (!permit) {
-            return res.status(404).json({ success: false, error: 'برگه خروج یافت نشد.' });
-        }
-        
-        let stepName = permit.status;
-        if (permit.status === 'خارج شده (بایگانی)') {
-            stepName = 'خروج نهایی (ارسال مجدد)';
-        } else {
-            stepName = `${permit.status} (ارسال مجدد)`;
-        }
-        
-        await notifyExitPermitStep(permit, null, null, null, db, stepName);
-        res.json({ success: true });
-    } catch (e) {
-        console.error("Manual Resend Notification Route Error:", e);
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
 app.delete('/api/exit-permits/:id', (req, res) => { 
     const db = getDb(); 
     const permit = db.exitPermits.find(p => p.id === req.params.id);

@@ -188,11 +188,10 @@ const generateRecordCardHTML = (title, data, type) => {
 // --- EXPORTED FUNCTIONS ---
 
 export const generateRecordImage = async (record, type, options = {}) => {
-    let page = null;
     try {
         const { isEdit, isDelete } = options;
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         await page.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
 
         let htmlData = '';
@@ -629,18 +628,13 @@ export const generateRecordImage = async (record, type, options = {}) => {
     } catch (e) {
         console.error("Renderer Image Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 export const generatePdfBuffer = async (html, options = {}) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         let finalHtml = html;
         if (!html.includes('@font-face') && fontFaceRule) {
             finalHtml = html.replace('<head>', `<head><style>${fontFaceRule} body { font-family: 'Vazirmatn' !important; }</style>`);
@@ -656,19 +650,14 @@ export const generatePdfBuffer = async (html, options = {}) => {
     } catch(e) {
         console.error("Renderer PDF Buffer Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 // 1. Voucher PDF
 export const generateVoucherPDF = async (order) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         const linesHtml = order.paymentDetails.map((d, i) => `<tr><td>${i+1}</td><td>${d.method}</td><td class="amount">${parseInt(d.amount).toLocaleString()}</td><td>${d.bankName || '-'}</td><td>${d.description || '-'}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
             <div class="voucher-container">
@@ -684,19 +673,14 @@ export const generateVoucherPDF = async (order) => {
     } catch (e) { 
         console.error("Generate Voucher PDF Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 // 2. Exit Permit PDF
 export const generateExitPermitPDF = async (permit) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         const itemsHtml = permit.items.map((i, idx) => `<tr><td>${idx+1}</td><td>${i.goodsName}</td><td>${i.cartonCount}</td><td>${i.weight}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
             <div class="voucher-container" style="min-height: 800px;">
@@ -713,19 +697,14 @@ export const generateExitPermitPDF = async (permit) => {
     } catch (e) {
         console.error("Generate Exit Permit PDF Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 // 3. Bijak PDF
 export const generateBijakPDF = async (tx) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         const itemsHtml = tx.items.map((i, idx) => `<tr><td>${idx+1}</td><td>${i.itemName}</td><td>${i.quantity}</td><td>${i.weight}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><style>${BASE_STYLE}</style></head><body>
             <div class="voucher-container">
@@ -742,19 +721,14 @@ export const generateBijakPDF = async (tx) => {
     } catch (e) {
         console.error("Generate Bijak PDF Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 // 4. Report PDF
 export const generateReportPDF = async (title, columns, rows, landscape = false) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         
         const isDebtor = title.includes('بدهکار');
         const colorClass = isDebtor ? 'red' : 'emerald';
@@ -922,18 +896,13 @@ export const generateReportPDF = async (title, columns, rows, landscape = false)
     } catch (e) { 
         console.error("Generate Report PDF Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 export const generateMeetingAnnouncementImage = async (meeting) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
             <script src="https://cdn.tailwindcss.com"></script>
@@ -971,18 +940,13 @@ export const generateMeetingAnnouncementImage = async (meeting) => {
     } catch (e) {
         console.error("Generate Announcement Image Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };
 
 export const generateMeetingMinutesPDF = async (meeting) => {
-    let page = null;
     try {
         const browser = await getBrowser();
-        page = await browser.newPage();
+        const page = await browser.newPage();
         await page.setViewport({ width: 800, height: 1100, deviceScaleFactor: 2 });
         
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
@@ -1058,9 +1022,5 @@ export const generateMeetingMinutesPDF = async (meeting) => {
     } catch (e) {
         console.error("Generate Meeting PDF Error:", e.message);
         throw e;
-    } finally {
-        if (page) {
-            try { await page.close(); } catch (err) {}
-        }
     }
 };

@@ -21,12 +21,15 @@ const ManageUsers: React.FC = () => {
     canManageSales: false, 
     receiveNotifications: true, 
     avatar: '', 
+    signature: '',
     telegramChatId: '', 
     baleChatId: '', 
     phoneNumber: '' 
   });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
       const [usersData, settingsData] = await Promise.all([getUsers(), getSettings()]);
@@ -75,6 +78,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           avatar: '', 
+          signature: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -94,6 +98,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: user.canManageSales || false, 
           receiveNotifications: user.receiveNotifications !== false, 
           avatar: user.avatar || '', 
+          signature: user.signature || '',
           telegramChatId: user.telegramChatId || '', 
           baleChatId: user.baleChatId || '', 
           phoneNumber: user.phoneNumber || '' 
@@ -113,6 +118,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           avatar: '', 
+          signature: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -129,6 +135,24 @@ const ManageUsers: React.FC = () => {
       reader.onload = async (ev) => {
           const base64 = ev.target?.result as string;
           try { const result = await uploadFile(file.name, base64); setFormData({ ...formData, avatar: result.url }); } catch (error) { alert('خطا در آپلود تصویر'); } finally { setUploadingAvatar(false); }
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handleSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]; if (!file) return;
+      setUploadingSignature(true);
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+          const base64 = ev.target?.result as string;
+          try { 
+              const result = await uploadFile(file.name, base64); 
+              setFormData({ ...formData, signature: result.url }); 
+          } catch (error) { 
+              alert('خطا در آپلود تصویر مهر و امضا'); 
+          } finally { 
+              setUploadingSignature(false); 
+          }
       };
       reader.readAsDataURL(file);
   };
@@ -171,16 +195,33 @@ const ManageUsers: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-          {/* Avatar Upload */}
-          <div className="flex flex-col items-center justify-center row-span-2">
-              <div className="w-20 h-20 rounded-full bg-gray-200 mb-2 overflow-hidden relative group border">
-                  {formData.avatar ? <img src={formData.avatar} className="w-full h-full object-cover" /> : <UserIcon className="w-full h-full p-4 text-gray-400" />}
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => avatarInputRef.current?.click()}>
-                      <Camera className="text-white" size={24}/>
+          {/* Upload Container */}
+          <div className="flex gap-4 items-center justify-center col-span-1 md:col-span-2 lg:col-span-1 row-span-2 border-l pl-2 border-dashed border-gray-200">
+              {/* Avatar Upload */}
+              <div className="flex flex-col items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-200 mb-1 overflow-hidden relative group border">
+                      {formData.avatar ? <img src={formData.avatar} className="w-full h-full object-cover" /> : <UserIcon className="w-full h-full p-3 text-gray-400" />}
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => avatarInputRef.current?.click()}>
+                          <Camera className="text-white" size={18}/>
+                      </div>
                   </div>
+                  <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                  <span className="text-[10px] text-gray-500 font-bold">عکس پروفایل</span>
+                  <button type="button" onClick={() => avatarInputRef.current?.click()} className="text-[10px] text-blue-600 hover:underline" disabled={uploadingAvatar}>{uploadingAvatar ? '...' : 'تغییر'}</button>
               </div>
-              <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
-              <button type="button" onClick={() => avatarInputRef.current?.click()} className="text-xs text-blue-600 hover:underline" disabled={uploadingAvatar}>{uploadingAvatar ? '...' : 'تغییر عکس'}</button>
+
+              {/* Signature Upload */}
+              <div className="flex flex-col items-center justify-center">
+                  <div className="w-16 h-16 rounded-lg bg-gray-100 mb-1 overflow-hidden relative group border flex items-center justify-center">
+                      {formData.signature ? <img src={formData.signature} className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-[8px] text-gray-400 text-center p-1 font-bold">بدون امضا</div>}
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => signatureInputRef.current?.click()}>
+                          <Camera className="text-white" size={18}/>
+                      </div>
+                  </div>
+                  <input type="file" ref={signatureInputRef} className="hidden" accept="image/*" onChange={handleSignatureChange} />
+                  <span className="text-[10px] text-gray-500 font-bold">مهر و امضاء</span>
+                  <button type="button" onClick={() => signatureInputRef.current?.click()} className="text-[10px] text-blue-600 hover:underline" disabled={uploadingSignature}>{uploadingSignature ? '...' : 'آپلود'}</button>
+              </div>
           </div>
 
           <div className="space-y-1 lg:col-span-2"><label className="text-sm text-gray-600">نام و نام خانوادگی</label><input required type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="مثال: محمد احمدی" /></div>
