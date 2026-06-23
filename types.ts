@@ -1026,11 +1026,22 @@ export interface MeetingAttendee {
     isAbsenceAuthorized?: boolean;
 }
 
+export interface MeetingItemComment {
+    id: string;
+    userId?: string;
+    username: string;
+    fullName: string;
+    text: string;
+    date: number;
+    parentId?: string;
+}
+
 export interface MeetingItem {
     id: string;
     description: string;
     responsiblePerson: string;
     duration: string;
+    comments?: MeetingItemComment[];
 }
 
 export interface MeetingMinutes {

@@ -39,6 +39,9 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     });
     
     const [searchTerm, setSearchTerm] = useState('');
+    const [expandedCommentsItem, setExpandedCommentsItem] = useState<Record<string, boolean>>({});
+    const [meetingCommentTexts, setMeetingCommentTexts] = useState<Record<string, string>>({});
+    const [replyingToCommentId, setReplyingToCommentId] = useState<Record<string, string | null>>({});
 
     const canView = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canViewMeetings);
     const canCreate = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canCreateMeeting);
@@ -1063,14 +1066,177 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                 </tr>
                                             </thead>
                                             <tbody className="text-[11px] font-bold">
-                                                {viewMeeting.items.map((item, idx) => (
-                                                    <tr key={item.id}>
-                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{idx + 1}</td>
-                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 leading-relaxed">{item.description}</td>
-                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.responsiblePerson}</td>
-                                                        <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.duration}</td>
-                                                    </tr>
-                                                ))}
+                                                {viewMeeting.items.map((item, idx) => {
+                                                    const isCommentsExpanded = !!expandedCommentsItem[item.id];
+                                                    const commentText = meetingCommentTexts[item.id] || '';
+                                                    const activeReplyId = replyingToCommentId[item.id] || null;
+                                                    const commentsList = item.comments || [];
+                                                    const parentComments = commentsList.filter(c => !c.parentId);
+
+                                                    const handleToggleComments = () => {
+                                                        setExpandedCommentsItem(p => ({ ...p, [item.id]: !p[item.id] }));
+                                                    };
+
+                                                    const handleAddComment = async (parentId?: string) => {
+                                                        const text = commentText.trim();
+                                                        if (!text) return;
+
+                                                        const newComment = {
+                                                            id: generateUUID(),
+                                                            userId: currentUser.id,
+                                                            username: currentUser.username,
+                                                            fullName: currentUser.fullName,
+                                                            text: text,
+                                                            date: Date.now(),
+                                                            parentId: parentId
+                                                        };
+
+                                                        const updatedItems = viewMeeting.items.map(it => {
+                                                            if (it.id === item.id) {
+                                                                return {
+                                                                    ...it,
+                                                                    comments: [...(it.comments || []), newComment]
+                                                                };
+                                                            }
+                                                            return it;
+                                                        });
+
+                                                        const updatedMeeting = {
+                                                            ...viewMeeting,
+                                                            items: updatedItems,
+                                                            updatedAt: Date.now()
+                                                        };
+
+                                                        try {
+                                                            await updateMeeting(updatedMeeting);
+                                                            setViewMeeting(updatedMeeting);
+                                                            setMeetingCommentTexts(p => ({ ...p, [item.id]: '' }));
+                                                            setReplyingToCommentId(p => ({ ...p, [item.id]: null }));
+                                                            loadData();
+                                                        } catch (err) {
+                                                            alert('خطا در ثبت کامنت');
+                                                        }
+                                                    };
+
+                                                    return (
+                                                        <React.Fragment key={item.id}>
+                                                            <tr className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
+                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{idx + 1}</td>
+                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 leading-relaxed font-sans">
+                                                                    <div>{item.description}</div>
+                                                                    <div className="mt-2 flex items-center gap-2">
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={handleToggleComments}
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-lg text-[10px] font-bold transition-all active:scale-95"
+                                                                        >
+                                                                            <MessageSquare size={12} />
+                                                                            {commentsList.length > 0 ? `${commentsList.length} نظر و پیگیری` : 'ثبت نظر و پیگیری'}
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.responsiblePerson}</td>
+                                                                <td className="border border-gray-300 dark:border-gray-700 p-4 text-center">{item.duration}</td>
+                                                            </tr>
+                                                            {isCommentsExpanded && (
+                                                                <tr>
+                                                                    <td colSpan={4} className="border border-gray-300 dark:border-gray-700 bg-gray-50/40 dark:bg-black/15 p-4 text-right">
+                                                                        <div className="max-w-3xl mr-auto space-y-4">
+                                                                            <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                                                                <MessageSquare size={14} className="text-blue-500" />
+                                                                                <span className="font-black text-xs text-gray-800 dark:text-gray-200">نظرات و پیگیری‌های این مصوبه</span>
+                                                                            </div>
+
+                                                                            <div className="space-y-3 font-sans">
+                                                                                {parentComments.length === 0 ? (
+                                                                                    <p className="text-xs text-gray-400 italic">نظری برای این مصوبه ثبت نشده است. اولین نظر را بنویسید.</p>
+                                                                                ) : (
+                                                                                    parentComments.map(comment => {
+                                                                                        const isReplyingThis = activeReplyId === comment.id;
+                                                                                        const replies = commentsList.filter(r => r.parentId === comment.id);
+
+                                                                                        return (
+                                                                                            <div key={comment.id} className="space-y-2 border-r-2 border-blue-500/50 pr-3 mr-1 py-1">
+                                                                                                <div className="flex justify-between items-start gap-3">
+                                                                                                    <div>
+                                                                                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200">{comment.fullName}</span>
+                                                                                                        <span className="mx-1 text-gray-400 text-[9px]">•</span>
+                                                                                                        <span className="text-[9px] text-gray-400 font-bold">{new Date(comment.date).toLocaleDateString('fa-IR')} - {new Date(comment.date).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                                                    </div>
+                                                                                                    <button 
+                                                                                                        onClick={() => setReplyingToCommentId(p => ({ ...p, [item.id]: isReplyingThis ? null : comment.id }))}
+                                                                                                        className="text-[9px] text-blue-600 hover:text-blue-800 font-bold"
+                                                                                                    >
+                                                                                                        {isReplyingThis ? 'انصراف' : 'پاسخ'}
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                                <p className="text-xs text-gray-700 dark:text-gray-300 font-medium whitespace-pre-line bg-white dark:bg-gray-800 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60 shadow-sm leading-relaxed">{comment.text}</p>
+
+                                                                                                <div className="mr-4 space-y-2">
+                                                                                                    {replies.map(rep => (
+                                                                                                        <div key={rep.id} className="border-r-2 border-gray-300 dark:border-gray-600 pr-3 py-1 space-y-1">
+                                                                                                            <div className="flex justify-between items-center">
+                                                                                                                <div>
+                                                                                                                    <span className="text-[11px] font-black text-gray-800 dark:text-gray-200">{rep.fullName}</span>
+                                                                                                                    <span className="mx-1 text-gray-400 text-[8px]">•</span>
+                                                                                                                    <span className="text-[8px] text-gray-400 font-bold">{new Date(rep.date).toLocaleDateString('fa-IR')}</span>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium whitespace-pre-line bg-gray-100/50 dark:bg-black/20 p-2 rounded-xl leading-relaxed">{rep.text}</p>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+
+                                                                                                {isReplyingThis && (
+                                                                                                    <div className="mr-4 pt-2 flex gap-2">
+                                                                                                        <input 
+                                                                                                            type="text"
+                                                                                                            value={commentText}
+                                                                                                            onChange={e => setMeetingCommentTexts(p => ({ ...p, [item.id]: e.target.value }))}
+                                                                                                            className="flex-1 text-xs border rounded-lg p-2 dark:bg-gray-800"
+                                                                                                            placeholder={`پاسخ به ${comment.fullName}...`}
+                                                                                                            onKeyDown={e => { if (e.key === 'Enter') handleAddComment(comment.id); }}
+                                                                                                        />
+                                                                                                        <button 
+                                                                                                            onClick={() => handleAddComment(comment.id)}
+                                                                                                            className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-blue-700 transition"
+                                                                                                        >
+                                                                                                            ارسال
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })
+                                                                                )}
+                                                                            </div>
+
+                                                                            {!activeReplyId && (
+                                                                                <div className="pt-2 flex gap-2">
+                                                                                    <textarea 
+                                                                                        rows={1}
+                                                                                        value={commentText}
+                                                                                        onChange={e => setMeetingCommentTexts(p => ({ ...p, [item.id]: e.target.value }))}
+                                                                                        className="flex-1 text-xs border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 resize-none font-sans"
+                                                                                        placeholder="پیگیری مصوبه، نتایج اقدامات یا نظر جدید..."
+                                                                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+                                                                                    />
+                                                                                    <button 
+                                                                                        onClick={() => handleAddComment()}
+                                                                                        disabled={!commentText.trim()}
+                                                                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                                                                                    >
+                                                                                        ارسال <Send size={12} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                                 {viewMeeting.items.length === 0 && (
                                                     <tr>
                                                         <td colSpan={4} className="border border-gray-300 dark:border-gray-700 p-8 text-center text-gray-400 italic">موردی ثبت نشده است</td>

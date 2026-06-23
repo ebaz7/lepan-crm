@@ -27,7 +27,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
     const [viewMode, setViewMode] = useState<'web' | 'print'>('web');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     
-    const handleUpdateRecordField = (recordId: string, field: 'goodsName' | 'description', value: string) => {
+    const handleUpdateRecordField = (recordId: string, field: 'goodsName' | 'sellerName', value: string) => {
         if(!onUpdateRecord) return;
         const rec = records.find(r => r.id === recordId);
         if(!rec) return;
@@ -185,7 +185,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                             deliveredAmount: trancheDeliveredAmount,
                             // @ts-ignore
                             returnAmount: t.returnAmount || 0,
-                            finalCostPerUnit: t.deliveredAmount > 0 ? ((t.rialAmount || 0) - ((t.returnAmount || 0) * (t.rate || ((t.rialAmount || 0)/(t.amount || 1))))) / t.deliveredAmount : 0,
+                            finalCostPerUnit: trancheDeliveredAmount > 0 ? ((t.rialAmount || 0) - ((t.returnAmount || 0) * (t.rate || ((t.rialAmount || 0)/(t.amount || 1))))) / trancheDeliveredAmount : 0,
                             // @ts-ignore
                             returnDate: t.returnDate || '-'
                         });
@@ -196,7 +196,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
             if (recordTranches.length > 0) {
                 recordTranches.sort((a,b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
             groups.push({
-                    recordInfo: { recordId: r.id, goodsName: r.goodsName, description: r.description, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
+                    recordInfo: { recordId: r.id, goodsName: r.goodsName, description: r.sellerName, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
                     tranches: recordTranches
                 });
             }
@@ -669,7 +669,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                             <textarea
                                                 className="w-full bg-transparent resize-none text-center outline-none focus:ring-2 focus:ring-[#1e40af] rounded-lg p-1 text-sm font-semibold text-slate-800 min-h-[44px]"
                                                 defaultValue={group.recordInfo.goodsName || ''}
-                                                onBlur={e => onUpdateRecord && onUpdateRecord(group.recordInfo.id, { goodsName: e.target.value })}
+                                                onBlur={e => handleUpdateRecordField(group.recordInfo.id, 'goodsName', e.target.value)}
                                                 rows={2}
                                                 placeholder="شرح کالا..."
                                             />
@@ -680,7 +680,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                             <textarea
                                                 className="w-full bg-transparent resize-none text-center outline-none focus:ring-2 focus:ring-[#1e40af] rounded-lg p-1 text-sm text-slate-600 min-h-[44px]"
                                                 defaultValue={group.recordInfo.description || ''}
-                                                onBlur={e => onUpdateRecord && onUpdateRecord(group.recordInfo.id, { description: e.target.value })}
+                                                onBlur={e => handleUpdateRecordField(group.recordInfo.id, 'sellerName', e.target.value)}
                                                 rows={2}
                                                 placeholder="توضیحات..."
                                             />
