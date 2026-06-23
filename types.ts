@@ -28,7 +28,6 @@ export interface User {
   canManageTrade?: boolean;
   canManageSales?: boolean;
   receiveNotifications?: boolean;
-  signatureBase64?: string;
   mobileNavOrder?: string[];
   lastSeen?: number; // New: For online status
 }
@@ -1182,45 +1181,4 @@ export interface PartKardex {
     balance: number;
     unitPrice?: number;
     description?: string;
-}
-
-// Secretriat system types
-export enum LetterStatus {
-    DRAFT = 'draft',
-    PENDING_SIGNATURE = 'pending_signature',
-    SIGNED = 'signed',
-    ARCHIVED = 'archived'
-}
-
-export interface LetterComment {
-    id: string;
-    text: string;
-    author: string;
-    timestamp: number;
-}
-
-export interface LetterSignature {
-    id: string;
-    userId: string;
-    userName: string;
-    roleLabel: string;
-    signedAt?: number;
-    signatureBase64?: string;
-}
-
-export interface OfficialLetter {
-    id: string;
-    letterNumber: string;
-    company: string;
-    branch: 'FACTORY' | 'CENTRAL';
-    date: string;
-    subject: string;
-    recipient: string;
-    body: string;
-    status: LetterStatus;
-    signatures: LetterSignature[];
-    comments: LetterComment[];
-    attachments?: string[];
-    createdAt: number;
-    creator: string;
 }

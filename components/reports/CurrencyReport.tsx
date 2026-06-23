@@ -2,15 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TradeRecord, TradeStage } from '../../types';
 import { formatNumberString, deformatNumberString, parsePersianDate, getCurrentShamsiDate, formatCurrency } from '../../constants';
 import { FileSpreadsheet, Printer, FileDown, Filter, RefreshCw, X, Loader2, Eye, LayoutGrid, Smartphone, ChevronLeft, ChevronRight, CheckCircle2, Clock, Info, HelpCircle, Activity, DollarSign, Building2, Coins, ArrowLeftRight } from 'lucide-react';
-import { generatePdf } from '../../utils/pdfGenerator';
-import * as ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-// from '../../utils/pdfGenerator'; 
+import { generatePdf } from '../../utils/pdfGenerator'; 
 
 interface CurrencyReportProps {
     records: TradeRecord[];
     onSelectTranche?: (recordId: string, trancheId?: string | null) => void;
-    onUpdateRecord?: (record: TradeRecord) => void;
 }
 
 interface ExchangeRates {
@@ -22,19 +18,9 @@ interface ExchangeRates {
 
 const STORAGE_KEY_RATES = 'currency_report_rates_v1';
 
-const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche, onUpdateRecord }) => {
+const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche }) => {
     // -- State --
     const [viewMode, setViewMode] = useState<'web' | 'print'>('web');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-    
-    const handleUpdateRecordField = (recordId: string, field: 'goodsName' | 'description', value: string) => {
-        if(!onUpdateRecord) return;
-        const rec = records.find(r => r.id === recordId);
-        if(!rec) return;
-        if(rec[field] !== value) {
-            onUpdateRecord({ ...rec, [field]: value });
-        }
-    };
     const [rates, setRates] = useState<ExchangeRates>({
         eurToUsd: 1.08,
         aedToUsd: 0.272,
@@ -116,7 +102,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
 
     // processedGroups filters and processes raw trade records into tranches
     const processedGroups = React.useMemo(() => {
-        const groups: { recordInfo: any, tranches: any[] }[] = [];
+        const groups: any[] = [];
         records.forEach(r => {
             if (filters.archiveStatus === 'active' && (r.status === 'Completed' || r.isArchived)) return;
             if (filters.archiveStatus === 'archive' && !(r.status === 'Completed' || r.isArchived)) return;
@@ -194,7 +180,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
 
             if (recordTranches.length > 0) {
                 groups.push({
-                    recordInfo: { recordId: r.id, goodsName: r.goodsName, description: r.description, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
+                    recordInfo: { recordId: r.id, goodsName: r.goodsName, fileNumber: r.fileNumber, orderNumber: r.orderNumber || r.fileNumber, registrationNumber: r.registrationNumber, company: r.company, bank: r.operatingBank },
                     tranches: recordTranches
                 });
             }
@@ -283,78 +269,75 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
             {/* Main Table */}
             <table className="w-full border-collapse border border-black text-center mb-4 text-black table-fixed">
                 <colgroup>
-    <col style={{width: '25px'}} />
-    <col />
-    <col />
-    <col style={{width: '65px'}} />
-    <col style={{width: '65px'}} />
-    <col style={{width: '75px'}} />
-    <col style={{width: '65px'}} />
-    <col style={{width: '60px'}} />
-    <col style={{width: '40px'}} />
-    <col style={{width: '60px'}} />
-    <col style={{width: '75px'}} />
-    <col style={{width: '65px'}} />
-    <col style={{width: '60px'}} />
-    <col style={{width: '65px'}} />
-    <col style={{width: '60px'}} />
-    <col style={{width: '45px'}} />
-    <col style={{width: '60px'}} />
-    <col style={{width: '50px'}} />
-</colgroup>
-<thead>
-    <tr className="bg-[#1e40af] text-white font-black text-[9px] border-black">
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ردیف</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">شرح کالا</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">توضیحات</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">پرونده</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ثبت سفارش</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">نام شرکت</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">معادل دلار</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">مقدار ارز</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">نوع</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">تاریخ خرید</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">بهای ارز (ریال)</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">صرافی</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">کارگزار</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">بانک</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">تحویلی</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">وضعیت</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">عودت</th>
-        <th className="border border-black p-1 align-middle text-center bg-[#1e40af] text-white">ت. عودت</th>
-    </tr>
-</thead>
+                    <col style={{width: '30px'}} /> {/* Row */}
+                    <col /> {/* Goods */}
+                    <col style={{width: '75px'}} /> {/* File No */}
+                    <col style={{width: '75px'}} /> {/* Reg No */}
+                    <col style={{width: '85px'}} /> {/* Company */}
+                    <col style={{width: '65px'}} /> {/* USD */}
+                    <col style={{width: '65px'}} /> {/* Orig Amount */}
+                    <col style={{width: '40px'}} /> {/* Currency */}
+                    <col style={{width: '65px'}} /> {/* Date */}
+                    <col style={{width: '85px'}} /> {/* Rial */}
+                    <col style={{width: '70px'}} /> {/* Exchange */}
+                    <col style={{width: '65px'}} /> {/* Broker */}
+                    <col style={{width: '75px'}} /> {/* Bank */}
+                    <col style={{width: '65px'}} /> {/* Delivered */}
+                    <col style={{width: '45px'}} /> {/* Status */}
+                    <col style={{width: '75px'}} /> {/* Return Amt */}
+                    <col style={{width: '65px'}} /> {/* Return Date */}
+                </colgroup>
+                <thead>
+                    <tr className="bg-gray-100 text-black text-[9px] h-10 select-none">
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ردیف</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شرح کالا</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">شماره سفارش (پرونده)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">ثبت سفارش</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">نام شرکت</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (دلار آمریکا)</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (مقدار)</th>
+                        <th className="border border-black p-1 font-black text-center bg-blue-100/50 text-black">ارز (نوع)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">تاریخ خرید</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بهای ارز (ریال)</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">محل ارسال</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">کارگزار</th>
+                        <th className="border border-black p-1 font-black text-center bg-gray-100 text-black">بانک عامل</th>
+                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">مقدار تحویل</th>
+                        <th className="border border-black p-1 font-black text-center bg-green-100/50 text-black">وضعیت تصفیه</th>
+                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">مبلغ عودتی</th>
+                        <th className="border border-black p-1 font-black text-center bg-red-100/50 text-black">تاریخ عودتی</th>
+                    </tr>
+                </thead>
                 <tbody>
                     {processedGroups.map((group, gIndex) => (
                         <React.Fragment key={gIndex}>
                             {group.tranches.map((t: any, tIndex: number) => (
-                                <tr key={`${gIndex}_${tIndex}`} className={`text-black leading-tight text-[9px] ${gIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}`}>
+                                <tr key={`${gIndex}_${tIndex}`} className="bg-white text-gray-800 leading-tight text-black text-[9px]">
                                     {/* Row Span Logic: Only render details on first tranche */}
                                     {tIndex === 0 && (
                                         <>
-                                            <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{gIndex + 1}</td>
-                                            <td className="border border-black p-1 align-middle text-center truncate font-bold text-black" rowSpan={group.tranches.length} title={group.recordInfo.goodsName}>{group.recordInfo.goodsName}</td>
-                                            <td className="border border-black p-1 align-middle text-center truncate font-bold text-black" rowSpan={group.tranches.length} title={group.recordInfo.description || '-'}>{group.recordInfo.description || '-'}</td>
-                                            <td className="border border-black p-1 align-middle text-center font-mono font-bold text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.fileNumber}</td>
-                                            <td className="border border-black p-1 align-middle text-center font-mono text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.registrationNumber || '-'}</td>
-                                            <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.company}</td>
+                                            <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{gIndex + 1}</td>
+                                            <td className="border border-black p-1 text-right truncate font-bold text-black" rowSpan={group.tranches.length} title={group.recordInfo.goodsName}>{group.recordInfo.goodsName}</td>
+                                            <td className="border border-black p-1 font-mono font-bold text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.fileNumber}</td>
+                                            <td className="border border-black p-1 font-mono text-center text-black" rowSpan={group.tranches.length}>{group.recordInfo.registrationNumber || '-'}</td>
+                                            <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.company}</td>
                                         </>
                                     )}
                                     
-                                    <td className="border border-black p-1 align-middle text-center font-mono font-black bg-blue-50/50 text-center text-black">{formatUSD(t.usdAmount)}</td>
-                                    <td className="border border-black p-1 align-middle text-center font-mono font-bold text-center text-black">{formatNumberString(t.originalAmount)}</td>
-                                    <td className="border border-black p-1 align-middle text-center text-center font-bold text-black">{t.currencyType}</td>
-                                    <td className="border border-black p-1 align-middle text-center dir-ltr text-center font-bold text-black">{t.purchaseDate}</td>
-                                    <td className="border border-black p-1 align-middle text-center font-mono text-center font-bold text-black">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
-                                    <td className="border border-black p-1 align-middle text-center text-[9px] truncate text-center font-bold text-black" title={t.exchangeName}>{t.exchangeName}</td>
-                                    <td className="border border-black p-1 align-middle text-center font-mono text-[9px] text-center font-bold text-black">{t.brokerName}</td> 
+                                    <td className="border border-black p-1 font-mono font-black bg-blue-50/50 text-center text-black">{formatUSD(t.usdAmount)}</td>
+                                    <td className="border border-black p-1 font-mono font-bold text-center text-black">{formatNumberString(t.originalAmount)}</td>
+                                    <td className="border border-black p-1 text-center font-bold text-black">{t.currencyType}</td>
+                                    <td className="border border-black p-1 dir-ltr text-center font-bold text-black">{t.purchaseDate}</td>
+                                    <td className="border border-black p-1 font-mono text-center font-bold text-black">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
+                                    <td className="border border-black p-1 text-[9px] truncate text-center font-bold text-black" title={t.exchangeName}>{t.exchangeName}</td>
+                                    <td className="border border-black p-1 font-mono text-[9px] text-center font-bold text-black">{t.brokerName}</td> 
                                     
-                                    {tIndex === 0 && <td className="border border-black p-1 align-middle text-center text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.bank}</td>}
+                                    {tIndex === 0 && <td className="border border-black p-1 text-center font-bold text-black" rowSpan={group.tranches.length}>{group.recordInfo.bank}</td>}
                                     
-                                    <td className="border border-black p-1 align-middle text-center font-mono bg-green-50/50 text-center font-black text-black">{formatNumberString(t.deliveredAmount)}</td>
-                                    <td className="border border-black p-1 align-middle text-center text-center font-bold text-black">{t.isDelivered ? '✅' : '⏳'}</td>
-                                    <td className="border border-black p-1 align-middle text-center bg-red-50/50 text-center font-black text-black">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
-                                    <td className="border border-black p-1 align-middle text-center bg-red-50/50 text-center font-bold text-black">{t.returnDate}</td>
+                                    <td className="border border-black p-1 font-mono bg-green-50/50 text-center font-black text-black">{formatNumberString(t.deliveredAmount)}</td>
+                                    <td className="border border-black p-1 text-center font-bold text-black">{t.isDelivered ? '✅' : '⏳'}</td>
+                                    <td className="border border-black p-1 bg-red-50/50 text-center font-black text-black">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
+                                    <td className="border border-black p-1 bg-red-50/50 text-center font-bold text-black">{t.returnDate}</td>
                                 </tr>
                             ))}
                         </React.Fragment>
@@ -364,13 +347,13 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                     )}
                     <tr className="bg-gray-100 font-black text-[9px] text-black">
                         <td colSpan={5} className="border border-black p-1 text-center bg-gray-200 text-black">جمع کل</td>
-                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatUSD(tableTotals.usd)}</td>
-                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.original)}</td>
-                        <td className="border border-black p-1 align-middle text-center bg-gray-200 text-black">-</td>
-                        <td className="border border-black p-1 align-middle text-center bg-gray-200 text-black">-</td>
-                        <td className="border border-black p-1 align-middle text-center dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.rial)}</td>
+                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatUSD(tableTotals.usd)}</td>
+                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.original)}</td>
+                        <td className="border border-black p-1 bg-gray-200 text-black">-</td>
+                        <td className="border border-black p-1 bg-gray-200 text-black">-</td>
+                        <td className="border border-black p-1 dir-ltr text-center bg-gray-200 text-black">{formatNumberString(tableTotals.rial)}</td>
                         <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
-                        <td className="border border-black p-1 align-middle text-center font-mono bg-green-100/50 text-center font-black text-black">{formatNumberString(tableTotals.delivered)}</td>
+                        <td className="border border-black p-1 font-mono bg-green-100/50 text-center font-black text-black">{formatNumberString(tableTotals.delivered)}</td>
                         <td colSpan={3} className="border border-black p-1 bg-gray-200 text-black"></td>
                     </tr>
                 </tbody>
@@ -635,25 +618,24 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                     <div className="flex-1 overflow-auto rounded-xl border border-slate-100 dark:border-slate-800 custom-scrollbar relative">
                         <table className="w-full border-collapse text-right text-xs">
                             <thead>
-                                <tr className="bg-[#1e40af] text-white font-extrabold border-b border-[#1e3a8a] shrink-0 select-none">
-                                    <th className="p-3.5 align-middle text-center w-12 sticky right-0 bg-[#1e40af] z-20 shadow-sm border-l border-[#1e3a8a]">ردیف</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[190px] sticky right-12 bg-[#1e40af] z-20 shadow-sm border-l border-[#1e3a8a]">شرح کالا</th>
-<th className="p-3.5 align-middle text-center min-w-[150px] border-l border-[#1e3a8a]">توضیحات</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[110px] border-l border-[#1e3a8a]">شماره سفارش پرونده</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[110px] border-l border-[#1e3a8a]">ثبت سفارش</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[120px] border-l border-[#1e3a8a]">نام شرکت</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[125px] border-l border-[#1e3a8a]">معادل دلار آمریکا</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[115px] border-l border-[#1e3a8a]">مقدار ارز</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[65px] border-l border-[#1e3a8a]">نوع ارز</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[105px] font-sans border-l border-[#1e3a8a]">تاریخ خرید</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[135px] border-l border-[#1e3a8a]">ارز خریداری شده (ریال)</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[115px] border-l border-[#1e3a8a]">صرافی عامل</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[115px] border-l border-[#1e3a8a]">کارگزار</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[125px] border-l border-[#1e3a8a]">بانک عامل</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[125px] border-l border-[#1e3a8a]">مقدار تحویل شده</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[65px] border-l border-[#1e3a8a]">وضعیت</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[115px] border-l border-[#1e3a8a]">مبلغ عودت</th>
-                                    <th className="p-3.5 align-middle text-center min-w-[105px] font-sans">تاریخ عودت</th>
+                                <tr className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-extrabold border-b border-slate-200 dark:border-slate-800 shrink-0 select-none">
+                                    <th className="p-3.5 text-center w-12 sticky right-0 bg-slate-100 dark:bg-slate-800 z-20 shadow-sm">ردیف</th>
+                                    <th className="p-3.5 text-right min-w-[190px] sticky right-12 bg-slate-100 dark:bg-slate-800 z-20 shadow-sm">شرح کالا</th>
+                                    <th className="p-3.5 text-center min-w-[110px]">شماره سفارش پرونده</th>
+                                    <th className="p-3.5 text-center min-w-[110px]">ثبت سفارش</th>
+                                    <th className="p-3.5 text-center min-w-[120px]">نام شرکت</th>
+                                    <th className="p-3.5 text-center min-w-[125px] bg-blue-50/40 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300">معادل دلار آمریکا</th>
+                                    <th className="p-3.5 text-center min-w-[115px] bg-blue-50/40 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300">مقدار ارز</th>
+                                    <th className="p-3.5 text-center min-w-[65px] bg-blue-50/40 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300">نوع ارز</th>
+                                    <th className="p-3.5 text-center min-w-[105px] font-sans">تاریخ خرید</th>
+                                    <th className="p-3.5 text-center min-w-[135px]">ارز خریداری شده (ریال)</th>
+                                    <th className="p-3.5 text-center min-w-[115px]">صرافی عامل</th>
+                                    <th className="p-3.5 text-center min-w-[115px]">کارگزار</th>
+                                    <th className="p-3.5 text-center min-w-[125px]">بانک عامل</th>
+                                    <th className="p-3.5 text-center min-w-[125px] bg-green-50/40 dark:bg-green-950/20 text-green-800 dark:text-green-300">مقدار تحویل شده</th>
+                                    <th className="p-3.5 text-center min-w-[65px] bg-green-50/40 dark:bg-green-950/20 text-green-800 dark:text-green-300">وضعیت</th>
+                                    <th className="p-3.5 text-center min-w-[115px] bg-red-50/40 dark:bg-red-950/20 text-red-800 dark:text-red-300">مبلغ عودت</th>
+                                    <th className="p-3.5 text-center min-w-[105px] bg-red-50/40 dark:bg-red-950/20 text-red-800 dark:text-red-300 font-sans">تاریخ عودت</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -669,47 +651,44 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                                         onClick={() => {
                                                              setSelectedRowDetail({ group, tranche: t, index: currentIdx });
                                                          }}
-                                                        className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/40 cursor-pointer active:bg-blue-100/30 dark:active:bg-slate-800/60 transition-colors group text-slate-800 dark:text-slate-200 font-semibold ${gIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
+                                                        className="hover:bg-blue-50/40 dark:hover:bg-slate-800/40 cursor-pointer active:bg-blue-100/30 dark:active:bg-slate-800/60 transition-colors group text-slate-800 dark:text-slate-200 font-semibold"
                                                     >
                                                         {tIndex === 0 && (
                                                             <>
-                                                                <td className="p-3 align-middle text-center font-bold bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 sticky right-0 group-hover:bg-slate-100 dark:group-hover:bg-slate-850 z-20 shadow-xs" rowSpan={groupRowSpan}>
+                                                                <td className="p-3 text-center font-bold bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 sticky right-0 group-hover:bg-slate-100 dark:group-hover:bg-slate-850 z-20 shadow-xs" rowSpan={groupRowSpan}>
                                                                     {gIndex + 1}
                                                                 </td>
-                                                                <td className="p-3 align-middle text-center font-black text-slate-900 dark:text-white truncate border-l border-slate-200 dark:border-slate-800 sticky right-12 group-hover:bg-slate-100 dark:group-hover:bg-slate-850 z-20 max-w-[200px]" rowSpan={groupRowSpan} title={group.recordInfo.goodsName}>
+                                                                <td className="p-3 text-right font-black text-slate-900 dark:text-white truncate border-l border-slate-200 dark:border-slate-800 sticky right-12 group-hover:bg-slate-100 dark:group-hover:bg-slate-850 z-20 max-w-[200px]" rowSpan={groupRowSpan} title={group.recordInfo.goodsName}>
                                                                     {group.recordInfo.goodsName}
                                                                 </td>
-                                                                <td className="p-3 align-middle text-center border-l font-bold border-slate-200 dark:border-slate-800" rowSpan={groupRowSpan}>
-                                                                    {group.recordInfo.description || '-'}
-                                                                </td>
-                                                                <td className="p-3 align-middle text-center font-mono font-black text-blue-600 dark:text-blue-400" rowSpan={groupRowSpan}>
+                                                                <td className="p-3 text-center font-mono font-black text-blue-600 dark:text-blue-400" rowSpan={groupRowSpan}>
                                                                     {group.recordInfo.fileNumber}
                                                                 </td>
-                                                                <td className="p-3 align-middle text-center font-mono text-slate-500 dark:text-slate-400" rowSpan={groupRowSpan}>
+                                                                <td className="p-3 text-center font-mono text-slate-500 dark:text-slate-400" rowSpan={groupRowSpan}>
                                                                     {group.recordInfo.registrationNumber || '-'}
                                                                 </td>
-                                                                <td className="p-3 align-middle text-center font-extrabold text-slate-700 dark:text-slate-300" rowSpan={groupRowSpan}>
+                                                                <td className="p-3 text-center font-extrabold text-slate-700 dark:text-slate-300" rowSpan={groupRowSpan}>
                                                                     {group.recordInfo.company}
                                                                 </td>
                                                             </>
                                                         )}
                                                         
-                                                        <td className="p-3 align-middle text-center font-mono font-black bg-blue-50/20 dark:bg-blue-950/5 text-blue-700 dark:text-blue-300">{formatUSD(t.usdAmount)} $</td>
-                                                        <td className="p-3 align-middle text-center font-mono font-bold text-slate-900 dark:text-white">{formatNumberString(t.originalAmount)}</td>
-                                                        <td className="p-3 align-middle text-center font-black text-slate-500 dark:text-slate-400">{t.currencyType}</td>
-                                                        <td className="p-3 align-middle text-center font-mono text-slate-600 dark:text-slate-400">{t.purchaseDate || '-'}</td>
-                                                        <td className="p-3 align-middle text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
-                                                        <td className="p-3 align-middle text-center font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]" title={t.exchangeName}>{t.exchangeName}</td>
-                                                        <td className="p-3 align-middle text-center text-slate-600 dark:text-slate-400">{t.brokerName || '-'}</td>
+                                                        <td className="p-3 text-center font-mono font-black bg-blue-50/20 dark:bg-blue-950/5 text-blue-700 dark:text-blue-300">{formatUSD(t.usdAmount)} $</td>
+                                                        <td className="p-3 text-center font-mono font-bold text-slate-900 dark:text-white">{formatNumberString(t.originalAmount)}</td>
+                                                        <td className="p-3 text-center font-black text-slate-500 dark:text-slate-400">{t.currencyType}</td>
+                                                        <td className="p-3 text-center font-mono text-slate-600 dark:text-slate-400">{t.purchaseDate || '-'}</td>
+                                                        <td className="p-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{t.rialAmount > 0 ? formatNumberString(t.rialAmount) : '-'}</td>
+                                                        <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]" title={t.exchangeName}>{t.exchangeName}</td>
+                                                        <td className="p-3 text-center text-slate-600 dark:text-slate-400">{t.brokerName || '-'}</td>
                                                         
                                                         {tIndex === 0 && (
-                                                            <td className="p-3 align-middle text-center text-slate-700 dark:text-slate-300 font-black" rowSpan={groupRowSpan}>
+                                                            <td className="p-3 text-center text-slate-700 dark:text-slate-300 font-black" rowSpan={groupRowSpan}>
                                                                 {group.recordInfo.bank || '-'}
                                                             </td>
                                                         )}
                                                         
-                                                        <td className="p-3 align-middle text-center font-mono font-black bg-green-50/20 dark:bg-green-950/5 text-green-700 dark:text-green-300">{formatNumberString(t.deliveredAmount)}</td>
-                                                        <td className="p-3 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                                                        <td className="p-3 text-center font-mono font-black bg-green-50/20 dark:bg-green-950/5 text-green-700 dark:text-green-300">{formatNumberString(t.deliveredAmount)}</td>
+                                                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                                              <div className="flex items-center justify-center gap-1.5">
                                                                  <span className={`inline-flex items-center justify-center p-1.5 rounded-full ${t.isDelivered ? 'bg-green-100 dark:bg-green-900/35 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/35 text-amber-800 dark:text-amber-300'}`} title={t.isDelivered ? 'تحویل شده' : 'در انتظار'}>
                                                                      {t.isDelivered ? (
@@ -733,8 +712,8 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
                                                                  )}
                                                              </div>
                                                          </td>
-                                                        <td className="p-3 align-middle text-center font-mono font-bold bg-red-50/10 text-red-600 dark:text-red-400">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
-                                                        <td className="p-3 align-middle text-center font-mono text-slate-500 dark:text-slate-400">{t.returnDate || '-'}</td>
+                                                        <td className="p-3 text-center font-mono font-bold bg-red-50/10 text-red-600 dark:text-red-400">{t.returnAmount > 0 ? formatNumberString(t.returnAmount) : '-'}</td>
+                                                        <td className="p-3 text-center font-mono text-slate-500 dark:text-slate-400">{t.returnDate || '-'}</td>
                                                     </tr>
                                                 );
                                             })}

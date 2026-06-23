@@ -7,7 +7,7 @@ import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText, Send
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
@@ -211,27 +211,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             alert('خطا در عملیات تایید');
             setProcessingId(null);
         }
-    };
-
-    const handleManualResend = async (p: ExitPermit) => {
-        if(!confirm('آیا قصد ارسال مجدد پیام ربات به گروه‌ها برای این مرحله را دارید؟')) return;
-        setProcessingId(p.id);
-        setActiveAutoSends(prev => [...prev, p]);
-        
-        let prevStatus: any = p.status;
-        if (p.status === ExitPermitStatus.PENDING_CEO) prevStatus = 'CREATE';
-        else if (p.status === ExitPermitStatus.PENDING_FACTORY) prevStatus = ExitPermitStatus.PENDING_CEO;
-        else if (p.status === ExitPermitStatus.PENDING_WAREHOUSE) prevStatus = ExitPermitStatus.PENDING_FACTORY;
-        else if (p.status === ExitPermitStatus.PENDING_SECURITY) prevStatus = ExitPermitStatus.PENDING_WAREHOUSE;
-        else if (p.status === ExitPermitStatus.PENDING_FACTORY_FINAL) prevStatus = ExitPermitStatus.PENDING_SECURITY;
-        else if (p.status === ExitPermitStatus.EXITED) prevStatus = ExitPermitStatus.PENDING_FACTORY_FINAL;
-        
-        setTimeout(async () => {
-            await sendNotification(p, prevStatus);
-            setProcessingId(null);
-            setActiveAutoSends(prev => prev.filter(x => x.id !== p.id));
-            alert('درخواست ارسال دستی به ربات‌ها ارسال شد.');
-        }, 2500);
     };
 
     const sendCancellationNotification = async (permit: ExitPermit, prevStatus: ExitPermitStatus, reason: string) => {
@@ -474,10 +453,10 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const fallbackOptionStr = prevStatus; // For older formats
             
             const g1StatusArray = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
-            const isG1Active = g1StatusArray.includes(configOptionStr1) || g1StatusArray.includes(fallbackOptionStr) || (prevStatus === 'CREATE' && g1StatusArray.includes('CREATE'));
+            const isG1Active = g1StatusArray.includes(configOptionStr1) || g1StatusArray.includes(fallbackOptionStr);
             
             const g2StatusArray = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
-            const isG2Active = g2StatusArray.includes(configOptionStr1) || g2StatusArray.includes(fallbackOptionStr) || (prevStatus === 'CREATE' && g2StatusArray.includes('CREATE'));
+            const isG2Active = g2StatusArray.includes(configOptionStr1) || g2StatusArray.includes(fallbackOptionStr);
             
             if (isG1Active) {
                 if (g1WA) targets.push({ group: g1WA });
@@ -491,9 +470,7 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             }
 
             let captionTitle = '';
-            if (prevStatus === 'CREATE') {
-                captionTitle = 'در انتظار بررسی و تایید مدیرعامل';
-            } else if (prevStatus === ExitPermitStatus.PENDING_CEO) {
+            if (prevStatus === ExitPermitStatus.PENDING_CEO) {
                 captionTitle = '✅ تایید مدیرعامل - ارجاع به کارخانه';
                 targets.push({ role: UserRole.FACTORY_MANAGER });
             } else if (prevStatus === ExitPermitStatus.PENDING_FACTORY) {
@@ -663,16 +640,6 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 {canAct && !processingId && (
                      <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); handleApprove(p); }} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
                          {getActionLabel(p.status)}
-                     </button>
-                )}
-                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === UserRole.WAREHOUSE_KEEPER) && p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED && !processingId && (
-                     <button onClick={() => handleManualResend(p)} className="bg-sky-50 text-sky-600 px-3 py-2 rounded-lg hover:bg-sky-100" title="ارسال مجدد پیام ربات به گروه‌ها">
-                         <Send size={16}/>
-                     </button>
-                )}
-                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.FACTORY_MANAGER || currentUser.role === UserRole.WAREHOUSE_KEEPER) && p.status !== ExitPermitStatus.EXITED && p.status !== ExitPermitStatus.REJECTED && p.status !== ExitPermitStatus.CANCELED && !processingId && (
-                     <button onClick={() => handleManualResend(p)} className="bg-sky-50 text-sky-600 px-3 py-2 rounded-lg hover:bg-sky-100" title="ارسال مجدد پیام ربات به گروه‌ها">
-                         <Send size={16}/>
                      </button>
                 )}
                 {(currentUser.role === UserRole.ADMIN || (settings ? getRolePermissions(currentUser.role, settings, currentUser).canCancelExitPermit : false)) && 
