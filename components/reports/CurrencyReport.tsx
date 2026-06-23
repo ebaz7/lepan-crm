@@ -2,7 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TradeRecord, TradeStage } from '../../types';
 import { formatNumberString, deformatNumberString, parsePersianDate, getCurrentShamsiDate, formatCurrency } from '../../constants';
 import { FileSpreadsheet, Printer, FileDown, Filter, RefreshCw, X, Loader2, Eye, LayoutGrid, Smartphone, ChevronLeft, ChevronRight, CheckCircle2, Clock, Info, HelpCircle, Activity, DollarSign, Building2, Coins, ArrowLeftRight } from 'lucide-react';
-import { generatePdf } from '../../utils/pdfGenerator'; 
+import { generatePdf } from '../../utils/pdfGenerator';
+import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+// from '../../utils/pdfGenerator'; 
 
 interface CurrencyReportProps {
     records: TradeRecord[];
@@ -21,6 +24,7 @@ const STORAGE_KEY_RATES = 'currency_report_rates_v1';
 const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranche }) => {
     // -- State --
     const [viewMode, setViewMode] = useState<'web' | 'print'>('web');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [rates, setRates] = useState<ExchangeRates>({
         eurToUsd: 1.08,
         aedToUsd: 0.272,
