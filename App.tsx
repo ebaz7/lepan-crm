@@ -24,6 +24,7 @@ import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import CctiConverter from './components/CctiConverter';
 import SayanReports from './components/SayanReports';
+import SecretariatModule from './components/SecretariatModule';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers, getRolePermissions, logout as authLogout } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
@@ -1231,6 +1232,7 @@ function App() {
                 {activeTab === 'security' && <div className="page-transition flex flex-col flex-1 min-h-0"><SecurityModule currentUser={currentUser} financialYear={financialYear} /></div>}
                 {activeTab === 'meetings' && <div className="page-transition flex flex-col flex-1 min-h-0"><MeetingModule currentUser={currentUser} /></div>}
                 {activeTab === 'purchase' && <div className="page-transition flex flex-col flex-1 min-h-0"><PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} /></div>}
+               {activeTab === 'secretariat' && <div className="page-transition flex flex-col flex-1 min-h-0"><SecretariatModule currentUser={currentUser} /></div>}
                 
                 <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0 page-transition' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 

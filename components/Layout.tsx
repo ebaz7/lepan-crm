@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BookOpen, LayoutDashboard, Search, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Sparkles } from 'lucide-react';
+import { Mail, BookOpen, LayoutDashboard, Search, PlusCircle, ListChecks, FileText, Inbox, Users, LogOut, User as UserIcon, Settings, Bell, BellOff, MessageSquare, X, Check, Container, KeyRound, Save, Upload, Camera, Download, Share, ChevronRight, Home, Send, BrainCircuit, Mic, StopCircle, Loader2, Truck, ClipboardList, Package, Printer, CheckSquare, ShieldCheck, Shield, Phone, RefreshCw, Smartphone, MonitorDown, BellRing, Smartphone as MobileIcon, Trash2, Menu, Edit3, Sun, Moon, ShoppingCart, Wallet, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, AppNotification, SystemSettings } from '../types';
 import { logout, hasPermission, getRolePermissions, updateUser } from '../services/authService';
@@ -308,6 +308,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
   const canSeeCcti = currentUser.role === UserRole.ADMIN || perms.canAccessCcti === true;
   const canSeeSayan = currentUser.role === UserRole.ADMIN || perms.canViewSayan === true;
+  const canSeeSecretariat = currentUser.role === UserRole.ADMIN || [UserRole.CEO, UserRole.MANAGER, UserRole.FACTORY_MANAGER, UserRole.FINANCIAL, UserRole.SALES_MANAGER, UserRole.COMMERCIAL].includes(currentUser.role as UserRole) || perms.canViewSecretariat === true;
   const canSeeNotifications = true;
 
   const navItems = [
@@ -324,6 +325,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   if (canSeeMeetings) navItems.push({ id: 'meetings', label: 'جلسات تولید', icon: ClipboardList });
   if (canSeePurchase) navItems.push({ id: 'purchase', label: 'درخواست خرید', icon: ShoppingCart });
+  if (canSeeSecretariat) navItems.push({ id: 'secretariat', label: 'دبیرخانه', icon: Mail });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
   if (canSeeKnowledgeBase) navItems.push({ id: 'knowledge', label: 'اطلاعات و یادداشت ها', icon: BookOpen });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });
