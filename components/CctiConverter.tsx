@@ -63,7 +63,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
 
     // Calculate Unique Persons for Kardex
     const kardexPersons = Array.from(new Set(archives.flatMap(a => a.details.map(d => d.name || d.id))));
-    const filteredKardexPersons = kardexPersons.filter(p => p.includes(kardexSearch));
+    const filteredKardexPersons = kardexPersons.filter(p => p ? String(p).includes(kardexSearch) : false);
     const [savedPersons, setSavedPersons] = useState<Record<string, { account: string, name: string }>>({});
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -735,9 +735,9 @@ ${xmlTxLines.join('\\n')}
                             ) : (
                                 Object.entries(savedPersons)
                                     .filter(([id, data]) => 
-                                        id.includes(searchTerm) || 
-                                        data.name.includes(searchTerm) || 
-                                        data.account.includes(searchTerm)
+                                        String(id || '').includes(searchTerm) || 
+                                        String(data?.name || '').includes(searchTerm) || 
+                                        String(data?.account || '').includes(searchTerm)
                                     )
                                     .map(([id, data]) => (
                                     <div key={id} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:shadow transition-all group">
