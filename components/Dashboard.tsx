@@ -54,6 +54,12 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         return item ? JSON.parse(item) : [];
     } catch { return []; }
   });
+  const [secretariatLetters, setSecretariatLetters] = useState<any[]>(() => {
+    try {
+        const item = localStorage.getItem('app_data_secretariat');
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  });
 
   // Personal Notes State
   const [notes, setNotes] = useState<Note[]>(() => {
@@ -257,7 +263,18 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
       }
   }
 
-  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0;
+  // 5. Secretariat Pending Count
+  const hasSecretariatAccess = currentUser.canAccessSecretariat === true || permissions.isSuperUser;
+  let pendingSecretariatCount = 0;
+  if (hasSecretariatAccess) {
+      pendingSecretariatCount = secretariatLetters.filter(l => 
+          l.status === 'در انتظار اقدام' && 
+          (!currentUser.secretariatAllowedCompanies || currentUser.secretariatAllowedCompanies.length === 0 || currentUser.secretariatAllowedCompanies.includes(l.companyId)) &&
+          (l.referredTo?.includes(currentUser.id) || permissions.isSuperUser)
+      ).length;
+  }
+
+  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || pendingSecretariatCount > 0;
 
   // ... (Existing Charts logic) ...
   const completedOrders = orders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -512,6 +529,20 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                 </div>
                                 <h3 className="text-xl font-black mb-1">تایید درخواست خرید</h3>
                                 <p className="text-emerald-50 text-xs opacity-85">درخواست‌های منتظر تایید شما</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {pendingSecretariatCount > 0 && hasSecretariatAccess && (
+                        <div onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'secretariat' }))} className="bg-gradient-to-br from-[#f59e0b] to-[#d97706] rounded-2xl p-6 text-white shadow-lg shadow-amber-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><BookOpen size={100}/></div>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
+                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingSecretariatCount} مورد</span>
+                                </div>
+                                <h3 className="text-xl font-black mb-1">دبیرخانه (نامه‌های اداری)</h3>
+                                <p className="text-amber-50 text-xs opacity-85">نامه‌های منتظر اقدام شما</p>
                             </div>
                         </div>
                     )}

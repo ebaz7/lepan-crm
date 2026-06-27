@@ -93,7 +93,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     receiver: '',
     type: 'internal' as 'internal' | 'incoming' | 'outgoing',
     attachments: [] as SecretariatLetterAttachment[],
-    addCompanyStamp: false
+    addCompanyStamp: false,
+    signOffText: 'با تشکر'
   });
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -186,7 +187,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   };
 
   // Companies List derived from system settings
-  const availableCompanies = systemSettings?.companies || [];
+  const availableCompanies = (systemSettings?.companies || []).filter(comp => 
+      isSuperUser || 
+      !currentUser.secretariatAllowedCompanies || 
+      currentUser.secretariatAllowedCompanies.length === 0 || 
+      currentUser.secretariatAllowedCompanies.includes(comp.id)
+  );
 
   // Filter letters based on current company, section, tab (cartable vs archive) and search parameters
   const filteredLetters = letters.filter(letter => {
@@ -251,6 +257,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       comments: [],
       attachments: newLetterForm.attachments,
       addCompanyStamp: newLetterForm.addCompanyStamp,
+      signOffText: newLetterForm.signOffText,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       createdBy: currentUser.fullName
@@ -913,12 +920,20 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                         )}
                       </div>
 
-                      <button 
-                        onClick={() => setSelectedLetterForView(letter)}
-                        className="text-purple-600 hover:text-purple-800 font-bold hover:underline flex items-center gap-0.5"
-                      >
-                        مشاهده و اقدام <ChevronLeft size={12} />
-                      </button>
+                      <div className="flex gap-4 items-center">
+                        <button 
+                          onClick={() => setIsPrintMode(letter)}
+                          className="text-emerald-600 hover:text-emerald-800 font-bold hover:underline flex items-center gap-0.5"
+                        >
+                          مشاهده نامه <FileText size={12} />
+                        </button>
+                        <button 
+                          onClick={() => setSelectedLetterForView(letter)}
+                          className="text-purple-600 hover:text-purple-800 font-bold hover:underline flex items-center gap-0.5"
+                        >
+                          جزئیات و اقدام <ChevronLeft size={12} />
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -1237,6 +1252,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                     <input 
                       required 
                       type="text" 
+                      list="user-list"
                       value={newLetterForm.sender}
                       onChange={e => setNewLetterForm({...newLetterForm, sender: e.target.value})}
                       placeholder="مثال: مدیریت دفتر مرکزی"
@@ -1250,12 +1266,19 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                     <input 
                       required 
                       type="text" 
+                      list="user-list"
                       value={newLetterForm.receiver}
                       onChange={e => setNewLetterForm({...newLetterForm, receiver: e.target.value})}
                       placeholder="مثال: سرپرست کارخانه"
                       className="w-full border rounded-lg px-3 py-2 text-xs"
                     />
                   </div>
+                  
+                  <datalist id="user-list">
+                    {users.map(u => (
+                      <option key={u.id} value={u.fullName} />
+                    ))}
+                  </datalist>
                 </div>
 
                 {/* Subject */}
@@ -1290,6 +1313,19 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                     onChange={e => setNewLetterForm({...newLetterForm, content: e.target.value})}
                     placeholder="متن رسمی و اداری خود را اینجا بنویسید..."
                     className="w-full border rounded-lg p-3 text-xs leading-relaxed"
+                  />
+                </div>
+
+                {/* Sign-off text */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 font-bold">متن پایان نامه (با تشکر...)</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={newLetterForm.signOffText}
+                    onChange={e => setNewLetterForm({...newLetterForm, signOffText: e.target.value})}
+                    placeholder="مثال: با تشکر"
+                    className="w-full border rounded-lg px-3 py-2 text-xs"
                   />
                 </div>
 
@@ -1775,12 +1811,10 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
 
                 {/* Custom Image Letterhead Background or Corporate Mockup Header */}
                 {companySettingsForm.letterheadUrl ? (
-                  <div className="w-full h-24 mb-6 relative">
-                    <img src={companySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
-                  </div>
+                  <img src={companySettingsForm.letterheadUrl} className="absolute inset-0 w-full h-full object-cover opacity-100 z-0 pointer-events-none print:max-w-none print:max-h-none print:w-[210mm] print:h-[297mm]" />
                 ) : (
                   /* Elegant default corporate letterhead */
-                  <div className="border-b-2 border-double border-slate-800 pb-4 mb-8 flex justify-between items-center">
+                  <div className="border-b-2 border-double border-slate-800 pb-4 mb-8 flex justify-between items-center relative z-10">
                     {/* Left: Metadata (Only shown here if NOT absolutely positioned) */}
                     {companySettingsForm.metadataTop === undefined && companySettingsForm.metadataLeft === undefined ? (
                       <div className="text-[11px] font-bold space-y-1.5 text-slate-800 w-1/3 text-right">
@@ -1815,59 +1849,45 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 )}
 
                 {/* Letter Body Context */}
-                <div className="space-y-6 text-sm leading-loose text-slate-800 px-4 min-h-[450px]">
+                <div className="space-y-6 text-sm leading-loose text-slate-800 px-8 min-h-[450px] relative pb-48 pt-32 z-10">
                   
                   {/* Salutations */}
-                  <div className="font-bold space-y-1">
-                    <div>جناب آقای/سرکار خانم: <span className="text-slate-900 font-black">{isPrintMode.receiver}</span></div>
-                    <div>از طرف: <span className="text-slate-900 font-black">{isPrintMode.sender}</span></div>
-                  </div>
-
-                  {/* Subject */}
-                  <div className="font-black text-base text-slate-900 border-b pb-2 pt-2">
-                    موضوع: {isPrintMode.subject}
+                  <div className="font-bold space-y-2 mb-6">
+                    <div className="text-base text-slate-900">{isPrintMode.receiver}</div>
+                    <div className="text-base font-medium">با سلام و احترام،</div>
                   </div>
 
                   {/* Body Content */}
-                  <div className="pt-4 text-justify whitespace-pre-wrap leading-loose font-medium text-slate-800 text-[13px]">
+                  <div className="pt-2 text-justify whitespace-pre-wrap leading-loose font-medium text-slate-800 text-[14px]">
                     {isPrintMode.content}
                   </div>
 
-                </div>
+                  {/* Signatures & Stamp block (bottom left aligned) */}
+                  <div className="absolute bottom-16 left-12 w-64 text-center space-y-2">
+                     <div className="font-bold text-sm mb-4">{isPrintMode.signOffText || 'با تشکر'}</div>
+                     <div className="font-bold text-sm">{selectedCompany?.name || ''}</div>
+                     <div className="font-bold text-sm mb-2">{isPrintMode.sender}</div>
 
-                {/* Signatures & Stamp Row */}
-                {((isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0) || (isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl)) && (
-                  <div className="mt-12 pt-6 border-t border-dashed flex justify-between items-end px-6">
-                    {/* Stamp */}
-                    {isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl ? (
-                      <div className="text-center space-y-1">
-                        <span className="text-[9px] text-red-500 font-bold block">★ مهر رسمی شرکت</span>
-                        <img src={companySettingsForm.companyStampUrl} className="h-20 w-20 mx-auto object-contain mix-blend-multiply" />
-                      </div>
-                    ) : <div></div>}
-
-                    {/* Signatures */}
-                    {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (
-                      <div className="flex justify-end gap-12">
-                        {isPrintMode.approvedBy.map((userId, idx) => {
-                          const signerUser = users.find(u => u.id === userId);
-                          const sigUrl = isPrintMode.signatureImageUrls?.[idx];
-                          return (
-                            <div key={idx} className="text-center space-y-2">
-                              <span className="text-[10px] text-emerald-600 font-bold block">✓ تایید و امضای الکترونیک</span>
-                              {sigUrl ? (
-                                <img src={sigUrl} className="h-16 mx-auto object-contain mix-blend-multiply" />
-                              ) : (
-                                <div className="h-16 flex items-center justify-center text-[10px] text-slate-400">فاقد تصویر امضا</div>
-                              )}
-                              <div className="text-xs font-black text-slate-900">{signerUser?.fullName || 'کاربر سیستم'}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                     <div className="relative mt-2 flex justify-center items-center">
+                        {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (
+                          <div className="flex justify-center gap-2 relative z-10 w-full flex-wrap">
+                            {isPrintMode.approvedBy.map((userId, idx) => {
+                              const sigUrl = isPrintMode.signatureImageUrls?.[idx];
+                              return sigUrl ? (
+                                <img key={idx} src={sigUrl} className="h-16 object-contain mix-blend-multiply" />
+                              ) : null;
+                            })}
+                          </div>
+                        )}
+                        {isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl && (
+                          <img 
+                            src={companySettingsForm.companyStampUrl} 
+                            className="h-28 w-28 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-multiply opacity-70 z-0" 
+                          />
+                        )}
+                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* Footer bar containing metadata of address/phone */}
                 <div className="absolute bottom-6 left-8 right-8 text-[10px] text-slate-400 border-t pt-2 flex justify-between items-center flex-wrap gap-2 print:border-t">

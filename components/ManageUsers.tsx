@@ -21,6 +21,7 @@ const ManageUsers: React.FC = () => {
     canManageSales: false, 
     receiveNotifications: true, 
     canAccessSecretariat: false,
+    secretariatAllowedCompanies: [],
     canManageSecretariatSettings: false,
     avatar: '', 
     signatureUrl: '', // New signature field
@@ -102,6 +103,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: user.canManageSales || false, 
           receiveNotifications: user.receiveNotifications !== false, 
           canAccessSecretariat: user.canAccessSecretariat || false,
+          secretariatAllowedCompanies: user.secretariatAllowedCompanies || [],
           canManageSecretariatSettings: user.canManageSecretariatSettings || false,
           avatar: user.avatar || '', 
           signatureUrl: user.signatureUrl || '',
@@ -124,6 +126,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           canAccessSecretariat: false,
+          secretariatAllowedCompanies: [],
           canManageSecretariatSettings: false,
           avatar: '', 
           signatureUrl: '',
@@ -325,6 +328,35 @@ const ManageUsers: React.FC = () => {
                   <input type="checkbox" checked={formData.canAccessSecretariat} onChange={e => setFormData({...formData, canAccessSecretariat: e.target.checked})} className="w-4 h-4 text-purple-600" />
                   <span>دسترسی به دبیرخانه</span>
               </label>
+              
+              {formData.canAccessSecretariat && settings?.companies && (
+                  <div className="flex flex-col gap-1 col-span-1 md:col-span-2 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                      <span className="text-xs font-semibold text-purple-800 mb-1">شرکت‌های مجاز برای دبیرخانه:</span>
+                      <div className="flex flex-wrap gap-2">
+                          {settings.companies.map(comp => (
+                              <label key={comp.id} className="flex items-center gap-1.5 text-xs text-gray-600 bg-white px-2 py-1 rounded border border-gray-200 cursor-pointer">
+                                  <input 
+                                      type="checkbox" 
+                                      className="w-3.5 h-3.5 text-purple-600"
+                                      checked={formData.secretariatAllowedCompanies?.includes(comp.id) || false}
+                                      onChange={(e) => {
+                                          const isChecked = e.target.checked;
+                                          const current = formData.secretariatAllowedCompanies || [];
+                                          setFormData({
+                                              ...formData,
+                                              secretariatAllowedCompanies: isChecked 
+                                                ? [...current, comp.id] 
+                                                : current.filter(id => id !== comp.id)
+                                          });
+                                      }}
+                                  />
+                                  <span>{comp.name}</span>
+                              </label>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
               <label className="flex items-center gap-2 text-xs text-gray-700 bg-indigo-50 px-2 py-1.5 rounded cursor-pointer border border-indigo-200">
                   <input type="checkbox" checked={formData.canManageSecretariatSettings} onChange={e => setFormData({...formData, canManageSecretariatSettings: e.target.checked})} className="w-4 h-4 text-indigo-600" />
                   <span>مدیریت تنظیمات دبیرخانه</span>

@@ -28,6 +28,7 @@ export interface User {
   canManageTrade?: boolean;
   canManageSales?: boolean;
   canAccessSecretariat?: boolean;
+  secretariatAllowedCompanies?: string[];
   canManageSecretariatSettings?: boolean;
   receiveNotifications?: boolean;
   mobileNavOrder?: string[];
@@ -1233,7 +1234,7 @@ export interface SecretariatLetter {
     comments: SecretariatLetterComment[];
     attachments: SecretariatLetterAttachment[];
     addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
-    
+    signOffText?: string; // متن با تشکر
     createdAt: number;
     updatedAt: number;
     createdBy: string;
