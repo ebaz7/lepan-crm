@@ -55,15 +55,39 @@ const cleanAndParseAmount = (val: any): number => {
 const isValidAccountString = (acc: any): boolean => {
     if (!acc) return false;
     const s = String(acc).trim().toUpperCase();
-    if (s === '' || s === 'EMPTY' || s === 'NULL' || s === 'UNDEFINED' || s === '-' || s === '.') {
+    if (s === '' || s === 'EMPTY' || s === 'NULL' || s === 'UNDEFINED' || s === '-' || s === '.' || s === '0') {
         return false;
     }
-    // A valid account/IBAN should contain at least some digits
-    return /[0-9]/.test(s);
+    // A valid account/IBAN should contain at least 5 digits
+    const digitsCount = s.replace(/[^0-9]/g, '').length;
+    return digitsCount >= 5;
 };
 
-const findPersonInSaved = (excelId: string, saved: Record<string, { account: string, name: string }>) => {
-    const clean = (s: string) => {
+const cleanNameForMatching = (n: string): string => {
+    if (!n) return '';
+    let str = String(n).trim();
+    // Convert Persian/Arabic digits to English digits
+    str = convertPersianToEnglishDigits(str);
+    // Replace Arabic letters with Persian ones for consistency
+    str = str.replace(/ي/g, 'ی')
+             .replace(/ك/g, 'ک')
+             .replace(/ة/g, 'ه')
+             .replace(/ؤ/g, 'و')
+             .replace(/أ/g, 'ا')
+             .replace(/إ/g, 'ا')
+             .replace(/آ/g, 'ا')
+             .replace(/ء/g, '');
+    // Remove all whitespace, non-breaking spaces, ZWNJs, hyphens, slashes, parentheses, commas, dots, and typical separators
+    str = str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '');
+    return str.toLowerCase();
+};
+
+const findPersonInSaved = (
+    excelId: string,
+    excelName: string,
+    saved: Record<string, { account: string, name: string }>
+) => {
+    const cleanId = (s: string) => {
         let str = String(s).trim();
         str = convertPersianToEnglishDigits(str);
         
@@ -75,24 +99,41 @@ const findPersonInSaved = (excelId: string, saved: Record<string, { account: str
             }
         }
         
-        // Remove spaces, hyphens, slashes, parentheses, commas, dots, and typical separators
-        str = str.replace(/[-_.\s/\\(),،]/g, '');
+        // Remove spaces, hyphens, slashes, parentheses, commas, dots, and typical separators, including ZWNJs and NBSP
+        str = str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '');
         // Remove leading zeros
         return str.replace(/^0+/, '');
     };
 
-    const cleanExcel = clean(excelId);
-    if (!cleanExcel) return null;
+    const cExcelId = cleanId(excelId);
+    const cExcelName = cleanNameForMatching(excelName);
 
-    // 1. Direct match first
-    if (saved[excelId] && saved[excelId].account) {
+    // 1. Direct ID match
+    if (excelId && saved[excelId] && isValidAccountString(saved[excelId].account)) {
         return { matchedKey: excelId, person: saved[excelId] };
     }
 
-    // 2. Exact clean match
-    for (const key of Object.keys(saved)) {
-        if (saved[key] && clean(key) === cleanExcel) {
-            return { matchedKey: key, person: saved[key] };
+    // 2. Exact clean ID match
+    if (cExcelId) {
+        for (const key of Object.keys(saved)) {
+            if (saved[key] && cleanId(key) === cExcelId && isValidAccountString(saved[key].account)) {
+                return { matchedKey: key, person: saved[key] };
+            }
+        }
+    }
+
+    // 3. Robust Name match as fallback
+    if (cExcelName) {
+        for (const key of Object.keys(saved)) {
+            if (saved[key] && saved[key].name && cleanNameForMatching(saved[key].name) === cExcelName && isValidAccountString(saved[key].account)) {
+                return { matchedKey: key, person: saved[key] };
+            }
+        }
+        // Check if the key itself is the name
+        for (const key of Object.keys(saved)) {
+            if (saved[key] && cleanNameForMatching(key) === cExcelName && isValidAccountString(saved[key].account)) {
+                return { matchedKey: key, person: saved[key] };
+            }
         }
     }
 
@@ -300,7 +341,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             let name = nameOrig ? String(nameOrig).trim() : '';
 
             // Find match in saved memory
-            const matchedMemory = findPersonInSaved(id, newSaved);
+            const matchedMemory = findPersonInSaved(id, name, newSaved);
 
             const hasInputAccount = isValidAccountString(account);
 
