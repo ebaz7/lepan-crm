@@ -27,19 +27,52 @@ interface Props {
     canManageArchive?: boolean;
 }
 
+const convertPersianToEnglishDigits = (str: string): string => {
+    const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    const arabicDigits  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    let out = str;
+    for (let i = 0; i < 10; i++) {
+        out = out.replace(persianDigits[i], String(i)).replace(arabicDigits[i], String(i));
+    }
+    return out;
+};
+
 const cleanAndParseAmount = (val: any): number => {
     if (val === undefined || val === null) return 0;
     let str = String(val).trim();
-    // Convert Persian/Arabic digits to English
-    const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
-    const arabicDigits  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
-    for (let i = 0; i < 10; i++) {
-        str = str.replace(persianDigits[i], String(i)).replace(arabicDigits[i], String(i));
-    }
+    str = convertPersianToEnglishDigits(str);
     // Remove thousand separators, commas, spaces
     str = str.replace(/[,_ \s]/g, '');
     const num = parseFloat(str);
     return isNaN(num) ? 0 : Math.round(num);
+};
+
+const findPersonInSaved = (excelId: string, saved: Record<string, { account: string, name: string }>) => {
+    const clean = (s: string) => {
+        let str = String(s).trim();
+        str = convertPersianToEnglishDigits(str);
+        // Remove spaces, hyphens, slashes, non-word characters
+        str = str.replace(/[^a-zA-Z0-9]/g, '');
+        // Remove leading zeros
+        return str.replace(/^0+/, '');
+    };
+
+    const cleanExcel = clean(excelId);
+    if (!cleanExcel) return null;
+
+    // 1. Direct match first
+    if (saved[excelId]) {
+        return { matchedKey: excelId, person: saved[excelId] };
+    }
+
+    // 2. Exact clean match
+    for (const key of Object.keys(saved)) {
+        if (clean(key) === cleanExcel) {
+            return { matchedKey: key, person: saved[key] };
+        }
+    }
+
+    return null;
 };
 
 const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageArchive = false }) => {
@@ -237,17 +270,26 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             let account = accountOrig;
             let name = nameOrig;
 
+            // Find match in saved memory
+            const matchedMemory = findPersonInSaved(id, newSaved);
+
             if (account) {
-                newSaved[id] = { account, name: name || newSaved[id]?.name || id };
+                // If Excel/Manual entry has the account, we save/update it
+                const targetId = matchedMemory ? matchedMemory.matchedKey : id;
+                newSaved[targetId] = { account, name: name || newSaved[targetId]?.name || id };
             } else {
-                account = newSaved[id]?.account || '';
-                name = name || newSaved[id]?.name || id;
-                if (name && !newSaved[id]?.name) {
-                     newSaved[id] = { ...newSaved[id], name };
+                // If Excel/Manual entry doesn't have the account, get it from memory
+                if (matchedMemory) {
+                    account = matchedMemory.person.account || '';
+                    name = name || matchedMemory.person.name || id;
+                } else {
+                    account = '';
+                    name = name || id;
                 }
             }
 
-            if (!account) {
+            const isInvalidAccount = !account || account.trim() === '' || account.trim().toUpperCase() === 'EMPTY';
+            if (isInvalidAccount) {
                 missingCount++;
                 account = 'EMPTY';
                 missingPersonsList.push({ id, name: name || 'بدون نام' });
@@ -600,7 +642,8 @@ ${xmlTxLines.join('\\n')}
                                                     value={expectedTotalAmount}
                                                     placeholder="ریال"
                                                     onChange={(e) => {
-                                                        const val = e.target.value.replace(/[^0-9]/g, '');
+                                                        const raw = convertPersianToEnglishDigits(e.target.value);
+                                                         const val = raw.replace(/[^0-9]/g, '');
                                                         setExpectedTotalAmount(val ? Number(val).toLocaleString() : '');
                                                     }}
                                                 />
