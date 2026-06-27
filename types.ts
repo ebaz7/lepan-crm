@@ -27,9 +27,12 @@ export interface User {
   baleChatId?: string;
   canManageTrade?: boolean;
   canManageSales?: boolean;
+  canAccessSecretariat?: boolean;
+  canManageSecretariatSettings?: boolean;
   receiveNotifications?: boolean;
   mobileNavOrder?: string[];
   lastSeen?: number; // New: For online status
+  signatureUrl?: string; // Appended for Secretariat letter signatures
 }
 
 export interface AppNotification {
@@ -154,6 +157,8 @@ export interface RolePermissions {
   canViewCustomerBalances?: boolean;
   canImportCustomerBalances?: boolean;
   canViewSayan?: boolean;
+  canAccessSecretariat?: boolean;
+  canManageSecretariatSettings?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -1182,3 +1187,62 @@ export interface PartKardex {
     unitPrice?: number;
     description?: string;
 }
+
+export interface SecretariatLetterAttachment {
+  fileName: string;
+  url: string;
+}
+
+export interface SecretariatLetterComment {
+  id: string;
+  userId: string;
+  username: string;
+  comment: string;
+  createdAt: number;
+}
+
+export enum SecretariatLetterStatus {
+  DRAFT = 'پیش‌نویس',
+  PENDING = 'در انتظار اقدام',
+  APPROVED = 'تایید شده',
+  REJECTED = 'رد شده',
+  ARCHIVED = 'بایگانی شده'
+}
+
+export interface SecretariatLetter {
+    id: string;
+    companyId: string; // The company this letter belongs to
+    section: 'headquarters' | 'factory'; // دفتر مرکزی یا کارخانه
+    letterNumber: string;
+    date: string;
+    subject: string;
+    content: string;
+    sender: string; // From whom
+    receiver: string; // To whom
+    type: 'internal' | 'incoming' | 'outgoing';
+    status: SecretariatLetterStatus;
+    
+    // Referral (ارجاع)
+    referredTo?: string[]; // Array of User IDs
+    referredBy?: string;
+    
+    // Approval/Signature
+    approvedBy?: string[]; // Array of User IDs who approved/signed
+    signatureImageUrls?: string[]; // Captured signatures
+    
+    comments: SecretariatLetterComment[];
+    attachments: SecretariatLetterAttachment[];
+    
+    createdAt: number;
+    updatedAt: number;
+    createdBy: string;
+}
+
+export interface SecretariatCompanySettings {
+    companyId: string;
+    headquartersAccessTokens: string[]; // List of user IDs with access
+    factoryAccessTokens: string[];     // List of user IDs with access
+    letterheadUrl?: string;            // سربرگ
+    meetingMinutesTemplate?: string;   // قالب صورتجلسه
+}
+

@@ -975,6 +975,51 @@ app.post('/api/part-master-data', (req, res) => { const db = getDb(); if(!db.par
 app.put('/api/part-master-data/:id', (req, res) => { const db = getDb(); const idx = (db.partMasterData||[]).findIndex(p => p.id === req.params.id); if(idx > -1) { db.partMasterData[idx] = { ...db.partMasterData[idx], ...req.body }; saveDb(db); res.json(db.partMasterData); } else res.status(404).send('Not Found'); });
 app.delete('/api/part-master-data/:id', (req, res) => { const db = getDb(); db.partMasterData = (db.partMasterData||[]).filter(p => p.id !== req.params.id); saveDb(db); res.json(db.partMasterData); });
 
+// --- SECRETARIAT API ---
+app.get('/api/secretariat-letters', (req, res) => {
+    res.json(getDb().secretariatLetters || []);
+});
+app.post('/api/secretariat-letters', (req, res) => {
+    const db = getDb();
+    if (!db.secretariatLetters) db.secretariatLetters = [];
+    db.secretariatLetters.unshift(req.body);
+    saveDb(db);
+    res.json(db.secretariatLetters);
+});
+app.put('/api/secretariat-letters/:id', (req, res) => {
+    const db = getDb();
+    const idx = (db.secretariatLetters || []).findIndex(l => l.id === req.params.id);
+    if (idx > -1) {
+        db.secretariatLetters[idx] = { ...db.secretariatLetters[idx], ...req.body };
+        saveDb(db);
+        res.json(db.secretariatLetters);
+    } else res.status(404).send('Not Found');
+});
+app.delete('/api/secretariat-letters/:id', (req, res) => {
+    const db = getDb();
+    db.secretariatLetters = (db.secretariatLetters || []).filter(l => l.id !== req.params.id);
+    saveDb(db);
+    res.json(db.secretariatLetters);
+});
+
+app.get('/api/secretariat-settings', (req, res) => {
+    res.json(getDb().secretariatSettings || []);
+});
+app.post('/api/secretariat-settings', (req, res) => {
+    const db = getDb();
+    if (!db.secretariatSettings) db.secretariatSettings = [];
+    // If company settings already exist, replace. Otherwise add.
+    const newSett = req.body;
+    const idx = db.secretariatSettings.findIndex(s => s.companyId === newSett.companyId);
+    if (idx > -1) {
+        db.secretariatSettings[idx] = newSett;
+    } else {
+        db.secretariatSettings.push(newSett);
+    }
+    saveDb(db);
+    res.json(db.secretariatSettings);
+});
+
 // --- NOTES API ---
 app.get('/api/notes', (req, res) => {
     res.json(getDb().notes || []);

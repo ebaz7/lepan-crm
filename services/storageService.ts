@@ -316,3 +316,29 @@ export const getPartKardex = async (partId: string): Promise<PartKardex[]> => {
     const res = await apiCall<PartKardex[]>(`/part-kardex/${partId}`);
     return safeArray(res);
 };
+
+// --- SECRETARIAT ---
+import { SecretariatLetter, SecretariatCompanySettings } from '../types';
+
+export const getSecretariatLetters = async (): Promise<SecretariatLetter[]> => {
+    const res = await apiCall<SecretariatLetter[]>('/secretariat-letters');
+    return safeArray(res);
+};
+export const saveSecretariatLetter = async (letter: SecretariatLetter): Promise<SecretariatLetter[]> => {
+    return await apiCall<SecretariatLetter[]>('/secretariat-letters', 'POST', letter);
+};
+export const updateSecretariatLetter = async (letter: SecretariatLetter): Promise<SecretariatLetter[]> => {
+    return await apiCall<SecretariatLetter[]>(`/secretariat-letters/${letter.id}`, 'PUT', letter);
+};
+export const deleteSecretariatLetter = async (id: string): Promise<SecretariatLetter[]> => {
+    return await apiCall<SecretariatLetter[]>(`/secretariat-letters/${id}`, 'DELETE');
+};
+
+export const getSecretariatSettings = async (): Promise<SecretariatCompanySettings[]> => {
+    const res = await apiCall<SecretariatCompanySettings[]>('/secretariat-settings');
+    return safeArray(res);
+};
+export const saveSecretariatSettings = async (settings: SecretariatCompanySettings): Promise<SecretariatCompanySettings[]> => {
+    return await apiCall<SecretariatCompanySettings[]>('/secretariat-settings', 'POST', settings);
+};
+

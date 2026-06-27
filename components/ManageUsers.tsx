@@ -20,13 +20,18 @@ const ManageUsers: React.FC = () => {
     canManageTrade: false, 
     canManageSales: false, 
     receiveNotifications: true, 
+    canAccessSecretariat: false,
+    canManageSecretariatSettings: false,
     avatar: '', 
+    signatureUrl: '', // New signature field
     telegramChatId: '', 
     baleChatId: '', 
     phoneNumber: '' 
   });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
       const [usersData, settingsData] = await Promise.all([getUsers(), getSettings()]);
@@ -74,7 +79,10 @@ const ManageUsers: React.FC = () => {
           canManageTrade: false, 
           canManageSales: false, 
           receiveNotifications: true, 
+          canAccessSecretariat: false,
+          canManageSecretariatSettings: false,
           avatar: '', 
+          signatureUrl: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -93,7 +101,10 @@ const ManageUsers: React.FC = () => {
           canManageTrade: user.canManageTrade || false, 
           canManageSales: user.canManageSales || false, 
           receiveNotifications: user.receiveNotifications !== false, 
+          canAccessSecretariat: user.canAccessSecretariat || false,
+          canManageSecretariatSettings: user.canManageSecretariatSettings || false,
           avatar: user.avatar || '', 
+          signatureUrl: user.signatureUrl || '',
           telegramChatId: user.telegramChatId || '', 
           baleChatId: user.baleChatId || '', 
           phoneNumber: user.phoneNumber || '' 
@@ -112,7 +123,10 @@ const ManageUsers: React.FC = () => {
           canManageTrade: false, 
           canManageSales: false, 
           receiveNotifications: true, 
+          canAccessSecretariat: false,
+          canManageSecretariatSettings: false,
           avatar: '', 
+          signatureUrl: '',
           telegramChatId: '', 
           baleChatId: '', 
           phoneNumber: '' 
@@ -129,6 +143,17 @@ const ManageUsers: React.FC = () => {
       reader.onload = async (ev) => {
           const base64 = ev.target?.result as string;
           try { const result = await uploadFile(file.name, base64); setFormData({ ...formData, avatar: result.url }); } catch (error) { alert('خطا در آپلود تصویر'); } finally { setUploadingAvatar(false); }
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handleSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]; if (!file) return;
+      setUploadingSignature(true);
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+          const base64 = ev.target?.result as string;
+          try { const result = await uploadFile(file.name, base64); setFormData({ ...formData, signatureUrl: result.url }); } catch (error) { alert('خطا در آپلود امضا'); } finally { setUploadingSignature(false); }
       };
       reader.readAsDataURL(file);
   };
@@ -171,16 +196,29 @@ const ManageUsers: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-          {/* Avatar Upload */}
-          <div className="flex flex-col items-center justify-center row-span-2">
-              <div className="w-20 h-20 rounded-full bg-gray-200 mb-2 overflow-hidden relative group border">
-                  {formData.avatar ? <img src={formData.avatar} className="w-full h-full object-cover" /> : <UserIcon className="w-full h-full p-4 text-gray-400" />}
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => avatarInputRef.current?.click()}>
-                      <Camera className="text-white" size={24}/>
+          {/* Avatar & Signature Upload */}
+          <div className="flex flex-col items-center justify-center row-span-2 gap-4 border-l border-gray-100 dark:border-white/5 pl-2">
+              <div className="flex flex-col items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-200 mb-1 overflow-hidden relative group border">
+                      {formData.avatar ? <img src={formData.avatar} className="w-full h-full object-cover" /> : <UserIcon className="w-full h-full p-3 text-gray-400" />}
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => avatarInputRef.current?.click()}>
+                          <Camera className="text-white" size={18}/>
+                      </div>
                   </div>
+                  <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                  <button type="button" onClick={() => avatarInputRef.current?.click()} className="text-[11px] text-blue-600 hover:underline font-bold" disabled={uploadingAvatar}>{uploadingAvatar ? '...' : 'عکس پروفایل'}</button>
               </div>
-              <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
-              <button type="button" onClick={() => avatarInputRef.current?.click()} className="text-xs text-blue-600 hover:underline" disabled={uploadingAvatar}>{uploadingAvatar ? '...' : 'تغییر عکس'}</button>
+
+              <div className="flex flex-col items-center justify-center">
+                  <div className="w-16 h-12 rounded bg-slate-50 border border-dashed border-slate-300 mb-1 overflow-hidden relative group flex items-center justify-center">
+                      {formData.signatureUrl ? <img src={formData.signatureUrl} className="w-full h-full object-contain" /> : <span className="text-[10px] text-gray-400">بدون امضا</span>}
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity" onClick={() => signatureInputRef.current?.click()}>
+                          <Camera className="text-white" size={16}/>
+                      </div>
+                  </div>
+                  <input type="file" ref={signatureInputRef} className="hidden" accept="image/*" onChange={handleSignatureChange} />
+                  <button type="button" onClick={() => signatureInputRef.current?.click()} className="text-[11px] text-emerald-600 hover:underline font-bold" disabled={uploadingSignature}>{uploadingSignature ? '...' : 'آپلود امضا'}</button>
+              </div>
           </div>
 
           <div className="space-y-1 lg:col-span-2"><label className="text-sm text-gray-600">نام و نام خانوادگی</label><input required type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="مثال: محمد احمدی" /></div>
@@ -283,6 +321,14 @@ const ManageUsers: React.FC = () => {
                   <input type="checkbox" checked={formData.receiveNotifications} onChange={e => setFormData({...formData, receiveNotifications: e.target.checked})} className="w-4 h-4 text-green-600" />
                   <span>دریافت پیام‌های اطلاع‌رسانی</span>
               </label>
+              <label className="flex items-center gap-2 text-xs text-gray-700 bg-purple-50 px-2 py-1.5 rounded cursor-pointer border border-purple-200">
+                  <input type="checkbox" checked={formData.canAccessSecretariat} onChange={e => setFormData({...formData, canAccessSecretariat: e.target.checked})} className="w-4 h-4 text-purple-600" />
+                  <span>دسترسی به دبیرخانه</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-700 bg-indigo-50 px-2 py-1.5 rounded cursor-pointer border border-indigo-200">
+                  <input type="checkbox" checked={formData.canManageSecretariatSettings} onChange={e => setFormData({...formData, canManageSecretariatSettings: e.target.checked})} className="w-4 h-4 text-indigo-600" />
+                  <span>مدیریت تنظیمات دبیرخانه</span>
+              </label>
               <div className="flex gap-2 mt-1">
                   {editingId && (<button type="button" onClick={handleCancelEdit} className="bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-3 rounded-lg text-sm font-medium transition-colors h-[38px] flex items-center justify-center" title="انصراف"><X size={18} /></button>)}
                   <button type="submit" className={`${editingId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'} text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors h-[38px] flex-1 flex items-center justify-center gap-1`}>{editingId ? <><Save size={16}/> ذخیره</> : 'افزودن'}</button>
@@ -294,7 +340,7 @@ const ManageUsers: React.FC = () => {
         <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">لیست کاربران سیستم</h2></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-right"><thead className="bg-gray-5 text-gray-600"><tr><th className="px-6 py-3">تصویر</th><th className="px-6 py-3">نام و نام خانوادگی</th><th className="px-6 py-3">نام کاربری</th><th className="px-6 py-3">شماره تماس</th><th className="px-6 py-3">نقش‌ها</th><th className="px-6 py-3">دسترسی‌ها</th><th className="px-6 py-3 text-center">عملیات</th></tr></thead>
-            <tbody className="divide-y divide-gray-100">{users.map((user) => (<tr key={user.id} className={`hover:bg-gray-50 transition-colors ${editingId === user.id ? 'bg-amber-50' : ''}`}><td className="px-6 py-4"><div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-gray-400"><UserIcon size={20}/></div>}</div></td><td className="px-6 py-4 flex items-center gap-2">{user.fullName}</td><td className="px-6 py-4 font-mono text-gray-500">{user.username}</td><td className="px-6 py-4 font-mono text-gray-500" dir="ltr">{user.phoneNumber || '-'}</td><td className="px-6 py-4"><div className="flex flex-wrap gap-1">{(user.roles && user.roles.length > 0 ? user.roles : [user.role]).map((r, i) => (<span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${r === UserRole.ADMIN ? 'bg-purple-100/70 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{r === UserRole.ADMIN && <Shield size={10} />}{getRoleLabel(r)}</span>))}</div></td><td className="px-6 py-4 flex gap-1 flex-wrap">{user.canManageTrade && (<span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded w-fit"><Container size={10} /> بازرگانی</span>)}{user.canManageSales && (<span className="flex items-center gap-1 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded w-fit"><Package size={10} /> فروش</span>)}{user.receiveNotifications !== false && (<span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded w-fit"><BellRing size={10} /> اعلان‌ها</span>)}</td><td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => handleEditClick(user)} className="text-amber-500 hover:text-amber-700 p-1 hover:bg-amber-50 rounded transition-colors" title="ویرایش / تغییر رمز"><Pencil size={16} /></button>{user.username !== 'admin' && (<button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors" title="حذف کاربر"><Trash2 size={16} /></button>)}</div></td></tr>))}</tbody>
+            <tbody className="divide-y divide-gray-100">{users.map((user) => (<tr key={user.id} className={`hover:bg-gray-50 transition-colors ${editingId === user.id ? 'bg-amber-50' : ''}`}><td className="px-6 py-4"><div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">{user.avatar ? <img src={user.avatar} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-gray-400"><UserIcon size={20}/></div>}</div></td><td className="px-6 py-4 flex items-center gap-2">{user.fullName}</td><td className="px-6 py-4 font-mono text-gray-500">{user.username}</td><td className="px-6 py-4 font-mono text-gray-500" dir="ltr">{user.phoneNumber || '-'}</td><td className="px-6 py-4"><div className="flex flex-wrap gap-1">{(user.roles && user.roles.length > 0 ? user.roles : [user.role]).map((r, i) => (<span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${r === UserRole.ADMIN ? 'bg-purple-100/70 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{r === UserRole.ADMIN && <Shield size={10} />}{getRoleLabel(r)}</span>))}</div></td><td className="px-6 py-4 flex gap-1 flex-wrap">{user.canManageTrade && (<span className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded w-fit"><Container size={10} /> بازرگانی</span>)}{user.canManageSales && (<span className="flex items-center gap-1 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded w-fit"><Package size={10} /> فروش</span>)}{user.receiveNotifications !== false && (<span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded w-fit"><BellRing size={10} /> اعلان‌ها</span>)}{user.canAccessSecretariat && (<span className="flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded w-fit"><Shield size={10} /> دبیرخانه</span>)}{user.canManageSecretariatSettings && (<span className="flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded w-fit"><Shield size={10} /> مدیریت دبیرخانه</span>)}</td><td className="px-6 py-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => handleEditClick(user)} className="text-amber-500 hover:text-amber-700 p-1 hover:bg-amber-50 rounded transition-colors" title="ویرایش / تغییر رمز"><Pencil size={16} /></button>{user.username !== 'admin' && (<button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors" title="حذف کاربر"><Trash2 size={16} /></button>)}</div></td></tr>))}</tbody>
           </table>
         </div>
       </div>

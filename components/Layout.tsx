@@ -324,6 +324,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   if (canSeeMeetings) navItems.push({ id: 'meetings', label: 'جلسات تولید', icon: ClipboardList });
   if (canSeePurchase) navItems.push({ id: 'purchase', label: 'درخواست خرید', icon: ShoppingCart });
+  navItems.push({ id: 'secretariat', label: 'دبیرخانه اداری', icon: FileText });
   navItems.push({ id: 'chat', label: 'گفتگو', icon: MessageSquare });
   if (canSeeKnowledgeBase) navItems.push({ id: 'knowledge', label: 'اطلاعات و یادداشت ها', icon: BookOpen });
   if (canSeeTrade) navItems.push({ id: 'trade', label: 'بازرگانی', icon: Container });
