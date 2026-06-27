@@ -83,6 +83,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   const [showNewLetterModal, setShowNewLetterModal] = useState(false);
   const [selectedLetterForView, setSelectedLetterForView] = useState<SecretariatLetter | null>(null);
   const [isPrintMode, setIsPrintMode] = useState<SecretariatLetter | null>(null);
+  const [showSignaturesInPrint, setShowSignaturesInPrint] = useState(false);
 
   // --- New Letter Form State ---
   const [newLetterForm, setNewLetterForm] = useState({
@@ -1504,7 +1505,17 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={showSignaturesInPrint}
+                      onChange={(e) => setShowSignaturesInPrint(e.target.checked)}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    />
+                    چاپ خروجی کامل (شامل مهر و امضا)
+                  </label>
+
                   <button
                     onClick={() => {
                       // Append custom print styles to ensure perfection
@@ -1652,7 +1663,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                           
                           {/* Signatures */}
                           {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (
-                            <div className="flex justify-center gap-6 z-10">
+                            <div className={`flex justify-center gap-6 z-10 ${showSignaturesInPrint ? '' : 'print:hidden'}`}>
                               {isPrintMode.approvedBy.map((userId, idx) => {
                                 const signerUser = users.find(u => u.id === userId);
                                 const sigUrl = isPrintMode.signatureImageUrls?.[idx];
@@ -1664,7 +1675,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                                       <div className="h-20 w-20 flex items-center justify-center text-[10px] text-slate-400 border border-dashed rounded-lg">بدون تصویر</div>
                                     )}
                                     {/* Exclude metadata like "تایید و امضای الکترونیک" from print, only show names optionally */}
-                                    <div className="text-xs font-bold text-slate-800 mt-1 print:hidden">{signerUser?.fullName || 'کاربر سیستم'}</div>
+                                    <div className="text-xs font-bold text-slate-800 mt-1">{signerUser?.fullName || 'کاربر سیستم'}</div>
                                   </div>
                                 );
                               })}
@@ -1673,7 +1684,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
 
                           {/* Stamp (Background overlay style) */}
                           {isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl && (
-                            <div className="absolute -top-4 -right-12 z-0 opacity-90 pointer-events-none">
+                            <div className={`absolute -top-4 -right-12 z-0 opacity-90 pointer-events-none ${showSignaturesInPrint ? '' : 'print:hidden'}`}>
                               <img src={companySettingsForm.companyStampUrl} className="h-28 w-28 object-contain mix-blend-multiply rotate-[-15deg]" />
                             </div>
                           )}

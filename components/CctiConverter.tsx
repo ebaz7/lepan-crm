@@ -87,72 +87,69 @@ const findPersonInSaved = (
     excelName: string,
     saved: Record<string, { account: string, name: string }>
 ) => {
-    const cleanId = (s: string) => {
+    const cleanId = (s: any) => {
+        if (s === null || s === undefined) return '';
         let str = String(s).trim();
         str = convertPersianToEnglishDigits(str);
         
-        // Remove decimal part entirely (user requested: read personnel code without decimals)
         if (str.includes('.')) {
             str = str.split('.')[0];
         }
         
-        // Remove spaces, hyphens, slashes, parentheses, commas, dots, and typical separators, including ZWNJs and NBSP
         str = str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '');
-        // Remove leading zeros
-        return str.replace(/^0+/, '');
+        const cleaned = str.replace(/^0+/, '');
+        return cleaned === '' && str.length > 0 ? '0' : cleaned;
     };
 
+    const cleanNameForMatching = (s: any) => {
+        if (!s) return '';
+        let str = String(s).trim();
+        str = convertPersianToEnglishDigits(str);
+        return str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '').toLowerCase();
+    };
+
+    if (!saved) return null;
+    
     const cExcelId = cleanId(excelId);
     const cExcelName = cleanNameForMatching(excelName);
-
-    // 1. Strict Match: Both ID and Name must match (if both are provided in Excel)
-    if (cExcelId && cExcelName) {
-        for (const key of Object.keys(saved)) {
-            const person = saved[key];
-            if (!person || !isValidAccountString(person.account)) continue;
-            
-            const sId = cleanId(key);
-            const sName = cleanNameForMatching(person.name);
-            
-            // If the saved record has both an ID and a Name, check ID match first
-            if (sId === cExcelId) {
-                // For name, allow partial match to avoid failing on minor typo differences
-                if (sName === cExcelName || sName.includes(cExcelName) || cExcelName.includes(sName)) {
+    
+    // 1. Exact ID Match (Most reliable)
+    if (cExcelId) {
+        for (const [key, person] of Object.entries(saved)) {
+            if (person && isValidAccountString(person.account)) {
+                if (cleanId(key) === cExcelId) {
                     return { matchedKey: key, person };
                 }
             }
         }
-        // Fallback: If ID matches exactly but names completely differ, we should probably still accept it
-        // since personnel codes are unique, but the user requested checking both. We'll fallback to ID-only
-        // just in case the name was completely mangled, so they don't get stuck.
-        for (const key of Object.keys(saved)) {
-            const person = saved[key];
-            if (person && cleanId(key) === cExcelId && isValidAccountString(person.account)) {
-                return { matchedKey: key, person };
+    }
+    
+    // 2. Name Match (Only if Name is substantial)
+    if (cExcelName && cExcelName.length > 2) {
+        for (const [key, person] of Object.entries(saved)) {
+            if (person && isValidAccountString(person.account)) {
+                const sName = cleanNameForMatching(person.name);
+                if (sName && sName.length > 2) {
+                    if (sName === cExcelName || sName.includes(cExcelName) || cExcelName.includes(sName)) {
+                        return { matchedKey: key, person };
+                    }
+                }
             }
         }
     }
-
-    // 2. If Excel only provided ID (no Name)
-    if (cExcelId && !cExcelName) {
-        for (const key of Object.keys(saved)) {
-            const person = saved[key];
-            if (person && cleanId(key) === cExcelId && isValidAccountString(person.account)) {
-                return { matchedKey: key, person };
+    
+    // 3. Cross-match (if ID and Name columns were swapped)
+    if (cExcelId && cExcelId.length > 2) {
+        for (const [key, person] of Object.entries(saved)) {
+            if (person && isValidAccountString(person.account)) {
+                const sName = cleanNameForMatching(person.name);
+                if (sName && (sName === cExcelId || sName.includes(cExcelId) || cExcelId.includes(sName))) {
+                    return { matchedKey: key, person };
+                }
             }
         }
     }
-
-    // 3. If Excel only provided Name (no ID)
-    if (!cExcelId && cExcelName) {
-        for (const key of Object.keys(saved)) {
-            const person = saved[key];
-            if (person && cleanNameForMatching(person.name) === cExcelName && isValidAccountString(person.account)) {
-                return { matchedKey: key, person };
-            }
-        }
-    }
-
+    
     return null;
 };
 

@@ -289,7 +289,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
       ).length;
   }
 
-  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || pendingSecretariatCount > 0;
+  const hasSecretariatAccess = currentUser.canAccessSecretariat || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO;
+  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || hasSecretariatAccess;
 
   // ... (Existing Charts logic) ...
   const completedOrders = orders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -548,16 +549,18 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                         </div>
                     )}
 
-                    {pendingSecretariatCount > 0 && (
+                    {hasSecretariatAccess && (
                         <div onClick={onGoToSecretariat} className="bg-gradient-to-br from-[#6366f1] to-[#4338ca] rounded-2xl p-6 text-white shadow-lg shadow-indigo-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><BookOpen size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><BookOpen size={24} className="text-white"/></div>
-                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingSecretariatCount} مورد</span>
+                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">
+                                        {pendingSecretariatCount > 0 ? `${pendingSecretariatCount} نامه خوانده نشده` : 'بدون نامه جدید'}
+                                    </span>
                                 </div>
-                                <h3 className="text-xl font-black mb-1">کارتابل دبیرخانه</h3>
-                                <p className="text-indigo-50 text-xs opacity-85">نامه‌های جدید در کارتابل شما</p>
+                                <h3 className="text-xl font-black mb-1">دبیرخانه و نامه‌نگاری</h3>
+                                <p className="text-indigo-50 text-xs opacity-85">ورود به سیستم نامه‌نگاری اداری</p>
                             </div>
                         </div>
                     )}
