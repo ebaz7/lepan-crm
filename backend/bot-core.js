@@ -132,9 +132,18 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '💰 مدیریت پرداخت', callback_data: 'MENU_PAY' }, { text: '🚛 مدیریت خروج', callback_data: 'MENU_EXIT' }],
             [{ text: '📦 انبار و موجودی', callback_data: 'MENU_WH' }, { text: '🌍 بازرگانی', callback_data: 'MENU_TRADE' }],
-            [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }],
+            [{ text: '🛒 فروش', callback_data: 'MENU_SALES' }, { text: '📂 دبیرخانه اداری', callback_data: 'MENU_SEC' }],
             [{ text: '📊 گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }, { text: 'ℹ️ اطلاعات شرکت و بانک‌ها', callback_data: 'ACT_KNOWLEDGE' }],
             [{ text: '👤 پروفایل', callback_data: 'MENU_PROFILE' }]
+        ]
+    },
+    SECRETARIAT: {
+        inline_keyboard: [
+            [{ text: '📥 نامه‌های منتظر تایید من', callback_data: 'SEC_PENDING' }],
+            [{ text: '📂 آخرین نامه‌های کارتابل', callback_data: 'SEC_CARTABLE_LATEST' }],
+            [{ text: '🔎 جستجو در نامه‌ها', callback_data: 'SEC_SEARCH' }],
+            [{ text: '➕ ثبت نامه جدید (ارسال فایل)', callback_data: 'SEC_NEW_LETTER_FLOW' }],
+            [{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'MENU_MAIN' }]
         ]
     },
     SALES: {
@@ -1210,6 +1219,160 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
 
         if (isGroup) return;
         return sendFn(chatId, `امکانات ربات: لطفا /start را بزنید.`);
+    }
+
+    // --- SECRETARIAT STATES ---
+    if (session.state === 'SEC_WAIT_FILE') {
+        if (rawMsg && rawMsg.document) {
+            session.data.fileName = rawMsg.document.file_name;
+            session.data.fileId = rawMsg.document.file_id;
+            
+            const companies = db.settings?.companies || [];
+            if (companies.length === 0) {
+                session.state = 'IDLE';
+                return sendFn(chatId, "❌ خطایی رخ داد: هیچ شرکتی در سیستم تعریف نشده است.");
+            }
+            
+            session.state = 'SEC_WAIT_COMPANY';
+            const inline_keyboard = companies.map(c => [{ text: `🏢 ${c.name}`, callback_data: `SEC_SET_CO_${c.id}` }]);
+            inline_keyboard.push([{ text: '❌ انصراف', callback_data: 'MENU_SEC' }]);
+            
+            return sendFn(chatId, `📎 فایل دریافت شد: *${rawMsg.document.file_name}*\n\n🏢 لطفا شرکت مربوط به این نامه را انتخاب کنید:`, {
+                reply_markup: { inline_keyboard }
+            });
+        } else {
+            return sendFn(chatId, "⚠️ لطفا فایل نامه (PDF یا Word/DOCX) را به عنوان یک فایل (Document) ارسال کنید. در صورت انصراف، منوی اصلی را انتخاب کنید یا دستور /start را بفرستید.");
+        }
+    }
+
+    if (session.state === 'SEC_WAIT_SENDER') {
+        session.data.sender = text.trim();
+        session.state = 'SEC_WAIT_RECEIVER';
+        return sendFn(chatId, `👤 فرستنده ثبت شد: *${text}*\n\n👥 لطفا نام گیرنده نامه را ارسال کنید:`);
+    }
+
+    if (session.state === 'SEC_WAIT_RECEIVER') {
+        session.data.receiver = text.trim();
+        session.state = 'SEC_WAIT_SUBJECT';
+        return sendFn(chatId, `👥 گیرنده ثبت شد: *${text}*\n\n📝 لطفا موضوع نامه را ارسال کنید:`);
+    }
+
+    if (session.state === 'SEC_WAIT_SUBJECT') {
+        session.data.subject = text.trim();
+        session.state = 'SEC_WAIT_CONTENT';
+        return sendFn(chatId, `📝 موضوع ثبت شد: *${text}*\n\n💬 لطفا خلاصه متن نامه را ارسال کنید (یا کلمه /skip را جهت رد کردن بفرستید):`);
+    }
+
+    if (session.state === 'SEC_WAIT_CONTENT') {
+        const hasContent = text.trim().toLowerCase() !== '/skip';
+        session.data.content = hasContent ? text.trim() : '';
+        
+        session.state = 'IDLE';
+        try {
+            if (!db.secretariatLetters) db.secretariatLetters = [];
+            
+            const companies = db.settings?.companies || [];
+            const company = companies.find(c => c.id === session.data.companyId);
+            const companyName = company ? company.name : '';
+            const companySettings = (db.secretariatSettings || []).find(s => s.companyId === session.data.companyId);
+            
+            const count = (db.secretariatLetters || []).filter(l => l.companyId === session.data.companyId).length + 1;
+            const prefix = companySettings?.letterNumberPrefix || 'A';
+            const yearStr = new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(new Date()).replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]);
+            const letterNumber = `${prefix}/${yearStr}/${String(count).padStart(4, '0')}`;
+            
+            const shamsiDate = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            
+            const newLetter = {
+                id: generateUUID(),
+                companyId: session.data.companyId,
+                section: session.data.section,
+                letterNumber: letterNumber,
+                date: shamsiDate,
+                sender: session.data.sender,
+                receiver: session.data.receiver,
+                subject: session.data.subject,
+                content: session.data.content,
+                status: 'PENDING',
+                type: 'incoming',
+                attachments: [
+                    {
+                        fileName: session.data.fileName,
+                        url: `bot_file_id:${session.data.fileId}`
+                    }
+                ],
+                referredTo: [],
+                approvedBy: [],
+                signatureImageUrls: [],
+                createdBy: user ? user.fullName : 'سیستم (بات)',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            
+            db.secretariatLetters.unshift(newLetter);
+            saveDb(db);
+            
+            notifySecretariatLetter(newLetter, db).catch(e => console.error("Bot Secretariat notification error:", e));
+            
+            const confirmationMsg = `✅ *نامه اداری با موفقیت ثبت شد!*\n\n` +
+                                   `🔢 *شماره نامه:* ${letterNumber}\n` +
+                                   `🏢 *شرکت:* ${companyName}\n` +
+                                   `📍 *بخش:* ${session.data.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}\n` +
+                                   `📅 *تاریخ ثبت:* ${shamsiDate}\n` +
+                                   `👤 *فرستنده:* ${session.data.sender}\n` +
+                                   `👥 *گیرنده:* ${session.data.receiver}\n` +
+                                   `📝 *موضوع:* ${session.data.subject}`;
+                                   
+            return sendFn(chatId, confirmationMsg, {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منوی دبیرخانه', callback_data: 'MENU_SEC' }]] }
+            });
+        } catch (e) {
+            console.error("Bot register letter error:", e);
+            return sendFn(chatId, "❌ متأسفانه در ثبت نامه خطایی رخ داد. مجدداً تلاش کنید.");
+        }
+    }
+
+    if (session.state === 'SEC_WAIT_SEARCH_QUERY') {
+        session.state = 'IDLE';
+        const query = text.trim().toLowerCase();
+        const letters = db.secretariatLetters || [];
+        
+        const results = letters.filter(l => 
+            userHasLetterAccess(user, l, db) &&
+            (
+                l.subject.toLowerCase().includes(query) ||
+                l.sender.toLowerCase().includes(query) ||
+                l.receiver.toLowerCase().includes(query) ||
+                l.letterNumber.toLowerCase().includes(query) ||
+                (l.content && l.content.toLowerCase().includes(query))
+            )
+        ).slice(0, 5);
+        
+        if (results.length === 0) {
+            return sendFn(chatId, `❌ هیچ نامه‌ای با عبارت "${text}" یافت نشد.`, {
+                reply_markup: { inline_keyboard: [[{ text: '🔍 جستجوی مجدد', callback_data: 'SEC_SEARCH' }], [{ text: '🔙 بازگشت', callback_data: 'MENU_SEC' }]] }
+            });
+        }
+        
+        await sendFn(chatId, `🔎 نتایج جستجو برای عبارت *"${text}"*:`);
+        for (const l of results) {
+            const inline_keyboard = [
+                [
+                    { text: '📥 دریافت PDF', callback_data: `SEC_GET_PDF_${l.id}` },
+                    { text: '📥 دریافت Word', callback_data: `SEC_GET_DOC_${l.id}` }
+                ]
+            ];
+            
+            const msg = `✉️ *نامه شماره ${l.letterNumber}*\n` +
+                        `📅 تاریخ: ${l.date}\n` +
+                        `👤 فرستنده: ${l.sender}\n` +
+                        `👥 گیرنده: ${l.receiver}\n` +
+                        `📝 موضوع: ${l.subject}\n` +
+                        `وضعیت: ${l.status === 'APPROVED' ? '✅ تایید شده' : l.status === 'REJECTED' ? '❌ رد شده' : '⏳ در حال بررسی'}`;
+                        
+            await sendFn(chatId, msg, { reply_markup: { inline_keyboard } });
+        }
+        return;
     }
 
     if (session.state === 'SALES_WAIT_BROADCAST_MSG') {
@@ -2332,6 +2495,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (data === 'MENU_EXIT') return sendFn(chatId, "🚛 مدیریت خروج:", { reply_markup: KEYBOARDS.EXIT });
         if (data === 'MENU_WH') return sendFn(chatId, "📦 مدیریت انبار:", { reply_markup: KEYBOARDS.WAREHOUSE });
         if (data === 'MENU_TRADE') return sendFn(chatId, "🌍 مدیریت بازرگانی:", { reply_markup: KEYBOARDS.TRADE });
+        if (data === 'MENU_SEC') {
+            const isSecAdmin = user && (user.role === 'admin' || user.role === 'ceo' || user.canManageSecretariatSettings);
+            const hasSecAccess = user && (isSecAdmin || user.canAccessSecretariat);
+            if (!hasSecAccess) {
+                return sendFn(chatId, "⛔ شما به دبیرخانه اداری دسترسی ندارید. لطفا با مدیر سیستم تماس بگیرید.");
+            }
+            return sendFn(chatId, "📂 دبیرخانه اداری:\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:", { reply_markup: KEYBOARDS.SECRETARIAT });
+        }
         
         if (data === 'MENU_SALES') {
             session.lastFinMenu = 'MENU_SALES';
@@ -2350,6 +2521,207 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (data === 'MENU_REPORTS') {
             session.lastFinMenu = 'MENU_REPORTS';
             return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+        }
+    }
+
+    // --- SECRETARIAT ACTIONS ---
+    if (data.startsWith('SEC_')) {
+        const isSecAdmin = user && (user.role === 'admin' || user.role === 'ceo' || user.canManageSecretariatSettings);
+        const hasSecAccess = user && (isSecAdmin || user.canAccessSecretariat);
+        if (!hasSecAccess) {
+            return sendFn(chatId, "⛔ شما به دبیرخانه اداری دسترسی ندارید.");
+        }
+
+        if (data === 'SEC_PENDING') {
+            const letters = db.secretariatLetters || [];
+            const pending = letters.filter(l => 
+                l.status === 'PENDING' && 
+                (l.referredTo || []).includes(user.id) && 
+                !(l.approvedBy || []).includes(user.id)
+            );
+            
+            if (pending.length === 0) {
+                return sendFn(chatId, "📥 هیچ نامه منتظر تایید یا امضایی برای شما یافت نشد.", {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SEC' }]] }
+                });
+            }
+            
+            await sendFn(chatId, `📥 تعداد ${pending.length} نامه منتظر اقدام شما یافت شد:`);
+            for (const l of pending) {
+                const inline_keyboard = [
+                    [
+                        { text: '📥 دریافت PDF', callback_data: `SEC_GET_PDF_${l.id}` },
+                        { text: '📥 دریافت Word', callback_data: `SEC_GET_DOC_${l.id}` }
+                    ],
+                    [{ text: '✍️ تایید و امضای واقعی', callback_data: `SEC_APPROVE_${l.id}` }]
+                ];
+                
+                const msg = `✉️ *نامه شماره ${l.letterNumber}*\n` +
+                            `📅 تاریخ: ${l.date}\n` +
+                            `👤 فرستنده: ${l.sender}\n` +
+                            `👥 گیرنده: ${l.receiver}\n` +
+                            `📝 موضوع: ${l.subject}\n` +
+                            `------------------\n` +
+                            `خلاصه: ${l.content ? l.content.slice(0, 100) + '...' : 'بدون متن'}`;
+                            
+                await sendFn(chatId, msg, { reply_markup: { inline_keyboard } });
+            }
+            return;
+        }
+
+        if (data === 'SEC_CARTABLE_LATEST') {
+            const letters = db.secretariatLetters || [];
+            const myLetters = letters.filter(l => userHasLetterAccess(user, l, db)).slice(0, 5);
+            
+            if (myLetters.length === 0) {
+                return sendFn(chatId, "📂 کارتابل شما خالی است.", {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SEC' }]] }
+                });
+            }
+            
+            await sendFn(chatId, `📂 آخرین نامه‌های کارتابل شما:`);
+            for (const l of myLetters) {
+                const inline_keyboard = [
+                    [
+                        { text: '📥 دریافت PDF', callback_data: `SEC_GET_PDF_${l.id}` },
+                        { text: '📥 دریافت Word', callback_data: `SEC_GET_DOC_${l.id}` }
+                    ]
+                ];
+                
+                const msg = `✉️ *نامه شماره ${l.letterNumber}*\n` +
+                            `📅 تاریخ: ${l.date}\n` +
+                            `👤 فرستنده: ${l.sender}\n` +
+                            `👥 گیرنده: ${l.receiver}\n` +
+                            `📝 موضوع: ${l.subject}\n` +
+                            `وضعیت: ${l.status === 'APPROVED' ? '✅ تایید شده' : l.status === 'REJECTED' ? '❌ رد شده' : '⏳ در حال بررسی'}`;
+                            
+                await sendFn(chatId, msg, { reply_markup: { inline_keyboard } });
+            }
+            return;
+        }
+
+        if (data === 'SEC_SEARCH') {
+            session.state = 'SEC_WAIT_SEARCH_QUERY';
+            return sendFn(chatId, "🔍 لطفا کلمه کلیدی، شماره نامه، موضوع یا فرستنده مورد نظر خود را ارسال کنید:", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SEC' }]] }
+            });
+        }
+
+        if (data === 'SEC_NEW_LETTER_FLOW') {
+            session.state = 'SEC_WAIT_FILE';
+            session.data = {};
+            return sendFn(chatId, "📥 لطفا فایل ضمیمه نامه اداری جدید (PDF یا Word/DOCX) را با فرمت Document ارسال کنید:", {
+                reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_SEC' }]] }
+            });
+        }
+
+        if (data.startsWith('SEC_GET_PDF_') || data.startsWith('SEC_GET_DOC_')) {
+            const isPdf = data.startsWith('SEC_GET_PDF_');
+            const letterId = data.replace(isPdf ? 'SEC_GET_PDF_' : 'SEC_GET_DOC_', '');
+            const letters = db.secretariatLetters || [];
+            const letter = letters.find(l => l.id === letterId);
+            
+            if (!letter) return sendFn(chatId, "❌ نامه یافت نشد.");
+            if (!userHasLetterAccess(user, letter, db)) {
+                return sendFn(chatId, "⛔ شما به این نامه دسترسی ندارید.");
+            }
+            
+            await sendFn(chatId, `⏳ در حال تولید فایل ${isPdf ? 'PDF' : 'Word'} نامه...`);
+            try {
+                const company = (settings.companies || []).find(c => c.id === letter.companyId);
+                const companyName = company ? company.name : '';
+                const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
+                
+                if (isPdf) {
+                    const buf = await Renderer.generateSecretariatLetterPDF(letter, companyName, companySettings);
+                    const filename = `Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.pdf`;
+                    await sendDocFn(chatId, buf, filename, `📄 فایل PDF رسمی نامه شماره ${letter.letterNumber}`);
+                } else {
+                    const buf = await Renderer.generateSecretariatLetterDoc(letter, companyName, companySettings);
+                    const filename = `Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.doc`;
+                    await sendDocFn(chatId, buf, filename, `📝 فایل Word رسمی نامه شماره ${letter.letterNumber}`);
+                }
+            } catch (e) {
+                console.error("Bot export letter error:", e);
+                await sendFn(chatId, "❌ خطا در تولید یا ارسال فایل نامه اداری.");
+            }
+            return;
+        }
+
+        if (data.startsWith('SEC_APPROVE_')) {
+            const letterId = data.replace('SEC_APPROVE_', '');
+            const letters = db.secretariatLetters || [];
+            const letterIdx = letters.findIndex(l => l.id === letterId);
+            
+            if (letterIdx === -1) return sendFn(chatId, "❌ نامه یافت نشد.");
+            const letter = letters[letterIdx];
+            
+            if (!(letter.referredTo || []).includes(user.id)) {
+                return sendFn(chatId, "⛔ این نامه به شما ارجاع داده نشده است.");
+            }
+            
+            if ((letter.approvedBy || []).includes(user.id)) {
+                return sendFn(chatId, "⚠️ شما قبلاً این نامه را تایید کرده‌اید.");
+            }
+            
+            if (!user.signatureUrl) {
+                return sendFn(chatId, "⚠️ تصویر امضای واقعی شما در پروفایلتان بارگذاری نشده است. لطفاً ابتدا از منوی کاربران در پنل وب نسبت به آپلود امضا اقدام کنید.");
+            }
+            
+            const currentApprovers = letter.approvedBy || [];
+            const currentSignatures = letter.signatureImageUrls || [];
+            
+            letter.approvedBy = [...currentApprovers, user.id];
+            letter.signatureImageUrls = [...currentSignatures, user.signatureUrl];
+            letter.status = 'APPROVED';
+            letter.updatedAt = Date.now();
+            
+            saveDb(db);
+            await sendFn(chatId, `✅ نامه شماره ${letter.letterNumber} با موفقیت توسط امضای واقعی شما تایید و امضا شد.`);
+            
+            // Notify creator!
+            const creator = db.users.find(u => u.fullName === letter.createdBy);
+            if (creator) {
+                const notifyMsg = `🔔 *امضای نامه دبیرخانه*:\n` +
+                                  `نامه شماره ${letter.letterNumber} با موضوع "${letter.subject}" توسط *${user.fullName}* تایید و امضا شد.`;
+                                  
+                const baleModule = await import('./bale.js');
+                const tgModule = await import('./telegram.js');
+                if (creator.telegramChatId) {
+                    try { await tgModule.sendBotMessage(creator.telegramChatId, notifyMsg); } catch(e){}
+                }
+                if (creator.baleChatId) {
+                    try { await baleModule.sendBotMessage(creator.baleChatId, notifyMsg); } catch(e){}
+                }
+            }
+            return;
+        }
+
+        if (data.startsWith('SEC_SET_CO_')) {
+            const coId = data.replace('SEC_SET_CO_', '');
+            session.data.companyId = coId;
+            
+            session.state = 'SEC_WAIT_SECTION';
+            const inline_keyboard = [
+                [
+                    { text: '🏢 دفتر مرکزی', callback_data: 'SEC_SET_SEC_hq' },
+                    { text: '🏭 کارخانه', callback_data: 'SEC_SET_SEC_fc' }
+                ],
+                [{ text: '❌ انصراف', callback_data: 'MENU_SEC' }]
+            ];
+            
+            const company = (settings.companies || []).find(c => c.id === coId);
+            return sendFn(chatId, `🏢 شرکت انتخاب شد: *${company ? company.name : ''}*\n\n📍 لطفا بخش مربوط به این نامه اداری را مشخص کنید:`, {
+                reply_markup: { inline_keyboard }
+            });
+        }
+        
+        if (data.startsWith('SEC_SET_SEC_')) {
+            const isHq = data === 'SEC_SET_SEC_hq';
+            session.data.section = isHq ? 'headquarters' : 'factory';
+            
+            session.state = 'SEC_WAIT_SENDER';
+            return sendFn(chatId, `📍 بخش انتخاب شد: *${isHq ? 'دفتر مرکزی' : 'کارخانه'}*\n\n👤 لطفا نام فرستنده نامه را ارسال کنید (مثال: شرکت پارس، یا نام شخص):`);
         }
     }
 
@@ -3549,5 +3921,88 @@ export const notifyPurchaseRequestStep = async (p, platform, chatId, sendPhotoFn
         }).catch(err => {});
     } catch (e) {
         console.error('Error in notifyPurchase:', e);
+    }
+};
+
+export const userHasLetterAccess = (user, letter, db) => {
+    if (!user) return false;
+    if (user.role === 'admin' || user.role === 'ceo' || user.canManageSecretariatSettings) return true;
+    if (!user.canAccessSecretariat) return false;
+    
+    const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
+    if (!companySettings) return true; // Default to true if not configured yet
+    
+    const tokens = letter.section === 'headquarters'
+        ? companySettings.headquartersAccessTokens || []
+        : companySettings.factoryAccessTokens || [];
+    return tokens.includes(user.id);
+};
+
+export const notifySecretariatLetter = async (letter, db) => {
+    try {
+        const company = (db.settings?.companies || []).find(c => c.id === letter.companyId);
+        const companyName = company ? company.name : 'نامشخص';
+        const sectionName = letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه';
+        
+        let userIdsToNotify = [];
+        if (letter.referredTo && letter.referredTo.length > 0) {
+            userIdsToNotify = letter.referredTo;
+        } else {
+            const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
+            if (companySettings) {
+                userIdsToNotify = letter.section === 'headquarters'
+                    ? companySettings.headquartersAccessTokens || []
+                    : companySettings.factoryAccessTokens || [];
+            }
+        }
+        
+        // Filter out those who already approved
+        userIdsToNotify = userIdsToNotify.filter(uid => !(letter.approvedBy || []).includes(uid));
+        
+        if (userIdsToNotify.length === 0) return;
+        
+        const text = `✉️ *اطلاعیه کارتابل دبیرخانه اداری*\n` +
+                     `یک نامه اداری جدید منتظر بررسی یا امضای شماست:\n\n` +
+                     `🏢 *شرکت:* ${companyName}\n` +
+                     `📍 *بخش:* ${sectionName}\n` +
+                     `🔢 *شماره نامه:* ${letter.letterNumber}\n` +
+                     `📅 *تاریخ:* ${letter.date}\n` +
+                     `👤 *فرستنده:* ${letter.sender}\n` +
+                     `👥 *گیرنده:* ${letter.receiver}\n` +
+                     `📝 *موضوع:* ${letter.subject}\n\n` +
+                     `💡 جهت مشاهده و تایید واقعی، وارد سامانه شوید یا از دکمه‌های زیر در ربات استفاده کنید:`;
+                     
+        const inline_keyboard = [
+            [
+                { text: '📥 دریافت PDF', callback_data: `SEC_GET_PDF_${letter.id}` },
+                { text: '📥 دریافت Word', callback_data: `SEC_GET_DOC_${letter.id}` }
+            ],
+            [{ text: '✍️ تایید و امضا', callback_data: `SEC_APPROVE_${letter.id}` }]
+        ];
+        
+        const baleModule = await import('./bale.js');
+        const tgModule = await import('./telegram.js');
+        
+        for (const uid of userIdsToNotify) {
+            const u = db.users.find(usr => usr.id === uid);
+            if (!u) continue;
+            
+            if (u.telegramChatId) {
+                try {
+                    await tgModule.sendBotMessage(u.telegramChatId, text, { reply_markup: { inline_keyboard } });
+                } catch(e) {
+                    console.error(`Failed to notify ${u.fullName} via Telegram:`, e.message);
+                }
+            }
+            if (u.baleChatId) {
+                try {
+                    await baleModule.sendBotMessage(u.baleChatId, text, { reply_markup: { inline_keyboard } });
+                } catch(e) {
+                    console.error(`Failed to notify ${u.fullName} via Bale:`, e.message);
+                }
+            }
+        }
+    } catch (err) {
+        console.error("notifySecretariatLetter error:", err);
     }
 };

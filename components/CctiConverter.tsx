@@ -27,6 +27,21 @@ interface Props {
     canManageArchive?: boolean;
 }
 
+const cleanAndParseAmount = (val: any): number => {
+    if (val === undefined || val === null) return 0;
+    let str = String(val).trim();
+    // Convert Persian/Arabic digits to English
+    const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    const arabicDigits  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    for (let i = 0; i < 10; i++) {
+        str = str.replace(persianDigits[i], String(i)).replace(arabicDigits[i], String(i));
+    }
+    // Remove thousand separators, commas, spaces
+    str = str.replace(/[,_ \s]/g, '');
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : Math.round(num);
+};
+
 const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageArchive = false }) => {
     const [file, setFile] = useState<File | null>(null);
     const [excelData, setExcelData] = useState<any[]>([]);
@@ -196,6 +211,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         let generatedCount = 0;
         let totalAmount = 0;
         const detailsArchive: CctiArchiveDetail[] = [];
+        const missingPersonsList: { id: string; name: string }[] = [];
         
         const newSaved = { ...savedPersons };
         const xmlTxLines: string[] = [];
@@ -216,7 +232,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             shamsiDateTimeStr = `${y}-${m}-${d}T${h}:${min}:${sec}`;
         } catch(e) {}
 
-        const processRow = (id: string, amount: string, accountOrig: string, nameOrig: string) => {
+        const processRow = (id: string, amountVal: any, accountOrig: string, nameOrig: string) => {
             if (!id) return;
             let account = accountOrig;
             let name = nameOrig;
@@ -234,6 +250,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             if (!account) {
                 missingCount++;
                 account = 'EMPTY';
+                missingPersonsList.push({ id, name: name || 'بدون نام' });
             }
 
             let iban = account.toUpperCase();
@@ -242,7 +259,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             }
 
             generatedCount++;
-            const nAmount = Number(amount) || 0;
+            const nAmount = cleanAndParseAmount(amountVal);
             totalAmount += nAmount;
             detailsArchive.push({ id, name, account, amount: nAmount });
 
@@ -275,7 +292,6 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         excelData.forEach(row => {
             const id = row[idCol] ? String(row[idCol]).trim() : '';
             let amount = row[amountCol] || '';
-            if (typeof amount === 'string') amount = amount.replace(/,/g, '');
             let account = accountCol ? String(row[accountCol] || '').trim() : '';
             let name = nameCol ? String(row[nameCol] || '').trim() : '';
             processRow(id, amount, account, name);
@@ -283,7 +299,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         
         manualRows.forEach(row => {
             const id = row.id.trim();
-            let amount = String(row.amount).replace(/,/g, '');
+            let amount = row.amount;
             let account = row.account.trim();
             let name = row.name.trim();
             processRow(id, amount, account, name);
@@ -296,14 +312,19 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             return;
         }
 
-        if (expectedTotalAmount && Number(expectedTotalAmount.replace(/,/g, '')) !== totalAmount) {
-            const expectedNum = Number(expectedTotalAmount.replace(/,/g, ''));
+        const expectedNum = expectedTotalAmount ? cleanAndParseAmount(expectedTotalAmount) : 0;
+        if (expectedTotalAmount && expectedNum !== totalAmount) {
             alert(`جمع مبالغ وارد شده (${expectedNum.toLocaleString()} ریال) با جمع کل ردیف‌ها (${totalAmount.toLocaleString()} ریال) مغایرت دارد.\n\nاختلاف: ${Math.abs(expectedNum - totalAmount).toLocaleString()} ریال`);
             return;
         }
 
         if (missingCount > 0) {
-            const proceed = window.confirm(`${missingCount} ردیف مجاز به دلیل نداشتن شماره شبا به صورت EMPTY ایجاد شدند.\nآیا مایل به دریافت فایل هستید؟`);
+            const missingDetails = missingPersonsList
+                .map((p, idx) => `${idx + 1}. شناسه: ${p.id} | نام: ${p.name}`)
+                .join('\n');
+            
+            const msg = `تعداد ${missingCount} نفر از پرسنل فاقد شماره شبا در فایل اکسل یا حافظه سیستم هستند:\n\n${missingDetails}\n\nلطفاً شماره شبای این افراد را در بخش "مدیریت اشخاص" یا فایل اکسل خود اضافه کنید.\nآیا مایلید فایل بدون شبای این افراد (به صورت EMPTY) تولید شود؟`;
+            const proceed = window.confirm(msg);
             if (!proceed) return;
         }
 

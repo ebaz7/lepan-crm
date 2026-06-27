@@ -1024,3 +1024,219 @@ export const generateMeetingMinutesPDF = async (meeting) => {
         throw e;
     }
 };
+
+export const generateSecretariatLetterPDF = async (letter, companyName, companySettings) => {
+    try {
+        const browser = await getBrowser();
+        const page = await browser.newPage();
+        await page.setViewport({ width: 800, height: 1100, deviceScaleFactor: 2 });
+        
+        const hasCustomPos = companySettings?.metadataTop !== undefined || companySettings?.metadataLeft !== undefined;
+        
+        const letterheadHtml = companySettings?.letterheadUrl 
+            ? `<div class="letterhead-container" style="position: relative;">
+                 <img src="${companySettings.letterheadUrl}" />
+                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left-default-on-img'}">
+                     <div><b>شماره:</b> ${letter.letterNumber}</div>
+                     <div><b>تاریخ:</b> ${letter.date}</div>
+                     <div><b>پیوست:</b> ${letter.attachments?.length ? `${letter.attachments.length} مورد` : 'ندارد'}</div>
+                 </div>
+               </div>`
+            : `<div class="default-letterhead">
+                 <div class="lh-right">
+                     <h2>دبیرخانه اداری ${companyName || 'شرکت'}</h2>
+                     <p>بخش: ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
+                 </div>
+                 <div class="lh-center">
+                     <h1>نامه اداری</h1>
+                 </div>
+                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left'}">
+                     <div><b>شماره:</b> ${letter.letterNumber}</div>
+                     <div><b>تاریخ:</b> ${letter.date}</div>
+                     <div><b>پیوست:</b> ${letter.attachments?.length ? `${letter.attachments.length} مورد` : 'ندارد'}</div>
+                 </div>
+               </div>`;
+
+        const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
+            <style>
+                ${BASE_STYLE}
+                .letterhead-container { text-align: center; margin-bottom: 25px; border-bottom: 1px solid #ddd; padding-bottom: 15px; }
+                .letterhead-container img { max-height: 110px; max-width: 100%; object-fit: contain; }
+                .default-letterhead { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px double #1e3a8a; padding-bottom: 15px; margin-bottom: 30px; }
+                .lh-right h2 { font-size: 16px; font-weight: 900; color: #1e3a8a; margin: 0; }
+                .lh-right p { font-size: 11px; color: #666; margin: 5px 0 0 0; }
+                .lh-center h1 { font-size: 22px; font-weight: 900; color: #111; margin: 0; border: 2px solid #111; padding: 5px 15px; border-radius: 4px; }
+                .lh-left { font-size: 12px; color: #333; font-weight: bold; line-height: 1.6; text-align: right; }
+                
+                .lh-left-default-on-img {
+                    position: absolute;
+                    top: 25mm;
+                    left: 20mm;
+                    font-size: 11px;
+                    line-height: 1.6;
+                    font-weight: bold;
+                    text-align: right;
+                }
+                
+                .lh-left-custom {
+                    position: absolute !important;
+                    top: ${companySettings?.metadataTop ?? 25}mm !important;
+                    left: ${companySettings?.metadataLeft ?? 20}mm !important;
+                    font-size: ${companySettings?.metadataFontSize ?? 11}px !important;
+                    line-height: 1.6 !important;
+                    font-weight: bold !important;
+                    text-align: right !important;
+                    z-index: 1000 !important;
+                }
+                
+                .letter-meta-row { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 25px; font-size: 13px; font-weight: bold; color: #333; }
+                .meta-item { display: flex; gap: 5px; }
+                .meta-label { color: #666; }
+                
+                .letter-subject { font-size: 18px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #1e3a8a; }
+                .letter-body { font-size: 14px; line-height: 1.8; color: #111; text-align: justify; min-height: 350px; margin-bottom: 40px; white-space: pre-wrap; }
+                
+                .letter-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #eee; padding-top: 20px; font-size: 12px; }
+                .footer-right { color: #666; font-weight: bold; }
+                .footer-left { text-align: center; }
+                .footer-left h4 { margin: 0 0 10px 0; font-size: 13px; font-weight: 900; color: #1e3a8a; }
+                
+                .sig-images-container { display: flex; gap: 15px; justify-content: center; align-items: flex-end; }
+                .sig-img-wrapper { border: 1px dashed #ccc; padding: 4px; border-radius: 8px; background: #fafafa; }
+                .sig-img-wrapper img { max-height: 65px; max-width: 110px; object-fit: contain; display: block; }
+            </style>
+        </head><body>
+            ${letterheadHtml}
+            
+            <div class="letter-meta-row">
+                <div class="meta-item"><span class="meta-label">فرستنده:</span> <span>${letter.sender}</span></div>
+                <div class="meta-item"><span class="meta-label">گیرنده:</span> <span>${letter.receiver}</span></div>
+                <div class="meta-item"><span class="meta-label">نوع نامه:</span> <span>${letter.type === 'internal' ? 'داخلی' : letter.type === 'incoming' ? 'وارده' : 'صادره'}</span></div>
+            </div>
+            
+            <div class="letter-subject">موضوع: ${letter.subject}</div>
+            
+            <div class="letter-body">${letter.content || ''}</div>
+            
+            <div class="letter-footer">
+                <div class="footer-right">
+                    <span>ثبت‌کننده: ${letter.createdBy || 'سیستم'}</span>
+                </div>
+                <div class="footer-left">
+                    <h4>تایید و امضا کنندگان:</h4>
+                    <div class="sig-images-container">
+                        ${(letter.signatureImageUrls || []).length > 0 ? 
+                            (letter.signatureImageUrls || []).map(url => `
+                                <div class="sig-img-wrapper">
+                                    <img src="${url}" />
+                                </div>
+                            `).join('') : '<span style="color: #999; font-size: 11px;">بدون امضا</span>'
+                        }
+                        ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `
+                            <div class="sig-img-wrapper" style="border: 1px dashed #ef4444; padding: 4px; border-radius: 8px; background: #fff5f5; text-align: center;">
+                                <span style="font-size: 8px; color: #ef4444; font-weight: bold; display: block; margin-bottom: 2px;">مهر رسمی شرکت</span>
+                                <img src="${companySettings.companyStampUrl}" style="max-height: 65px; max-width: 65px; object-fit: contain; display: block; mix-blend-multiply: multiply;" />
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </body></html>`;
+
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({ 
+            format: 'A4', 
+            printBackground: true,
+            margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+        });
+        await page.close();
+        return pdf;
+    } catch (e) {
+        console.error("Generate Letter PDF Error:", e.message);
+        throw e;
+    }
+};
+
+export const generateSecretariatLetterDoc = async (letter, companyName, companySettings) => {
+    // Generate beautiful Word-compatible HTML file
+    const letterheadHtml = companySettings?.letterheadUrl 
+        ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${companySettings.letterheadUrl}" style="max-height: 100px; max-width: 100%;" /></div>`
+        : `<div style="text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 30px;">
+             <h1 style="margin: 0; font-size: 24pt; color: #1e3a8a;">دبیرخانه اداری - ${companyName || 'شرکت'}</h1>
+             <p style="margin: 5px 0 0 0; font-size: 11pt; color: #555;">بخش ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
+           </div>`;
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+    <meta charset="utf-8">
+    <title>${letter.subject}</title>
+    <!--[if gte mso 9]>
+    <xml>
+    <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Zoom>100</w:Zoom>
+    <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+    </xml>
+    <![endif]-->
+    <style>
+        body { font-family: 'Tahoma', 'Arial', sans-serif; direction: rtl; }
+        .letter-meta { width: 100%; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .letter-meta td { font-size: 10.5pt; color: #333; }
+        .letter-title { font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 25px; color: #1e3a8a; }
+        .letter-recipient { font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
+        .letter-content { font-size: 11pt; line-height: 1.6; margin-bottom: 40px; text-align: justify; }
+        .signatures { width: 100%; margin-top: 50px; }
+        .signature-box { text-align: center; font-size: 10pt; }
+        .signature-image { max-height: 70px; margin-bottom: 5px; }
+    </style>
+    </head>
+    <body style="tab-interval:.5in; direction: rtl;">
+        ${letterheadHtml}
+        <table class="letter-meta" style="width: 100%;">
+            <tr>
+                <td style="text-align: right; width: 50%;"><b>فرستنده:</b> ${letter.sender}</td>
+                <td style="text-align: left; width: 50%;"><b>شماره نامه:</b> ${letter.letterNumber}</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;"><b>گیرنده:</b> ${letter.receiver}</td>
+                <td style="text-align: left;"><b>تاریخ:</b> ${letter.date}</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;"><b>نوع نامه:</b> ${letter.type === 'internal' ? 'داخلی' : letter.type === 'incoming' ? 'وارده' : 'صادره'}</td>
+                <td style="text-align: left;"><b>وضعیت:</b> ${letter.status}</td>
+            </tr>
+        </table>
+        
+        <div class="letter-title">موضوع: ${letter.subject}</div>
+        
+        <div class="letter-content" style="white-space: pre-wrap;">${letter.content || ''}</div>
+        
+        <table class="signatures" style="width: 100%;">
+            <tr>
+                <td style="text-align: right; font-size: 10pt; color: #666;">
+                    <b>ثبت‌کننده:</b> ${letter.createdBy || 'سیستم'}
+                </td>
+                <td style="text-align: left;">
+                    <div style="display: inline-block; text-align: center;">
+                        <p style="margin: 0 0 5px 0; font-size: 10pt; font-weight: bold;">تایید و امضا کنندگان:</p>
+                        ${(letter.signatureImageUrls || []).map((url) => `
+                            <div style="display: inline-block; margin: 5px; text-align: center;">
+                                <img src="${url}" style="max-height: 60px; max-width: 120px; display: block;" />
+                            </div>
+                        `).join('')}
+                        ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `
+                            <div style="display: inline-block; margin: 5px; text-align: center; border: 1px dashed #ef4444; padding: 4px; background: #fff5f5;">
+                                <span style="font-size: 8px; color: #ef4444; font-weight: bold; display: block;">مهر رسمی شرکت</span>
+                                <img src="${companySettings.companyStampUrl}" style="max-height: 60px; max-width: 60px; display: block;" />
+                            </div>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>`;
+    
+    return Buffer.from(html, 'utf-8');
+};

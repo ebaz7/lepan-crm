@@ -14,7 +14,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep, runDailyReport } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep, runDailyReport, notifySecretariatLetter } from './backend/bot-core.js';
 import * as telegram from './backend/telegram.js';
 import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
@@ -982,8 +982,11 @@ app.get('/api/secretariat-letters', (req, res) => {
 app.post('/api/secretariat-letters', (req, res) => {
     const db = getDb();
     if (!db.secretariatLetters) db.secretariatLetters = [];
-    db.secretariatLetters.unshift(req.body);
+    const newLetter = req.body;
+    db.secretariatLetters.unshift(newLetter);
     saveDb(db);
+    // Send bot notification asynchronously
+    notifySecretariatLetter(newLetter, db).catch(e => console.error("Bot Secretariat notification error:", e));
     res.json(db.secretariatLetters);
 });
 app.put('/api/secretariat-letters/:id', (req, res) => {
@@ -992,6 +995,8 @@ app.put('/api/secretariat-letters/:id', (req, res) => {
     if (idx > -1) {
         db.secretariatLetters[idx] = { ...db.secretariatLetters[idx], ...req.body };
         saveDb(db);
+        // Send referral/update notification asynchronously
+        notifySecretariatLetter(db.secretariatLetters[idx], db).catch(e => console.error("Bot Secretariat referral notification error:", e));
         res.json(db.secretariatLetters);
     } else res.status(404).send('Not Found');
 });
@@ -1000,6 +1005,45 @@ app.delete('/api/secretariat-letters/:id', (req, res) => {
     db.secretariatLetters = (db.secretariatLetters || []).filter(l => l.id !== req.params.id);
     saveDb(db);
     res.json(db.secretariatLetters);
+});
+
+// PDF and Word Document Export Endpoints
+app.get('/api/secretariat/letters/:id/pdf', async (req, res) => {
+    const db = getDb();
+    const letter = (db.secretariatLetters || []).find(l => l.id === req.params.id);
+    if (!letter) return res.status(404).send('Letter not found');
+    try {
+        const company = (db.settings?.companies || []).find(c => c.id === letter.companyId);
+        const companyName = company ? company.name : '';
+        const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
+        
+        const pdf = await Renderer.generateSecretariatLetterPDF(letter, companyName, companySettings);
+        res.set('Content-Type', 'application/pdf');
+        res.set('Content-Disposition', `attachment; filename="Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.pdf"`);
+        res.send(pdf);
+    } catch(e) {
+        console.error("PDF Letter Generation Error:", e);
+        res.status(500).send('Error generating PDF');
+    }
+});
+
+app.get('/api/secretariat/letters/:id/docx', async (req, res) => {
+    const db = getDb();
+    const letter = (db.secretariatLetters || []).find(l => l.id === req.params.id);
+    if (!letter) return res.status(404).send('Letter not found');
+    try {
+        const company = (db.settings?.companies || []).find(c => c.id === letter.companyId);
+        const companyName = company ? company.name : '';
+        const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
+        
+        const doc = await Renderer.generateSecretariatLetterDoc(letter, companyName, companySettings);
+        res.set('Content-Type', 'application/msword');
+        res.set('Content-Disposition', `attachment; filename="Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.doc"`);
+        res.send(doc);
+    } catch(e) {
+        console.error("DOCX Letter Generation Error:", e);
+        res.status(500).send('Error generating Word document');
+    }
 });
 
 app.get('/api/secretariat-settings', (req, res) => {

@@ -1232,6 +1232,7 @@ export interface SecretariatLetter {
     
     comments: SecretariatLetterComment[];
     attachments: SecretariatLetterAttachment[];
+    addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
     
     createdAt: number;
     updatedAt: number;
@@ -1244,5 +1245,9 @@ export interface SecretariatCompanySettings {
     factoryAccessTokens: string[];     // List of user IDs with access
     letterheadUrl?: string;            // سربرگ
     meetingMinutesTemplate?: string;   // قالب صورتجلسه
+    companyStampUrl?: string;          // تصویر مهر رسمی شرکت
+    metadataTop?: number;              // فاصله از بالای سربرگ (میلی‌متر)
+    metadataLeft?: number;             // فاصله از چپ سربرگ (میلی‌متر)
+    metadataFontSize?: number;         // اندازه قلم اطلاعات سربرگ (پیکسل)
 }
 

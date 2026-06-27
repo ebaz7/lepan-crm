@@ -28,7 +28,8 @@ import {
   ChevronLeft,
   Loader2,
   FileCheck,
-  Save
+  Save,
+  Award
 } from 'lucide-react';
 
 import { 
@@ -91,7 +92,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     sender: '',
     receiver: '',
     type: 'internal' as 'internal' | 'incoming' | 'outgoing',
-    attachments: [] as SecretariatLetterAttachment[]
+    attachments: [] as SecretariatLetterAttachment[],
+    addCompanyStamp: false
   });
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -104,10 +106,16 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     headquartersAccessTokens: [],
     factoryAccessTokens: [],
     letterheadUrl: '',
-    meetingMinutesTemplate: ''
+    meetingMinutesTemplate: '',
+    companyStampUrl: '',
+    metadataTop: undefined,
+    metadataLeft: undefined,
+    metadataFontSize: undefined
   });
   const [uploadingLetterhead, setUploadingLetterhead] = useState(false);
   const letterheadInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingStamp, setUploadingStamp] = useState(false);
+  const stampInputRef = useRef<HTMLInputElement>(null);
 
   // Load Initial Data
   const loadData = async () => {
@@ -150,7 +158,11 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         headquartersAccessTokens: [],
         factoryAccessTokens: [],
         letterheadUrl: '',
-        meetingMinutesTemplate: ''
+        meetingMinutesTemplate: '',
+        companyStampUrl: '',
+        metadataTop: undefined,
+        metadataLeft: undefined,
+        metadataFontSize: undefined
       };
       setCompanySettingsForm(activeSettings);
     }
@@ -238,6 +250,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       status: SecretariatLetterStatus.PENDING,
       comments: [],
       attachments: newLetterForm.attachments,
+      addCompanyStamp: newLetterForm.addCompanyStamp,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       createdBy: currentUser.fullName
@@ -257,7 +270,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         sender: '',
         receiver: '',
         type: 'internal',
-        attachments: []
+        attachments: [],
+        addCompanyStamp: false
       });
     } catch (err) {
       alert('خطا در ذخیره‌سازی نامه');
@@ -470,6 +484,31 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         alert('خطا در آپلود سربرگ');
       } finally {
         setUploadingLetterhead(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload Company Stamp image
+  const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingStamp(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await uploadFile(file.name, base64);
+        setCompanySettingsForm(prev => ({
+          ...prev,
+          companyStampUrl: res.url
+        }));
+        alert('تصویر مهر رسمی شرکت با موفقیت بارگذاری شد.');
+      } catch (err) {
+        alert('خطا در آپلود مهر شرکت');
+      } finally {
+        setUploadingStamp(false);
       }
     };
     reader.readAsDataURL(file);
@@ -968,7 +1007,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
               </div>
             </div>
 
-            {/* Design Custom Letterhead and Template section */}
+            {/* Design Custom Letterhead and Stamp Uploads */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
               {/* Custom Letterhead Upload */}
               <div className="space-y-3">
@@ -978,7 +1017,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 <p className="text-[10px] text-gray-400">تصویر سربرگ شرکت را آپلود کنید تا نامه‌ها با این سربرگ چاپ و خروجی PDF شوند. در صورت عدم تعریف، از قالب پیش‌فرض رسمی سیستم استفاده می‌شود.</p>
                 
                 <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
+                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
                     {companySettingsForm.letterheadUrl ? (
                       <img src={companySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
                     ) : (
@@ -1015,6 +1054,54 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </div>
               </div>
 
+              {/* Custom Company Stamp Upload */}
+              <div className="space-y-3">
+                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                  <Award size={14} className="text-red-600" /> بارگذاری تصویر مهر رسمی شرکت
+                </label>
+                <p className="text-[10px] text-gray-400">تصویر مهر شرکت را جهت درج پای نامه‌های اداری آپلود کنید. در صورت فعال بودن تیک مهر، این تصویر در پایین نامه نمایش داده می‌شود.</p>
+                
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
+                    {companySettingsForm.companyStampUrl ? (
+                      <img src={companySettingsForm.companyStampUrl} className="w-full h-full object-contain mix-blend-multiply" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400">بدون مهر رسمی</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <input 
+                      type="file" 
+                      ref={stampInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleStampUpload} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => stampInputRef.current?.click()}
+                      className="flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs px-3 py-2 rounded-lg transition-colors font-bold border border-red-200"
+                      disabled={uploadingStamp}
+                    >
+                      <Upload size={14} /> {uploadingStamp ? 'درحال آپلود...' : 'انتخاب و آپلود تصویر مهر شرکت'}
+                    </button>
+                    {companySettingsForm.companyStampUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCompanySettingsForm(p => ({ ...p, companyStampUrl: '' }))}
+                        className="text-[10px] text-red-500 hover:underline block font-bold"
+                      >
+                        حذف مهر کنونی
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Template and Alignment settings */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
               {/* Default Meeting Minutes template */}
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
@@ -1025,10 +1112,56 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 <textarea
                   value={companySettingsForm.meetingMinutesTemplate || ''}
                   onChange={e => setCompanySettingsForm(p => ({ ...p, meetingMinutesTemplate: e.target.value }))}
-                  rows={4}
+                  rows={5}
                   className="w-full border rounded-xl p-3 text-xs focus:ring-1 focus:ring-purple-500"
                   placeholder="مثال: دستور جلسه مصوبات مورخ... اتخاذ تصمیمات صورت پذیرفته به شرح..."
                 />
+              </div>
+
+              {/* Letterhead Fields Alignment Coordinates */}
+              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
+                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                  <Settings2 size={14} className="text-purple-600" /> تنظیم دقیق موقعیت اطلاعات سربرگ
+                </label>
+                <p className="text-[10px] text-gray-400">اگر از سربرگ چاپی اختصاصی استفاده می‌کنید، مقادیر زیر را به میلی‌متر (mm) وارد کنید تا اطلاعات (تاریخ، شماره، پیوست) دقیقا در کادر مربوطه روی کاغذ چاپ شوند.</p>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از بالا (mm)</span>
+                    <input 
+                      type="number"
+                      value={companySettingsForm.metadataTop ?? ''}
+                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataTop: e.target.value ? Number(e.target.value) : undefined }))}
+                      placeholder="مثال: ۲۵"
+                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از چپ (mm)</span>
+                    <input 
+                      type="number"
+                      value={companySettingsForm.metadataLeft ?? ''}
+                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataLeft: e.target.value ? Number(e.target.value) : undefined }))}
+                      placeholder="مثال: ۲۰"
+                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-600 block">اندازه قلم (px)</span>
+                    <input 
+                      type="number"
+                      value={companySettingsForm.metadataFontSize ?? ''}
+                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataFontSize: e.target.value ? Number(e.target.value) : undefined }))}
+                      placeholder="مثال: ۱۱"
+                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="text-[9px] text-slate-400 leading-relaxed pt-1">
+                  * در صورت خالی رها کردن مقادیر فوق، از تنظیمات تراز پیش‌فرض سیستم استفاده خواهد شد.
+                </div>
               </div>
             </div>
 
@@ -1200,6 +1333,22 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   )}
                 </div>
 
+                {/* Company Stamp Checkbox */}
+                {companySettingsForm.companyStampUrl && (
+                  <div className="flex items-center gap-2 bg-red-50/50 border border-red-100 p-3 rounded-xl">
+                    <input 
+                      type="checkbox" 
+                      id="new-letter-add-stamp"
+                      checked={newLetterForm.addCompanyStamp}
+                      onChange={e => setNewLetterForm(prev => ({ ...prev, addCompanyStamp: e.target.checked }))}
+                      className="rounded text-red-600 focus:ring-red-500 w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="new-letter-add-stamp" className="text-xs font-black text-slate-700 cursor-pointer select-none flex items-center gap-1.5">
+                      <Award size={14} className="text-red-600 animate-pulse" /> درج مهر رسمی شرکت پای این نامه اداری
+                    </label>
+                  </div>
+                )}
+
                 {/* Form Buttons */}
                 <div className="flex justify-end gap-2 border-t pt-4">
                   <button
@@ -1331,6 +1480,31 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       </div>
                     </div>
                   )}
+
+                  {/* Letter Official Export PDF/DOCX */}
+                  <div className="space-y-1.5 pt-3 border-t">
+                    <span className="text-[11px] font-bold text-slate-500 block">خروجی رسمی نامه اداری:</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <a 
+                        href={`/api/secretariat/letters/${selectedLetterForView.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-xl py-2 text-[11px] font-bold transition-all"
+                      >
+                        <FileText size={14} />
+                        دانلود خروجی PDF
+                      </a>
+                      <a 
+                        href={`/api/secretariat/letters/${selectedLetterForView.id}/docx`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl py-2 text-[11px] font-bold transition-all"
+                      >
+                        <FileText size={14} />
+                        دانلود خروجی Word
+                      </a>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right (Action items: refer, comment, sign, archive) */}
@@ -1358,6 +1532,34 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       >
                         مخالفت و رد نامه اداری
                       </button>
+
+                      {/* Company Stamp toggle */}
+                      {companySettingsForm.companyStampUrl && (
+                        <label className="flex items-center gap-2 bg-red-50/40 border border-red-100 p-2.5 rounded-xl cursor-pointer hover:bg-red-50 transition-colors mt-1">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedLetterForView.addCompanyStamp || false}
+                            onChange={async (e) => {
+                              const updated: SecretariatLetter = {
+                                ...selectedLetterForView,
+                                addCompanyStamp: e.target.checked,
+                                updatedAt: Date.now()
+                              };
+                              try {
+                                const letters = await updateSecretariatLetter(updated);
+                                setLetters(letters);
+                                setSelectedLetterForView(updated);
+                              } catch (err) {
+                                alert('خطا در تغییر وضعیت مهر شرکت');
+                              }
+                            }}
+                            className="rounded text-red-600 focus:ring-red-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-xs font-black text-slate-700 flex items-center gap-1">
+                            <Award size={14} className="text-red-600" /> درج مهر رسمی شرکت پای نامه
+                          </span>
+                        </label>
+                      )}
                     </div>
 
                     {/* Quick status controls (Archive/Unarchive/Delete) */}
@@ -1550,6 +1752,27 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 className="bg-white border rounded-xl p-8 max-w-[21cm] mx-auto min-h-[29.7cm] shadow-xs relative text-black"
                 style={{ fontFamily: 'sans-serif' }}
               >
+                {/* Absolutely positioned metadata block if custom coordinates are defined, or custom letterhead is active */}
+                {(companySettingsForm.letterheadUrl || companySettingsForm.metadataTop !== undefined || companySettingsForm.metadataLeft !== undefined) && (
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      top: `${companySettingsForm.metadataTop ?? 25}mm`,
+                      left: `${companySettingsForm.metadataLeft ?? 20}mm`,
+                      fontSize: `${companySettingsForm.metadataFontSize ?? 11}px`,
+                      lineHeight: '1.6',
+                      fontWeight: 'bold',
+                      textAlign: 'right',
+                      direction: 'rtl',
+                      zIndex: 50
+                    }}
+                  >
+                    <div>تاریخ: {isPrintMode.date}</div>
+                    <div>شماره نامه: {isPrintMode.letterNumber}</div>
+                    <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
+                  </div>
+                )}
+
                 {/* Custom Image Letterhead Background or Corporate Mockup Header */}
                 {companySettingsForm.letterheadUrl ? (
                   <div className="w-full h-24 mb-6 relative">
@@ -1558,12 +1781,16 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 ) : (
                   /* Elegant default corporate letterhead */
                   <div className="border-b-2 border-double border-slate-800 pb-4 mb-8 flex justify-between items-center">
-                    {/* Left: Metadata */}
-                    <div className="text-[11px] font-bold space-y-1.5 text-slate-800 w-1/3 text-right">
-                      <div>تاریخ: {isPrintMode.date}</div>
-                      <div>شماره نامه: {isPrintMode.letterNumber}</div>
-                      <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
-                    </div>
+                    {/* Left: Metadata (Only shown here if NOT absolutely positioned) */}
+                    {companySettingsForm.metadataTop === undefined && companySettingsForm.metadataLeft === undefined ? (
+                      <div className="text-[11px] font-bold space-y-1.5 text-slate-800 w-1/3 text-right">
+                        <div>تاریخ: {isPrintMode.date}</div>
+                        <div>شماره نامه: {isPrintMode.letterNumber}</div>
+                        <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
+                      </div>
+                    ) : (
+                      <div className="w-1/3"></div> /* Empty spacer to preserve layout symmetry */
+                    )}
 
                     {/* Center: Title & Islamic Republic logo element */}
                     <div className="text-center space-y-1.5 flex-1">
@@ -1608,24 +1835,37 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
 
                 </div>
 
-                {/* Signatures Row */}
-                {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (
-                  <div className="mt-12 pt-6 border-t border-dashed flex justify-end gap-12 px-6">
-                    {isPrintMode.approvedBy.map((userId, idx) => {
-                      const signerUser = users.find(u => u.id === userId);
-                      const sigUrl = isPrintMode.signatureImageUrls?.[idx];
-                      return (
-                        <div key={idx} className="text-center space-y-2">
-                          <span className="text-[10px] text-emerald-600 font-bold block">✓ تایید و امضای الکترونیک</span>
-                          {sigUrl ? (
-                            <img src={sigUrl} className="h-16 mx-auto object-contain mix-blend-multiply" />
-                          ) : (
-                            <div className="h-16 flex items-center justify-center text-[10px] text-slate-400">فاقد تصویر امضا</div>
-                          )}
-                          <div className="text-xs font-black text-slate-900">{signerUser?.fullName || 'کاربر سیستم'}</div>
-                        </div>
-                      );
-                    })}
+                {/* Signatures & Stamp Row */}
+                {((isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0) || (isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl)) && (
+                  <div className="mt-12 pt-6 border-t border-dashed flex justify-between items-end px-6">
+                    {/* Stamp */}
+                    {isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl ? (
+                      <div className="text-center space-y-1">
+                        <span className="text-[9px] text-red-500 font-bold block">★ مهر رسمی شرکت</span>
+                        <img src={companySettingsForm.companyStampUrl} className="h-20 w-20 mx-auto object-contain mix-blend-multiply" />
+                      </div>
+                    ) : <div></div>}
+
+                    {/* Signatures */}
+                    {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (
+                      <div className="flex justify-end gap-12">
+                        {isPrintMode.approvedBy.map((userId, idx) => {
+                          const signerUser = users.find(u => u.id === userId);
+                          const sigUrl = isPrintMode.signatureImageUrls?.[idx];
+                          return (
+                            <div key={idx} className="text-center space-y-2">
+                              <span className="text-[10px] text-emerald-600 font-bold block">✓ تایید و امضای الکترونیک</span>
+                              {sigUrl ? (
+                                <img src={sigUrl} className="h-16 mx-auto object-contain mix-blend-multiply" />
+                              ) : (
+                                <div className="h-16 flex items-center justify-center text-[10px] text-slate-400">فاقد تصویر امضا</div>
+                              )}
+                              <div className="text-xs font-black text-slate-900">{signerUser?.fullName || 'کاربر سیستم'}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
