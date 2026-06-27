@@ -1211,7 +1211,7 @@ function App() {
                     </div>
                 )}
                 <div className={activeTab === 'dashboard' ? 'block h-full page-transition' : 'hidden'}>
-                    <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />
+                    <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} onGoToSecretariat={() => setActiveTab('secretariat')} financialYear={financialYear} />
                 </div>
                 {activeTab === 'create' && <div className="page-transition flex flex-col flex-1 min-h-0"><CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} /></div>}
                 {activeTab === 'manage' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} /></div>}

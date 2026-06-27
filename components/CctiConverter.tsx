@@ -108,31 +108,41 @@ const findPersonInSaved = (
     const cExcelId = cleanId(excelId);
     const cExcelName = cleanNameForMatching(excelName);
 
-    // 1. Direct ID match
-    if (excelId && saved[excelId] && isValidAccountString(saved[excelId].account)) {
-        return { matchedKey: excelId, person: saved[excelId] };
+    // 1. Strict Match: Both ID and Name must match (if both are provided in Excel)
+    if (cExcelId && cExcelName) {
+        for (const key of Object.keys(saved)) {
+            const person = saved[key];
+            if (!person || !isValidAccountString(person.account)) continue;
+            
+            const sId = cleanId(key);
+            const sName = cleanNameForMatching(person.name);
+            
+            // If the saved record has both an ID and a Name, they must BOTH match
+            if (sId === cExcelId && sName === cExcelName) {
+                return { matchedKey: key, person };
+            }
+        }
+        // If we reached here, there's no strict match. We should NOT fallback to partial match
+        // because the user explicitly requested "نام و کد پرسنلی باهم باید چک بشن... حتما جفتش رو چککنه"
+        return null;
     }
 
-    // 2. Exact clean ID match
-    if (cExcelId) {
+    // 2. If Excel only provided ID (no Name)
+    if (cExcelId && !cExcelName) {
         for (const key of Object.keys(saved)) {
-            if (saved[key] && cleanId(key) === cExcelId && isValidAccountString(saved[key].account)) {
-                return { matchedKey: key, person: saved[key] };
+            const person = saved[key];
+            if (person && cleanId(key) === cExcelId && isValidAccountString(person.account)) {
+                return { matchedKey: key, person };
             }
         }
     }
 
-    // 3. Robust Name match as fallback
-    if (cExcelName) {
+    // 3. If Excel only provided Name (no ID)
+    if (!cExcelId && cExcelName) {
         for (const key of Object.keys(saved)) {
-            if (saved[key] && saved[key].name && cleanNameForMatching(saved[key].name) === cExcelName && isValidAccountString(saved[key].account)) {
-                return { matchedKey: key, person: saved[key] };
-            }
-        }
-        // Check if the key itself is the name
-        for (const key of Object.keys(saved)) {
-            if (saved[key] && cleanNameForMatching(key) === cExcelName && isValidAccountString(saved[key].account)) {
-                return { matchedKey: key, person: saved[key] };
+            const person = saved[key];
+            if (person && cleanNameForMatching(person.name) === cExcelName && isValidAccountString(person.account)) {
+                return { matchedKey: key, person };
             }
         }
     }
