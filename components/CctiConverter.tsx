@@ -87,6 +87,8 @@ const findPersonInSaved = (
     excelName: string,
     saved: Record<string, { account: string, name: string }>
 ) => {
+    if (!saved) return null;
+    
     const cleanId = (s: any) => {
         if (s === null || s === undefined) return '';
         let str = String(s).trim();
@@ -108,16 +110,23 @@ const findPersonInSaved = (
         return str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '').toLowerCase();
     };
 
-    if (!saved) return null;
-    
     const cExcelId = cleanId(excelId);
     const cExcelName = cleanNameForMatching(excelName);
+    
+    const numExcelId = cExcelId.replace(/[^0-9]/g, '');
     
     // 1. Exact ID Match (Most reliable)
     if (cExcelId) {
         for (const [key, person] of Object.entries(saved)) {
             if (person && isValidAccountString(person.account)) {
-                if (cleanId(key) === cExcelId) {
+                const cKey = cleanId(key);
+                const numKey = cKey.replace(/[^0-9]/g, '');
+                
+                if (cKey === cExcelId) {
+                    return { matchedKey: key, person };
+                }
+                // Fallback to purely numeric match if both have numbers and they match
+                if (numExcelId && numKey && numExcelId === numKey) {
                     return { matchedKey: key, person };
                 }
             }
