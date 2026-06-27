@@ -186,7 +186,18 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   };
 
   // Companies List derived from system settings
-  const availableCompanies = systemSettings?.companies || [];
+  const availableCompanies = (systemSettings?.companies || []).filter(company => {
+    // If user is superuser, they can see all companies
+    if (isSuperUser) return true;
+    
+    // Otherwise, check if this specific user has access to either hq or factory in the company's secretariat settings
+    const companySet = secSettings.find(s => s.companyId === company.id);
+    if (!companySet) return false;
+    
+    const hq = companySet.headquartersAccessTokens || [];
+    const fact = companySet.factoryAccessTokens || [];
+    return hq.includes(currentUser?.id || '') || fact.includes(currentUser?.id || '');
+  });
 
   // Filter letters based on current company, section, tab (cartable vs archive) and search parameters
   const filteredLetters = letters.filter(letter => {
@@ -772,24 +783,14 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
             <Archive size={15} /> آرشیو و بایگانی
           </button>
 
-          {isSuperUser && (
-            <button 
-              onClick={() => setActiveTab('settings')}
-              className={`flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <Settings2 size={15} /> تنظیمات دبیرخانه
-            </button>
-          )}
         </div>
 
-        {activeTab !== 'settings' && (
-          <button 
-            onClick={() => setShowNewLetterModal(true)}
-            className="flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all"
-          >
-            <Plus size={16} /> ثبت نامه اداری جدید
-          </button>
-        )}
+        <button 
+          onClick={() => setShowNewLetterModal(true)}
+          className="flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all"
+        >
+          <Plus size={16} /> ثبت نامه اداری جدید
+        </button>
       </div>
 
       {/* TABS CONTENT */}
@@ -928,255 +929,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         </div>
       )}
 
-      {/* B. SECRETARIAT SETTINGS TAB */}
-      {activeTab === 'settings' && isSuperUser && (
-        <div className="glass-panel border border-slate-200/60 rounded-2xl bg-white p-6 animate-fade-in space-y-6">
-          <div className="border-b pb-3 flex items-center gap-2">
-            <Settings2 className="text-purple-600" size={20} />
-            <h2 className="text-base font-black text-slate-800">تنظیمات دبیرخانه مرکزی برای: {selectedCompany.name}</h2>
-          </div>
 
-          <form onSubmit={handleSaveSettings} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Access Control: Headquarters */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Lock size={14} className="text-purple-600" /> دسترسی به دبیرخانه دفتر مرکزی
-                </label>
-                <p className="text-[10px] text-gray-400">کاربرانی که مجاز به دسترسی به کارتابل و آرشیو دفتر مرکزی این شرکت هستند را علامت بزنید.</p>
-                
-                <div className="max-h-48 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
-                  {users.map(u => {
-                    const isChecked = companySettingsForm.headquartersAccessTokens?.includes(u.id);
-                    return (
-                      <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={isChecked}
-                          onChange={() => {
-                            let tokens = [...(companySettingsForm.headquartersAccessTokens || [])];
-                            if (tokens.includes(u.id)) {
-                              tokens = tokens.filter(t => t !== u.id);
-                            } else {
-                              tokens.push(u.id);
-                            }
-                            setCompanySettingsForm(p => ({ ...p, headquartersAccessTokens: tokens }));
-                          }}
-                          className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
-                        />
-                        <span className="font-bold text-gray-700">{u.fullName}</span>
-                        <span className="text-[9px] text-gray-400">({u.username})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Access Control: Factory */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Lock size={14} className="text-indigo-600" /> دسترسی به دبیرخانه کارخانه
-                </label>
-                <p className="text-[10px] text-gray-400">کاربرانی که مجاز به دسترسی به کارتابل و آرشیو بخش کارخانه این شرکت هستند را علامت بزنید.</p>
-                
-                <div className="max-h-48 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
-                  {users.map(u => {
-                    const isChecked = companySettingsForm.factoryAccessTokens?.includes(u.id);
-                    return (
-                      <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={isChecked}
-                          onChange={() => {
-                            let tokens = [...(companySettingsForm.factoryAccessTokens || [])];
-                            if (tokens.includes(u.id)) {
-                              tokens = tokens.filter(t => t !== u.id);
-                            } else {
-                              tokens.push(u.id);
-                            }
-                            setCompanySettingsForm(p => ({ ...p, factoryAccessTokens: tokens }));
-                          }}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
-                        />
-                        <span className="font-bold text-gray-700">{u.fullName}</span>
-                        <span className="text-[9px] text-gray-400">({u.username})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Design Custom Letterhead and Stamp Uploads */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-              {/* Custom Letterhead Upload */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <ImageIcon size={14} /> بارگذاری تصویر سربرگ اداری اختصاصی شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">تصویر سربرگ شرکت را آپلود کنید تا نامه‌ها با این سربرگ چاپ و خروجی PDF شوند. در صورت عدم تعریف، از قالب پیش‌فرض رسمی سیستم استفاده می‌شود.</p>
-                
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
-                    {companySettingsForm.letterheadUrl ? (
-                      <img src={companySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400">بدون سربرگ</span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <input 
-                      type="file" 
-                      ref={letterheadInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleLetterheadUpload} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => letterheadInputRef.current?.click()}
-                      className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs px-3 py-2 rounded-lg transition-colors font-bold border border-purple-200"
-                      disabled={uploadingLetterhead}
-                    >
-                      <Upload size={14} /> {uploadingLetterhead ? 'درحال آپلود...' : 'انتخاب و آپلود تصویر سربرگ'}
-                    </button>
-                    {companySettingsForm.letterheadUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setCompanySettingsForm(p => ({ ...p, letterheadUrl: '' }))}
-                        className="text-[10px] text-red-500 hover:underline block font-bold"
-                      >
-                        حذف سربرگ کنونی
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom Company Stamp Upload */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Award size={14} className="text-red-600" /> بارگذاری تصویر مهر رسمی شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">تصویر مهر شرکت را جهت درج پای نامه‌های اداری آپلود کنید. در صورت فعال بودن تیک مهر، این تصویر در پایین نامه نمایش داده می‌شود.</p>
-                
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
-                    {companySettingsForm.companyStampUrl ? (
-                      <img src={companySettingsForm.companyStampUrl} className="w-full h-full object-contain mix-blend-multiply" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400">بدون مهر رسمی</span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <input 
-                      type="file" 
-                      ref={stampInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleStampUpload} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => stampInputRef.current?.click()}
-                      className="flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs px-3 py-2 rounded-lg transition-colors font-bold border border-red-200"
-                      disabled={uploadingStamp}
-                    >
-                      <Upload size={14} /> {uploadingStamp ? 'درحال آپلود...' : 'انتخاب و آپلود تصویر مهر شرکت'}
-                    </button>
-                    {companySettingsForm.companyStampUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setCompanySettingsForm(p => ({ ...p, companyStampUrl: '' }))}
-                        className="text-[10px] text-red-500 hover:underline block font-bold"
-                      >
-                        حذف مهر کنونی
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Template and Alignment settings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-              {/* Default Meeting Minutes template */}
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  قالب صورتجلسه پیش‌فرض شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">می‌توانید قالب متنی پیش‌فرض صورتجلسات اداری این شرکت را تعریف کنید تا در هنگام ثبت نامه‌های اداری جدید با یک کلیک درج شود.</p>
-                
-                <textarea
-                  value={companySettingsForm.meetingMinutesTemplate || ''}
-                  onChange={e => setCompanySettingsForm(p => ({ ...p, meetingMinutesTemplate: e.target.value }))}
-                  rows={5}
-                  className="w-full border rounded-xl p-3 text-xs focus:ring-1 focus:ring-purple-500"
-                  placeholder="مثال: دستور جلسه مصوبات مورخ... اتخاذ تصمیمات صورت پذیرفته به شرح..."
-                />
-              </div>
-
-              {/* Letterhead Fields Alignment Coordinates */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Settings2 size={14} className="text-purple-600" /> تنظیم دقیق موقعیت اطلاعات سربرگ
-                </label>
-                <p className="text-[10px] text-gray-400">اگر از سربرگ چاپی اختصاصی استفاده می‌کنید، مقادیر زیر را به میلی‌متر (mm) وارد کنید تا اطلاعات (تاریخ، شماره، پیوست) دقیقا در کادر مربوطه روی کاغذ چاپ شوند.</p>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از بالا (mm)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataTop ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataTop: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۲۵"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از چپ (mm)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataLeft ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataLeft: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۲۰"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">اندازه قلم (px)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataFontSize ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataFontSize: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۱۱"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-                <div className="text-[9px] text-slate-400 leading-relaxed pt-1">
-                  * در صورت خالی رها کردن مقادیر فوق، از تنظیمات تراز پیش‌فرض سیستم استفاده خواهد شد.
-                </div>
-              </div>
-            </div>
-
-            {/* Save Buttons */}
-            <div className="flex justify-end pt-4 border-t">
-              <button
-                type="submit"
-                className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm hover:shadow transition-colors"
-              >
-                <Save size={15} /> ذخیره کلیه تنظیمات دبیرخانه
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
 
       {/* --- ALL MODALS --- */}

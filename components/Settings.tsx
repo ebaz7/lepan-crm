@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getSettings, saveSettings, uploadFile } from '../services/storageService';
-import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
+import { getSettings, saveSettings, uploadFile, getSecretariatSettings, saveSecretariatSettings } from '../services/storageService';
+import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate, SecretariatCompanySettings } from '../types';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList, Award, Building2, Settings2, Upload, Lock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
@@ -181,6 +181,44 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   // App Users for various settings
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
   const [appContacts, setAppContacts] = useState<Contact[]>([]);
+
+  // Secretariat Settings States
+  const [permissionsSubTab, setPermissionsSubTab] = useState<'general' | 'secretariat'>('general');
+  const [secSettings, setSecSettings] = useState<SecretariatCompanySettings[]>([]);
+  const [selectedSecCompanyId, setSelectedSecCompanyId] = useState<string>('');
+  const [secCompanySettingsForm, setSecCompanySettingsForm] = useState<SecretariatCompanySettings | null>(null);
+  const [uploadingSecLetterhead, setUploadingSecLetterhead] = useState(false);
+  const [uploadingSecStamp, setUploadingSecStamp] = useState(false);
+  const secLetterheadInputRef = useRef<HTMLInputElement>(null);
+  const secStampInputRef = useRef<HTMLInputElement>(null);
+
+  const loadSecretariatSettingsData = async () => {
+    try {
+      const data = await getSecretariatSettings();
+      setSecSettings(data);
+    } catch (e) {
+      console.error("Failed to load secretariat settings", e);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedSecCompanyId) {
+      const activeSettings = secSettings.find(s => s.companyId === selectedSecCompanyId) || {
+        companyId: selectedSecCompanyId,
+        headquartersAccessTokens: [],
+        factoryAccessTokens: [],
+        letterheadUrl: '',
+        meetingMinutesTemplate: '',
+        companyStampUrl: '',
+        metadataTop: undefined,
+        metadataLeft: undefined,
+        metadataFontSize: undefined
+      };
+      setSecCompanySettingsForm(activeSettings);
+    } else {
+      setSecCompanySettingsForm(null);
+    }
+  }, [selectedSecCompanyId, secSettings]);
   
   // Current User Permissions
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -222,6 +260,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       setNotificationsEnabled(isNotificationEnabledInApp()); 
       checkWhatsappStatus();
       loadSystemUsers();
+      loadSecretariatSettingsData();
   }, [propSettings]);
 
   const loadSettings = async () => { 
@@ -433,6 +472,67 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const result = await uploadFile(file.name, ev.target?.result as string); setNewCompanyLogo(result.url); } catch (error) { alert('خطا در آپلود'); } finally { setIsUploadingLogo(false); } }; reader.readAsDataURL(file); };
   const handleLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploadingLetterhead(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const result = await uploadFile(file.name, ev.target?.result as string); setNewCompanyLetterhead(result.url); } catch (error) { alert('خطا در آپلود'); } finally { setIsUploadingLetterhead(false); } }; reader.readAsDataURL(file); };
+
+  const handleSecLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !secCompanySettingsForm) return;
+
+    setUploadingSecLetterhead(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await uploadFile(file.name, base64);
+        setSecCompanySettingsForm(prev => prev ? ({
+          ...prev,
+          letterheadUrl: res.url
+        }) : null);
+        alert('تصویر سربرگ با موفقیت بارگذاری شد.');
+      } catch (err) {
+        alert('خطا در آپلود سربرگ');
+      } finally {
+        setUploadingSecLetterhead(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSecStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !secCompanySettingsForm) return;
+
+    setUploadingSecStamp(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await uploadFile(file.name, base64);
+        setSecCompanySettingsForm(prev => prev ? ({
+          ...prev,
+          companyStampUrl: res.url
+        }) : null);
+        alert('تصویر مهر با موفقیت بارگذاری شد.');
+      } catch (err) {
+        alert('خطا در آپلود مهر');
+      } finally {
+        setUploadingSecStamp(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveSecCompanySettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secCompanySettingsForm) return;
+
+    try {
+      const updatedSettings = await saveSecretariatSettings(secCompanySettingsForm);
+      setSecSettings(updatedSettings);
+      alert('تنظیمات و دسترسی‌های دبیرخانه این شرکت با موفقیت ذخیره شد.');
+    } catch (err) {
+      alert('خطا در ذخیره‌سازی تنظیمات');
+    }
+  };
 
   const handleSaveCompany = () => { if (!newCompanyName.trim()) return; let updatedCompanies = settings.companies || []; const companyData = { id: editingCompanyId || generateUUID(), name: newCompanyName.trim(), logo: newCompanyLogo, showInWarehouse: newCompanyShowInWarehouse, banks: newCompanyBanks, letterhead: newCompanyLetterhead, registrationNumber: newCompanyRegNum, nationalId: newCompanyNatId, address: newCompanyAddress, phone: newCompanyPhone, fax: newCompanyFax, postalCode: newCompanyPostalCode, economicCode: newCompanyEcoCode }; if (editingCompanyId) { updatedCompanies = updatedCompanies.map(c => c.id === editingCompanyId ? companyData : c); } else { updatedCompanies = [...updatedCompanies, companyData]; } setSettings({ ...settings, companies: updatedCompanies, companyNames: updatedCompanies.map(c => c.name) }); resetCompanyForm(); };
   const handleEditCompany = (c: Company) => { setNewCompanyName(c.name); setNewCompanyLogo(c.logo || ''); setNewCompanyShowInWarehouse(c.showInWarehouse !== false); setNewCompanyBanks(c.banks || []); setNewCompanyLetterhead(c.letterhead || ''); setNewCompanyRegNum(c.registrationNumber || ''); setNewCompanyNatId(c.nationalId || ''); setNewCompanyAddress(c.address || ''); setNewCompanyPhone(c.phone || ''); setNewCompanyFax(c.fax || ''); setNewCompanyPostalCode(c.postalCode || ''); setNewCompanyEcoCode(c.economicCode || ''); setEditingCompanyId(c.id); };
@@ -1646,7 +1746,342 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
 
                     {activeCategory === 'permissions' && (
                         <div className="space-y-6 animate-fade-in">
-                            <RolePermissionsEditor settings={settings} onUpdateSettings={handleUpdateSettings} />
+                            {/* Sub-tab navigation */}
+                            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setPermissionsSubTab('general')}
+                                    className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-colors ${permissionsSubTab === 'general' ? 'border-amber-600 text-amber-700 font-black' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    نقش‌ها و دسترسی‌های عمومی
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPermissionsSubTab('secretariat')}
+                                    className={`py-2.5 px-4 text-xs font-bold border-b-2 transition-colors ${permissionsSubTab === 'secretariat' ? 'border-amber-600 text-amber-700 font-black' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    تنظیمات و دسترسی‌های دبیرخانه
+                                </button>
+                            </div>
+
+                            {permissionsSubTab === 'general' && (
+                                <RolePermissionsEditor settings={settings} onUpdateSettings={handleUpdateSettings} />
+                            )}
+
+                            {permissionsSubTab === 'secretariat' && (
+                                <div className="space-y-6">
+                                    <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                                        <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                            <Building2 size={18} className="text-purple-600" /> دسترسی‌ها و قالب‌های چاپی دبیرخانه شرکت‌ها
+                                        </h3>
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                            در این بخش می‌توانید دسترسی کاربران به دفتر مرکزی یا کارخانه هر شرکت را به صورت مجزا تعیین کرده و همچنین تصاویر سربرگ، مهر رسمی و قالب‌های متنی صورتجلسه مربوط به هر شرکت را آپلود و تراز کنید.
+                                        </p>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-slate-700 dark:text-slate-300 block">انتخاب شرکت:</label>
+                                            <select
+                                                value={selectedSecCompanyId}
+                                                onChange={e => setSelectedSecCompanyId(e.target.value)}
+                                                className="w-full md:w-1/2 border rounded-xl p-2.5 text-xs bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white focus:ring-1 focus:ring-amber-500 font-bold"
+                                            >
+                                                <option value="">-- انتخاب کنید --</option>
+                                                {settings.companies?.map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {secCompanySettingsForm && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                                            
+                                            {/* LEFT/CENTER: Form Fields (2 columns) */}
+                                            <div className="lg:col-span-2 space-y-6 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+                                                <h4 className="font-bold text-gray-800 dark:text-white text-sm border-b dark:border-gray-850 pb-2 flex items-center gap-2">
+                                                    <Settings2 size={16} className="text-purple-600" />
+                                                    پیکربندی جزئیات دبیرخانه برای شرکت انتخابی
+                                                </h4>
+
+                                                {/* Access Control Row */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {/* HQ Access */}
+                                                    <div className="space-y-2 bg-slate-50/50 dark:bg-slate-900/10 p-3.5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                                                        <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                            <Lock size={12} className="text-purple-600" /> دسترسی به دفتر مرکزی
+                                                        </label>
+                                                        <p className="text-[9px] text-gray-400">کاربران مجاز به دفتر مرکزی این شرکت:</p>
+                                                        <div className="max-h-36 overflow-y-auto border border-gray-150 dark:border-gray-750 bg-white dark:bg-gray-850 rounded-lg p-2 space-y-1">
+                                                            {systemUsers.map(u => {
+                                                                const isChecked = secCompanySettingsForm.headquartersAccessTokens?.includes(u.id);
+                                                                return (
+                                                                    <label key={u.id} className="flex items-center gap-2 text-[11px] hover:bg-slate-50 dark:hover:bg-gray-800 p-1 rounded cursor-pointer">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                let tokens = [...(secCompanySettingsForm.headquartersAccessTokens || [])];
+                                                                                if (tokens.includes(u.id)) {
+                                                                                    tokens = tokens.filter(t => t !== u.id);
+                                                                                } else {
+                                                                                    tokens.push(u.id);
+                                                                                }
+                                                                                setSecCompanySettingsForm(p => p ? ({ ...p, headquartersAccessTokens: tokens }) : null);
+                                                                            }}
+                                                                            className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
+                                                                        />
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">{u.fullName}</span>
+                                                                        <span className="text-[9px] text-gray-400">({u.username})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Factory Access */}
+                                                    <div className="space-y-2 bg-slate-50/50 dark:bg-slate-900/10 p-3.5 border border-gray-100 dark:border-gray-800 rounded-xl">
+                                                        <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                            <Lock size={12} className="text-indigo-600" /> دسترسی به بخش کارخانه
+                                                        </label>
+                                                        <p className="text-[9px] text-gray-400">کاربران مجاز به کارخانه این شرکت:</p>
+                                                        <div className="max-h-36 overflow-y-auto border border-gray-150 dark:border-gray-750 bg-white dark:bg-gray-850 rounded-lg p-2 space-y-1">
+                                                            {systemUsers.map(u => {
+                                                                const isChecked = secCompanySettingsForm.factoryAccessTokens?.includes(u.id);
+                                                                return (
+                                                                    <label key={u.id} className="flex items-center gap-2 text-[11px] hover:bg-slate-50 dark:hover:bg-gray-800 p-1 rounded cursor-pointer">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                let tokens = [...(secCompanySettingsForm.factoryAccessTokens || [])];
+                                                                                if (tokens.includes(u.id)) {
+                                                                                    tokens = tokens.filter(t => t !== u.id);
+                                                                                } else {
+                                                                                    tokens.push(u.id);
+                                                                                }
+                                                                                setSecCompanySettingsForm(p => p ? ({ ...p, factoryAccessTokens: tokens }) : null);
+                                                                            }}
+                                                                            className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                                                                        />
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">{u.fullName}</span>
+                                                                        <span className="text-[9px] text-gray-400">({u.username})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Letterhead & Stamp Uploads */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+                                                    {/* Letterhead */}
+                                                    <div className="space-y-2">
+                                                        <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                            <ImageIcon size={14} /> تصویر سربرگ اداری اختصاصی
+                                                        </label>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-16 h-16 border rounded-xl bg-slate-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                                                                {secCompanySettingsForm.letterheadUrl ? (
+                                                                    <img src={secCompanySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
+                                                                ) : (
+                                                                    <span className="text-[9px] text-slate-400">بدون سربرگ</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <input
+                                                                    type="file"
+                                                                    ref={secLetterheadInputRef}
+                                                                    className="hidden"
+                                                                    accept="image/*"
+                                                                    onChange={handleSecLetterheadUpload}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => secLetterheadInputRef.current?.click()}
+                                                                    className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] px-2.5 py-1.5 rounded-lg transition-colors font-bold border border-purple-200"
+                                                                    disabled={uploadingSecLetterhead}
+                                                                >
+                                                                    <Upload size={12} /> {uploadingSecLetterhead ? 'درحال آپلود...' : 'بارگذاری تصویر'}
+                                                                </button>
+                                                                {secCompanySettingsForm.letterheadUrl && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSecCompanySettingsForm(p => p ? ({ ...p, letterheadUrl: '' }) : null)}
+                                                                        className="text-[9px] text-red-500 hover:underline block font-bold"
+                                                                    >
+                                                                        حذف سربرگ
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Stamp */}
+                                                    <div className="space-y-2">
+                                                        <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                            <Award size={14} className="text-red-600" /> تصویر مهر رسمی شرکت
+                                                        </label>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-16 h-16 border rounded-xl bg-slate-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                                                                {secCompanySettingsForm.companyStampUrl ? (
+                                                                    <img src={secCompanySettingsForm.companyStampUrl} className="w-full h-full object-contain mix-blend-multiply bg-white" />
+                                                                ) : (
+                                                                    <span className="text-[9px] text-slate-400">بدون مهر</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <input
+                                                                    type="file"
+                                                                    ref={secStampInputRef}
+                                                                    className="hidden"
+                                                                    accept="image/*"
+                                                                    onChange={handleSecStampUpload}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => secStampInputRef.current?.click()}
+                                                                    className="flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 text-[10px] px-2.5 py-1.5 rounded-lg transition-colors font-bold border border-red-200"
+                                                                    disabled={uploadingSecStamp}
+                                                                >
+                                                                    <Upload size={12} /> {uploadingSecStamp ? 'درحال آپلود...' : 'بارگذاری مهر'}
+                                                                </button>
+                                                                {secCompanySettingsForm.companyStampUrl && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setSecCompanySettingsForm(p => p ? ({ ...p, companyStampUrl: '' }) : null)}
+                                                                        className="text-[9px] text-red-500 hover:underline block font-bold"
+                                                                    >
+                                                                        حذف مهر
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Positioning Coordinates */}
+                                                <div className="bg-slate-50/50 dark:bg-slate-900/10 p-4 border border-gray-100 dark:border-gray-800 rounded-xl space-y-3">
+                                                    <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                                        <Settings2 size={14} className="text-purple-600" /> تنظیم دقیق موقعیت اطلاعات سربرگ
+                                                    </label>
+                                                    <p className="text-[9px] text-gray-400">مقادیر تراز اطلاعات (تاریخ، شماره، پیوست) روی کاغذ به میلی‌متر (mm):</p>
+                                                    
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        <div className="space-y-1">
+                                                            <span className="text-[9px] font-bold text-slate-600 dark:text-slate-400 block">فاصله از بالا (mm)</span>
+                                                            <input
+                                                                type="number"
+                                                                value={secCompanySettingsForm.metadataTop ?? ''}
+                                                                onChange={e => setSecCompanySettingsForm(p => p ? ({ ...p, metadataTop: e.target.value ? Number(e.target.value) : undefined }) : null)}
+                                                                placeholder="پیش‌فرض: ۲۵"
+                                                                className="w-full border border-gray-250 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-lg px-2.5 py-1.5 text-xs font-mono dark:text-white"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <span className="text-[9px] font-bold text-slate-600 dark:text-slate-400 block">فاصله از چپ (mm)</span>
+                                                            <input
+                                                                type="number"
+                                                                value={secCompanySettingsForm.metadataLeft ?? ''}
+                                                                onChange={e => setSecCompanySettingsForm(p => p ? ({ ...p, metadataLeft: e.target.value ? Number(e.target.value) : undefined }) : null)}
+                                                                placeholder="پیش‌فرض: ۲۰"
+                                                                className="w-full border border-gray-250 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-lg px-2.5 py-1.5 text-xs font-mono dark:text-white"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <span className="text-[9px] font-bold text-slate-600 dark:text-slate-400 block">اندازه قلم (px)</span>
+                                                            <input
+                                                                type="number"
+                                                                value={secCompanySettingsForm.metadataFontSize ?? ''}
+                                                                onChange={e => setSecCompanySettingsForm(p => p ? ({ ...p, metadataFontSize: e.target.value ? Number(e.target.value) : undefined }) : null)}
+                                                                placeholder="پیش‌فرض: ۱۱"
+                                                                className="w-full border border-gray-250 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-lg px-2.5 py-1.5 text-xs font-mono dark:text-white"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Default minutes template */}
+                                                <div className="space-y-1 border-t border-gray-100 dark:border-gray-800 pt-4">
+                                                    <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 block">قالب صورتجلسه پیش‌فرض</label>
+                                                    <textarea
+                                                        value={secCompanySettingsForm.meetingMinutesTemplate || ''}
+                                                        onChange={e => setSecCompanySettingsForm(p => p ? ({ ...p, meetingMinutesTemplate: e.target.value }) : null)}
+                                                        rows={4}
+                                                        className="w-full border border-gray-250 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl p-3 text-xs focus:ring-1 focus:ring-purple-500 dark:text-white"
+                                                        placeholder="متن پیش‌فرض قالب صورتجلسه این شرکت..."
+                                                    />
+                                                </div>
+
+                                                <div className="flex justify-end pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSaveSecCompanySettings}
+                                                        className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm hover:shadow transition-colors"
+                                                    >
+                                                        <Save size={14} /> ذخیره کلیه تنظیمات دبیرخانه این شرکت
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* RIGHT COLUMN: Live Visual Preview of A4 Paper */}
+                                            <div className="bg-slate-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex flex-col items-center justify-center space-y-4 lg:col-span-1 shadow-xs sticky top-4">
+                                                <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 dark:text-gray-300">
+                                                    <Building size={14} className="text-purple-600" />
+                                                    <span>پیش‌نمایش زنده تراز اطلاعات روی کاغذ A4</span>
+                                                </div>
+
+                                                <div className="w-[210px] h-[297px] bg-white border border-gray-300 shadow-md relative overflow-hidden rounded-md select-none">
+                                                    {/* Company Stamp if present */}
+                                                    {secCompanySettingsForm.companyStampUrl && (
+                                                        <img
+                                                            src={secCompanySettingsForm.companyStampUrl}
+                                                            className="absolute bottom-6 right-6 w-8 h-8 object-contain mix-blend-multiply opacity-85 border border-red-100 p-0.5 rounded-full"
+                                                            style={{ pointerEvents: 'none' }}
+                                                        />
+                                                    )}
+
+                                                    {/* Letterhead background or image */}
+                                                    {secCompanySettingsForm.letterheadUrl ? (
+                                                        <div className="absolute top-0 left-0 w-full h-[60px] p-1 border-b border-dashed border-slate-100 flex items-center justify-center">
+                                                            <img src={secCompanySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="absolute top-2 left-2 right-2 border border-dashed border-slate-200 h-[60px] flex items-center justify-center text-[9px] text-slate-400 text-center leading-normal">
+                                                            بدون تصویر سربرگ<br/>(از کادر عمومی سیستم استفاده می‌شود)
+                                                        </div>
+                                                    )}
+
+                                                    {/* Absolutely positioned metadata block showing coordinates */}
+                                                    <div
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: `${secCompanySettingsForm.metadataTop ?? 25}px`,
+                                                            left: `${secCompanySettingsForm.metadataLeft ?? 20}px`,
+                                                            fontSize: `${Math.max(5, (secCompanySettingsForm.metadataFontSize ?? 11) * 0.75)}px`,
+                                                            lineHeight: '1.3',
+                                                            fontWeight: 'bold',
+                                                            textAlign: 'right',
+                                                            direction: 'rtl',
+                                                            color: '#0f172a'
+                                                        }}
+                                                        className="border border-purple-400 bg-purple-50/90 px-1 py-0.5 rounded shadow-2xs font-mono whitespace-nowrap leading-tight"
+                                                    >
+                                                        <div>تاریخ: ۱۴۰۵/۰۴/۰۶</div>
+                                                        <div>شماره: ۱۲۳/د</div>
+                                                        <div>پیوست: دارد</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="text-[10px] text-slate-500 dark:text-gray-400 text-center leading-relaxed px-2 bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 rounded-xl p-2.5 w-full">
+                                                    <span className="font-bold text-purple-800 dark:text-purple-400 block mb-1">💡 راهنمای کادر تراز:</span>
+                                                    مستطیل بنفش، مکان دقیق قرارگیری فیلدهای تاریخ و شماره روی کاغذ A4 است. با تغییر اعداد فاصله از بالا و چپ، محل آن را با کادر چاپی سربرگ خود منطبق کنید.
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
