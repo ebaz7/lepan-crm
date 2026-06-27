@@ -27,141 +27,6 @@ interface Props {
     canManageArchive?: boolean;
 }
 
-const convertPersianToEnglishDigits = (str: string): string => {
-    const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
-    const arabicDigits  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
-    let out = str;
-    for (let i = 0; i < 10; i++) {
-        out = out.replace(persianDigits[i], String(i)).replace(arabicDigits[i], String(i));
-    }
-    return out;
-};
-
-const cleanAndParseAmount = (val: any): number => {
-    if (val === undefined || val === null) return 0;
-    let str = String(val).trim();
-    str = convertPersianToEnglishDigits(str);
-    
-    // Replace Persian commas (،), standard commas (,), underscores, slashes (/), and any spaces with empty string
-    str = str.replace(/[،,_\s/]/g, '');
-    
-    // Let's remove any other non-digit, non-dot characters, keeping only numbers and dot
-    str = str.replace(/[^0-9.]/g, '');
-    
-    const num = parseFloat(str);
-    return isNaN(num) ? 0 : Math.round(num);
-};
-
-const isValidAccountString = (acc: any): boolean => {
-    if (!acc) return false;
-    const s = String(acc).trim().toUpperCase();
-    if (s === '' || s === 'EMPTY' || s === 'NULL' || s === 'UNDEFINED' || s === '-' || s === '.' || s === '0') {
-        return false;
-    }
-    // A valid account/IBAN should contain at least 5 digits
-    const digitsCount = s.replace(/[^0-9]/g, '').length;
-    return digitsCount >= 5;
-};
-
-const cleanNameForMatching = (n: string): string => {
-    if (!n) return '';
-    let str = String(n).trim();
-    // Convert Persian/Arabic digits to English digits
-    str = convertPersianToEnglishDigits(str);
-    // Replace Arabic letters with Persian ones for consistency
-    str = str.replace(/ي/g, 'ی')
-             .replace(/ك/g, 'ک')
-             .replace(/ة/g, 'ه')
-             .replace(/ؤ/g, 'و')
-             .replace(/أ/g, 'ا')
-             .replace(/إ/g, 'ا')
-             .replace(/آ/g, 'ا')
-             .replace(/ء/g, '');
-    // Remove all whitespace, non-breaking spaces, ZWNJs, hyphens, slashes, parentheses, commas, dots, and typical separators
-    str = str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '');
-    return str.toLowerCase();
-};
-
-const findPersonInSaved = (
-    excelId: string,
-    excelName: string,
-    saved: Record<string, { account: string, name: string }>
-) => {
-    if (!saved) return null;
-    
-    const cleanId = (s: any) => {
-        if (s === null || s === undefined) return '';
-        let str = String(s).trim();
-        str = convertPersianToEnglishDigits(str);
-        
-        if (str.includes('.')) {
-            str = str.split('.')[0];
-        }
-        
-        str = str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '');
-        const cleaned = str.replace(/^0+/, '');
-        return cleaned === '' && str.length > 0 ? '0' : cleaned;
-    };
-
-    const cleanNameForMatching = (s: any) => {
-        if (!s) return '';
-        let str = String(s).trim();
-        str = convertPersianToEnglishDigits(str);
-        return str.replace(/[\s\-_.\/\\(),،\u200c\u200b\xa0]/g, '').toLowerCase();
-    };
-
-    const cExcelId = cleanId(excelId);
-    const cExcelName = cleanNameForMatching(excelName);
-    
-    const numExcelId = cExcelId.replace(/[^0-9]/g, '');
-    
-    // 1. Exact ID Match (Most reliable)
-    if (cExcelId) {
-        for (const [key, person] of Object.entries(saved)) {
-            if (person && isValidAccountString(person.account)) {
-                const cKey = cleanId(key);
-                const numKey = cKey.replace(/[^0-9]/g, '');
-                
-                if (cKey === cExcelId) {
-                    return { matchedKey: key, person };
-                }
-                // Fallback to purely numeric match if both have numbers and they match
-                if (numExcelId && numKey && numExcelId === numKey) {
-                    return { matchedKey: key, person };
-                }
-            }
-        }
-    }
-    
-    // 2. Name Match (Only if Name is substantial)
-    if (cExcelName && cExcelName.length > 2) {
-        for (const [key, person] of Object.entries(saved)) {
-            if (person && isValidAccountString(person.account)) {
-                const sName = cleanNameForMatching(person.name);
-                if (sName && sName.length > 2) {
-                    if (sName === cExcelName || sName.includes(cExcelName) || cExcelName.includes(sName)) {
-                        return { matchedKey: key, person };
-                    }
-                }
-            }
-        }
-    }
-    
-    // 3. Cross-match (if ID and Name columns were swapped)
-    if (cExcelId && cExcelId.length > 2) {
-        for (const [key, person] of Object.entries(saved)) {
-            if (person && isValidAccountString(person.account)) {
-                const sName = cleanNameForMatching(person.name);
-                if (sName && (sName === cExcelId || sName.includes(cExcelId) || cExcelId.includes(sName))) {
-                    return { matchedKey: key, person };
-                }
-            }
-        }
-    }
-    
-    return null;
-};
-
 const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageArchive = false }) => {
     const [file, setFile] = useState<File | null>(null);
     const [excelData, setExcelData] = useState<any[]>([]);
@@ -197,13 +62,8 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
     };
 
     // Calculate Unique Persons for Kardex
-    const kardexPersons = Array.from(new Set(archives.flatMap(a => (a.details || []).map(d => d && (d.name || d.id)).filter(Boolean))));
-    const filteredKardexPersons = kardexPersons.filter(p => {
-        if (!p) return false;
-        const cleanTerm = convertPersianToEnglishDigits(kardexSearch.trim()).toLowerCase();
-        const cleanP = convertPersianToEnglishDigits(String(p)).toLowerCase();
-        return cleanP.includes(cleanTerm);
-    });
+    const kardexPersons = Array.from(new Set(archives.flatMap(a => a.details.map(d => d.name || d.id))));
+    const filteredKardexPersons = kardexPersons.filter(p => p.includes(kardexSearch));
     const [savedPersons, setSavedPersons] = useState<Record<string, { account: string, name: string }>>({});
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -336,7 +196,6 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         let generatedCount = 0;
         let totalAmount = 0;
         const detailsArchive: CctiArchiveDetail[] = [];
-        const missingPersonsList: { id: string; name: string }[] = [];
         
         const newSaved = { ...savedPersons };
         const xmlTxLines: string[] = [];
@@ -357,47 +216,33 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             shamsiDateTimeStr = `${y}-${m}-${d}T${h}:${min}:${sec}`;
         } catch(e) {}
 
-        const processRow = (id: string, amountVal: any, accountOrig: string, nameOrig: string) => {
+        const processRow = (id: string, amount: string, accountOrig: string, nameOrig: string) => {
             if (!id) return;
-            let account = accountOrig ? String(accountOrig).trim() : '';
-            let name = nameOrig ? String(nameOrig).trim() : '';
+            let account = accountOrig;
+            let name = nameOrig;
 
-            // Find match in saved memory
-            const matchedMemory = findPersonInSaved(id, name, newSaved);
-
-            const hasInputAccount = isValidAccountString(account);
-
-            if (hasInputAccount) {
-                // If Excel/Manual entry has a valid account, we save/update it
-                const targetId = matchedMemory ? matchedMemory.matchedKey : id;
-                newSaved[targetId] = { account, name: name || newSaved[targetId]?.name || id };
+            if (account) {
+                newSaved[id] = { account, name: name || newSaved[id]?.name || id };
             } else {
-                // If Excel/Manual entry doesn't have a valid account, try to get it from memory
-                if (matchedMemory && isValidAccountString(matchedMemory.person.account)) {
-                    account = matchedMemory.person.account;
-                    name = name || matchedMemory.person.name || id;
-                } else {
-                    account = 'EMPTY';
-                    name = name || id;
+                account = newSaved[id]?.account || '';
+                name = name || newSaved[id]?.name || id;
+                if (name && !newSaved[id]?.name) {
+                     newSaved[id] = { ...newSaved[id], name };
                 }
             }
 
-            const isInvalidAccount = !isValidAccountString(account);
-            if (isInvalidAccount) {
+            if (!account) {
                 missingCount++;
                 account = 'EMPTY';
-                missingPersonsList.push({ id, name: name || 'بدون نام' });
             }
 
             let iban = account.toUpperCase();
             if (iban !== 'EMPTY' && !iban.startsWith('IR')) {
-                // If it doesn't start with IR, clean up any non-alphanumeric characters first and prefix with IR
-                const cleanIban = iban.replace(/[^A-Z0-9]/g, '');
-                iban = cleanIban.startsWith('IR') ? cleanIban : 'IR' + cleanIban;
+                iban = 'IR' + account;
             }
 
             generatedCount++;
-            const nAmount = cleanAndParseAmount(amountVal);
+            const nAmount = Math.round(Number(amount) || 0);
             totalAmount += nAmount;
             detailsArchive.push({ id, name, account, amount: nAmount });
 
@@ -407,7 +252,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
           <EndToEndId>EMPTY</EndToEndId>
         </PmtId>
         <Amt>
-          <InstdAmt Ccy="IRR">${nAmount.toFixed(0)}</InstdAmt>
+          <InstdAmt Ccy="IRR">${nAmount}</InstdAmt>
         </Amt>
         <Cdtr>
           <Nm>${name}</Nm>
@@ -430,6 +275,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         excelData.forEach(row => {
             const id = row[idCol] ? String(row[idCol]).trim() : '';
             let amount = row[amountCol] || '';
+            if (typeof amount === 'string') amount = amount.replace(/,/g, '');
             let account = accountCol ? String(row[accountCol] || '').trim() : '';
             let name = nameCol ? String(row[nameCol] || '').trim() : '';
             processRow(id, amount, account, name);
@@ -437,7 +283,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         
         manualRows.forEach(row => {
             const id = row.id.trim();
-            let amount = row.amount;
+            let amount = String(row.amount).replace(/,/g, '');
             let account = row.account.trim();
             let name = row.name.trim();
             processRow(id, amount, account, name);
@@ -450,19 +296,14 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             return;
         }
 
-        const expectedNum = expectedTotalAmount ? cleanAndParseAmount(expectedTotalAmount) : 0;
-        if (expectedTotalAmount && expectedNum !== totalAmount) {
+        if (expectedTotalAmount && Math.round(Number(expectedTotalAmount.replace(/,/g, '')) || 0) !== totalAmount) {
+            const expectedNum = Math.round(Number(expectedTotalAmount.replace(/,/g, '')) || 0);
             alert(`جمع مبالغ وارد شده (${expectedNum.toLocaleString()} ریال) با جمع کل ردیف‌ها (${totalAmount.toLocaleString()} ریال) مغایرت دارد.\n\nاختلاف: ${Math.abs(expectedNum - totalAmount).toLocaleString()} ریال`);
             return;
         }
 
         if (missingCount > 0) {
-            const missingDetails = missingPersonsList
-                .map((p, idx) => `${idx + 1}. شناسه: ${p.id} | نام: ${p.name}`)
-                .join('\n');
-            
-            const msg = `تعداد ${missingCount} نفر از پرسنل فاقد شماره شبا در فایل اکسل یا حافظه سیستم هستند:\n\n${missingDetails}\n\nلطفاً شماره شبای این افراد را در بخش "مدیریت اشخاص" یا فایل اکسل خود اضافه کنید.\nآیا مایلید فایل بدون شبای این افراد (به صورت EMPTY) تولید شود؟`;
-            const proceed = window.confirm(msg);
+            const proceed = window.confirm(`${missingCount} ردیف مجاز به دلیل نداشتن شماره شبا به صورت EMPTY ایجاد شدند.\nآیا مایل به دریافت فایل هستید؟`);
             if (!proceed) return;
         }
 
@@ -484,7 +325,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
       <MsgId>${msgId}</MsgId>
       <CreDtTm>${shamsiDateTimeStr}</CreDtTm>
       <NbOfTxs>${generatedCount}</NbOfTxs>
-      <CtrlSum>${totalAmount.toFixed(0)}</CtrlSum>
+      <CtrlSum>${totalAmount}</CtrlSum>
       <InitgPty>
         <Nm>${companyName}</Nm>
       </InitgPty>
@@ -493,7 +334,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
       <PmtInfId>1</PmtInfId>
       <PmtMtd Ccy="IRR">TRF</PmtMtd>
       <NbOfTxs>${generatedCount}</NbOfTxs>
-      <CtrlSum>${totalAmount.toFixed(0)}</CtrlSum>
+      <CtrlSum>${totalAmount}</CtrlSum>
       <ReqdExctnDt>${shamsiDateStr}</ReqdExctnDt>
       <Dbtr>
         <Nm>${companyName}</Nm>
@@ -738,8 +579,7 @@ ${xmlTxLines.join('\\n')}
                                                     value={expectedTotalAmount}
                                                     placeholder="ریال"
                                                     onChange={(e) => {
-                                                        const raw = convertPersianToEnglishDigits(e.target.value);
-                                                         const val = raw.replace(/[^0-9]/g, '');
+                                                        const val = e.target.value.replace(/[^0-9]/g, '');
                                                         setExpectedTotalAmount(val ? Number(val).toLocaleString() : '');
                                                     }}
                                                 />
@@ -847,19 +687,11 @@ ${xmlTxLines.join('\\n')}
                                 </div>
                             ) : (
                                 Object.entries(savedPersons)
-                                    .filter(([id, data]) => {
-                                        if (!id || !data) return false;
-                                        const term = searchTerm.trim().toLowerCase();
-                                        const cleanTerm = convertPersianToEnglishDigits(term);
-                                        
-                                        const cleanId = convertPersianToEnglishDigits(id).toLowerCase();
-                                        const cleanName = convertPersianToEnglishDigits(data.name || '').toLowerCase();
-                                        const cleanAccount = convertPersianToEnglishDigits(data.account || '').toLowerCase();
-                                        
-                                        return cleanId.includes(cleanTerm) || 
-                                               cleanName.includes(cleanTerm) || 
-                                               cleanAccount.includes(cleanTerm);
-                                    })
+                                    .filter(([id, data]) => 
+                                        id.includes(searchTerm) || 
+                                        data.name.includes(searchTerm) || 
+                                        data.account.includes(searchTerm)
+                                    )
                                     .map(([id, data]) => (
                                     <div key={id} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:shadow transition-all group">
                                         {editingId === id ? (

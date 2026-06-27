@@ -20,14 +20,13 @@ interface DashboardProps {
   onGoToExitApprovals: () => void;
   onGoToBijakApprovals: () => void;
   onGoToPurchaseApprovals: () => void;
-  onGoToSecretariat: () => void;
   financialYear?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, onGoToSecretariat, financialYear }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, financialYear }) => {
   const orders = useMemo(() => {
         if (!financialYear || financialYear === 'all') return rawOrders;
         return rawOrders.filter(o => isInFinancialYear(o.date, financialYear) || isInFinancialYear(o.payDate, financialYear));
@@ -52,18 +51,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequest[]>(() => {
     try {
         const item = localStorage.getItem('app_data_purchase_reqs');
-        return item ? JSON.parse(item) : [];
-    } catch { return []; }
-  });
-  const [secLetters, setSecLetters] = useState<any[]>(() => {
-    try {
-        const item = localStorage.getItem('app_data_sec_letters');
-        return item ? JSON.parse(item) : [];
-    } catch { return []; }
-  });
-  const [secSettings, setSecSettings] = useState<any[]>(() => {
-    try {
-        const item = localStorage.getItem('app_data_sec_settings');
         return item ? JSON.parse(item) : [];
     } catch { return []; }
   });
@@ -270,27 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
       }
   }
 
-  // 5. Secretariat Pending Count
-  let pendingSecretariatCount = 0;
-  if (currentUser) {
-      const isSuperUser = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO;
-      const availableCompanies = (settings?.companies || []).filter(company => {
-          if (isSuperUser) return true;
-          const companySet = secSettings.find(s => s.companyId === company.id);
-          if (!companySet) return false;
-          const hq = companySet.headquartersAccessTokens || [];
-          const fact = companySet.factoryAccessTokens || [];
-          return hq.includes(currentUser.id) || fact.includes(currentUser.id);
-      });
-      const activeCompanyIds = availableCompanies.map(c => c.id);
-      
-      pendingSecretariatCount = secLetters.filter(l => 
-          l.status !== 'ARCHIVED' && activeCompanyIds.includes(l.companyId)
-      ).length;
-  }
-
-  const hasSecretariatAccess = currentUser.canAccessSecretariat || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO;
-  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || hasSecretariatAccess;
+  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0;
 
   // ... (Existing Charts logic) ...
   const completedOrders = orders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -545,22 +512,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                 </div>
                                 <h3 className="text-xl font-black mb-1">تایید درخواست خرید</h3>
                                 <p className="text-emerald-50 text-xs opacity-85">درخواست‌های منتظر تایید شما</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {hasSecretariatAccess && (
-                        <div onClick={onGoToSecretariat} className="bg-gradient-to-br from-[#6366f1] to-[#4338ca] rounded-2xl p-6 text-white shadow-lg shadow-indigo-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><BookOpen size={100}/></div>
-                            <div className="relative z-10">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><BookOpen size={24} className="text-white"/></div>
-                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">
-                                        {pendingSecretariatCount > 0 ? `${pendingSecretariatCount} نامه خوانده نشده` : 'بدون نامه جدید'}
-                                    </span>
-                                </div>
-                                <h3 className="text-xl font-black mb-1">دبیرخانه و نامه‌نگاری</h3>
-                                <p className="text-indigo-50 text-xs opacity-85">ورود به سیستم نامه‌نگاری اداری</p>
                             </div>
                         </div>
                     )}
