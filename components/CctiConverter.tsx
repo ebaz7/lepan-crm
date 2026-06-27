@@ -41,18 +41,42 @@ const cleanAndParseAmount = (val: any): number => {
     if (val === undefined || val === null) return 0;
     let str = String(val).trim();
     str = convertPersianToEnglishDigits(str);
-    // Remove thousand separators, commas, spaces
-    str = str.replace(/[,_ \s]/g, '');
+    
+    // Replace Persian commas (،), standard commas (,), underscores, slashes (/), and any spaces with empty string
+    str = str.replace(/[،,_\s/]/g, '');
+    
+    // Let's remove any other non-digit, non-dot characters, keeping only numbers and dot
+    str = str.replace(/[^0-9.]/g, '');
+    
     const num = parseFloat(str);
     return isNaN(num) ? 0 : Math.round(num);
+};
+
+const isValidAccountString = (acc: any): boolean => {
+    if (!acc) return false;
+    const s = String(acc).trim().toUpperCase();
+    if (s === '' || s === 'EMPTY' || s === 'NULL' || s === 'UNDEFINED' || s === '-' || s === '.') {
+        return false;
+    }
+    // A valid account/IBAN should contain at least some digits
+    return /[0-9]/.test(s);
 };
 
 const findPersonInSaved = (excelId: string, saved: Record<string, { account: string, name: string }>) => {
     const clean = (s: string) => {
         let str = String(s).trim();
         str = convertPersianToEnglishDigits(str);
-        // Remove spaces, hyphens, slashes, non-word characters
-        str = str.replace(/[^a-zA-Z0-9]/g, '');
+        
+        // Strip trailing .0 / .00 from floating point representation of IDs in Excel
+        if (str.includes('.')) {
+            const parts = str.split('.');
+            if (/^0+$/.test(parts[1] || '')) {
+                str = parts[0];
+            }
+        }
+        
+        // Remove spaces, hyphens, slashes, parentheses, commas, dots, and typical separators
+        str = str.replace(/[-_.\s/\\(),،]/g, '');
         // Remove leading zeros
         return str.replace(/^0+/, '');
     };
@@ -61,13 +85,13 @@ const findPersonInSaved = (excelId: string, saved: Record<string, { account: str
     if (!cleanExcel) return null;
 
     // 1. Direct match first
-    if (saved[excelId]) {
+    if (saved[excelId] && saved[excelId].account) {
         return { matchedKey: excelId, person: saved[excelId] };
     }
 
     // 2. Exact clean match
     for (const key of Object.keys(saved)) {
-        if (clean(key) === cleanExcel) {
+        if (saved[key] && clean(key) === cleanExcel) {
             return { matchedKey: key, person: saved[key] };
         }
     }
@@ -110,8 +134,13 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
     };
 
     // Calculate Unique Persons for Kardex
-    const kardexPersons = Array.from(new Set(archives.flatMap(a => a.details.map(d => d.name || d.id))));
-    const filteredKardexPersons = kardexPersons.filter(p => p.includes(kardexSearch));
+    const kardexPersons = Array.from(new Set(archives.flatMap(a => (a.details || []).map(d => d && (d.name || d.id)).filter(Boolean))));
+    const filteredKardexPersons = kardexPersons.filter(p => {
+        if (!p) return false;
+        const cleanTerm = convertPersianToEnglishDigits(kardexSearch.trim()).toLowerCase();
+        const cleanP = convertPersianToEnglishDigits(String(p)).toLowerCase();
+        return cleanP.includes(cleanTerm);
+    });
     const [savedPersons, setSavedPersons] = useState<Record<string, { account: string, name: string }>>({});
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -267,28 +296,30 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
 
         const processRow = (id: string, amountVal: any, accountOrig: string, nameOrig: string) => {
             if (!id) return;
-            let account = accountOrig;
-            let name = nameOrig;
+            let account = accountOrig ? String(accountOrig).trim() : '';
+            let name = nameOrig ? String(nameOrig).trim() : '';
 
             // Find match in saved memory
             const matchedMemory = findPersonInSaved(id, newSaved);
 
-            if (account) {
-                // If Excel/Manual entry has the account, we save/update it
+            const hasInputAccount = isValidAccountString(account);
+
+            if (hasInputAccount) {
+                // If Excel/Manual entry has a valid account, we save/update it
                 const targetId = matchedMemory ? matchedMemory.matchedKey : id;
                 newSaved[targetId] = { account, name: name || newSaved[targetId]?.name || id };
             } else {
-                // If Excel/Manual entry doesn't have the account, get it from memory
-                if (matchedMemory) {
-                    account = matchedMemory.person.account || '';
+                // If Excel/Manual entry doesn't have a valid account, try to get it from memory
+                if (matchedMemory && isValidAccountString(matchedMemory.person.account)) {
+                    account = matchedMemory.person.account;
                     name = name || matchedMemory.person.name || id;
                 } else {
-                    account = '';
+                    account = 'EMPTY';
                     name = name || id;
                 }
             }
 
-            const isInvalidAccount = !account || account.trim() === '' || account.trim().toUpperCase() === 'EMPTY';
+            const isInvalidAccount = !isValidAccountString(account);
             if (isInvalidAccount) {
                 missingCount++;
                 account = 'EMPTY';
@@ -297,7 +328,9 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
 
             let iban = account.toUpperCase();
             if (iban !== 'EMPTY' && !iban.startsWith('IR')) {
-                iban = 'IR' + account;
+                // If it doesn't start with IR, clean up any non-alphanumeric characters first and prefix with IR
+                const cleanIban = iban.replace(/[^A-Z0-9]/g, '');
+                iban = cleanIban.startsWith('IR') ? cleanIban : 'IR' + cleanIban;
             }
 
             generatedCount++;
@@ -311,7 +344,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
           <EndToEndId>EMPTY</EndToEndId>
         </PmtId>
         <Amt>
-          <InstdAmt Ccy="IRR">${nAmount}</InstdAmt>
+          <InstdAmt Ccy="IRR">${nAmount.toFixed(0)}</InstdAmt>
         </Amt>
         <Cdtr>
           <Nm>${name}</Nm>
@@ -388,7 +421,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
       <MsgId>${msgId}</MsgId>
       <CreDtTm>${shamsiDateTimeStr}</CreDtTm>
       <NbOfTxs>${generatedCount}</NbOfTxs>
-      <CtrlSum>${totalAmount}</CtrlSum>
+      <CtrlSum>${totalAmount.toFixed(0)}</CtrlSum>
       <InitgPty>
         <Nm>${companyName}</Nm>
       </InitgPty>
@@ -397,7 +430,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
       <PmtInfId>1</PmtInfId>
       <PmtMtd Ccy="IRR">TRF</PmtMtd>
       <NbOfTxs>${generatedCount}</NbOfTxs>
-      <CtrlSum>${totalAmount}</CtrlSum>
+      <CtrlSum>${totalAmount.toFixed(0)}</CtrlSum>
       <ReqdExctnDt>${shamsiDateStr}</ReqdExctnDt>
       <Dbtr>
         <Nm>${companyName}</Nm>
@@ -751,11 +784,19 @@ ${xmlTxLines.join('\\n')}
                                 </div>
                             ) : (
                                 Object.entries(savedPersons)
-                                    .filter(([id, data]) => 
-                                        id.includes(searchTerm) || 
-                                        data.name.includes(searchTerm) || 
-                                        data.account.includes(searchTerm)
-                                    )
+                                    .filter(([id, data]) => {
+                                        if (!id || !data) return false;
+                                        const term = searchTerm.trim().toLowerCase();
+                                        const cleanTerm = convertPersianToEnglishDigits(term);
+                                        
+                                        const cleanId = convertPersianToEnglishDigits(id).toLowerCase();
+                                        const cleanName = convertPersianToEnglishDigits(data.name || '').toLowerCase();
+                                        const cleanAccount = convertPersianToEnglishDigits(data.account || '').toLowerCase();
+                                        
+                                        return cleanId.includes(cleanTerm) || 
+                                               cleanName.includes(cleanTerm) || 
+                                               cleanAccount.includes(cleanTerm);
+                                    })
                                     .map(([id, data]) => (
                                     <div key={id} className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm hover:shadow transition-all group">
                                         {editingId === id ? (
