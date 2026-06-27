@@ -216,18 +216,56 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             shamsiDateTimeStr = `${y}-${m}-${d}T${h}:${min}:${sec}`;
         } catch(e) {}
 
+        const normalizeStr = (str: string) => {
+            if (!str) return '';
+            return String(str)
+                .replace(/[۰-۹]/g, (d: any) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                .replace(/[٠-٩]/g, (d: any) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+                .replace(/ي/g, 'ی')
+                .replace(/ك/g, 'ک')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
         const processRow = (id: string, amount: string, accountOrig: string, nameOrig: string) => {
             if (!id) return;
             let account = accountOrig;
             let name = nameOrig;
 
+            const normId = normalizeStr(id);
+            const normName = normalizeStr(name);
+
             if (account) {
                 newSaved[id] = { account, name: name || newSaved[id]?.name || id };
             } else {
-                account = newSaved[id]?.account || '';
-                name = name || newSaved[id]?.name || id;
-                if (name && !newSaved[id]?.name) {
-                     newSaved[id] = { ...newSaved[id], name };
+                let foundPerson = newSaved[id] || newSaved[normId];
+                
+                if (!foundPerson) {
+                    const allSaved = Object.entries(newSaved);
+                    for (const [savedId, savedData] of allSaved) {
+                        if (normalizeStr(savedId) === normId) {
+                            foundPerson = savedData;
+                            break;
+                        }
+                        if (normName && normalizeStr(savedData.name) === normName) {
+                            foundPerson = savedData;
+                            break;
+                        }
+                    }
+                }
+
+                if (foundPerson) {
+                    account = foundPerson.account || '';
+                    name = name || foundPerson.name || id;
+                    
+                    if (name && !foundPerson.name) {
+                        const keyToUpdate = Object.keys(newSaved).find(k => newSaved[k] === foundPerson);
+                        if (keyToUpdate) {
+                            newSaved[keyToUpdate] = { ...foundPerson, name };
+                        }
+                    }
+                } else {
+                    name = name || id;
                 }
             }
 
@@ -242,7 +280,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             }
 
             generatedCount++;
-            const nAmount = Math.round(Number(amount) || 0);
+            const nAmount = Number(amount) || 0;
             totalAmount += nAmount;
             detailsArchive.push({ id, name, account, amount: nAmount });
 
@@ -275,7 +313,12 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
         excelData.forEach(row => {
             const id = row[idCol] ? String(row[idCol]).trim() : '';
             let amount = row[amountCol] || '';
-            if (typeof amount === 'string') amount = amount.replace(/,/g, '');
+            if (typeof amount === 'string') {
+                amount = amount
+                    .replace(/[۰-۹]/g, (d: any) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                    .replace(/[٠-٩]/g, (d: any) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+                    .replace(/,/g, '');
+            }
             let account = accountCol ? String(row[accountCol] || '').trim() : '';
             let name = nameCol ? String(row[nameCol] || '').trim() : '';
             processRow(id, amount, account, name);
@@ -296,8 +339,8 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             return;
         }
 
-        if (expectedTotalAmount && Math.round(Number(expectedTotalAmount.replace(/,/g, '')) || 0) !== totalAmount) {
-            const expectedNum = Math.round(Number(expectedTotalAmount.replace(/,/g, '')) || 0);
+        if (expectedTotalAmount && Number(expectedTotalAmount.replace(/,/g, '')) !== totalAmount) {
+            const expectedNum = Number(expectedTotalAmount.replace(/,/g, ''));
             alert(`جمع مبالغ وارد شده (${expectedNum.toLocaleString()} ریال) با جمع کل ردیف‌ها (${totalAmount.toLocaleString()} ریال) مغایرت دارد.\n\nاختلاف: ${Math.abs(expectedNum - totalAmount).toLocaleString()} ریال`);
             return;
         }
@@ -579,7 +622,11 @@ ${xmlTxLines.join('\\n')}
                                                     value={expectedTotalAmount}
                                                     placeholder="ریال"
                                                     onChange={(e) => {
-                                                        const val = e.target.value.replace(/[^0-9]/g, '');
+                                                        const raw = e.target.value;
+                                                        const norm = raw
+                                                            .replace(/[۰-۹]/g, (d: any) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                                                            .replace(/[٠-٩]/g, (d: any) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+                                                        const val = norm.replace(/[^0-9]/g, '');
                                                         setExpectedTotalAmount(val ? Number(val).toLocaleString() : '');
                                                     }}
                                                 />
