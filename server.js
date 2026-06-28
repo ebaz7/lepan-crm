@@ -18,6 +18,7 @@ import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, not
 import * as telegram from './backend/telegram.js';
 import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
+import mammoth from 'mammoth';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -1046,7 +1047,7 @@ app.get('/api/secretariat/letters/:id/docx', async (req, res) => {
             activeCompanySettings = { ...activeCompanySettings, letterheadUrl: '' };
         }
         
-        const doc = await Renderer.generateSecretariatLetterDoc(letter, companyName, activeCompanySettings);
+        const doc = await Renderer.generateSecretariatLetterDoc(letter, companyName, activeCompanySettings, company, req.query.noLetterhead === 'true');
         res.set('Content-Type', 'application/msword');
         res.set('Content-Disposition', `attachment; filename="Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.doc"`);
         res.send(doc);
@@ -1072,6 +1073,60 @@ app.post('/api/secretariat-settings', (req, res) => {
     }
     saveDb(db);
     res.json(db.secretariatSettings);
+});
+
+// --- SECRETARIAT TEMPLATES & IMPORT ---
+app.get('/api/secretariat-templates', (req, res) => {
+    res.json(getDb().secretariatTemplates || []);
+});
+
+app.post('/api/secretariat-templates', (req, res) => {
+    const db = getDb();
+    if (!db.secretariatTemplates) db.secretariatTemplates = [];
+    const template = req.body;
+    if (!template.id) {
+        template.id = 'temp_' + Date.now();
+    }
+    const idx = db.secretariatTemplates.findIndex(t => t.id === template.id);
+    if (idx > -1) {
+        db.secretariatTemplates[idx] = template;
+    } else {
+        db.secretariatTemplates.unshift(template);
+    }
+    saveDb(db);
+    res.json(db.secretariatTemplates);
+});
+
+app.delete('/api/secretariat-templates/:id', (req, res) => {
+    const db = getDb();
+    db.secretariatTemplates = (db.secretariatTemplates || []).filter(t => t.id !== req.params.id);
+    saveDb(db);
+    res.json(db.secretariatTemplates);
+});
+
+app.post('/api/secretariat/import-docx', (req, res) => {
+    const { fileData } = req.body;
+    if (!fileData) return res.status(400).send('Missing file data');
+    try {
+        const base64Data = fileData.replace(/^data:.*;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        mammoth.convertToHtml({ buffer: buffer })
+            .then((result) => {
+                res.json({
+                    success: true,
+                    html: result.value,
+                    warnings: result.messages
+                });
+            })
+            .catch((err) => {
+                console.error("Mammoth docx parse error:", err);
+                res.status(500).json({ success: false, error: err.message });
+            });
+    } catch (e) {
+        console.error("Docx import error:", e);
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // --- NOTES API ---

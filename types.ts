@@ -1253,6 +1253,7 @@ export interface SecretariatCompanySettings {
     editAccessTokens?: string[];       // List of user IDs with edit access
     deleteAccessTokens?: string[];     // List of user IDs with delete access
     letterheadUrl?: string;            // سربرگ
+    wordLetterheadUrl?: string;        // سربرگ اختصاصی فایل ورد
     meetingMinutesTemplate?: string;   // قالب صورتجلسه
     companyStampUrl?: string;          // تصویر مهر رسمی شرکت
     companyStampSize?: number;         // اندازه مهر رسمی (پیکسل)
@@ -1265,4 +1266,14 @@ export interface SecretariatCompanySettings {
     metadataOpacity?: number;          // میزان پررنگی اطلاعات سربرگ (درصد، از ۱۰ تا ۱۰۰)
     metadataFontWeight?: 'normal' | 'bold' | 'bolder' | 'black'; // میزان ضخامت متون سربرگ
 }
+
+export interface SecretariatTemplate {
+    id: string;
+    title: string;       // عنوان قالب
+    category?: string;   // دسته‌بندی قالب (مانند: اداری، مالی، فنی، عمومی)
+    subject?: string;    // موضوع پیش‌فرض نامه
+    content: string;     // متن خام قالب (HTML/Quill compatible)
+    createdAt: number;
+}
+
 

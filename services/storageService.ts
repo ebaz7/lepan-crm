@@ -318,7 +318,7 @@ export const getPartKardex = async (partId: string): Promise<PartKardex[]> => {
 };
 
 // --- SECRETARIAT ---
-import { SecretariatLetter, SecretariatCompanySettings } from '../types';
+import { SecretariatLetter, SecretariatCompanySettings, SecretariatTemplate } from '../types';
 
 export const getSecretariatLetters = async (): Promise<SecretariatLetter[]> => {
     const res = await apiCall<SecretariatLetter[]>('/secretariat-letters');
@@ -341,4 +341,23 @@ export const getSecretariatSettings = async (): Promise<SecretariatCompanySettin
 export const saveSecretariatSettings = async (settings: SecretariatCompanySettings): Promise<SecretariatCompanySettings[]> => {
     return await apiCall<SecretariatCompanySettings[]>('/secretariat-settings', 'POST', settings);
 };
+
+// Secretariat Templates & Word Import APIs
+export const getSecretariatTemplates = async (): Promise<SecretariatTemplate[]> => {
+    const res = await apiCall<SecretariatTemplate[]>('/secretariat-templates');
+    return safeArray(res);
+};
+
+export const saveSecretariatTemplate = async (template: SecretariatTemplate): Promise<SecretariatTemplate[]> => {
+    return await apiCall<SecretariatTemplate[]>('/secretariat-templates', 'POST', template);
+};
+
+export const deleteSecretariatTemplate = async (id: string): Promise<SecretariatTemplate[]> => {
+    return await apiCall<SecretariatTemplate[]>(`/secretariat-templates/${id}`, 'DELETE');
+};
+
+export const importDocx = async (fileData: string): Promise<{ success: boolean; html: string; warnings?: any }> => {
+    return await apiCall<{ success: boolean; html: string; warnings?: any }>('/secretariat/import-docx', 'POST', { fileData });
+};
+
 

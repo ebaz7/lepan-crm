@@ -12,6 +12,48 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 let browser = null;
 
+// --- DYNAMIC PERSIAN DIGIT CONVERTER ---
+const toPersianDigits = (str) => {
+    if (str === undefined || str === null) return '';
+    const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    let result = String(str);
+    for (let i = 0; i < 10; i++) {
+        result = result.replace(new RegExp(englishDigits[i], 'g'), persianDigits[i]);
+    }
+    return result;
+};
+
+// --- URL TO ABSOLUTE PATH / BASE64 CONVERTER ---
+const makeAbsolute = (url) => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    
+    // Check if it is a local upload (contains '/uploads/')
+    if (url.includes('/uploads/')) {
+        try {
+            const parts = url.split('/uploads/');
+            const fileName = parts[parts.length - 1].split('?')[0]; // strip query strings
+            const fullPath = path.join(process.cwd(), 'uploads', fileName);
+            
+            if (fs.existsSync(fullPath)) {
+                const ext = path.extname(fullPath).toLowerCase().replace('.', '');
+                const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+                const base64 = fs.readFileSync(fullPath).toString('base64');
+                return `data:${mimeType};base64,${base64}`;
+            } else {
+                console.error(`[Renderer] Local upload file not found on disk: ${fullPath}`);
+            }
+        } catch (e) {
+            console.error("[Renderer] Error reading file for PDF base64 conversion:", e.message);
+        }
+    }
+    
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    return `http://127.0.0.1:3000${cleanUrl}`;
+};
+
 // --- FONT LOADER (ROBUST OFFLINE SUPPORT) ---
 const getFontBase64 = () => {
     try {
@@ -1037,35 +1079,6 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
         
         await page.setViewport({ width: isA5 ? 600 : 800, height: isA5 ? 850 : 1100, deviceScaleFactor: 2 });
         
-        const makeAbsolute = (url) => {
-            if (!url) return '';
-            if (url.startsWith('data:')) return url;
-            
-            // Check if it is a local upload (contains '/uploads/')
-            if (url.includes('/uploads/')) {
-                try {
-                    const parts = url.split('/uploads/');
-                    const fileName = parts[parts.length - 1].split('?')[0]; // strip query strings
-                    const fullPath = path.join(process.cwd(), 'uploads', fileName);
-                    
-                    if (fs.existsSync(fullPath)) {
-                        const ext = path.extname(fullPath).toLowerCase().replace('.', '');
-                        const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
-                        const base64 = fs.readFileSync(fullPath).toString('base64');
-                        return `data:${mimeType};base64,${base64}`;
-                    } else {
-                        console.error(`[Renderer] Local upload file not found on disk: ${fullPath}`);
-                    }
-                } catch (e) {
-                    console.error("[Renderer] Error reading file for PDF base64 conversion:", e.message);
-                }
-            }
-            
-            if (url.startsWith('http://') || url.startsWith('https://')) return url;
-            const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-            return `http://127.0.0.1:3000${cleanUrl}`;
-        };
-
         const hasCustomPos = companySettings?.metadataTop !== undefined || companySettings?.metadataLeft !== undefined;
         
         const fontFamily = companySettings?.letterheadFontFamily || 'Tahoma';
@@ -1083,8 +1096,8 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
             letterheadHtml = `
                 <img src="${makeAbsolute(companySettings.letterheadUrl)}" class="letterhead-bg" />
                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left-default-on-img'}">
-                    <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.letterNumber}</span></div>
-                    <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.date}</span></div>
+                    <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${toPersianDigits(letter.letterNumber)}</span></div>
+                    <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${toPersianDigits(letter.date)}</span></div>
                     <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
                 </div>
             `;
@@ -1092,8 +1105,8 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
             letterheadHtml = `
                 <div class="default-letterhead">
                     <div class="lh-right">
-                        <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.letterNumber}</span></div>
-                        <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.date}</span></div>
+                        <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${toPersianDigits(letter.letterNumber)}</span></div>
+                        <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${toPersianDigits(letter.date)}</span></div>
                         <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
                     </div>
                     <div class="lh-center">
@@ -1177,6 +1190,8 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/font-face.css');
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/gandom-font@v0.8.0/dist/font-face.css');
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/estedad-font@v1.0.0-alpha3/dist/font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tanha-font@v0.1.3/dist/font-face.css');
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tahoma-font@v1.0.0/tahoma.css');
                 
                 html, body {
@@ -1209,9 +1224,12 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                     position: absolute;
                     top: 25mm; left: 20mm;
                     font-size: 11px;
-                    line-height: 1.6;
+                    line-height: 1.8;
                     opacity: ${metadataOpacity};
                     font-weight: ${metadataFontWeight} !important;
+                    text-align: right !important;
+                    direction: rtl !important;
+                    white-space: nowrap !important;
                 }
                 
                 .lh-left-custom {
@@ -1219,10 +1237,13 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                     top: ${metadataTop}mm !important;
                     left: ${metadataLeft}mm !important;
                     font-size: ${metadataFontSize}px !important;
-                    line-height: 1.6 !important;
+                    line-height: 1.8 !important;
                     z-index: 100 !important;
                     opacity: ${metadataOpacity} !important;
                     font-weight: ${metadataFontWeight} !important;
+                    text-align: right !important;
+                    direction: rtl !important;
+                    white-space: nowrap !important;
                 }
                 
                 .default-letterhead {
@@ -1310,7 +1331,7 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
     }
 };
 
-export const generateSecretariatLetterDoc = async (letter, companyName, companySettings) => {
+export const generateSecretariatLetterDoc = async (letter, companyName, companySettings, company, noLetterhead = false) => {
     // Generate beautiful Word-compatible HTML file
     
     // Determine page size and orientation
@@ -1320,14 +1341,57 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
         ? (isLandscape ? 'size: 595.3pt 419.5pt;' : 'size: 419.5pt 595.3pt;') 
         : (isLandscape ? 'size: 841.9pt 595.3pt;' : 'size: 595.3pt 841.9pt;');
 
-    const msoMargin = 'margin: 1in 1in 1in 1in;';
+    const msoMargin = 'margin: 0.8in 0.8in 0.8in 0.8in;';
+    const fontFamily = companySettings?.letterheadFontFamily || 'Tahoma';
     
-    const letterheadHtml = (!companySettings?.letterheadUrl)
-        ? `<div style="text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 30px;">
-             <h1 style="margin: 0; font-size: 24pt; color: #1e3a8a;">دبیرخانه اداری - ${companyName || 'شرکت'}</h1>
-             <p style="margin: 5px 0 0 0; font-size: 11pt; color: #555;">بخش ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
-           </div>`
-        : ''; // If there's a background, we don't need a mock header
+    let letterheadHtml = '';
+    if (!noLetterhead) {
+        if (companySettings?.wordLetterheadUrl) {
+            letterheadHtml = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="${makeAbsolute(companySettings.wordLetterheadUrl)}" style="width: 100%; max-height: 150px; object-fit: contain;" />
+                </div>
+                <table style="width: 100%; margin-bottom: 25px; border-bottom: 1px solid #ddd; padding-bottom: 10px; font-size: 11pt; font-family: '${fontFamily}', 'Tahoma', sans-serif; direction: rtl;">
+                    <tr>
+                        <td style="text-align: right; width: 50%;"><b>شماره:</b> <span style="direction: ltr; display: inline-block;">${toPersianDigits(letter.letterNumber)}</span></td>
+                        <td style="text-align: left; width: 50%;"><b>تاریخ:</b> <span style="direction: ltr; display: inline-block;">${toPersianDigits(letter.date)}</span></td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: right;"><b>پیوست:</b> ${letter.attachments?.length > 0 ? 'دارد' : 'ندارد'}</td>
+                        <td style="text-align: left;"><b>بخش:</b> ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</td>
+                    </tr>
+                </table>
+            `;
+        } else {
+            letterheadHtml = `
+                <table class="letterhead-table" style="width: 100%; margin-bottom: 30px; border-bottom: 3px double #333; padding-bottom: 15px; direction: rtl;">
+                    <tr>
+                        <!-- Left Column: Metadata (aligned right because of RTL, but visual left of the page) -->
+                        <td style="width: 33%; text-align: right; vertical-align: top; font-size: 11pt; line-height: 1.6; font-family: '${fontFamily}', 'Tahoma', sans-serif;">
+                            <div><b>شماره:</b> <span style="direction: ltr; display: inline-block;">${toPersianDigits(letter.letterNumber)}</span></div>
+                            <div><b>تاریخ:</b> <span style="direction: ltr; display: inline-block;">${toPersianDigits(letter.date)}</span></div>
+                            <div><b>پیوست:</b> ${letter.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
+                        </td>
+                        <!-- Center Column: Company Branding -->
+                        <td style="width: 34%; text-align: center; vertical-align: top; font-family: '${fontFamily}', 'Tahoma', sans-serif;">
+                            <div style="font-size: 11pt; font-weight: bold; margin-bottom: 5px;">باسمه تعالی</div>
+                            <div style="font-size: 14pt; font-weight: bold; color: #1e3a8a;">دبیرخانه اداری</div>
+                            <div style="font-size: 12pt; font-weight: bold; color: #555;">${companyName || 'شرکت'}</div>
+                            <div style="font-size: 9pt; color: #777; margin-top: 3px;">بخش: ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</div>
+                        </td>
+                        <!-- Right Column: Logo -->
+                        <td style="width: 33%; text-align: left; vertical-align: top;">
+                            ${(company?.logo || companySettings?.logoUrl) ? `
+                                <img src="${makeAbsolute(company?.logo || companySettings?.logoUrl)}" style="width: 70px; height: 70px; max-width: 100%; object-fit: contain;" />
+                            ` : `
+                                <div style="width: 70px; height: 70px; border: 1px dashed #ccc; display: inline-block; text-align: center; line-height: 70px; font-size: 9pt; color: #aaa;">لوگو</div>
+                            `}
+                        </td>
+                    </tr>
+                </table>
+            `;
+        }
+    }
 
     const html = `<html xmlns:v="urn:schemas-microsoft-com:vml"
     xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -1346,6 +1410,15 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
     </xml>
     <![endif]-->
     <style>
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.0.0/Vazirmatn-font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/gandom-font@v0.8.0/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/estedad-font@v1.0.0-alpha3/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tanha-font@v0.1.3/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tahoma-font@v1.0.0/tahoma.css');
+
         @page Section1 {
             ${msoPageSize}
             ${msoMargin}
@@ -1354,7 +1427,7 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
             mso-paper-source: 0;
         }
         div.Section1 { page: Section1; }
-        body { font-family: '${companySettings?.letterheadFontFamily || 'Tahoma'}', 'Arial', sans-serif; direction: rtl; }
+        body { font-family: '${fontFamily}', 'Tahoma', 'Arial', sans-serif; direction: rtl; }
         .letter-meta { width: 100%; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
         .letter-meta td { font-size: 10.5pt; color: #333; }
         .letter-recipient { font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
@@ -1364,21 +1437,17 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
         .signature-image { max-height: 70px; margin-bottom: 5px; }
     </style>
     </head>
-    <body style="tab-interval:.5in; direction: rtl;" ${companySettings?.letterheadUrl ? `background="${companySettings.letterheadUrl}"` : ''}>
+    <body style="tab-interval:.5in; direction: rtl;">
         <div class="Section1">
             ${letterheadHtml}
             <table class="letter-meta" style="width: 100%;">
                 <tr>
-                    <td style="text-align: right; width: 50%;"><b>موضوع:</b> ${letter.subject}</td>
-                    <td style="text-align: left; width: 50%;"><b>شماره نامه:</b> ${letter.letterNumber}</td>
+                    <td style="text-align: right; width: 50%;"><b>به سمت:</b> ${letter.receiver || 'نامشخص'}</td>
+                    <td style="text-align: left; width: 50%;"><b>موضوع:</b> ${letter.subject}</td>
                 </tr>
                 <tr>
-                    <td style="text-align: right;"></td>
-                    <td style="text-align: left;"><b>تاریخ:</b> ${letter.date}</td>
-                </tr>
-                <tr>
-                    <td style="text-align: right;"></td>
-                    <td style="text-align: left;"><b>پیوست:</b> ${letter.attachments?.length > 0 ? 'دارد' : 'ندارد'}</td>
+                    <td style="text-align: right;"><b>از طرف:</b> ${letter.sender || 'نامشخص'}</td>
+                    <td style="text-align: left;"><b>بخش:</b> ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</td>
                 </tr>
             </table>
             
@@ -1397,7 +1466,7 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
                                     <p style="font-size: 10pt; color: #555; margin: 0;">${s.title}</p>
                                 </div>
                             `).join('')}
-                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
+                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${makeAbsolute(companySettings.companyStampUrl)}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
                         ` : ''}
                     </td>
                     <td style="text-align: left; width: 33%;">
@@ -1409,7 +1478,7 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
                                     <p style="font-size: 10pt; color: #555; margin: 0;">${s.title}</p>
                                 </div>
                             `).join('')}
-                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
+                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${makeAbsolute(companySettings.companyStampUrl)}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
                         ` : ''}
                     </td>
                 </tr>
