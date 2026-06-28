@@ -1234,6 +1234,7 @@ export interface SecretariatLetter {
     comments: SecretariatLetterComment[];
     attachments: SecretariatLetterAttachment[];
     addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
+    isPrivate?: boolean; // تیک خصوصی بودن نامه
     signOffText?: string; // متن با تشکر
     signers?: { name: string; title: string; userId?: string; }[]; // لیست امضاکنندگان و سمت‌ها
     paperSize?: 'A4' | 'A5';

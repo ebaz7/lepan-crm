@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getSettings, saveSettings, uploadFile, getSecretariatSettings, saveSecretariatSettings } from '../services/storageService';
-import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate, SecretariatCompanySettings } from '../types';
+import { getSettings, saveSettings, uploadFile, getSecretariatSettings, saveSecretariatSettings, getSecretariatTemplates, saveSecretariatTemplate, deleteSecretariatTemplate, importDocx } from '../services/storageService';
+import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate, SecretariatCompanySettings, SecretariatTemplate } from '../types';
 import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList, Lock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
@@ -73,6 +73,14 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const [isUploadingSecStamp, setIsUploadingSecStamp] = useState(false);
   const secLetterheadInputRef = useRef<HTMLInputElement>(null);
   const secStampInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingSecWordLetterhead, setIsUploadingSecWordLetterhead] = useState(false);
+  const secWordLetterheadInputRef = useRef<HTMLInputElement>(null);
+
+  // Secretariat Templates State
+  const [secTemplates, setSecTemplates] = useState<SecretariatTemplate[]>([]);
+  const [editingSecTemplate, setEditingSecTemplate] = useState<Partial<SecretariatTemplate> | null>(null);
+  const [importingDocxFile, setImportingDocxFile] = useState(false);
+  const docxImportInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<SystemSettings>({ 
       appName: 'سیستم من',
@@ -295,8 +303,12 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   useEffect(() => {
     const fetchSecConfigs = async () => {
       try {
-        const configs = await getSecretariatSettings();
+        const [configs, templates] = await Promise.all([
+          getSecretariatSettings(),
+          getSecretariatTemplates()
+        ]);
         setSecConfigs(configs);
+        setSecTemplates(templates);
         if (settings.companies && settings.companies.length > 0 && !selectedCompanyIdForSec) {
           setSelectedCompanyIdForSec(settings.companies[0].id);
         }
@@ -569,6 +581,90 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       alert('خطا در ذخیره تنظیمات دبیرخانه');
     }
   };
+
+  // --- Secretariat Template Handlers ---
+  const handleSaveSecTemplate = async (templateData: any) => {
+    try {
+      const updatedTemplates = await saveSecretariatTemplate(templateData);
+      setSecTemplates(updatedTemplates);
+      alert('قالب نمونه نامه با موفقیت ذخیره شد.');
+      setEditingSecTemplate(null);
+    } catch (err) {
+      console.error(err);
+      alert('خطا در ذخیره قالب نمونه نامه');
+    }
+  };
+
+  const handleDeleteSecTemplate = async (id: string) => {
+    if (!confirm('آیا از حذف این قالب نمونه نامه مطمئن هستید؟')) return;
+    try {
+      const updatedTemplates = await deleteSecretariatTemplate(id);
+      setSecTemplates(updatedTemplates);
+      alert('قالب نمونه نامه با موفقیت حذف شد.');
+    } catch (err) {
+      console.error(err);
+      alert('خطا در حذف قالب نمونه نامه');
+    }
+  };
+
+  const handleDocxImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportingDocxFile(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await importDocx(base64);
+        if (res.success) {
+          if (editingSecTemplate) {
+            setEditingSecTemplate(prev => prev ? ({
+              ...prev,
+              content: res.html,
+              title: prev.title || file.name.replace(/\.[^/.]+$/, "")
+            }) : null);
+          }
+          alert('متن سند ورد با موفقیت استخراج و به ویرایشگر اضافه شد.');
+        } else {
+          alert('خطا در تبدیل سند ورد: ' + (res.success === false ? 'قالب ناسازگار' : 'خطای سیستم'));
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert('خطا در استخراج محتوای فایل ورد: ' + err.message);
+      } finally {
+        setImportingDocxFile(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleWordLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingSecWordLetterhead(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await uploadFile(file.name, base64);
+        setSecSettingsForm(prev => ({
+          ...prev,
+          wordLetterheadUrl: res.url
+        }));
+        alert('فایل سربرگ ورد (.docx) با موفقیت بارگذاری شد.');
+      } catch (err) {
+        console.error(err);
+        alert('خطا در آپلود فایل سربرگ ورد');
+      } finally {
+        setIsUploadingSecWordLetterhead(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  // -------------------------------------
 
   const handleSaveCompany = () => { if (!newCompanyName.trim()) return; let updatedCompanies = settings.companies || []; const companyData = { id: editingCompanyId || generateUUID(), name: newCompanyName.trim(), logo: newCompanyLogo, showInWarehouse: newCompanyShowInWarehouse, banks: newCompanyBanks, letterhead: newCompanyLetterhead, registrationNumber: newCompanyRegNum, nationalId: newCompanyNatId, address: newCompanyAddress, phone: newCompanyPhone, fax: newCompanyFax, postalCode: newCompanyPostalCode, economicCode: newCompanyEcoCode }; if (editingCompanyId) { updatedCompanies = updatedCompanies.map(c => c.id === editingCompanyId ? companyData : c); } else { updatedCompanies = [...updatedCompanies, companyData]; } setSettings({ ...settings, companies: updatedCompanies, companyNames: updatedCompanies.map(c => c.name) }); resetCompanyForm(); };
   const handleEditCompany = (c: Company) => { setNewCompanyName(c.name); setNewCompanyLogo(c.logo || ''); setNewCompanyShowInWarehouse(c.showInWarehouse !== false); setNewCompanyBanks(c.banks || []); setNewCompanyLetterhead(c.letterhead || ''); setNewCompanyRegNum(c.registrationNumber || ''); setNewCompanyNatId(c.nationalId || ''); setNewCompanyAddress(c.address || ''); setNewCompanyPhone(c.phone || ''); setNewCompanyFax(c.fax || ''); setNewCompanyPostalCode(c.postalCode || ''); setNewCompanyEcoCode(c.economicCode || ''); setEditingCompanyId(c.id); };
@@ -1922,7 +2018,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 <div>
                                                     <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">سربرگ نامه</h4>
                                                     <div className="flex flex-col gap-2">
-                                                        <input type="file" ref={secLetterheadInputRef} className="hidden" onChange={handleSecLetterheadUpload} accept="image/*" />
+                                                        <input type="file" ref={secLetterheadInputRef} className="hidden" onChange={handleSecLetterheadUpload} accept="image/*,application/pdf" />
                                                         <button 
                                                             type="button" 
                                                             onClick={() => secLetterheadInputRef.current?.click()} 
@@ -2116,6 +2212,65 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     ابتدا در بخش "اطلاعات پایه" حداقل یک شرکت تعریف کنید.
                                 </div>
                             )}
+                            
+                            {/* --- Templates Management --- */}
+                            <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 md:p-6 shadow-sm space-y-6 mt-8">
+                                <div className="flex items-center justify-between border-b pb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="p-2 bg-purple-50 text-purple-600 rounded-lg"><FileText size={18}/></span>
+                                    <div>
+                                      <h3 className="text-sm font-black text-slate-800">بانک نمونه نامه‌ها (قالب‌های آماده)</h3>
+                                      <p className="text-[10px] text-slate-400">نامه‌های تکراری و پرکاربرد را ذخیره کنید تا هنگام ثبت نامه جدید، به سرعت فراخوانی شوند.</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => setEditingSecTemplate({ title: '', category: 'اداری', subject: '', content: '' })}
+                                    className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                                  >
+                                    <Plus size={14} /> ایجاد نمونه نامه جدید
+                                  </button>
+                                </div>
+
+                                {/* Templates List */}
+                                {secTemplates.length === 0 ? (
+                                  <div className="text-center py-8 text-slate-400 text-xs">
+                                    هیچ نمونه نامه‌ای تعریف نشده است. با زدن دکمه بالا اولین نمونه نامه را بسازید.
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {secTemplates.map(temp => (
+                                      <div key={temp.id} className="border border-slate-100 rounded-xl p-4 hover:shadow-sm transition-all bg-slate-50 flex flex-col justify-between gap-3">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                              {temp.category || 'عمومی'}
+                                            </span>
+                                          </div>
+                                          <h4 className="font-bold text-slate-800 text-xs">{temp.title}</h4>
+                                          <p className="text-[10px] text-slate-400 line-clamp-1">موضوع: {temp.subject || '-'}</p>
+                                        </div>
+
+                                        <div className="flex items-center justify-end gap-2 border-t pt-2 mt-1">
+                                          <button
+                                            onClick={() => setEditingSecTemplate(temp)}
+                                            className="text-slate-500 hover:text-slate-700 text-[10px] font-bold bg-white px-2 py-1 border rounded"
+                                          >
+                                            ویرایش
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteSecTemplate(temp.id)}
+                                            className="text-red-500 hover:text-red-700 text-[10px] font-bold bg-white px-2 py-1 border rounded"
+                                          >
+                                            حذف
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
+
                         </div>
                     )}
 
@@ -2351,6 +2506,105 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                 </form>
             )}
         </div>
+        
+        {/* --- Secretariat Template Editor Modal --- */}
+        {editingSecTemplate && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                <div 
+                    className="bg-white dark:bg-slate-900 border dark:border-white/10 rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto text-right"
+                    dir="rtl"
+                >
+                    <div className="flex items-center justify-between border-b pb-3">
+                        <h3 className="text-base font-black text-gray-800 dark:text-white">
+                            {editingSecTemplate.id ? 'ویرایش نمونه نامه' : 'ایجاد نمونه نامه جدید'}
+                        </h3>
+                        <button 
+                            onClick={() => setEditingSecTemplate(null)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500">عنوان قالب (برای نمایش در لیست)</label>
+                            <input 
+                                type="text"
+                                value={editingSecTemplate.title || ''}
+                                onChange={e => setEditingSecTemplate({...editingSecTemplate, title: e.target.value})}
+                                className="w-full border rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500"
+                                placeholder="مثلا: نامه درخواست مرخصی"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500">موضوع نامه (اختیاری)</label>
+                            <input 
+                                type="text"
+                                value={editingSecTemplate.subject || ''}
+                                onChange={e => setEditingSecTemplate({...editingSecTemplate, subject: e.target.value})}
+                                className="w-full border rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500"
+                                placeholder="موضوعی که در پیش‌نویس درج شود"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-bold text-gray-500">متن نمونه نامه</label>
+                            
+                            <div className="flex gap-2">
+                                <input 
+                                    type="file"
+                                    accept=".docx"
+                                    ref={docxImportInputRef}
+                                    onChange={handleDocxImport}
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => docxImportInputRef.current?.click()}
+                                    className="flex items-center gap-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-[10px] font-bold px-2 py-1 rounded"
+                                    disabled={importingDocxFile}
+                                >
+                                    {importingDocxFile ? 'در حال تبدیل...' : (
+                                        <><UploadCloud size={12}/> استخراج متن از فایل Word</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                        <textarea
+                            value={editingSecTemplate.content || ''}
+                            onChange={e => setEditingSecTemplate({...editingSecTemplate, content: e.target.value})}
+                            className="w-full border rounded-xl p-3 text-sm focus:ring-2 focus:ring-purple-500 min-h-[300px] font-sans"
+                            placeholder="متن اصلی را اینجا بنویسید..."
+                        />
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t gap-2">
+                        <button 
+                            onClick={() => setEditingSecTemplate(null)}
+                            className="px-4 py-2 text-gray-500 bg-gray-100 rounded-xl text-sm font-bold hover:bg-gray-200"
+                        >
+                            انصراف
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (!editingSecTemplate.title || !editingSecTemplate.content) {
+                                    alert('عنوان قالب و متن آن الزامی است.');
+                                    return;
+                                }
+                                handleSaveSecTemplate(editingSecTemplate);
+                            }}
+                            className="px-6 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700"
+                        >
+                            ذخیره قالب
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {message && (<div className={`fixed bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full text-white text-sm font-bold shadow-2xl z-[100] animate-bounce ${message.includes('خطا') ? 'bg-red-600' : 'bg-green-600'}`}>{message}</div>)}
     </div>
   );

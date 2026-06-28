@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -267,11 +267,16 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
   const hasSecretariatAccess = currentUser.canAccessSecretariat === true || permissions.isSuperUser;
   let pendingSecretariatCount = 0;
   if (hasSecretariatAccess) {
-      pendingSecretariatCount = secretariatLetters.filter(l => 
-          l.status === 'در انتظار اقدام' && 
-          (!currentUser.secretariatAllowedCompanies || currentUser.secretariatAllowedCompanies.length === 0 || currentUser.secretariatAllowedCompanies.includes(l.companyId)) &&
-          (l.referredTo?.includes(currentUser.id) || permissions.isSuperUser)
-      ).length;
+      pendingSecretariatCount = secretariatLetters.filter(l => {
+          if (l.status !== 'در انتظار اقدام') return false;
+          if (currentUser.secretariatAllowedCompanies?.length > 0 && !currentUser.secretariatAllowedCompanies.includes(l.companyId)) return false;
+          
+          if (permissions.isSuperUser) return true;
+          const isReferred = l.referredTo?.includes(currentUser.id);
+          const needsSignature = l.signers?.some(s => s.userId === currentUser.id) && !l.approvedBy?.includes(currentUser.id);
+          
+          return isReferred || needsSignature;
+      }).length;
   }
 
   const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || pendingSecretariatCount > 0;
@@ -525,24 +530,24 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingPurchaseCount} مورد</span>
+                                    <span className="bg-yellow-400 text-yellow-900 text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingPurchaseCount} مورد</span>
                                 </div>
                                 <h3 className="text-xl font-black mb-1">تایید درخواست خرید</h3>
-                                <p className="text-emerald-50 text-xs opacity-85">درخواست‌های منتظر تایید شما</p>
+                                <p className="text-emerald-50 text-xs opacity-85">درخواست‌های خرید منتظر اقدام</p>
                             </div>
                         </div>
                     )}
 
                     {pendingSecretariatCount > 0 && hasSecretariatAccess && (
                         <div onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'secretariat' }))} className="bg-gradient-to-br from-[#f59e0b] to-[#d97706] rounded-2xl p-6 text-white shadow-lg shadow-amber-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><BookOpen size={100}/></div>
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><FileText size={100}/></div>
                             <div className="relative z-10">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-zinc-900/40 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingSecretariatCount} مورد</span>
+                                    <span className="bg-[#ff4e6e] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingSecretariatCount} مورد</span>
                                 </div>
-                                <h3 className="text-xl font-black mb-1">دبیرخانه (نامه‌های اداری)</h3>
-                                <p className="text-amber-50 text-xs opacity-85">نامه‌های منتظر اقدام شما</p>
+                                <h3 className="text-xl font-black mb-1">کارتابل نامه‌ها</h3>
+                                <p className="text-amber-50 text-xs opacity-85">نامه‌های اداری منتظر امضا/اقدام</p>
                             </div>
                         </div>
                     )}

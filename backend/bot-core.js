@@ -4080,6 +4080,25 @@ export const notifySecretariatLetter = async (letter, db) => {
             [{ text: '✍️ تایید و امضا', callback_data: `SEC_APPROVE_${letter.id}` }]
         ];
         
+        // --- IN-APP NOTIFICATION ---
+        const targetUsernames = userIdsToNotify.map(uid => db.users.find(u => u.id === uid)?.username).filter(Boolean);
+        if (targetUsernames.length > 0) {
+            if (!db.notifications) db.notifications = [];
+            db.notifications.push({
+                id: utils.generateUUID(),
+                title: "نامه اداری جدید",
+                body: `نامه با موضوع "${letter.subject}" منتظر بررسی یا امضای شماست.`,
+                url: "/secretariat",
+                targetRoles: null,
+                targetUsernames: targetUsernames,
+                excludeUsernames: null,
+                createdAt: Date.now(),
+                readBy: []
+            });
+            if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-1000);
+            dbManager.saveDb(db);
+        }
+        
         const baleModule = await import('./bale.js');
         const tgModule = await import('./telegram.js');
         
