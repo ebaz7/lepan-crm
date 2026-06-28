@@ -15,6 +15,8 @@ if (typeof window !== 'undefined' && ReactQuill) {
         'Sahel',
         'Gandom',
         'Estedad',
+        'Samim',
+        'Tanha',
         'Tahoma',
         'Arial',
         'Times New Roman',
@@ -76,7 +78,8 @@ import {
   Save,
   Award,
   Edit,
-  Eye
+  Eye,
+  Volume2
 } from 'lucide-react';
 
 import { 
@@ -161,6 +164,91 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   const [commentText, setCommentText] = useState('');
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Google Docs Style States & Handlers ---
+  const quillRef = useRef<any>(null);
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [activeMenu, setActiveMenu] = useState<'file' | 'edit' | 'insert' | 'format' | 'tools' | 'help' | null>(null);
+  const [isReadingAloud, setIsReadingAloud] = useState(false);
+
+  const handleFindReplace = () => {
+    if (!findText) return;
+    const updated = newLetterForm.content.split(findText).join(replaceText);
+    setNewLetterForm({ ...newLetterForm, content: updated });
+  };
+
+  const insertHTML = (html: string) => {
+    const quill = quillRef.current?.getEditor();
+    if (quill) {
+      const range = quill.getSelection();
+      const index = range ? range.index : quill.getLength();
+      quill.clipboard.dangerouslyPasteHTML(index, html);
+    }
+  };
+
+  const handleTTS = () => {
+    if (typeof window === 'undefined') return;
+    if (isReadingAloud) {
+      window.speechSynthesis.cancel();
+      setIsReadingAloud(false);
+    } else {
+      const cleanText = newLetterForm.content.replace(/<[^>]*>/g, '').trim();
+      if (!cleanText) return;
+      setIsReadingAloud(true);
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'fa-IR';
+      utterance.onend = () => {
+        setIsReadingAloud(false);
+      };
+      utterance.onerror = () => {
+        setIsReadingAloud(false);
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleUndo = () => {
+    const quill = quillRef.current?.getEditor();
+    if (quill) {
+      quill.history.undo();
+    }
+  };
+
+  const handleRedo = () => {
+    const quill = quillRef.current?.getEditor();
+    if (quill) {
+      quill.history.redo();
+    }
+  };
+
+  const handleSelectAll = () => {
+    const quill = quillRef.current?.getEditor();
+    if (quill) {
+      quill.setSelection(0, quill.getLength());
+    }
+  };
+
+  const handleClearFormatting = () => {
+    const quill = quillRef.current?.getEditor();
+    if (quill) {
+      const range = quill.getSelection();
+      if (range) {
+        quill.removeFormat(range.index, range.length);
+      }
+    }
+  };
+
+  // Close menus on click outside
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOutsideClick = () => {
+      setActiveMenu(null);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   // --- Settings Tab Form State ---
   const [companySettingsForm, setCompanySettingsForm] = useState<SecretariatCompanySettings>({
@@ -847,6 +935,103 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   return (
     <div className="space-y-6 animate-fade-in relative min-h-screen">
       <style>{`
+        /* Load additional Persian fonts from CDN */
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tanha-font@v0.9.0/dist/font-face.css');
+
+        /* Clear any overlaps and make pickers spacious */
+        .ql-snow .ql-picker.ql-font {
+          width: 170px !important;
+        }
+        .ql-snow .ql-picker.ql-size {
+          width: 140px !important;
+        }
+        .ql-snow .ql-picker.ql-header {
+          width: 130px !important;
+        }
+        .ql-snow .ql-picker-label {
+          padding-left: 8px !important;
+          padding-right: 24px !important;
+          background: #ffffff !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 6px !important;
+          font-weight: 500 !important;
+          color: #1e293b !important;
+          font-size: 11px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          height: 28px !important;
+        }
+        .ql-snow .ql-picker-label::before {
+          line-height: 28px !important;
+        }
+        .ql-snow .ql-picker-options {
+          border-radius: 8px !important;
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05) !important;
+          border: 1px solid #cbd5e1 !important;
+          padding: 6px !important;
+          background: white !important;
+        }
+        .ql-snow .ql-picker-item {
+          padding: 4px 8px !important;
+          border-radius: 4px !important;
+        }
+        .ql-snow .ql-picker-item:hover {
+          background-color: #f1f5f9 !important;
+        }
+        /* Style Quill toolbar */
+        .ql-toolbar.ql-snow {
+          background: #f8fafc !important;
+          border: 1px solid #cbd5e1 !important;
+          border-top-left-radius: 12px !important;
+          border-top-right-radius: 12px !important;
+          padding: 8px 12px !important;
+          display: flex !important;
+          flex-wrap: wrap !important;
+          align-items: center !important;
+          gap: 4px !important;
+        }
+        /* Editor panel */
+        .ql-container.ql-snow {
+          border: 1px solid #cbd5e1 !important;
+          border-top: none !important;
+          border-bottom-left-radius: 12px !important;
+          border-bottom-right-radius: 12px !important;
+          background: white !important;
+        }
+        /* Custom toolbar icon sizes */
+        .ql-snow .ql-toolbar button {
+          width: 30px !important;
+          height: 30px !important;
+          padding: 4px !important;
+          border-radius: 6px !important;
+          transition: all 0.2s;
+        }
+        .ql-snow .ql-toolbar button:hover {
+          background-color: rgba(0,0,0,0.05) !important;
+          color: #6366f1 !important;
+        }
+        .ql-snow .ql-toolbar button.ql-active {
+          background-color: #e0e7ff !important;
+          color: #4f46e5 !important;
+        }
+        /* Separation in toolbar */
+        .ql-snow .ql-toolbar .ql-formats {
+          margin-right: 0px !important;
+          margin-left: 8px !important;
+          border-left: 1px solid #e2e8f0;
+          padding-left: 8px;
+          display: inline-flex !important;
+          align-items: center;
+          gap: 2px;
+        }
+        .ql-snow .ql-toolbar .ql-formats:first-child {
+          border-left: none;
+          padding-left: 0;
+          margin-left: 0;
+        }
+
         /* Custom Quill Toolbar Fonts Dropdown labels & typography rendering in Persian */
         .ql-snow .ql-picker.ql-font .ql-picker-label::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item::before {
@@ -855,122 +1040,132 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Vazirmatn"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Vazirmatn"]::before {
-          content: 'وزیر متن (Vazirmatn)' !important;
+          content: 'وزیر متن' !important;
           font-family: 'Vazirmatn', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Shabnam"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Shabnam"]::before {
-          content: 'شبنم (Shabnam)' !important;
+          content: 'شبنم' !important;
           font-family: 'Shabnam', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Sahel"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Sahel"]::before {
-          content: 'ساحل (Sahel)' !important;
+          content: 'ساحل' !important;
           font-family: 'Sahel', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Gandom"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Gandom"]::before {
-          content: 'گندم (Gandom)' !important;
+          content: 'گندم' !important;
           font-family: 'Gandom', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Estedad"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Estedad"]::before {
-          content: 'استعداد (Estedad)' !important;
+          content: 'استعداد' !important;
           font-family: 'Estedad', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Samim"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Samim"]::before {
+          content: 'صمیم' !important;
+          font-family: 'Samim', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Tanha"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Tanha"]::before {
+          content: 'تنها' !important;
+          font-family: 'Tanha', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Tahoma"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Tahoma"]::before {
-          content: 'تاهوما (Tahoma)' !important;
+          content: 'تاهوما' !important;
           font-family: 'Tahoma', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Arial"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before {
-          content: 'آریال (Arial)' !important;
+          content: 'Arial' !important;
           font-family: 'Arial', sans-serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Times New Roman"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Times New Roman"]::before {
-          content: 'تایمز (Times New Roman)' !important;
+          content: 'Times' !important;
           font-family: 'Times New Roman', serif !important;
         }
         .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Courier New"]::before,
         .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Courier New"]::before {
-          content: 'کوریر (Courier New)' !important;
+          content: 'Courier' !important;
           font-family: 'Courier New', monospace !important;
         }
 
         /* Custom Font Sizes Dropdown labels in Quill Snow theme */
         .ql-snow .ql-picker.ql-size .ql-picker-label::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item::before {
-          content: '14px (استاندارد)' !important;
+          content: '۱۴ پیکسل (پیش‌فرض)' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="9px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="9px"]::before {
-          content: '9px (بسیار ریز)' !important;
+          content: '۹ ریز' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="10px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="10px"]::before {
-          content: '10px' !important;
+          content: '۱۰ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="11px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="11px"]::before {
-          content: '11px (ریز)' !important;
+          content: '۱۱ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before {
-          content: '12px' !important;
+          content: '۱۲ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="13px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="13px"]::before {
-          content: '13px' !important;
+          content: '۱۳ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="14px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="14px"]::before {
-          content: '14px (پیش‌فرض)' !important;
+          content: '۱۴ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="15px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="15px"]::before {
-          content: '15px' !important;
+          content: '۱۵ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="16px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before {
-          content: '16px (بزرگ)' !important;
+          content: '۱۶ بزرگ' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="17px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="17px"]::before {
-          content: '17px' !important;
+          content: '۱۷ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="18px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="18px"]::before {
-          content: '18px (تیتر ریز)' !important;
+          content: '۱۸ تیتر ریز' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="20px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before {
-          content: '20px' !important;
+          content: '۲۰ متوسط' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="22px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="22px"]::before {
-          content: '22px (سربرگ)' !important;
+          content: '۲۲ سربرگ' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="24px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="24px"]::before {
-          content: '24px (تیتر متوسط)' !important;
+          content: '۲۴ بزرگ' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="28px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="28px"]::before {
-          content: '28px' !important;
+          content: '۲۸ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="32px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="32px"]::before {
-          content: '32px (تیتر بزرگ)' !important;
+          content: '۳۲ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="36px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="36px"]::before {
-          content: '36px' !important;
+          content: '۳۶ پیکسل' !important;
         }
         .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="48px"]::before,
         .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="48px"]::before {
-          content: '48px' !important;
+          content: '۴۸ عظیم' !important;
         }
 
         /* Force editor content alignment and typography defaults */
@@ -1263,7 +1458,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-gray-900 border dark:border-white/10 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto text-right"
+              className="bg-slate-50 dark:bg-slate-900 border dark:border-white/10 rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto text-right"
               dir="rtl"
             >
               <div className="flex items-center justify-between border-b pb-3">
@@ -1374,64 +1569,332 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </div>
 
                 {/* Content Textarea with insert template option */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500 font-bold">متن نامه اداری</label>
-                      <div className="flex items-center gap-1 bg-slate-100 border px-2 py-0.5 rounded-md text-xs">
-                        <span className="text-[10px] text-gray-500 font-bold">بزرگنمایی:</span>
-                        <button
-                          type="button"
-                          onClick={() => setEditorZoom(prev => Math.max(80, prev - 10))}
-                          className="px-1 text-slate-700 hover:bg-slate-200 rounded font-black text-xs"
-                          title="کوچک‌نمایی"
-                        >
-                          -
-                        </button>
-                        <span className="font-bold font-mono text-[10px] min-w-[30px] text-center">{editorZoom}%</span>
-                        <button
-                          type="button"
-                          onClick={() => setEditorZoom(prev => Math.min(200, prev + 10))}
-                          className="px-1 text-slate-700 hover:bg-slate-200 rounded font-black text-xs"
-                          title="بزرگ‌نمایی"
-                        >
-                          +
-                        </button>
-                      </div>
+                <div className="space-y-3">
+                  {/* Google Docs Styled Menu Bar */}
+                  <div className="flex items-center flex-wrap gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 border dark:border-white/10 rounded-t-xl text-xs font-bold text-slate-700 dark:text-slate-200 select-none relative z-40">
+                    {/* Doc Icon & Subject */}
+                    <div className="flex items-center gap-1.5 border-l border-slate-300 dark:border-slate-700 pl-3 ml-1 text-purple-600 dark:text-purple-400">
+                      <FileText size={15} />
+                      <span className="truncate max-w-[150px]">{newLetterForm.subject || 'پیش‌نویس بدون نام'}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleInsertMinutesTemplate}
-                      className="text-[10px] text-purple-600 hover:text-purple-800 font-black flex items-center gap-0.5 bg-purple-50 px-2 py-0.5 rounded"
-                    >
-                      <FileCheck size={12} /> درج قالب صورتجلسه پیش‌فرض شرکت
-                    </button>
+
+                    {/* File Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'file' ? null : 'file'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'file' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        پرونده
+                      </button>
+                      {activeMenu === 'file' && (
+                        <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={handleInsertMinutesTemplate}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>درج قالب صورتجلسه پیش‌فرض</span>
+                            <FileCheck size={12} className="text-slate-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewLetterForm({ ...newLetterForm, content: '' })}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between text-red-600 dark:text-red-400"
+                          >
+                            <span>پاک کردن کل متن سند</span>
+                            <Trash2 size={12} className="text-red-400" />
+                          </button>
+                          <hr className="my-1 border-slate-100 dark:border-slate-700" />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewLetterModal(false)}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>خروج و بستن ویرایشگر</span>
+                            <X size={12} className="text-slate-400" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Edit Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'edit' ? null : 'edit'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'edit' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        ویرایش
+                      </button>
+                      {activeMenu === 'edit' && (
+                        <div className="absolute right-0 mt-1.5 w-48 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={handleUndo}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>واگرد (Undo)</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Ctrl+Z</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRedo}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>مجدد (Redo)</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Ctrl+Y</span>
+                          </button>
+                          <hr className="my-1 border-slate-100 dark:border-slate-700" />
+                          <button
+                            type="button"
+                            onClick={handleSelectAll}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>انتخاب همه متن</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Ctrl+A</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleClearFormatting}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>پاک کردن قالب‌بندی‌ها</span>
+                            <Trash2 size={12} className="text-slate-400" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Insert Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'insert' ? null : 'insert'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'insert' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        درج
+                      </button>
+                      {activeMenu === 'insert' && (
+                        <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => insertHTML('<table style="width:100%; border-collapse:collapse; margin:10px 0;"><tr style="background:#f8fafc;"><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">ردیف</th><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">عنوان</th><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">توضیحات</th></tr><tr><td style="border:1px solid #cbd5e1; padding:8px;">۱</td><td style="border:1px solid #cbd5e1; padding:8px;"></td><td style="border:1px solid #cbd5e1; padding:8px;"></td></tr><tr><td style="border:1px solid #cbd5e1; padding:8px;">۲</td><td style="border:1px solid #cbd5e1; padding:8px;"></td><td style="border:1px solid #cbd5e1; padding:8px;"></td></tr></table>')}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>جدول اداری خام</span>
+                            <Award size={12} className="text-slate-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertHTML('<hr style="border:0; border-top:1px solid #cbd5e1; margin:15px 0;" />')}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>خط افقی جداکننده</span>
+                            <span className="text-[10px] text-slate-400">---</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertHTML(`<b>تاریخ: ${newLetterForm.date || getCurrentShamsiDate()}</b>`)}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>تاریخ امروز</span>
+                            <Calendar size={12} className="text-slate-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertHTML(`<p style="text-align:left; margin-top:30px; font-weight:bold;">امضای: ${newLetterForm.sender || 'فرستنده'}</p>`)}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>امضای فرستنده</span>
+                            <UserCheck size={12} className="text-slate-400" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tools Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'tools' ? null : 'tools'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'tools' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        ابزارها
+                      </button>
+                      {activeMenu === 'tools' && (
+                        <div className="absolute right-0 mt-1.5 w-56 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cleanText = (newLetterForm.content || '').replace(/<[^>]*>/g, '').trim();
+                              const wCount = cleanText ? cleanText.split(/\s+/).length : 0;
+                              const cCount = cleanText.length;
+                              const minutes = Math.ceil(wCount / 180);
+                              alert(`آمار نگارش سند:\n\nتعداد کلمات: ${wCount} کلمه\nتعداد حروف: ${cCount} کاراکتر\nزمان تخمینی مطالعه: ${minutes} دقیقه`);
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>شمارش کلمات</span>
+                            <FileText size={12} className="text-slate-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowFindReplace(!showFindReplace)}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>جستجو و جایگزینی (Find)</span>
+                            <Edit size={12} className="text-slate-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleTTS}
+                            className={`w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between ${isReadingAloud ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 font-bold' : ''}`}
+                          >
+                            <span>{isReadingAloud ? 'توقف خوانش صوتی' : 'خوانش صوتی با هوش مصنوعی'}</span>
+                            <Volume2 size={12} className={isReadingAloud ? 'text-indigo-600' : 'text-slate-400'} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Help Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'help' ? null : 'help'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'help' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        راهنما
+                      </button>
+                      {activeMenu === 'help' && (
+                        <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-2xl py-2 px-3 text-right text-[11px] z-50 text-slate-800 dark:text-slate-200 space-y-1.5 leading-relaxed">
+                          <h5 className="font-black text-purple-700 dark:text-purple-400 border-b dark:border-slate-700 pb-1">نکات نگارش رسمی و سازمانی</h5>
+                          <p>۱. جملات کوتاه، شفاف و عاری از کلمات مبهم بنویسید.</p>
+                          <p>۲. همواره لحن محترمانه و قاطع اداری را حفظ نمایید.</p>
+                          <p>۳. برای تراز بندی پاراگراف‌ها از کلیدهای چینش متن استفاده کنید.</p>
+                          <p>۴. پیش از ارسال، آمار شمارش کلمات و غلط‌یابی املایی را چک کنید.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick zoom controls on the left */}
+                    <div className="mr-auto flex items-center gap-1.5 bg-white dark:bg-slate-900 border dark:border-white/10 px-2 py-0.5 rounded-lg text-xs">
+                      <span className="text-[10px] text-slate-400 font-bold">بزرگنمایی صفحه:</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditorZoom(prev => Math.max(80, prev - 10))}
+                        className="w-5 h-5 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded font-black text-sm"
+                        title="کوچک‌نمایی"
+                      >
+                        -
+                      </button>
+                      <span className="font-bold font-mono text-[10px] min-w-[30px] text-center dark:text-white">{editorZoom}%</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditorZoom(prev => Math.min(200, prev + 10))}
+                        className="w-5 h-5 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded font-black text-sm"
+                        title="بزرگ‌نمایی"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                  <div 
-                    className="bg-white rounded-lg border border-gray-300 min-h-[300px]"
-                    style={{ fontSize: `${14 * (editorZoom / 100)}px` }}
-                  >
-                    <ReactQuill 
-                      theme="snow"
-                      value={newLetterForm.content}
-                      onChange={val => setNewLetterForm({...newLetterForm, content: val})}
-                      placeholder="متن رسمی و اداری خود را اینجا بنویسید..."
-                      className="min-h-[250px] text-sm"
-                      modules={{
-                        toolbar: [
-                          [{ 'font': ['Vazirmatn', 'Shabnam', 'Sahel', 'Gandom', 'Estedad', 'Tahoma', 'Arial', 'Times New Roman', 'Courier New'] }, 
-                           { 'size': ['9px', '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '28px', '32px', '36px', '48px'] }],
-                          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                          ['bold', 'italic', 'underline', 'strike'],
-                          [{ 'color': [] }, { 'background': [] }],
-                          [{ 'script': 'sub'}, { 'script': 'super' }],
-                          [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                          [{ 'align': [] }, { 'direction': 'rtl' }],
-                          ['link', 'blockquote'],
-                          ['clean']
-                        ]
+
+                  {/* Find & Replace Bar */}
+                  {showFindReplace && (
+                    <div className="flex flex-wrap items-center gap-3 p-3 bg-white dark:bg-slate-800 border-x border-b dark:border-white/10 rounded-b-lg text-xs animate-slide-down">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-slate-400 font-bold">جستجو:</label>
+                        <input
+                          type="text"
+                          value={findText}
+                          onChange={e => setFindText(e.target.value)}
+                          placeholder="کلمه مورد نظر..."
+                          className="border dark:border-white/10 dark:bg-slate-900 rounded px-2 py-1 text-xs w-36"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-slate-400 font-bold">جایگزینی با:</label>
+                        <input
+                          type="text"
+                          value={replaceText}
+                          onChange={e => setReplaceText(e.target.value)}
+                          placeholder="کلمه جدید..."
+                          className="border dark:border-white/10 dark:bg-slate-900 rounded px-2 py-1 text-xs w-36"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleFindReplace}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded"
+                      >
+                        جایگزینی همه موارد
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowFindReplace(false)}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        لغو
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Virtual Google Docs Workspace Canvas */}
+                  <div className="bg-slate-100 dark:bg-slate-950 p-6 md:p-8 rounded-b-xl border border-slate-200 dark:border-slate-800 max-h-[550px] overflow-y-auto flex justify-center w-full relative">
+                    <div 
+                      className="bg-white dark:bg-gray-900 shadow-xl border border-slate-300 dark:border-slate-800 rounded-sm p-[1.5cm] mx-auto transition-all duration-300 google-docs-paper text-right relative flex flex-col justify-between"
+                      style={{
+                        width: newLetterForm.paperSize === 'A5' 
+                          ? (newLetterForm.orientation === 'landscape' ? '100%' : '148mm')
+                          : (newLetterForm.orientation === 'landscape' ? '100%' : '210mm'),
+                        minHeight: newLetterForm.paperSize === 'A5'
+                          ? (newLetterForm.orientation === 'landscape' ? '148mm' : '210mm')
+                          : (newLetterForm.orientation === 'landscape' ? '210mm' : '297mm'),
+                        fontSize: `${14 * (editorZoom / 100)}px`
                       }}
-                    />
+                      dir="rtl"
+                    >
+                      {(() => {
+                        const cleanText = (newLetterForm.content || '').replace(/<[^>]*>/g, '').trim();
+                        const wCount = cleanText ? cleanText.split(/\s+/).length : 0;
+                        const cCount = cleanText.length;
+                        return (
+                          <>
+                            <ReactQuill 
+                              ref={quillRef}
+                              theme="snow"
+                              value={newLetterForm.content}
+                              onChange={val => setNewLetterForm({...newLetterForm, content: val})}
+                              placeholder="متن رسمی و اداری خود را اینجا بنویسید..."
+                              className="text-sm border-none ql-editor-borderless flex-1"
+                              modules={{
+                                toolbar: [
+                                  [{ 'font': ['Vazirmatn', 'Shabnam', 'Sahel', 'Gandom', 'Estedad', 'Samim', 'Tanha', 'Tahoma', 'Arial', 'Times New Roman', 'Courier New'] }, 
+                                   { 'size': ['9px', '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '28px', '32px', '36px', '48px'] }],
+                                  [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                                  ['bold', 'italic', 'underline', 'strike'],
+                                  [{ 'color': [] }, { 'background': [] }],
+                                  [{ 'script': 'sub'}, { 'script': 'super' }],
+                                  [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                                  [{ 'align': [] }, { 'direction': 'rtl' }],
+                                  ['link', 'blockquote'],
+                                  ['clean']
+                                ]
+                              }}
+                            />
+
+                            {/* Realtime Stats Display */}
+                            <div className="absolute bottom-3 left-4 select-none bg-slate-50 dark:bg-slate-800 border dark:border-white/5 rounded px-2 py-1 text-[10px] text-slate-400 dark:text-slate-300 font-bold flex items-center gap-2 shadow-sm pointer-events-none">
+                              <span>کلمات: <b className="text-slate-700 dark:text-white font-mono">{wCount}</b></span>
+                              <span className="text-slate-300 dark:text-slate-700">|</span>
+                              <span>کاراکترها: <b className="text-slate-700 dark:text-white font-mono">{cCount}</b></span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
 
