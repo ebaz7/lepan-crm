@@ -100,10 +100,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     attachments: [] as SecretariatLetterAttachment[],
     addCompanyStamp: false,
     signOffText: 'با تشکر',
-    signers: [] as {name: string, title: string}[],
+    signers: [] as {name: string, title: string, userId?: string}[],
     paperSize: 'A4' as 'A4'|'A5',
     orientation: 'portrait' as 'portrait'|'landscape',
-    signaturePosition: 'bottom_left' as 'bottom_left'|'bottom_center'|'bottom_right'
+    signaturePosition: 'bottom_left' as 'bottom_left'|'bottom_center'|'bottom_right',
+    hideSubjectInLetter: false,
+    hideSalutationInLetter: false
   };
   const [newLetterForm, setNewLetterForm] = useState(initialFormState);
 
@@ -112,6 +114,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     setEditingLetterId(null);
   };
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [editorZoom, setEditorZoom] = useState<number>(100);
   const [commentText, setCommentText] = useState('');
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -280,7 +283,9 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       signers: letter.signers || [],
       paperSize: letter.paperSize || 'A4',
       orientation: letter.orientation || 'portrait',
-      signaturePosition: letter.signaturePosition || 'bottom_left'
+      signaturePosition: letter.signaturePosition || 'bottom_left',
+      hideSubjectInLetter: letter.hideSubjectInLetter || false,
+      hideSalutationInLetter: letter.hideSalutationInLetter || false
     });
     setEditingLetterId(letter.id);
     setSelectedLetterForView(null);
@@ -311,6 +316,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         paperSize: newLetterForm.paperSize,
         orientation: newLetterForm.orientation,
         signaturePosition: newLetterForm.signaturePosition,
+        hideSubjectInLetter: newLetterForm.hideSubjectInLetter,
+        hideSalutationInLetter: newLetterForm.hideSalutationInLetter,
         updatedAt: Date.now()
       };
 
@@ -344,6 +351,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         paperSize: newLetterForm.paperSize,
         orientation: newLetterForm.orientation,
         signaturePosition: newLetterForm.signaturePosition,
+        hideSubjectInLetter: newLetterForm.hideSubjectInLetter,
+        hideSalutationInLetter: newLetterForm.hideSalutationInLetter,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         createdBy: currentUser.fullName
@@ -1017,12 +1026,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 1. REGISTER NEW LETTER MODAL */}
       <AnimatePresence>
         {showNewLetterModal && (
-          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-gray-900 border dark:border-white/10 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto text-right"
+              className="bg-white dark:bg-gray-900 border dark:border-white/10 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto text-right"
               dir="rtl"
             >
               <div className="flex items-center justify-between border-b pb-3">
@@ -1110,12 +1119,54 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                     placeholder="مثال: درخواست تأمین تجهیزات حفاظتی"
                     className="w-full border rounded-lg px-3 py-2 text-xs"
                   />
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600 font-bold cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={newLetterForm.hideSubjectInLetter}
+                        onChange={e => setNewLetterForm({...newLetterForm, hideSubjectInLetter: e.target.checked})}
+                        className="rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      حذف موضوع از متن نامه نهایی
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600 font-bold cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={newLetterForm.hideSalutationInLetter}
+                        onChange={e => setNewLetterForm({...newLetterForm, hideSalutationInLetter: e.target.checked})}
+                        className="rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      حذف عبارت «با سلام و احترام» از متن نامه نهایی
+                    </label>
+                  </div>
                 </div>
 
                 {/* Content Textarea with insert template option */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-500 font-bold">متن نامه اداری</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-500 font-bold">متن نامه اداری</label>
+                      <div className="flex items-center gap-1 bg-slate-100 border px-2 py-0.5 rounded-md text-xs">
+                        <span className="text-[10px] text-gray-500 font-bold">بزرگنمایی:</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditorZoom(prev => Math.max(80, prev - 10))}
+                          className="px-1 text-slate-700 hover:bg-slate-200 rounded font-black text-xs"
+                          title="کوچک‌نمایی"
+                        >
+                          -
+                        </button>
+                        <span className="font-bold font-mono text-[10px] min-w-[30px] text-center">{editorZoom}%</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditorZoom(prev => Math.min(200, prev + 10))}
+                          className="px-1 text-slate-700 hover:bg-slate-200 rounded font-black text-xs"
+                          title="بزرگ‌نمایی"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={handleInsertMinutesTemplate}
@@ -1124,7 +1175,10 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       <FileCheck size={12} /> درج قالب صورتجلسه پیش‌فرض شرکت
                     </button>
                   </div>
-                  <div className="bg-white rounded-lg border border-gray-300 min-h-[300px]">
+                  <div 
+                    className="bg-white rounded-lg border border-gray-300 min-h-[300px]"
+                    style={{ fontSize: `${14 * (editorZoom / 100)}px` }}
+                  >
                     <ReactQuill 
                       theme="snow"
                       value={newLetterForm.content}
@@ -1366,12 +1420,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 2. DETAILED LETTER VIEW MODAL */}
       <AnimatePresence>
         {selectedLetterForView && (
-          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-gray-900 border dark:border-white/10 rounded-2xl max-w-3xl w-full p-6 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto text-right"
+              className="bg-white dark:bg-gray-900 border dark:border-white/10 rounded-2xl max-w-3xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto text-right"
               dir="rtl"
             >
               <div className="flex items-center justify-between border-b pb-3">
@@ -1494,27 +1548,55 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   )}
 
                   {/* Letter Official Export PDF/DOCX */}
-                  <div className="space-y-1.5 pt-3 border-t">
+                  <div className="space-y-2 pt-3 border-t">
                     <span className="text-[11px] font-bold text-slate-500 block">خروجی رسمی نامه اداری:</span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <a 
-                        href={`/api/secretariat/letters/${selectedLetterForView.id}/pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-xl py-2 text-[11px] font-bold transition-all"
-                      >
-                        <FileText size={14} />
-                        دانلود خروجی PDF
-                      </a>
-                      <a 
-                        href={`/api/secretariat/letters/${selectedLetterForView.id}/docx`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl py-2 text-[11px] font-bold transition-all"
-                      >
-                        <FileText size={14} />
-                        دانلود خروجی Word
-                      </a>
+                    
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <a 
+                          href={`/api/secretariat/letters/${selectedLetterForView.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-xl py-2 text-[10px] font-bold transition-all"
+                          title="دانلود با سربرگ پیش‌فرض شرکت"
+                        >
+                          <FileText size={13} />
+                          PDF با سربرگ
+                        </a>
+                        <a 
+                          href={`/api/secretariat/letters/${selectedLetterForView.id}/pdf?noLetterhead=true`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1 bg-rose-100/50 border border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl py-2 text-[10px] font-bold transition-all"
+                          title="دانلود بدون سربرگ (مناسب چاپ روی کاغذ سربرگ‌دار)"
+                        >
+                          <FileText size={13} />
+                          PDF بدون سربرگ
+                        </a>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <a 
+                          href={`/api/secretariat/letters/${selectedLetterForView.id}/docx`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl py-2 text-[10px] font-bold transition-all"
+                          title="دانلود سند Word با سربرگ"
+                        >
+                          <FileText size={13} />
+                          Word با سربرگ
+                        </a>
+                        <a 
+                          href={`/api/secretariat/letters/${selectedLetterForView.id}/docx?noLetterhead=true`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1 bg-sky-100/50 border border-sky-200 text-sky-700 hover:bg-sky-100 rounded-xl py-2 text-[10px] font-bold transition-all"
+                          title="دانلود سند Word بدون سربرگ (مناسب کاغذ سربرگ‌دار)"
+                        >
+                          <FileText size={13} />
+                          Word بدون سربرگ
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1689,12 +1771,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 3. HIGH QUALITY PRINT & PDF GENERATOR LAYOUT MODAL */}
       <AnimatePresence>
         {isPrintMode && (
-          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[96vh] overflow-y-auto text-right"
+              className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-right"
               dir="rtl"
             >
               {/* UI controls that are hidden on print */}
@@ -1847,10 +1929,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 `}>
                   
                   {/* Salutations */}
-                  <div className="font-bold space-y-2 mb-4">
-                    <div className="text-base font-medium">موضوع: {isPrintMode.subject}</div>
-                    <div className="text-base font-medium">با سلام و احترام،</div>
-                  </div>
+                  {(!isPrintMode.hideSubjectInLetter || !isPrintMode.hideSalutationInLetter) && (
+                    <div className="font-bold space-y-2 mb-4">
+                      {!isPrintMode.hideSubjectInLetter && <div className="text-base font-medium">موضوع: {isPrintMode.subject}</div>}
+                      {!isPrintMode.hideSalutationInLetter && <div className="text-base font-medium">با سلام و احترام،</div>}
+                    </div>
+                  )}
 
                   {/* Body Content from Quill */}
                   <div 

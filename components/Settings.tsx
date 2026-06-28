@@ -65,7 +65,9 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       letterheadFontFamily: 'Vazirmatn',
       metadataTop: 25,
       metadataLeft: 20,
-      metadataFontSize: 11
+      metadataFontSize: 11,
+      metadataOpacity: 100,
+      metadataFontWeight: 'bold'
   });
   const [isUploadingSecLetterhead, setIsUploadingSecLetterhead] = useState(false);
   const [isUploadingSecStamp, setIsUploadingSecStamp] = useState(false);
@@ -324,7 +326,9 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
         letterheadFontFamily: existing.letterheadFontFamily || 'Vazirmatn',
         metadataTop: existing.metadataTop ?? 25,
         metadataLeft: existing.metadataLeft ?? 20,
-        metadataFontSize: existing.metadataFontSize ?? 11
+        metadataFontSize: existing.metadataFontSize ?? 11,
+        metadataOpacity: existing.metadataOpacity ?? 100,
+        metadataFontWeight: existing.metadataFontWeight || 'bold'
       });
     } else {
       setSecSettingsForm({
@@ -340,7 +344,9 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
         letterheadFontFamily: 'Vazirmatn',
         metadataTop: 25,
         metadataLeft: 20,
-        metadataFontSize: 11
+        metadataFontSize: 11,
+        metadataOpacity: 100,
+        metadataFontWeight: 'bold'
       });
     }
   }, [selectedCompanyIdForSec, secConfigs]);
@@ -2031,13 +2037,40 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                             />
                                                         </div>
                                                         <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">میزان پررنگی / کدر بودن اطلاعات (درصد)</label>
+                                                            <input 
+                                                                type="range" min="10" max="100" step="5"
+                                                                value={secSettingsForm.metadataOpacity ?? 100}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, metadataOpacity: Number(e.target.value)})}
+                                                                className="w-full text-purple-600"
+                                                            />
+                                                            <div className="text-center text-xs font-bold text-purple-600">{secSettingsForm.metadataOpacity ?? 100}%</div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">میزان ضخامت قلم اطلاعات</label>
+                                                            <select 
+                                                                value={secSettingsForm.metadataFontWeight || 'bold'}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, metadataFontWeight: e.target.value as any})}
+                                                                className="w-full border rounded-xl p-2.5 text-xs focus:ring-2"
+                                                            >
+                                                                <option value="normal">Normal (معمولی)</option>
+                                                                <option value="bold">Bold (ضخیم)</option>
+                                                                <option value="bolder">Bolder (خیلی ضخیم)</option>
+                                                                <option value="black">Black (کاملا سیاه)</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
                                                             <label className="text-xs font-bold text-gray-500 block mb-1">نوع فونت نامه</label>
                                                             <select 
                                                                 value={secSettingsForm.letterheadFontFamily || 'Vazirmatn'}
                                                                 onChange={e => setSecSettingsForm({...secSettingsForm, letterheadFontFamily: e.target.value})}
                                                                 className="w-full border rounded-xl p-2.5 text-xs focus:ring-2"
                                                             >
-                                                                <option value="Vazirmatn">Vazirmatn (پیش‌فرض)</option>
+                                                                <option value="Vazirmatn">Vazirmatn (وزیرمتن - پیش‌فرض)</option>
+                                                                <option value="Shabnam">Shabnam (شبنم)</option>
+                                                                <option value="Sahel">Sahel (ساحل)</option>
+                                                                <option value="Gandom">Gandom (گندم)</option>
+                                                                <option value="Samim">Samim (سمیم)</option>
                                                                 <option value="Tahoma">Tahoma</option>
                                                                 <option value="Arial">Arial</option>
                                                                 <option value="B Nazanin">B Nazanin</option>
@@ -2062,6 +2095,8 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                                     left: `${secSettingsForm.metadataLeft}mm`,
                                                                     fontSize: `${secSettingsForm.metadataFontSize}px`,
                                                                     fontFamily: secSettingsForm.letterheadFontFamily,
+                                                                    opacity: (secSettingsForm.metadataOpacity ?? 100) / 100,
+                                                                    fontWeight: secSettingsForm.metadataFontWeight || 'bold',
                                                                     lineHeight: '1.5'
                                                                 }}
                                                             >

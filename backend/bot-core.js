@@ -4036,13 +4036,23 @@ export const notifySecretariatLetter = async (letter, db) => {
         
         let userIdsToNotify = [];
         if (letter.referredTo && letter.referredTo.length > 0) {
-            userIdsToNotify = letter.referredTo;
+            userIdsToNotify = [...letter.referredTo];
         } else {
             const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
             if (companySettings) {
                 userIdsToNotify = letter.section === 'headquarters'
-                    ? companySettings.headquartersAccessTokens || []
-                    : companySettings.factoryAccessTokens || [];
+                    ? [...(companySettings.headquartersAccessTokens || [])]
+                    : [...(companySettings.factoryAccessTokens || [])];
+            }
+        }
+        
+        // Also add signers if they are users and have not approved yet
+        if (letter.signers && letter.signers.length > 0) {
+            const signerUserIds = letter.signers.map(s => s.userId).filter(Boolean);
+            for (const suid of signerUserIds) {
+                if (!userIdsToNotify.includes(suid)) {
+                    userIdsToNotify.push(suid);
+                }
             }
         }
         

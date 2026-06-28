@@ -1037,22 +1037,32 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
         
         await page.setViewport({ width: isA5 ? 600 : 800, height: isA5 ? 850 : 1100, deviceScaleFactor: 2 });
         
+        const makeAbsolute = (url) => {
+            if (!url) return '';
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+            const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+            return `http://localhost:3000${cleanUrl}`;
+        };
+
         const hasCustomPos = companySettings?.metadataTop !== undefined || companySettings?.metadataLeft !== undefined;
         
         const fontFamily = companySettings?.letterheadFontFamily || 'Tahoma';
         const metadataTop = companySettings?.metadataTop ?? 25;
         const metadataLeft = companySettings?.metadataLeft ?? 20;
         const metadataFontSize = companySettings?.metadataFontSize ?? 11;
+        const metadataOpacity = (companySettings?.metadataOpacity ?? 100) / 100;
+        const metadataFontWeight = companySettings?.metadataFontWeight || 'bold';
+        
         const stampSize = companySettings?.companyStampSize || 120;
         const stampOpacity = (companySettings?.companyStampOpacity || 70) / 100;
 
         let letterheadHtml = '';
         if (companySettings?.letterheadUrl) {
             letterheadHtml = `
-                <img src="${companySettings.letterheadUrl}" class="letterhead-bg" />
+                <img src="${makeAbsolute(companySettings.letterheadUrl)}" class="letterhead-bg" />
                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left-default-on-img'}">
-                    <div>شماره: ${letter.letterNumber}</div>
-                    <div>تاریخ: ${letter.date}</div>
+                    <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.letterNumber}</span></div>
+                    <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.date}</span></div>
                     <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
                 </div>
             `;
@@ -1060,8 +1070,8 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
             letterheadHtml = `
                 <div class="default-letterhead">
                     <div class="lh-right">
-                        <div>شماره: ${letter.letterNumber}</div>
-                        <div>تاریخ: ${letter.date}</div>
+                        <div>شماره: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.letterNumber}</span></div>
+                        <div>تاریخ: <span style="direction: ltr; display: inline-block; unicode-bidi: embed;">${letter.date}</span></div>
                         <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
                     </div>
                     <div class="lh-center">
@@ -1081,21 +1091,49 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
         if (sigPos === 'bottom_right') sigStyle = 'text-align: center; margin-left: auto; margin-right: 0;';
 
         const stampHtml = letter.addCompanyStamp && companySettings?.companyStampUrl 
-            ? `<img src="${companySettings.companyStampUrl}" class="company-stamp" />` 
+            ? `<img src="${makeAbsolute(companySettings.companyStampUrl)}" class="company-stamp" />` 
             : '';
 
         let signersHtml = '';
         if (letter.signers && letter.signers.length > 0) {
             signersHtml = `
-                <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
-                    ${letter.signers.map(s => `
-                        <div style="display: flex; flex-direction: column; align-items: center;">
-                            <div style="font-weight: bold; font-size: 14px;">${s.name}</div>
-                            <div style="font-weight: bold; font-size: 12px; color: #555;">${s.title}</div>
-                        </div>
-                    `).join('')}
+                <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
+                    ${letter.signers.map(s => {
+                        let signerSigUrl = '';
+                        if (s.userId && letter.approvedBy && letter.signatureImageUrls) {
+                            const approverIdx = letter.approvedBy.indexOf(s.userId);
+                            if (approverIdx !== -1) {
+                                signerSigUrl = makeAbsolute(letter.signatureImageUrls[approverIdx]);
+                            }
+                        }
+                        return `
+                            <div style="display: flex; flex-direction: column; align-items: center; min-w: 100px;">
+                                <div style="font-weight: bold; font-size: 14px;">${s.name}</div>
+                                <div style="font-weight: bold; font-size: 12px; color: #555; margin-bottom: 5px;">${s.title}</div>
+                                ${signerSigUrl ? `<img src="${signerSigUrl}" style="height: 60px; object-fit: contain; mix-blend-mode: multiply; margin-top: 5px;" />` : ''}
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
+        }
+
+        let extraSignaturesHtml = '';
+        if (letter.approvedBy && letter.approvedBy.length > 0) {
+            const explicitUserIds = (letter.signers || []).map(s => s.userId).filter(Boolean);
+            const extraSignatures = letter.approvedBy
+                .map((uid, idx) => ({ uid, url: letter.signatureImageUrls?.[idx] }))
+                .filter(item => item.url && !explicitUserIds.includes(item.uid));
+            
+            if (extraSignatures.length > 0) {
+                extraSignaturesHtml = `
+                    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
+                        ${extraSignatures.map(item => `
+                            <img src="${makeAbsolute(item.url)}" style="height: 50px; object-fit: contain; mix-blend-mode: multiply;" />
+                        `).join('')}
+                    </div>
+                `;
+            }
         }
 
         signaturesHtml = `
@@ -1104,6 +1142,7 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                 ${signersHtml}
                 <div class="stamp-container">
                     ${stampHtml}
+                    ${extraSignaturesHtml}
                 </div>
             </div>
         `;
@@ -1112,6 +1151,10 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
             <style>
                 ${BASE_STYLE}
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.0.0/Vazirmatn-font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/gandom-font@v0.8.0/dist/font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css');
                 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tahoma-font@v1.0.0/tahoma.css');
                 
                 html, body {
@@ -1143,7 +1186,10 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                 .lh-left-default-on-img {
                     position: absolute;
                     top: 25mm; left: 20mm;
-                    font-size: 11px; font-weight: bold; line-height: 1.6;
+                    font-size: 11px;
+                    line-height: 1.6;
+                    opacity: ${metadataOpacity};
+                    font-weight: ${metadataFontWeight} !important;
                 }
                 
                 .lh-left-custom {
@@ -1151,8 +1197,10 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                     top: ${metadataTop}mm !important;
                     left: ${metadataLeft}mm !important;
                     font-size: ${metadataFontSize}px !important;
-                    font-weight: bold !important; line-height: 1.6 !important;
+                    line-height: 1.6 !important;
                     z-index: 100 !important;
+                    opacity: ${metadataOpacity} !important;
+                    font-weight: ${metadataFontWeight} !important;
                 }
                 
                 .default-letterhead {
@@ -1160,7 +1208,14 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                     border-bottom: 3px double #333; padding-bottom: 20px; margin-bottom: 40px;
                     padding-left: 30px; padding-right: 30px;
                 }
-                .default-letterhead .lh-right { font-size: 11px; font-weight: bold; line-height: 1.8; width: 33%; text-align: right; }
+                .default-letterhead .lh-right {
+                    font-size: 11px;
+                    line-height: 1.8;
+                    width: 33%;
+                    text-align: right;
+                    opacity: ${metadataOpacity};
+                    font-weight: ${metadataFontWeight} !important;
+                }
                 .default-letterhead .lh-center { text-align: center; width: 34%; }
                 .default-letterhead .lh-center h2 { margin: 0 0 5px 0; font-size: 20px; }
                 .default-letterhead .lh-center p { margin: 0; font-size: 12px; color: #555; }
@@ -1196,8 +1251,8 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
                 
                 <div class="letter-content-wrapper">
                     <div class="salutation">
-                        <div>موضوع: ${letter.subject}</div>
-                        <div>با سلام و احترام،</div>
+                        ${letter.hideSubjectInLetter ? '' : `<div>موضوع: ${letter.subject}</div>`}
+                        ${letter.hideSalutationInLetter ? '' : `<div>با سلام و احترام،</div>`}
                     </div>
                     
                     <div class="letter-body">

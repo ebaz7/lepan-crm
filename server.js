@@ -1017,7 +1017,12 @@ app.get('/api/secretariat/letters/:id/pdf', async (req, res) => {
         const companyName = company ? company.name : '';
         const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
         
-        const pdf = await Renderer.generateSecretariatLetterPDF(letter, companyName, companySettings);
+        let activeCompanySettings = companySettings;
+        if (req.query.noLetterhead === 'true' && activeCompanySettings) {
+            activeCompanySettings = { ...activeCompanySettings, letterheadUrl: '' };
+        }
+        
+        const pdf = await Renderer.generateSecretariatLetterPDF(letter, companyName, activeCompanySettings);
         res.set('Content-Type', 'application/pdf');
         res.set('Content-Disposition', `attachment; filename="Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.pdf"`);
         res.send(pdf);
@@ -1036,7 +1041,12 @@ app.get('/api/secretariat/letters/:id/docx', async (req, res) => {
         const companyName = company ? company.name : '';
         const companySettings = (db.secretariatSettings || []).find(s => s.companyId === letter.companyId);
         
-        const doc = await Renderer.generateSecretariatLetterDoc(letter, companyName, companySettings);
+        let activeCompanySettings = companySettings;
+        if (req.query.noLetterhead === 'true' && activeCompanySettings) {
+            activeCompanySettings = { ...activeCompanySettings, letterheadUrl: '' };
+        }
+        
+        const doc = await Renderer.generateSecretariatLetterDoc(letter, companyName, activeCompanySettings);
         res.set('Content-Type', 'application/msword');
         res.set('Content-Disposition', `attachment; filename="Letter_${letter.letterNumber.replace(/[\/\\]/g, '_')}.doc"`);
         res.send(doc);

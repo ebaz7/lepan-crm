@@ -1235,10 +1235,12 @@ export interface SecretariatLetter {
     attachments: SecretariatLetterAttachment[];
     addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
     signOffText?: string; // متن با تشکر
-    signers?: { name: string; title: string; }[]; // لیست امضاکنندگان و سمت‌ها
+    signers?: { name: string; title: string; userId?: string; }[]; // لیست امضاکنندگان و سمت‌ها
     paperSize?: 'A4' | 'A5';
     orientation?: 'portrait' | 'landscape';
     signaturePosition?: 'bottom_left' | 'bottom_center' | 'bottom_right';
+    hideSubjectInLetter?: boolean;
+    hideSalutationInLetter?: boolean;
     createdAt: number;
     updatedAt: number;
     createdBy: string;
@@ -1260,5 +1262,7 @@ export interface SecretariatCompanySettings {
     metadataTop?: number;              // فاصله از بالای سربرگ (میلی‌متر)
     metadataLeft?: number;             // فاصله از چپ سربرگ (میلی‌متر)
     metadataFontSize?: number;         // اندازه قلم اطلاعات سربرگ (پیکسل)
+    metadataOpacity?: number;          // میزان پررنگی اطلاعات سربرگ (درصد، از ۱۰ تا ۱۰۰)
+    metadataFontWeight?: 'normal' | 'bold' | 'bolder' | 'black'; // میزان ضخامت متون سربرگ
 }
 
