@@ -7,6 +7,7 @@ import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarCha
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
+import WarehouseDispatchReport from './reports/WarehouseDispatchReport';
 import { apiCall } from '../services/apiService';
 import { getUsers, getRolePermissions } from '../services/authService';
 import html2canvas from 'html2canvas';
@@ -785,6 +786,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     { id: 'archive', label: 'بیجک‌ها', color: 'gray' },
                     { id: 'approvals', label: 'تاییدیه', color: 'orange' },
                     { id: 'reports', label: 'کاردکس', color: 'purple' },
+                    { id: 'dispatch_report', label: 'گزارش بیجک‌ها', color: 'red' },
                     { id: 'stock_report', label: 'موجودی', color: 'orange' }
                 ].map(tab => (
                     <button 
@@ -1313,6 +1315,13 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {activeTab === 'reports' && (
                     <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
                         <WarehouseKardexReport items={items} transactions={safeTransactions} companies={companyList} />
+                    </div>
+                )}
+
+                {/* DISPATCH REPORT TAB */}
+                {activeTab === 'dispatch_report' && (
+                    <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
+                        <WarehouseDispatchReport transactions={safeTransactions} companies={companyList} />
                     </div>
                 )}
 

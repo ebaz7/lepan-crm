@@ -1235,6 +1235,9 @@ export interface SecretariatLetter {
     attachments: SecretariatLetterAttachment[];
     addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
     signOffText?: string; // متن با تشکر
+    paperSize?: 'A4' | 'A5';
+    orientation?: 'portrait' | 'landscape';
+    signaturePosition?: 'bottom_left' | 'bottom_center' | 'bottom_right';
     createdAt: number;
     updatedAt: number;
     createdBy: string;
@@ -1247,6 +1250,10 @@ export interface SecretariatCompanySettings {
     letterheadUrl?: string;            // سربرگ
     meetingMinutesTemplate?: string;   // قالب صورتجلسه
     companyStampUrl?: string;          // تصویر مهر رسمی شرکت
+    companyStampSize?: number;         // اندازه مهر رسمی (پیکسل)
+    companyStampOpacity?: number;      // شفافیت مهر رسمی (درصد)
+    hideAutoFooter?: boolean;          // عدم نمایش خودکار پاورقی در صورت داشتن سربرگ
+    letterheadFontFamily?: string;     // نوع فونت بدنه نامه
     metadataTop?: number;              // فاصله از بالای سربرگ (میلی‌متر)
     metadataLeft?: number;             // فاصله از چپ سربرگ (میلی‌متر)
     metadataFontSize?: number;         // اندازه قلم اطلاعات سربرگ (پیکسل)

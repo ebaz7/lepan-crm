@@ -1159,14 +1159,27 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
 
 export const generateSecretariatLetterDoc = async (letter, companyName, companySettings) => {
     // Generate beautiful Word-compatible HTML file
-    const letterheadHtml = companySettings?.letterheadUrl 
-        ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${companySettings.letterheadUrl}" style="max-height: 100px; max-width: 100%;" /></div>`
-        : `<div style="text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 30px;">
+    
+    // Determine page size and orientation
+    const isA5 = letter.paperSize === 'A5';
+    const isLandscape = letter.orientation === 'landscape';
+    const msoPageSize = isA5 
+        ? (isLandscape ? 'size: 595.3pt 419.5pt;' : 'size: 419.5pt 595.3pt;') 
+        : (isLandscape ? 'size: 841.9pt 595.3pt;' : 'size: 595.3pt 841.9pt;');
+
+    const msoMargin = 'margin: 1in 1in 1in 1in;';
+    
+    const letterheadHtml = (!companySettings?.letterheadUrl)
+        ? `<div style="text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 30px;">
              <h1 style="margin: 0; font-size: 24pt; color: #1e3a8a;">دبیرخانه اداری - ${companyName || 'شرکت'}</h1>
              <p style="margin: 5px 0 0 0; font-size: 11pt; color: #555;">بخش ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
-           </div>`;
+           </div>`
+        : ''; // If there's a background, we don't need a mock header
 
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    const html = `<html xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:w="urn:schemas-microsoft-com:office:word"
+    xmlns="http://www.w3.org/TR/REC-html40">
     <head>
     <meta charset="utf-8">
     <title>${letter.subject}</title>
@@ -1180,10 +1193,17 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
     </xml>
     <![endif]-->
     <style>
-        body { font-family: 'Tahoma', 'Arial', sans-serif; direction: rtl; }
+        @page Section1 {
+            ${msoPageSize}
+            ${msoMargin}
+            mso-header-margin: 0.5in;
+            mso-footer-margin: 0.5in;
+            mso-paper-source: 0;
+        }
+        div.Section1 { page: Section1; }
+        body { font-family: '${companySettings?.letterheadFontFamily || 'Tahoma'}', 'Arial', sans-serif; direction: rtl; }
         .letter-meta { width: 100%; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
         .letter-meta td { font-size: 10.5pt; color: #333; }
-        .letter-title { font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 25px; color: #1e3a8a; }
         .letter-recipient { font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
         .letter-content { font-size: 11pt; line-height: 1.6; margin-bottom: 40px; text-align: justify; }
         .signatures { width: 100%; margin-top: 50px; }
@@ -1191,50 +1211,49 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
         .signature-image { max-height: 70px; margin-bottom: 5px; }
     </style>
     </head>
-    <body style="tab-interval:.5in; direction: rtl;">
-        ${letterheadHtml}
-        <table class="letter-meta" style="width: 100%;">
-            <tr>
-                <td style="text-align: right; width: 50%;"><b>فرستنده:</b> ${letter.sender}</td>
-                <td style="text-align: left; width: 50%;"><b>شماره نامه:</b> ${letter.letterNumber}</td>
-            </tr>
-            <tr>
-                <td style="text-align: right;"><b>گیرنده:</b> ${letter.receiver}</td>
-                <td style="text-align: left;"><b>تاریخ:</b> ${letter.date}</td>
-            </tr>
-            <tr>
-                <td style="text-align: right;"><b>نوع نامه:</b> ${letter.type === 'internal' ? 'داخلی' : letter.type === 'incoming' ? 'وارده' : 'صادره'}</td>
-                <td style="text-align: left;"><b>وضعیت:</b> ${letter.status}</td>
-            </tr>
-        </table>
-        
-        <div class="letter-title">موضوع: ${letter.subject}</div>
-        
-        <div class="letter-content" style="white-space: pre-wrap;">${letter.content || ''}</div>
-        
-        <table class="signatures" style="width: 100%;">
-            <tr>
-                <td style="text-align: right; font-size: 10pt; color: #666;">
-                    <b>ثبت‌کننده:</b> ${letter.createdBy || 'سیستم'}
-                </td>
-                <td style="text-align: left;">
-                    <div style="display: inline-block; text-align: center;">
-                        <p style="margin: 0 0 5px 0; font-size: 10pt; font-weight: bold;">تایید و امضا کنندگان:</p>
-                        ${(letter.signatureImageUrls || []).map((url) => `
-                            <div style="display: inline-block; margin: 5px; text-align: center;">
-                                <img src="${url}" style="max-height: 60px; max-width: 120px; display: block;" />
-                            </div>
-                        `).join('')}
-                        ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `
-                            <div style="display: inline-block; margin: 5px; text-align: center; border: 1px dashed #ef4444; padding: 4px; background: #fff5f5;">
-                                <span style="font-size: 8px; color: #ef4444; font-weight: bold; display: block;">مهر رسمی شرکت</span>
-                                <img src="${companySettings.companyStampUrl}" style="max-height: 60px; max-width: 60px; display: block;" />
-                            </div>
+    <body style="tab-interval:.5in; direction: rtl;" ${companySettings?.letterheadUrl ? `background="${companySettings.letterheadUrl}"` : ''}>
+        <div class="Section1">
+            ${letterheadHtml}
+            <table class="letter-meta" style="width: 100%;">
+                <tr>
+                    <td style="text-align: right; width: 50%;"><b>گیرنده:</b> ${letter.receiver}</td>
+                    <td style="text-align: left; width: 50%;"><b>شماره نامه:</b> ${letter.letterNumber}</td>
+                </tr>
+                <tr>
+                    <td style="text-align: right;"><b>موضوع:</b> ${letter.subject}</td>
+                    <td style="text-align: left;"><b>تاریخ:</b> ${letter.date}</td>
+                </tr>
+                <tr>
+                    <td style="text-align: right;"><b>فرستنده:</b> ${letter.sender}</td>
+                    <td style="text-align: left;"><b>پیوست:</b> ${letter.attachments?.length > 0 ? 'دارد' : 'ندارد'}</td>
+                </tr>
+            </table>
+            
+            <div class="letter-content">${letter.content || ''}</div>
+            
+            <table class="signatures" style="width: 100%;">
+                <tr>
+                    <td style="text-align: right; font-size: 10pt; color: #666; width: 33%;">
+                    </td>
+                    <td style="text-align: center; width: 34%;">
+                        ${letter.signaturePosition === 'bottom_center' ? `
+                            <p style="font-weight: bold; margin-bottom: 10px;">${letter.signOffText || 'با تشکر'}</p>
+                            <p style="font-weight: bold; margin-bottom: 10px;">${companyName || ''}</p>
+                            <p style="font-weight: bold;">${letter.sender}</p>
+                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
                         ` : ''}
-                    </div>
-                </td>
-            </tr>
-        </table>
+                    </td>
+                    <td style="text-align: left; width: 33%;">
+                        ${letter.signaturePosition !== 'bottom_center' ? `
+                            <p style="font-weight: bold; margin-bottom: 10px;">${letter.signOffText || 'با تشکر'}</p>
+                            <p style="font-weight: bold; margin-bottom: 10px;">${companyName || ''}</p>
+                            <p style="font-weight: bold;">${letter.sender}</p>
+                            ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
+                        ` : ''}
+                    </td>
+                </tr>
+            </table>
+        </div>
     </body>
     </html>`;
     

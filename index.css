@@ -110,6 +110,30 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Shabnam';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.2/dist/Shabnam.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sahel';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/Sahel.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gandom';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/gandom-font@v0.6.0/dist/Gandom.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Estedad';
+  src: url('https://cdn.jsdelivr.net/gh/rastikerdar/estedad-font@v4.0.2/dist/Estedad.woff2') format('woff2');
+  font-display: swap;
+}
+
 body {
   font-family: 'Vazirmatn', sans-serif;
   background: var(--app-bg);

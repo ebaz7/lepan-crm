@@ -180,7 +180,7 @@ const KEYBOARDS = {
             [{ text: '📂 کارتابل انبار (تایید/رد)', callback_data: 'ACT_WH_CARTABLE' }], 
             [{ text: '🔎 جستجو بیجک (شماره)', callback_data: 'ACT_SEARCH_ID_WH' }],
             [{ text: '🗄️ آرشیو بیجک‌ها', callback_data: 'ACT_ARCHIVE_WH_OUT' }, { text: '🗄️ آرشیو رسیدها', callback_data: 'ACT_ARCHIVE_WH_IN' }],
-            [{ text: '📦 گزارش موجودی (PDF)', callback_data: 'WH_RPT_STOCK' }],
+            [{ text: '📦 گزارش موجودی (PDF)', callback_data: 'WH_RPT_STOCK' }, { text: '📊 گزارش خروج (PDF/Excel)', callback_data: 'WH_RPT_DISPATCH_PROMPT' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ]
     },
@@ -3467,6 +3467,96 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     // --- WAREHOUSE STOCK REPORT ---
+    if (data === 'WH_RPT_DISPATCH_PROMPT') {
+        const kb = [
+            [{ text: '📅 گزارش امروز', callback_data: 'WH_RPT_DISPATCH_TODAY' }],
+            [{ text: '📅 گزارش هفته جاری', callback_data: 'WH_RPT_DISPATCH_WEEK' }],
+            [{ text: '📅 گزارش ماه جاری', callback_data: 'WH_RPT_DISPATCH_MONTH' }],
+            [{ text: '📋 تمام بیجک‌ها', callback_data: 'WH_RPT_DISPATCH_ALL' }],
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_WH' }]
+        ];
+        return sendFn(chatId, "بازه زمانی گزارش خروج را انتخاب کنید:", { reply_markup: { inline_keyboard: kb } });
+    }
+
+    if (data.startsWith('WH_RPT_DISPATCH_') && data !== 'WH_RPT_DISPATCH_PROMPT') {
+        const rangeType = data.replace('WH_RPT_DISPATCH_', '');
+        await sendFn(chatId, "⏳ در حال استخراج و تولید گزارش خروج (PDF و Excel)...");
+        
+        try {
+            const txs = Array.isArray(db.warehouseTransactions) ? db.warehouseTransactions : [];
+            let outTxs = txs.filter(t => t.type === 'OUT');
+            
+            let titleRange = 'تمام دوره‌ها';
+            
+            if (rangeType === 'TODAY') {
+                const todayStr = getTehranDateString(); 
+                outTxs = outTxs.filter(t => t.date && t.date.startsWith(todayStr));
+                titleRange = 'امروز';
+            } else if (rangeType === 'WEEK') {
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                outTxs = outTxs.filter(t => t.date && new Date(t.date) >= weekAgo);
+                titleRange = 'هفته جاری';
+            } else if (rangeType === 'MONTH') {
+                const monthAgo = new Date();
+                monthAgo.setDate(monthAgo.getDate() - 30);
+                outTxs = outTxs.filter(t => t.date && new Date(t.date) >= monthAgo);
+                titleRange = 'ماه جاری';
+            }
+
+            outTxs.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            const columns = ["ردیف", "تاریخ", "شماره", "شرکت", "کالا", "تعداد", "وزن", "گیرنده", "راننده", "پلاک", "توضیحات"];
+            const rows = [];
+            
+            let rowIdx = 1;
+            outTxs.forEach(tx => {
+                if (tx.items && tx.items.length > 0) {
+                    tx.items.forEach(item => {
+                        let fDate = '-';
+                        try {
+                            if (tx.date) fDate = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(tx.date));
+                        } catch(e){}
+                        rows.push([
+                            rowIdx++,
+                            fDate,
+                            tx.number || '-',
+                            tx.company || '-',
+                            item.itemName || '-',
+                            item.quantity || '0',
+                            item.weight || '0',
+                            tx.recipientName || '-',
+                            tx.driverName || '-',
+                            tx.plateNumber || '-',
+                            tx.description || '-'
+                        ]);
+                    });
+                }
+            });
+
+            if (rows.length === 0) {
+                return sendFn(chatId, `هیچ بیجک خروجی در بازه "${titleRange}" یافت نشد.`);
+            }
+
+            const title = `گزارش خروج کالا (بیجک‌ها) - ${titleRange}`;
+            
+            // 1. Generate PDF
+            const pdfBuffer = await Renderer.generateReportPDF(title, columns, rows, true);
+            const pdfFilename = `Dispatch_Report_${rangeType}_${Date.now()}.pdf`;
+            await sendDocFn(chatId, pdfBuffer, pdfFilename, `📄 فایل PDF گزارش خروج (${titleRange})\nتعداد رکورد: ${rows.length}`);
+
+            // 2. Generate Excel
+            const excelBuffer = generateExcelBuffer(columns, rows, "خروج کالا");
+            const excelFilename = `Dispatch_Report_${rangeType}_${Date.now()}.xlsx`;
+            await sendDocFn(chatId, excelBuffer, excelFilename, `📊 فایل Excel گزارش خروج (${titleRange})`);
+            
+        } catch (e) {
+            console.error("Dispatch Report Gen Error:", e);
+            return sendFn(chatId, "❌ خطا در تولید گزارش.");
+        }
+        return;
+    }
+
     if (data === 'WH_RPT_STOCK') {
         await sendFn(chatId, "⏳ در حال محاسبه موجودی و تولید PDF...");
         try {

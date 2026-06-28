@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building, 
@@ -94,7 +96,11 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     type: 'internal' as 'internal' | 'incoming' | 'outgoing',
     attachments: [] as SecretariatLetterAttachment[],
     addCompanyStamp: false,
-    signOffText: 'با تشکر'
+    signOffText: 'با تشکر',
+    paperSize: 'A4',
+    orientation: 'portrait',
+    addCompanyStamp: false,
+    signaturePosition: 'bottom_left'
   });
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -1306,18 +1312,77 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       <FileCheck size={12} /> درج قالب صورتجلسه پیش‌فرض شرکت
                     </button>
                   </div>
-                  <textarea 
-                    required 
-                    rows={6}
-                    value={newLetterForm.content}
-                    onChange={e => setNewLetterForm({...newLetterForm, content: e.target.value})}
-                    placeholder="متن رسمی و اداری خود را اینجا بنویسید..."
-                    className="w-full border rounded-lg p-3 text-xs leading-relaxed"
-                  />
+                  <div className="bg-white rounded-lg border border-gray-300 min-h-[300px]">
+                    <ReactQuill 
+                      theme="snow"
+                      value={newLetterForm.content}
+                      onChange={val => setNewLetterForm({...newLetterForm, content: val})}
+                      placeholder="متن رسمی و اداری خود را اینجا بنویسید..."
+                      className="min-h-[250px] text-sm"
+                      modules={{
+                        toolbar: [
+                          [{ 'header': [1, 2, 3, false] }],
+                          ['bold', 'italic', 'underline', 'strike'],
+                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                          [{ 'align': [] }],
+                          [{ 'color': [] }, { 'background': [] }],
+                          ['clean']
+                        ]
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 border-t pt-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 font-bold">اندازه کاغذ</label>
+                    <select 
+                      value={newLetterForm.paperSize}
+                      onChange={e => setNewLetterForm({...newLetterForm, paperSize: e.target.value as 'A4'|'A5'})}
+                      className="w-full border rounded-lg p-2 text-xs"
+                    >
+                      <option value="A4">A4</option>
+                      <option value="A5">A5</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 font-bold">جهت کاغذ</label>
+                    <select 
+                      value={newLetterForm.orientation}
+                      onChange={e => setNewLetterForm({...newLetterForm, orientation: e.target.value as 'portrait'|'landscape'})}
+                      className="w-full border rounded-lg p-2 text-xs"
+                    >
+                      <option value="portrait">عمودی (Portrait)</option>
+                      <option value="landscape">افقی (Landscape)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 font-bold">مکان امضا/مهر</label>
+                    <select 
+                      value={newLetterForm.signaturePosition}
+                      onChange={e => setNewLetterForm({...newLetterForm, signaturePosition: e.target.value as any})}
+                      className="w-full border rounded-lg p-2 text-xs"
+                    >
+                      <option value="bottom_left">پایین سمت چپ</option>
+                      <option value="bottom_center">پایین وسط</option>
+                      <option value="bottom_right">پایین سمت راست</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1 flex flex-col justify-center">
+                    <label className="flex items-center gap-2 cursor-pointer mt-4">
+                      <input 
+                        type="checkbox"
+                        checked={newLetterForm.addCompanyStamp}
+                        onChange={e => setNewLetterForm({...newLetterForm, addCompanyStamp: e.target.checked})}
+                        className="w-4 h-4 text-purple-600 rounded"
+                      />
+                      <span className="text-xs font-bold text-slate-700">درج مهر شرکت</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Sign-off text */}
-                <div className="space-y-1">
+                <div className="space-y-1 mt-4">
                   <label className="text-xs text-slate-500 font-bold">متن پایان نامه (با تشکر...)</label>
                   <input 
                     required 
@@ -1470,8 +1535,10 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                     </div>
 
                     {/* Content */}
-                    <div className="pt-4 text-slate-700 leading-loose whitespace-pre-wrap font-medium">
-                      {selectedLetterForView.content}
+                    <div 
+                      className="ql-editor pt-4 text-slate-700 leading-loose whitespace-pre-wrap font-medium"
+                      dangerouslySetInnerHTML={{__html: selectedLetterForView.content}}
+                    >
                     </div>
 
                     {/* Real embedded signatures layout */}
@@ -1782,11 +1849,18 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </div>
               </div>
 
-              {/* PRINTABLE AREA (A4 Container) */}
+              {/* PRINTABLE AREA */}
               <div 
                 id="print-content-section" 
-                className="bg-white border rounded-xl p-8 max-w-[21cm] mx-auto min-h-[29.7cm] shadow-xs relative text-black"
-                style={{ fontFamily: 'sans-serif' }}
+                className={`bg-white border rounded-xl mx-auto shadow-xs relative text-black
+                  ${isPrintMode.paperSize === 'A5' 
+                    ? (isPrintMode.orientation === 'landscape' ? 'max-w-[21cm] min-h-[14.8cm]' : 'max-w-[14.8cm] min-h-[21cm]')
+                    : (isPrintMode.orientation === 'landscape' ? 'max-w-[29.7cm] min-h-[21cm]' : 'max-w-[21cm] min-h-[29.7cm]')}
+                `}
+                style={{ 
+                  fontFamily: companySettingsForm.letterheadFontFamily || 'sans-serif',
+                  overflow: 'hidden' // clip background
+                }}
               >
                 {/* Absolutely positioned metadata block if custom coordinates are defined, or custom letterhead is active */}
                 {(companySettingsForm.letterheadUrl || companySettingsForm.metadataTop !== undefined || companySettingsForm.metadataLeft !== undefined) && (
@@ -1803,28 +1877,28 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       zIndex: 50
                     }}
                   >
+                    <div>شماره: {isPrintMode.letterNumber}</div>
                     <div>تاریخ: {isPrintMode.date}</div>
-                    <div>شماره نامه: {isPrintMode.letterNumber}</div>
                     <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
                   </div>
                 )}
 
                 {/* Custom Image Letterhead Background or Corporate Mockup Header */}
                 {companySettingsForm.letterheadUrl ? (
-                  <img src={companySettingsForm.letterheadUrl} className="absolute inset-0 w-full h-full object-cover opacity-100 z-0 pointer-events-none print:max-w-none print:max-h-none print:w-[210mm] print:h-[297mm]" />
+                  <img src={companySettingsForm.letterheadUrl} className="absolute inset-0 w-full h-full opacity-100 z-0 pointer-events-none" style={{ objectFit: 'fill' }} />
                 ) : (
                   /* Elegant default corporate letterhead */
-                  <div className="border-b-2 border-double border-slate-800 pb-4 mb-8 flex justify-between items-center relative z-10">
+                  <div className="border-b-2 border-double border-slate-800 pb-4 mb-8 flex justify-between items-center relative z-10 px-8 pt-8">
                     {/* Left: Metadata (Only shown here if NOT absolutely positioned) */}
                     {companySettingsForm.metadataTop === undefined && companySettingsForm.metadataLeft === undefined ? (
-                      <div className="text-[11px] font-bold space-y-1.5 text-slate-800 w-1/3 text-right">
-                        <div>تاریخ: {isPrintMode.date}</div>
-                        <div>شماره نامه: {isPrintMode.letterNumber}</div>
-                        <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
-                      </div>
-                    ) : (
-                      <div className="w-1/3"></div> /* Empty spacer to preserve layout symmetry */
-                    )}
+                       <div className="text-[11px] font-bold space-y-1.5 text-slate-800 w-1/3 text-right">
+                         <div>تاریخ: {isPrintMode.date}</div>
+                         <div>شماره نامه: {isPrintMode.letterNumber}</div>
+                         <div>پیوست: {isPrintMode.attachments?.length > 0 ? 'دارد' : 'ندارد'}</div>
+                       </div>
+                     ) : (
+                       <div className="w-1/3"></div> /* Empty spacer to preserve layout symmetry */
+                     )}
 
                     {/* Center: Title & Islamic Republic logo element */}
                     <div className="text-center space-y-1.5 flex-1">
@@ -1849,21 +1923,33 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 )}
 
                 {/* Letter Body Context */}
-                <div className="space-y-6 text-sm leading-loose text-slate-800 px-8 min-h-[450px] relative pb-48 pt-32 z-10">
+                <div className={`space-y-4 text-sm leading-loose text-slate-800 px-12 relative z-10 
+                   ${companySettingsForm.letterheadUrl ? 'pt-40' : 'pt-4'}
+                   ${isPrintMode.paperSize === 'A5' ? 'min-h-[250px]' : 'min-h-[450px]'}
+                `}>
                   
                   {/* Salutations */}
-                  <div className="font-bold space-y-2 mb-6">
+                  <div className="font-bold space-y-2 mb-4">
                     <div className="text-base text-slate-900">{isPrintMode.receiver}</div>
+                    <div className="text-base font-medium">موضوع: {isPrintMode.subject}</div>
                     <div className="text-base font-medium">با سلام و احترام،</div>
                   </div>
 
-                  {/* Body Content */}
-                  <div className="pt-2 text-justify whitespace-pre-wrap leading-loose font-medium text-slate-800 text-[14px]">
-                    {isPrintMode.content}
+                  {/* Body Content from Quill */}
+                  <div 
+                    className="ql-editor pt-2 text-justify whitespace-pre-wrap leading-loose font-medium text-slate-800 text-[14px]"
+                    dangerouslySetInnerHTML={{__html: isPrintMode.content}}
+                  >
                   </div>
 
-                  {/* Signatures & Stamp block (bottom left aligned) */}
-                  <div className="absolute bottom-16 left-12 w-64 text-center space-y-2">
+                  {/* Signatures & Stamp block */}
+                  <div 
+                    className={`mt-16 w-64 text-center space-y-2 ${
+                        isPrintMode.signaturePosition === 'bottom_right' ? 'mr-auto ml-0' : 
+                        isPrintMode.signaturePosition === 'bottom_center' ? 'mx-auto' : 
+                        'ml-auto mr-0'
+                    }`}
+                  >
                      <div className="font-bold text-sm mb-4">{isPrintMode.signOffText || 'با تشکر'}</div>
                      <div className="font-bold text-sm">{selectedCompany?.name || ''}</div>
                      <div className="font-bold text-sm mb-2">{isPrintMode.sender}</div>
@@ -1882,7 +1968,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                         {isPrintMode.addCompanyStamp && companySettingsForm.companyStampUrl && (
                           <img 
                             src={companySettingsForm.companyStampUrl} 
-                            className="h-28 w-28 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-multiply opacity-70 z-0" 
+                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-multiply z-0" 
+                            style={{ 
+                                height: companySettingsForm.companyStampSize ? `${companySettingsForm.companyStampSize}px` : '120px',
+                                width: companySettingsForm.companyStampSize ? `${companySettingsForm.companyStampSize}px` : '120px',
+                                opacity: companySettingsForm.companyStampOpacity ? companySettingsForm.companyStampOpacity / 100 : 0.7
+                            }}
                           />
                         )}
                      </div>
@@ -1890,13 +1981,15 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </div>
 
                 {/* Footer bar containing metadata of address/phone */}
-                <div className="absolute bottom-6 left-8 right-8 text-[10px] text-slate-400 border-t pt-2 flex justify-between items-center flex-wrap gap-2 print:border-t">
-                  <span>نشانی: {selectedCompany.address || 'ثبت نشده'}</span>
-                  <div className="flex gap-4">
-                    <span>تلفن: {selectedCompany.phone || 'ثبت نشده'}</span>
-                    <span>کدپستی: {selectedCompany.postalCode || '-'}</span>
-                  </div>
-                </div>
+                {(!companySettingsForm.hideAutoFooter || !companySettingsForm.letterheadUrl) && (
+                    <div className="absolute bottom-6 left-8 right-8 text-[10px] text-slate-400 border-t pt-2 flex justify-between items-center flex-wrap gap-2 print:border-t">
+                    <span>نشانی: {selectedCompany.address || 'ثبت نشده'}</span>
+                    <div className="flex gap-4">
+                        <span>تلفن: {selectedCompany.phone || 'ثبت نشده'}</span>
+                        <span>کدپستی: {selectedCompany.postalCode || '-'}</span>
+                    </div>
+                    </div>
+                )}
 
               </div>
             </motion.div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getSettings, saveSettings, uploadFile } from '../services/storageService';
-import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate } from '../types';
+import { getSettings, saveSettings, uploadFile, getSecretariatSettings, saveSecretariatSettings } from '../services/storageService';
+import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate, SecretariatCompanySettings } from '../types';
 import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
@@ -47,7 +47,31 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettings, onUpdateSettings }) => {
-  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings'>('system');
+  const [activeCategory, setActiveCategory] = useState<'system' | 'fiscal' | 'data' | 'integrations' | 'whatsapp' | 'permissions' | 'warehouse' | 'commerce' | 'templates' | 'bot' | 'meetings' | 'secretariat'>('system');
+  
+  // --- Secretariat Settings State ---
+  const [secConfigs, setSecConfigs] = useState<SecretariatCompanySettings[]>([]);
+  const [selectedCompanyIdForSec, setSelectedCompanyIdForSec] = useState<string>('');
+  const [secSettingsForm, setSecSettingsForm] = useState<SecretariatCompanySettings>({
+      companyId: '',
+      headquartersAccessTokens: [],
+      factoryAccessTokens: [],
+      letterheadUrl: '',
+      meetingMinutesTemplate: '',
+      companyStampUrl: '',
+      companyStampSize: 112,
+      companyStampOpacity: 70,
+      hideAutoFooter: false,
+      letterheadFontFamily: 'Vazirmatn',
+      metadataTop: 25,
+      metadataLeft: 20,
+      metadataFontSize: 11
+  });
+  const [isUploadingSecLetterhead, setIsUploadingSecLetterhead] = useState(false);
+  const [isUploadingSecStamp, setIsUploadingSecStamp] = useState(false);
+  const secLetterheadInputRef = useRef<HTMLInputElement>(null);
+  const secStampInputRef = useRef<HTMLInputElement>(null);
+
   const [settings, setSettings] = useState<SystemSettings>({ 
       appName: 'سیستم من',
       currentTrackingNumber: 1000, 
@@ -265,6 +289,62 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
       } catch (e) { console.error("Failed to load users"); }
   };
 
+  // Secretariat Settings fetch & sync
+  useEffect(() => {
+    const fetchSecConfigs = async () => {
+      try {
+        const configs = await getSecretariatSettings();
+        setSecConfigs(configs);
+        if (settings.companies && settings.companies.length > 0 && !selectedCompanyIdForSec) {
+          setSelectedCompanyIdForSec(settings.companies[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load secretariat configs:", err);
+      }
+    };
+    if (activeCategory === 'secretariat' || (settings.companies && settings.companies.length > 0)) {
+      fetchSecConfigs();
+    }
+  }, [activeCategory, settings.companies]);
+
+  useEffect(() => {
+    if (!selectedCompanyIdForSec) return;
+    const existing = secConfigs.find(c => c.companyId === selectedCompanyIdForSec);
+    if (existing) {
+      setSecSettingsForm({
+        companyId: selectedCompanyIdForSec,
+        headquartersAccessTokens: existing.headquartersAccessTokens || [],
+        factoryAccessTokens: existing.factoryAccessTokens || [],
+        letterheadUrl: existing.letterheadUrl || '',
+        meetingMinutesTemplate: existing.meetingMinutesTemplate || '',
+        companyStampUrl: existing.companyStampUrl || '',
+        companyStampSize: existing.companyStampSize || 112,
+        companyStampOpacity: existing.companyStampOpacity || 70,
+        hideAutoFooter: existing.hideAutoFooter || false,
+        letterheadFontFamily: existing.letterheadFontFamily || 'Vazirmatn',
+        metadataTop: existing.metadataTop ?? 25,
+        metadataLeft: existing.metadataLeft ?? 20,
+        metadataFontSize: existing.metadataFontSize ?? 11
+      });
+    } else {
+      setSecSettingsForm({
+        companyId: selectedCompanyIdForSec,
+        headquartersAccessTokens: [],
+        factoryAccessTokens: [],
+        letterheadUrl: '',
+        meetingMinutesTemplate: '',
+        companyStampUrl: '',
+        companyStampSize: 112,
+        companyStampOpacity: 70,
+        hideAutoFooter: false,
+        letterheadFontFamily: 'Vazirmatn',
+        metadataTop: 25,
+        metadataLeft: 20,
+        metadataFontSize: 11
+      });
+    }
+  }, [selectedCompanyIdForSec, secConfigs]);
+
   const checkWhatsappStatus = async () => {
       setRefreshingWA(true);
       try {
@@ -434,6 +514,56 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const result = await uploadFile(file.name, ev.target?.result as string); setNewCompanyLogo(result.url); } catch (error) { alert('خطا در آپلود'); } finally { setIsUploadingLogo(false); } }; reader.readAsDataURL(file); };
   const handleLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploadingLetterhead(true); const reader = new FileReader(); reader.onload = async (ev) => { try { const result = await uploadFile(file.name, ev.target?.result as string); setNewCompanyLetterhead(result.url); } catch (error) { alert('خطا در آپلود'); } finally { setIsUploadingLetterhead(false); } }; reader.readAsDataURL(file); };
 
+  const handleSecLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSecLetterhead(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const result = await uploadFile(file.name, ev.target?.result as string);
+        setSecSettingsForm(prev => ({ ...prev, letterheadUrl: result.url }));
+        alert('تصویر سربرگ با موفقیت آپلود شد.');
+      } catch (error) {
+        alert('خطا در آپلود سربرگ');
+      } finally {
+        setIsUploadingSecLetterhead(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSecStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSecStamp(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const result = await uploadFile(file.name, ev.target?.result as string);
+        setSecSettingsForm(prev => ({ ...prev, companyStampUrl: result.url }));
+        alert('تصویر مهر با موفقیت آپلود شد.');
+      } catch (error) {
+        alert('خطا در آپلود مهر');
+      } finally {
+        setIsUploadingSecStamp(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveSecSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCompanyIdForSec) return;
+    try {
+      const updated = await saveSecretariatSettings(secSettingsForm);
+      setSecConfigs(updated);
+      alert('تنظیمات دبیرخانه با موفقیت ذخیره شد.');
+    } catch (err) {
+      alert('خطا در ذخیره تنظیمات دبیرخانه');
+    }
+  };
+
   const handleSaveCompany = () => { if (!newCompanyName.trim()) return; let updatedCompanies = settings.companies || []; const companyData = { id: editingCompanyId || generateUUID(), name: newCompanyName.trim(), logo: newCompanyLogo, showInWarehouse: newCompanyShowInWarehouse, banks: newCompanyBanks, letterhead: newCompanyLetterhead, registrationNumber: newCompanyRegNum, nationalId: newCompanyNatId, address: newCompanyAddress, phone: newCompanyPhone, fax: newCompanyFax, postalCode: newCompanyPostalCode, economicCode: newCompanyEcoCode }; if (editingCompanyId) { updatedCompanies = updatedCompanies.map(c => c.id === editingCompanyId ? companyData : c); } else { updatedCompanies = [...updatedCompanies, companyData]; } setSettings({ ...settings, companies: updatedCompanies, companyNames: updatedCompanies.map(c => c.name) }); resetCompanyForm(); };
   const handleEditCompany = (c: Company) => { setNewCompanyName(c.name); setNewCompanyLogo(c.logo || ''); setNewCompanyShowInWarehouse(c.showInWarehouse !== false); setNewCompanyBanks(c.banks || []); setNewCompanyLetterhead(c.letterhead || ''); setNewCompanyRegNum(c.registrationNumber || ''); setNewCompanyNatId(c.nationalId || ''); setNewCompanyAddress(c.address || ''); setNewCompanyPhone(c.phone || ''); setNewCompanyFax(c.fax || ''); setNewCompanyPostalCode(c.postalCode || ''); setNewCompanyEcoCode(c.economicCode || ''); setEditingCompanyId(c.id); };
   const resetCompanyForm = () => { setNewCompanyName(''); setNewCompanyLogo(''); setNewCompanyShowInWarehouse(true); setNewCompanyBanks([]); setNewCompanyLetterhead(''); setNewCompanyRegNum(''); setNewCompanyNatId(''); setNewCompanyAddress(''); setNewCompanyPhone(''); setNewCompanyFax(''); setNewCompanyPostalCode(''); setNewCompanyEcoCode(''); setEditingCompanyId(null); resetBankForm(); };
@@ -489,6 +619,7 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                         <button onClick={() => setActiveCategory('bot')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'bot' ? 'glass-panel shadow text-sky-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><Power size={18}/> تنظیمات ربات و فروش</button>
                         <button onClick={() => setActiveCategory('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'meetings' ? 'glass-panel shadow text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> صورتجلسات</button>
                         <button onClick={() => setActiveCategory('permissions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'permissions' ? 'glass-panel shadow text-amber-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><ShieldCheck size={18}/> دسترسی‌ها و نقش‌ها</button>
+                        <button type="button" onClick={() => setActiveCategory('secretariat')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === 'secretariat' ? 'glass-panel shadow text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}><FileText size={18}/> تنظیمات دبیرخانه</button>
                     </>
                 )}
             </nav>
@@ -1641,6 +1772,206 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     <li>برای ارسال به واتساپ، فعلاً ارسال گروهی بر اساس شناسه گروه واتساپ (JID) انجام می‌شود.</li>
                                 </ul>
                             </div>
+                        </div>
+                    )}
+
+                    {activeCategory === 'secretariat' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                    <FileText className="text-purple-600" /> تنظیمات دبیرخانه
+                                </h3>
+                                <div className="text-xs font-bold text-gray-500">مختص هر شرکت</div>
+                            </div>
+                            
+                            {settings.companies && settings.companies.length > 0 ? (
+                                <div className="space-y-6">
+                                    <div className="flex flex-col md:flex-row gap-4 items-center">
+                                        <label className="text-sm font-bold text-gray-700">شرکت را انتخاب کنید:</label>
+                                        <select 
+                                            className="border-2 border-purple-200 rounded-xl p-2 text-sm focus:border-purple-500 min-w-[200px]"
+                                            value={selectedCompanyIdForSec}
+                                            onChange={(e) => setSelectedCompanyIdForSec(e.target.value)}
+                                        >
+                                            {settings.companies.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    {selectedCompanyIdForSec && (
+                                        <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 md:p-6 shadow-sm">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                
+                                                {/* Upload Letterhead */}
+                                                <div>
+                                                    <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">سربرگ نامه</h4>
+                                                    <div className="flex flex-col gap-2">
+                                                        <input type="file" ref={secLetterheadInputRef} className="hidden" onChange={handleSecLetterheadUpload} accept="image/*" />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => secLetterheadInputRef.current?.click()} 
+                                                            className="bg-purple-100 text-purple-700 font-bold px-4 py-2 rounded-xl text-xs hover:bg-purple-200 w-full"
+                                                            disabled={isUploadingSecLetterhead}
+                                                        >
+                                                            {isUploadingSecLetterhead ? 'در حال آپلود...' : 'انتخاب تصویر سربرگ'}
+                                                        </button>
+                                                        {secSettingsForm.letterheadUrl && (
+                                                            <div className="mt-2 border rounded-xl overflow-hidden relative">
+                                                                <img src={secSettingsForm.letterheadUrl} className="w-full max-h-40 object-contain bg-gray-100" />
+                                                                <button type="button" onClick={() => setSecSettingsForm({...secSettingsForm, letterheadUrl: ''})} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><X size={14}/></button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Upload Stamp */}
+                                                <div>
+                                                    <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">مهر شرکت</h4>
+                                                    <div className="flex flex-col gap-2">
+                                                        <input type="file" ref={secStampInputRef} className="hidden" onChange={handleSecStampUpload} accept="image/*" />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => secStampInputRef.current?.click()} 
+                                                            className="bg-indigo-100 text-indigo-700 font-bold px-4 py-2 rounded-xl text-xs hover:bg-indigo-200 w-full"
+                                                            disabled={isUploadingSecStamp}
+                                                        >
+                                                            {isUploadingSecStamp ? 'در حال آپلود...' : 'انتخاب تصویر مهر'}
+                                                        </button>
+                                                        {secSettingsForm.companyStampUrl && (
+                                                            <div className="mt-2 border rounded-xl overflow-hidden relative flex justify-center items-center h-40 bg-gray-50">
+                                                                <img src={secSettingsForm.companyStampUrl} className="max-h-full object-contain" />
+                                                                <button type="button" onClick={() => setSecSettingsForm({...secSettingsForm, companyStampUrl: ''})} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><X size={14}/></button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 pt-6 border-t border-dashed">
+                                                
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-bold text-gray-500 block mb-1">اندازه مهر (پیکسل)</label>
+                                                    <input 
+                                                        type="number"
+                                                        value={secSettingsForm.companyStampSize}
+                                                        onChange={e => setSecSettingsForm({...secSettingsForm, companyStampSize: Number(e.target.value)})}
+                                                        className="w-full border rounded-xl p-2.5 text-xs focus:ring-2 dir-ltr"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-bold text-gray-500 block mb-1">شفافیت مهر (%)</label>
+                                                    <input 
+                                                        type="number"
+                                                        max="100"
+                                                        min="10"
+                                                        value={secSettingsForm.companyStampOpacity}
+                                                        onChange={e => setSecSettingsForm({...secSettingsForm, companyStampOpacity: Number(e.target.value)})}
+                                                        className="w-full border rounded-xl p-2.5 text-xs focus:ring-2 dir-ltr"
+                                                    />
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <label className="flex items-center gap-2 cursor-pointer mt-4">
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={secSettingsForm.hideAutoFooter}
+                                                            onChange={e => setSecSettingsForm({...secSettingsForm, hideAutoFooter: e.target.checked})}
+                                                            className="w-5 h-5 text-purple-600 rounded"
+                                                        />
+                                                        <span className="text-sm font-bold text-gray-700">عدم نمایش پاورقی خودکار (در صورت داشتن سربرگ عکس‌دار)</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {/* Preview Metadata */}
+                                            <div className="mt-8">
+                                                <h4 className="font-bold text-sm text-gray-700 mb-4 border-b pb-2">موقعیت اطلاعات (شماره/تاریخ/پیوست) روی سربرگ</h4>
+                                                
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">فاصله از بالا (میلی‌متر)</label>
+                                                            <input 
+                                                                type="range" min="0" max="150" 
+                                                                value={secSettingsForm.metadataTop}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, metadataTop: Number(e.target.value)})}
+                                                                className="w-full"
+                                                            />
+                                                            <div className="text-center text-xs font-bold text-purple-600">{secSettingsForm.metadataTop} mm</div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">فاصله از چپ (میلی‌متر)</label>
+                                                            <input 
+                                                                type="range" min="0" max="150" 
+                                                                value={secSettingsForm.metadataLeft}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, metadataLeft: Number(e.target.value)})}
+                                                                className="w-full"
+                                                            />
+                                                            <div className="text-center text-xs font-bold text-purple-600">{secSettingsForm.metadataLeft} mm</div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">اندازه قلم اطلاعات (پیکسل)</label>
+                                                            <input 
+                                                                type="number"
+                                                                value={secSettingsForm.metadataFontSize}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, metadataFontSize: Number(e.target.value)})}
+                                                                className="w-full border rounded-xl p-2.5 text-xs focus:ring-2 dir-ltr"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs font-bold text-gray-500 block mb-1">نوع فونت نامه</label>
+                                                            <select 
+                                                                value={secSettingsForm.letterheadFontFamily || 'Vazirmatn'}
+                                                                onChange={e => setSecSettingsForm({...secSettingsForm, letterheadFontFamily: e.target.value})}
+                                                                className="w-full border rounded-xl p-2.5 text-xs focus:ring-2"
+                                                            >
+                                                                <option value="Vazirmatn">Vazirmatn (پیش‌فرض)</option>
+                                                                <option value="Tahoma">Tahoma</option>
+                                                                <option value="Arial">Arial</option>
+                                                                <option value="B Nazanin">B Nazanin</option>
+                                                                <option value="B Titr">B Titr</option>
+                                                            </select>
+                                                        </div>
+                                                        <button type="button" onClick={handleSaveSecSettings} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 font-bold text-sm shadow-md transition-colors mt-4">
+                                                            ذخیره تنظیمات دبیرخانه
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Live Preview Pane */}
+                                                    <div className="border border-gray-300 rounded-lg p-2 bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                        <div 
+                                                            className="relative bg-white shadow-sm border border-gray-200 w-full"
+                                                            style={{ aspectRatio: '1 / 1.414', backgroundImage: secSettingsForm.letterheadUrl ? `url(${secSettingsForm.letterheadUrl})` : 'none', backgroundSize: '100% 100%' }}
+                                                        >
+                                                            <div 
+                                                                className="absolute border border-dashed border-red-500 bg-white/50 text-right p-1"
+                                                                style={{
+                                                                    top: `${secSettingsForm.metadataTop}mm`,
+                                                                    left: `${secSettingsForm.metadataLeft}mm`,
+                                                                    fontSize: `${secSettingsForm.metadataFontSize}px`,
+                                                                    fontFamily: secSettingsForm.letterheadFontFamily,
+                                                                    lineHeight: '1.5'
+                                                                }}
+                                                            >
+                                                                <div>شماره: ۱۲۳/۴۵۶</div>
+                                                                <div>تاریخ: ۱۴۰۳/۰۱/۰۱</div>
+                                                                <div>پیوست: دارد</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="p-8 text-center bg-gray-50 border rounded-2xl text-gray-500 font-bold text-sm">
+                                    ابتدا در بخش "اطلاعات پایه" حداقل یک شرکت تعریف کنید.
+                                </div>
+                            )}
                         </div>
                     )}
 
