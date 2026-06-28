@@ -25,7 +25,7 @@ const PrintMeeting: React.FC<PrintMeetingProps> = ({ meeting, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-start p-4 overflow-y-auto animate-fade-in safe-pb">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-start p-4 overflow-y-auto animate-fade-in safe-pb">
       <div className="relative z-50 flex flex-col gap-2 no-print w-full max-w-4xl mb-4">
          <div className="glass-panel p-3 rounded-xl shadow-lg flex justify-between items-center gap-4">
              <span className="font-bold text-sm">پیش‌نمایش چاپ صورتجلسه</span>

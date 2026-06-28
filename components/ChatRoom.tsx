@@ -1820,7 +1820,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 2. Image Viewer */}
             {showImageViewer && (
-                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
+                <div className="fixed inset-0 bg-black/90 z-[200] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center animate-fade-in" onClick={() => setShowImageViewer(null)}>
                     <img src={showImageViewer} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={e => e.stopPropagation()}/>
                     <div className="absolute top-4 right-4 flex gap-4 z-50">
                         <button onClick={(e) => { 
@@ -1834,7 +1834,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 3. Forward Modal */}
             {showForwardModal && (
-                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm">
                     <div className="glass-panel rounded-xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                             <span className="font-bold">ارسال به...</span>
@@ -1865,7 +1865,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 3.1 Group Creation Modal */}
             {showGroupModal && (
-                <div className="fixed inset-0 bg-black/50 z-[202] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                <div className="fixed inset-0 bg-black/50 z-[202] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in">
                     <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden animate-scale-in">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                             <h3 className="font-bold flex items-center gap-2"><Users size={20} className="text-orange-500"/> ساخت گروه جدید</h3>
@@ -1917,7 +1917,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 4. Group Info & Management Modal */}
             {showGroupInfo && (
-                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in">
                     <div className="glass-panel rounded-2xl w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
                         <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 p-8 text-white flex flex-col items-center">
                             <button onClick={() => setShowGroupInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>
@@ -2069,7 +2069,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             {/* 5. Contact Info Modal */}
             {showContactInfo && (
-                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={()=>setShowContactInfo(null)}>
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={()=>setShowContactInfo(null)}>
                     <div className="glass-panel rounded-2xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e=>e.stopPropagation()}>
                         <div className="relative bg-gradient-to-br from-blue-500 to-blue-700 p-8 text-white flex flex-col items-center">
                             <button onClick={() => setShowContactInfo(null)} className="absolute top-4 left-4 p-2 bg-black/20 rounded-full hover:bg-black/30"><X size={20}/></button>

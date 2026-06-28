@@ -1029,126 +1029,202 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
     try {
         const browser = await getBrowser();
         const page = await browser.newPage();
-        await page.setViewport({ width: 800, height: 1100, deviceScaleFactor: 2 });
+        
+        const isA5 = letter.paperSize === 'A5';
+        const isLandscape = letter.orientation === 'landscape';
+        const format = isA5 ? 'A5' : 'A4';
+        const landscape = isLandscape;
+        
+        await page.setViewport({ width: isA5 ? 600 : 800, height: isA5 ? 850 : 1100, deviceScaleFactor: 2 });
         
         const hasCustomPos = companySettings?.metadataTop !== undefined || companySettings?.metadataLeft !== undefined;
         
-        const letterheadHtml = companySettings?.letterheadUrl 
-            ? `<div class="letterhead-container" style="position: relative;">
-                 <img src="${companySettings.letterheadUrl}" />
-                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left-default-on-img'}">
-                     <div><b>شماره:</b> ${letter.letterNumber}</div>
-                     <div><b>تاریخ:</b> ${letter.date}</div>
-                     <div><b>پیوست:</b> ${letter.attachments?.length ? `${letter.attachments.length} مورد` : 'ندارد'}</div>
-                 </div>
-               </div>`
-            : `<div class="default-letterhead">
-                 <div class="lh-right">
-                     <h2>دبیرخانه اداری ${companyName || 'شرکت'}</h2>
-                     <p>بخش: ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
-                 </div>
-                 <div class="lh-center">
-                     <h1>نامه اداری</h1>
-                 </div>
-                 <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left'}">
-                     <div><b>شماره:</b> ${letter.letterNumber}</div>
-                     <div><b>تاریخ:</b> ${letter.date}</div>
-                     <div><b>پیوست:</b> ${letter.attachments?.length ? `${letter.attachments.length} مورد` : 'ندارد'}</div>
-                 </div>
-               </div>`;
+        const fontFamily = companySettings?.letterheadFontFamily || 'Tahoma';
+        const metadataTop = companySettings?.metadataTop ?? 25;
+        const metadataLeft = companySettings?.metadataLeft ?? 20;
+        const metadataFontSize = companySettings?.metadataFontSize ?? 11;
+        const stampSize = companySettings?.companyStampSize || 120;
+        const stampOpacity = (companySettings?.companyStampOpacity || 70) / 100;
+
+        let letterheadHtml = '';
+        if (companySettings?.letterheadUrl) {
+            letterheadHtml = `
+                <img src="${companySettings.letterheadUrl}" class="letterhead-bg" />
+                <div class="${hasCustomPos ? 'lh-left-custom' : 'lh-left-default-on-img'}">
+                    <div>شماره: ${letter.letterNumber}</div>
+                    <div>تاریخ: ${letter.date}</div>
+                    <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
+                </div>
+            `;
+        } else {
+            letterheadHtml = `
+                <div class="default-letterhead">
+                    <div class="lh-right">
+                        <div>شماره: ${letter.letterNumber}</div>
+                        <div>تاریخ: ${letter.date}</div>
+                        <div>پیوست: ${letter.attachments?.length ? 'دارد' : 'ندارد'}</div>
+                    </div>
+                    <div class="lh-center">
+                        <h2>دبیرخانه اداری ${companyName || 'شرکت'}</h2>
+                        <p>بخش: ${letter.section === 'headquarters' ? 'دفتر مرکزی' : 'کارخانه'}</p>
+                    </div>
+                    <div class="lh-left"></div>
+                </div>
+            `;
+        }
+
+        let signaturesHtml = '';
+        const sigPos = letter.signaturePosition || 'bottom_left';
+        
+        let sigStyle = 'text-align: center; margin-right: auto; margin-left: 0;';
+        if (sigPos === 'bottom_center') sigStyle = 'text-align: center; margin: 0 auto;';
+        if (sigPos === 'bottom_right') sigStyle = 'text-align: center; margin-left: auto; margin-right: 0;';
+
+        const stampHtml = letter.addCompanyStamp && companySettings?.companyStampUrl 
+            ? `<img src="${companySettings.companyStampUrl}" class="company-stamp" />` 
+            : '';
+
+        let signersHtml = '';
+        if (letter.signers && letter.signers.length > 0) {
+            signersHtml = `
+                <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
+                    ${letter.signers.map(s => `
+                        <div style="display: flex; flex-direction: column; align-items: center;">
+                            <div style="font-weight: bold; font-size: 14px;">${s.name}</div>
+                            <div style="font-weight: bold; font-size: 12px; color: #555;">${s.title}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        signaturesHtml = `
+            <div class="signatures" style="${sigStyle}">
+                <div class="sign-off-text" style="white-space: pre-wrap;">${letter.signOffText || 'با تشکر'}</div>
+                ${signersHtml}
+                <div class="stamp-container">
+                    ${stampHtml}
+                </div>
+            </div>
+        `;
 
         const html = `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">
             <style>
                 ${BASE_STYLE}
-                .letterhead-container { text-align: center; margin-bottom: 25px; border-bottom: 1px solid #ddd; padding-bottom: 15px; }
-                .letterhead-container img { max-height: 110px; max-width: 100%; object-fit: contain; }
-                .default-letterhead { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px double #1e3a8a; padding-bottom: 15px; margin-bottom: 30px; }
-                .lh-right h2 { font-size: 16px; font-weight: 900; color: #1e3a8a; margin: 0; }
-                .lh-right p { font-size: 11px; color: #666; margin: 5px 0 0 0; }
-                .lh-center h1 { font-size: 22px; font-weight: 900; color: #111; margin: 0; border: 2px solid #111; padding: 5px 15px; border-radius: 4px; }
-                .lh-left { font-size: 12px; color: #333; font-weight: bold; line-height: 1.6; text-align: right; }
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.0.0/Vazirmatn-font-face.css');
+                @import url('https://cdn.jsdelivr.net/gh/rastikerdar/tahoma-font@v1.0.0/tahoma.css');
+                
+                html, body {
+                    margin: 0; padding: 0;
+                    font-family: '${fontFamily}', 'Tahoma', 'Arial', sans-serif;
+                    direction: rtl;
+                    height: 100%;
+                    box-sizing: border-box;
+                }
+                
+                .page-container {
+                    position: relative;
+                    width: 100%;
+                    min-height: 100vh;
+                    overflow: hidden;
+                    box-sizing: border-box;
+                    padding-top: ${companySettings?.letterheadUrl ? '150px' : '30px'};
+                    padding-bottom: 100px;
+                }
+                
+                .letterhead-bg {
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    width: 100%; height: 100%;
+                    object-fit: fill;
+                    z-index: -1;
+                }
                 
                 .lh-left-default-on-img {
                     position: absolute;
-                    top: 25mm;
-                    left: 20mm;
-                    font-size: 11px;
-                    line-height: 1.6;
-                    font-weight: bold;
-                    text-align: right;
+                    top: 25mm; left: 20mm;
+                    font-size: 11px; font-weight: bold; line-height: 1.6;
                 }
                 
                 .lh-left-custom {
                     position: absolute !important;
-                    top: ${companySettings?.metadataTop ?? 25}mm !important;
-                    left: ${companySettings?.metadataLeft ?? 20}mm !important;
-                    font-size: ${companySettings?.metadataFontSize ?? 11}px !important;
-                    line-height: 1.6 !important;
-                    font-weight: bold !important;
-                    text-align: right !important;
-                    z-index: 1000 !important;
+                    top: ${metadataTop}mm !important;
+                    left: ${metadataLeft}mm !important;
+                    font-size: ${metadataFontSize}px !important;
+                    font-weight: bold !important; line-height: 1.6 !important;
+                    z-index: 100 !important;
                 }
                 
-                .letter-meta-row { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 25px; font-size: 13px; font-weight: bold; color: #333; }
-                .meta-item { display: flex; gap: 5px; }
-                .meta-label { color: #666; }
+                .default-letterhead {
+                    display: flex; justify-content: space-between; align-items: flex-start;
+                    border-bottom: 3px double #333; padding-bottom: 20px; margin-bottom: 40px;
+                    padding-left: 30px; padding-right: 30px;
+                }
+                .default-letterhead .lh-right { font-size: 11px; font-weight: bold; line-height: 1.8; width: 33%; text-align: right; }
+                .default-letterhead .lh-center { text-align: center; width: 34%; }
+                .default-letterhead .lh-center h2 { margin: 0 0 5px 0; font-size: 20px; }
+                .default-letterhead .lh-center p { margin: 0; font-size: 12px; color: #555; }
+                .default-letterhead .lh-left { width: 33%; }
                 
-                .letter-subject { font-size: 18px; font-weight: 900; text-align: center; margin-bottom: 30px; color: #1e3a8a; }
-                .letter-body { font-size: 14px; line-height: 1.8; color: #111; text-align: justify; min-height: 350px; margin-bottom: 40px; white-space: pre-wrap; }
+                .letter-content-wrapper {
+                    padding: 0 40px;
+                    z-index: 10;
+                    position: relative;
+                }
                 
-                .letter-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #eee; padding-top: 20px; font-size: 12px; }
-                .footer-right { color: #666; font-weight: bold; }
-                .footer-left { text-align: center; }
-                .footer-left h4 { margin: 0 0 10px 0; font-size: 13px; font-weight: 900; color: #1e3a8a; }
+                .salutation { margin-bottom: 25px; font-weight: bold; font-size: 14px; line-height: 1.8; }
+                .letter-body { font-size: 14px; line-height: 2; text-align: justify; margin-bottom: 50px; }
                 
-                .sig-images-container { display: flex; gap: 15px; justify-content: center; align-items: flex-end; }
-                .sig-img-wrapper { border: 1px dashed #ccc; padding: 4px; border-radius: 8px; background: #fafafa; }
-                .sig-img-wrapper img { max-height: 65px; max-width: 110px; object-fit: contain; display: block; }
+                .signatures { width: 250px; }
+                .sign-off-text { font-weight: bold; font-size: 14px; margin-bottom: 15px; }
+                .company-name { font-weight: bold; font-size: 14px; }
+                .sender-name { font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+                
+                .stamp-container { position: relative; min-height: ${stampSize}px; display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+                .company-stamp { position: absolute; max-width: ${stampSize}px; max-height: ${stampSize}px; opacity: ${stampOpacity}; mix-blend-multiply: multiply; z-index: -1; }
+                
+                .footer {
+                    position: absolute; bottom: 20px; left: 30px; right: 30px;
+                    border-top: 1px solid #ccc; padding-top: 10px;
+                    display: flex; justify-content: space-between;
+                    font-size: 10px; color: #666;
+                }
             </style>
         </head><body>
-            ${letterheadHtml}
-            
-            <div class="letter-meta-row">
-                <div class="meta-item"><span class="meta-label">فرستنده:</span> <span>${letter.sender}</span></div>
-                <div class="meta-item"><span class="meta-label">گیرنده:</span> <span>${letter.receiver}</span></div>
-                <div class="meta-item"><span class="meta-label">نوع نامه:</span> <span>${letter.type === 'internal' ? 'داخلی' : letter.type === 'incoming' ? 'وارده' : 'صادره'}</span></div>
-            </div>
-            
-            <div class="letter-subject">موضوع: ${letter.subject}</div>
-            
-            <div class="letter-body">${letter.content || ''}</div>
-            
-            <div class="letter-footer">
-                <div class="footer-right">
-                    <span>ثبت‌کننده: ${letter.createdBy || 'سیستم'}</span>
-                </div>
-                <div class="footer-left">
-                    <h4>تایید و امضا کنندگان:</h4>
-                    <div class="sig-images-container">
-                        ${(letter.signatureImageUrls || []).length > 0 ? 
-                            (letter.signatureImageUrls || []).map(url => `
-                                <div class="sig-img-wrapper">
-                                    <img src="${url}" />
-                                </div>
-                            `).join('') : '<span style="color: #999; font-size: 11px;">بدون امضا</span>'
-                        }
-                        ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `
-                            <div class="sig-img-wrapper" style="border: 1px dashed #ef4444; padding: 4px; border-radius: 8px; background: #fff5f5; text-align: center;">
-                                <span style="font-size: 8px; color: #ef4444; font-weight: bold; display: block; margin-bottom: 2px;">مهر رسمی شرکت</span>
-                                <img src="${companySettings.companyStampUrl}" style="max-height: 65px; max-width: 65px; object-fit: contain; display: block; mix-blend-multiply: multiply;" />
-                            </div>
-                        ` : ''}
+            <div class="page-container">
+                ${letterheadHtml}
+                
+                <div class="letter-content-wrapper">
+                    <div class="salutation">
+                        <div>موضوع: ${letter.subject}</div>
+                        <div>با سلام و احترام،</div>
                     </div>
+                    
+                    <div class="letter-body">
+                        ${letter.content || ''}
+                    </div>
+                    
+                    ${signaturesHtml}
                 </div>
+                
+                ${(!companySettings?.hideAutoFooter || !companySettings?.letterheadUrl) ? `
+                <div class="footer">
+                    <span>نشانی: ${companySettings?.address || 'ثبت نشده'}</span>
+                    <span>تلفن: ${companySettings?.phone || 'ثبت نشده'}</span>
+                    <span>کدپستی: ${companySettings?.postalCode || '-'}</span>
+                </div>
+                ` : ''}
             </div>
         </body></html>`;
 
         await page.setContent(html, { waitUntil: 'networkidle0' });
         const pdf = await page.pdf({ 
-            format: 'A4', 
+            format: format, 
+            landscape: landscape,
             printBackground: true,
-            margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+            margin: { top: '0', bottom: '0', left: '0', right: '0' } // handled by CSS
         });
+        
         await page.close();
         return pdf;
     } catch (e) {
@@ -1216,15 +1292,15 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
             ${letterheadHtml}
             <table class="letter-meta" style="width: 100%;">
                 <tr>
-                    <td style="text-align: right; width: 50%;"><b>گیرنده:</b> ${letter.receiver}</td>
+                    <td style="text-align: right; width: 50%;"><b>موضوع:</b> ${letter.subject}</td>
                     <td style="text-align: left; width: 50%;"><b>شماره نامه:</b> ${letter.letterNumber}</td>
                 </tr>
                 <tr>
-                    <td style="text-align: right;"><b>موضوع:</b> ${letter.subject}</td>
+                    <td style="text-align: right;"></td>
                     <td style="text-align: left;"><b>تاریخ:</b> ${letter.date}</td>
                 </tr>
                 <tr>
-                    <td style="text-align: right;"><b>فرستنده:</b> ${letter.sender}</td>
+                    <td style="text-align: right;"></td>
                     <td style="text-align: left;"><b>پیوست:</b> ${letter.attachments?.length > 0 ? 'دارد' : 'ندارد'}</td>
                 </tr>
             </table>
@@ -1237,17 +1313,25 @@ export const generateSecretariatLetterDoc = async (letter, companyName, companyS
                     </td>
                     <td style="text-align: center; width: 34%;">
                         ${letter.signaturePosition === 'bottom_center' ? `
-                            <p style="font-weight: bold; margin-bottom: 10px;">${letter.signOffText || 'با تشکر'}</p>
-                            <p style="font-weight: bold; margin-bottom: 10px;">${companyName || ''}</p>
-                            <p style="font-weight: bold;">${letter.sender}</p>
+                            <p style="font-weight: bold; margin-bottom: 10px; white-space: pre-wrap;">${letter.signOffText || 'با تشکر'}</p>
+                            ${(letter.signers || []).map(s => `
+                                <div style="margin-top: 10px;">
+                                    <p style="font-weight: bold; margin: 0;">${s.name}</p>
+                                    <p style="font-size: 10pt; color: #555; margin: 0;">${s.title}</p>
+                                </div>
+                            `).join('')}
                             ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
                         ` : ''}
                     </td>
                     <td style="text-align: left; width: 33%;">
                         ${letter.signaturePosition !== 'bottom_center' ? `
-                            <p style="font-weight: bold; margin-bottom: 10px;">${letter.signOffText || 'با تشکر'}</p>
-                            <p style="font-weight: bold; margin-bottom: 10px;">${companyName || ''}</p>
-                            <p style="font-weight: bold;">${letter.sender}</p>
+                            <p style="font-weight: bold; margin-bottom: 10px; white-space: pre-wrap;">${letter.signOffText || 'با تشکر'}</p>
+                            ${(letter.signers || []).map(s => `
+                                <div style="margin-top: 10px;">
+                                    <p style="font-weight: bold; margin: 0;">${s.name}</p>
+                                    <p style="font-size: 10pt; color: #555; margin: 0;">${s.title}</p>
+                                </div>
+                            `).join('')}
                             ${letter.addCompanyStamp && companySettings?.companyStampUrl ? `<img src="${companySettings.companyStampUrl}" style="height: 100px; width: 100px; margin-top: 10px;" />` : ''}
                         ` : ''}
                     </td>

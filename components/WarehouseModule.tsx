@@ -20,7 +20,7 @@ import { isInFinancialYear } from '../utils/dateUtils';
 interface Props { 
     currentUser: User; 
     settings?: SystemSettings; 
-    initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals';
+    initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals' | 'dispatch_report';
     financialYear?: string;
 }
 
@@ -47,7 +47,7 @@ const TransactionEditModal = ({ tx, onClose, onSave, items }: { tx: WarehouseTra
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-[150] flex items-center justify-center p-0 md:p-4 animate-fade-in backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[150] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-0 md:p-4 animate-fade-in backdrop-blur-sm">
             <div className="glass-panel rounded-none md:rounded-3xl shadow-2xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col overflow-hidden border-0 md:border md:border-white/20">
                 <div className="p-4 md:p-6 border-b flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/60 backdrop-blur-md text-gray-800 dark:text-gray-200">
                     <div className="flex items-center gap-2">

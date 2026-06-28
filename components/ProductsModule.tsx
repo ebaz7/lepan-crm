@@ -407,7 +407,7 @@ const ProductsModule: React.FC = () => {
             )}
 
             {showProductModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
                         <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                             <h3 className="font-bold text-lg">{editingProduct ? 'ویرایش محصول' : 'محصول جدید'}</h3>

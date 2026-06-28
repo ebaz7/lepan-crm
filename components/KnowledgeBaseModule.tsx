@@ -71,7 +71,7 @@ const PersonalNoteModal: React.FC<PersonalNoteModalProps> = ({ note, onClose, on
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm rtl text-right">
+        <div className="fixed inset-0 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm rtl text-right">
             <div className={`w-full max-w-xl rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in max-h-[90vh] ${color}`}>
                 <div className="p-4 border-b border-black/5 flex justify-between items-center flex-none">
                     <input 
@@ -188,7 +188,7 @@ interface ItemModalProps {
 const ItemModal: React.FC<ItemModalProps> = ({ 
     editingItem, titleStr, setTitleStr, contentStr, setContentStr, onClose, onSave 
 }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
+    <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
         <div className="glass-panel rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 flex-none">
                 <h2 className="font-black text-gray-800 text-lg">{editingItem ? 'ویرایش یادداشت' : 'افزودن یادداشت جدید'}</h2>
@@ -239,7 +239,7 @@ interface CompanyModalProps {
 const CompanyModal: React.FC<CompanyModalProps> = ({ 
     editingCompany, setEditingCompany, onClose, onSave, companies 
 }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
+    <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm rtl text-right">
         <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-yellow-50 flex-none">
                 <h2 className="font-black text-yellow-900 text-lg">

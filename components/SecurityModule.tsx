@@ -562,7 +562,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             
             {/* Shift Meta Modal */}
             {showShiftModal && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                     <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-5">
                         <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">اطلاعات شیفت ({formatDate(getIsoSelectedDate())})</h3><button onClick={()=>setShowShiftModal(false)}><X/></button></div>
                         <div className="space-y-4">
@@ -579,7 +579,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
 
             {/* Print Preview Modal */}
             {showPrintModal && printTarget && (
-                <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                     <div className="glass-panel p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print">
                         <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"><Printer size={16}/> چاپ</button>
                         <button onClick={handleDownloadPDF} disabled={isGeneratingPdf} className="bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2">{isGeneratingPdf ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>} دانلود PDF</button>
@@ -601,7 +601,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
 
             {/* Cartable Action Modal */}
             {viewCartableItem && (
-                <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                     <div className="glass-panel p-4 rounded-xl shadow-lg mb-4 flex gap-4 no-print w-full max-w-2xl justify-between items-center">
                         <div className="font-bold text-lg text-gray-800">{viewCartableItem.type === 'daily_approval' || viewCartableItem.type === 'daily_archive' ? `گزارش روزانه - ${formatDate(viewCartableItem.date)}` : 'بررسی'}</div>
                         <div className="flex gap-2">
@@ -659,7 +659,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
 
             {/* Input Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                     <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">{activeTab === 'logs' ? 'ثبت ورود و خروج' : activeTab === 'delays' ? 'ثبت تاخیر پرسنل' : 'ثبت وقایع'}</h3><button onClick={resetForms}><X size={20}/></button></div>
                         {activeTab === 'logs' && (

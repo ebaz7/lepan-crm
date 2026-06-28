@@ -355,7 +355,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
 
         {/* ADD BANK MODAL */}
         {showAddBankModal && (
-            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                 <div className="glass-panel rounded-xl shadow-xl w-full max-w-sm p-5 animate-scale-in">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><Landmark size={18} className="text-blue-600"/> افزودن بانک جدید</h3>

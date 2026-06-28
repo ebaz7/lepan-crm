@@ -205,7 +205,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       {/* Restore Modal */}
       {showRestoreModal && (
-          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+          <div className="fixed inset-0 bg-black/80 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 animate-fade-in backdrop-blur-sm">
               <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
                   <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
                       <Database size={32}/>

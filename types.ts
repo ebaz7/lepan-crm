@@ -1235,6 +1235,7 @@ export interface SecretariatLetter {
     attachments: SecretariatLetterAttachment[];
     addCompanyStamp?: boolean; // تیک درج مهر شرکت پای نامه
     signOffText?: string; // متن با تشکر
+    signers?: { name: string; title: string; }[]; // لیست امضاکنندگان و سمت‌ها
     paperSize?: 'A4' | 'A5';
     orientation?: 'portrait' | 'landscape';
     signaturePosition?: 'bottom_left' | 'bottom_center' | 'bottom_right';
@@ -1247,6 +1248,8 @@ export interface SecretariatCompanySettings {
     companyId: string;
     headquartersAccessTokens: string[]; // List of user IDs with access
     factoryAccessTokens: string[];     // List of user IDs with access
+    editAccessTokens?: string[];       // List of user IDs with edit access
+    deleteAccessTokens?: string[];     // List of user IDs with delete access
     letterheadUrl?: string;            // سربرگ
     meetingMinutesTemplate?: string;   // قالب صورتجلسه
     companyStampUrl?: string;          // تصویر مهر رسمی شرکت

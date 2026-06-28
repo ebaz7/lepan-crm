@@ -778,7 +778,7 @@ const CurrencyReport: React.FC<CurrencyReportProps> = ({ records, onSelectTranch
             {/* --- INTELLIGENT ACCESSIBILITY DRAWER/MODAL FOR DETAILED RECORD VIEWS (ESPECIALLY ON PHONE SCREENS) --- */}
             {selectedRowDetail && (
                 <div 
-                    className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in no-print" 
+                    className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 animate-fade-in no-print" 
                     onClick={() => setSelectedRowDetail(null)}
                 >
                     <div 

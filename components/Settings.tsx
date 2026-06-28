@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSettings, saveSettings, uploadFile, getSecretariatSettings, saveSecretariatSettings } from '../services/storageService';
 import { SystemSettings, Company, Contact, CompanyBank, User, PrintTemplate, SecretariatCompanySettings } from '../types';
-import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, Database, Bell, Plus, Trash2, Building, ShieldCheck, Landmark, AppWindow, BellRing, BellOff, Send, Image as ImageIcon, Pencil, X, Check, MessageCircle, RefreshCw, Users, User as UserIcon, FolderSync, Smartphone, Link, Truck, DownloadCloud, UploadCloud, Warehouse, FileText, Container, LayoutTemplate, WifiOff, Info, RefreshCcw, FileClock, Power, Cpu, Zap, Layers, Globe, ClipboardList, Lock } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { Capacitor } from '@capacitor/core';
 import { requestNotificationPermission, setNotificationPreference, isNotificationEnabledInApp } from '../services/notificationService';
@@ -1800,8 +1800,117 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                     </div>
                                     
                                     {selectedCompanyIdForSec && (
-                                        <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 md:p-6 shadow-sm">
+                                        <div className="bg-white/50 dark:bg-gray-800 border rounded-2xl p-5 md:p-6 shadow-sm space-y-6">
+                                            
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
+                                                    <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                                        <Lock size={14} className="text-purple-600" /> دسترسی به دبیرخانه دفتر مرکزی
+                                                    </label>
+                                                    <div className="max-h-40 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
+                                                        {systemUsers.map(u => {
+                                                            const isChecked = secSettingsForm.headquartersAccessTokens?.includes(u.id);
+                                                            return (
+                                                                <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" checked={isChecked}
+                                                                        onChange={() => {
+                                                                            let tokens = [...(secSettingsForm.headquartersAccessTokens || [])];
+                                                                            if (tokens.includes(u.id)) tokens = tokens.filter(t => t !== u.id);
+                                                                            else tokens.push(u.id);
+                                                                            setSecSettingsForm({...secSettingsForm, headquartersAccessTokens: tokens});
+                                                                        }}
+                                                                        className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
+                                                                    />
+                                                                    <span className="font-bold text-gray-700">{u.fullName}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
+                                                    <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                                        <Lock size={14} className="text-indigo-600" /> دسترسی به دبیرخانه کارخانه
+                                                    </label>
+                                                    <div className="max-h-40 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
+                                                        {systemUsers.map(u => {
+                                                            const isChecked = secSettingsForm.factoryAccessTokens?.includes(u.id);
+                                                            return (
+                                                                <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" checked={isChecked}
+                                                                        onChange={() => {
+                                                                            let tokens = [...(secSettingsForm.factoryAccessTokens || [])];
+                                                                            if (tokens.includes(u.id)) tokens = tokens.filter(t => t !== u.id);
+                                                                            else tokens.push(u.id);
+                                                                            setSecSettingsForm({...secSettingsForm, factoryAccessTokens: tokens});
+                                                                        }}
+                                                                        className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                                                                    />
+                                                                    <span className="font-bold text-gray-700">{u.fullName}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                                                <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
+                                                    <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                                        <Lock size={14} className="text-amber-600" /> دسترسی به ویرایش نامه‌ها
+                                                    </label>
+                                                    <div className="max-h-40 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
+                                                        {systemUsers.map(u => {
+                                                            const isChecked = secSettingsForm.editAccessTokens?.includes(u.id);
+                                                            return (
+                                                                <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" checked={isChecked}
+                                                                        onChange={() => {
+                                                                            let tokens = [...(secSettingsForm.editAccessTokens || [])];
+                                                                            if (tokens.includes(u.id)) tokens = tokens.filter(t => t !== u.id);
+                                                                            else tokens.push(u.id);
+                                                                            setSecSettingsForm({...secSettingsForm, editAccessTokens: tokens});
+                                                                        }}
+                                                                        className="rounded text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                                                                    />
+                                                                    <span className="font-bold text-gray-700">{u.fullName}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
+                                                    <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                                        <Lock size={14} className="text-red-600" /> دسترسی به حذف نامه‌ها
+                                                    </label>
+                                                    <div className="max-h-40 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
+                                                        {systemUsers.map(u => {
+                                                            const isChecked = secSettingsForm.deleteAccessTokens?.includes(u.id);
+                                                            return (
+                                                                <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" checked={isChecked}
+                                                                        onChange={() => {
+                                                                            let tokens = [...(secSettingsForm.deleteAccessTokens || [])];
+                                                                            if (tokens.includes(u.id)) tokens = tokens.filter(t => t !== u.id);
+                                                                            else tokens.push(u.id);
+                                                                            setSecSettingsForm({...secSettingsForm, deleteAccessTokens: tokens});
+                                                                        }}
+                                                                        className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+                                                                    />
+                                                                    <span className="font-bold text-gray-700">{u.fullName}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-dashed">
                                                 
                                                 {/* Upload Letterhead */}
                                                 <div>

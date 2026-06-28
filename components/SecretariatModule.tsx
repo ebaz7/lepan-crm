@@ -31,7 +31,9 @@ import {
   Loader2,
   FileCheck,
   Save,
-  Award
+  Award,
+  Edit,
+  Eye
 } from 'lucide-react';
 
 import { 
@@ -83,11 +85,12 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
 
   // --- Modals & Forms ---
   const [showNewLetterModal, setShowNewLetterModal] = useState(false);
+  const [editingLetterId, setEditingLetterId] = useState<string | null>(null);
   const [selectedLetterForView, setSelectedLetterForView] = useState<SecretariatLetter | null>(null);
   const [isPrintMode, setIsPrintMode] = useState<SecretariatLetter | null>(null);
 
   // --- New Letter Form State ---
-  const [newLetterForm, setNewLetterForm] = useState({
+  const initialFormState = {
     date: '',
     subject: '',
     content: '',
@@ -97,11 +100,17 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     attachments: [] as SecretariatLetterAttachment[],
     addCompanyStamp: false,
     signOffText: 'با تشکر',
-    paperSize: 'A4',
-    orientation: 'portrait',
-    addCompanyStamp: false,
-    signaturePosition: 'bottom_left'
-  });
+    signers: [] as {name: string, title: string}[],
+    paperSize: 'A4' as 'A4'|'A5',
+    orientation: 'portrait' as 'portrait'|'landscape',
+    signaturePosition: 'bottom_left' as 'bottom_left'|'bottom_center'|'bottom_right'
+  };
+  const [newLetterForm, setNewLetterForm] = useState(initialFormState);
+
+  const resetForm = () => {
+    setNewLetterForm(initialFormState);
+    setEditingLetterId(null);
+  };
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
@@ -179,6 +188,10 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   const userRoles = currentUser.roles || [currentUser.role];
   const isSuperUser = userRoles.includes('admin') || userRoles.includes('ceo') || currentUser.canManageSecretariatSettings;
 
+  const activeCompanySettings = secSettings.find(s => s.companyId === selectedCompany?.id);
+  const canEditLetters = isSuperUser || activeCompanySettings?.editAccessTokens?.includes(currentUser.id);
+  const canDeleteLetters = isSuperUser || activeCompanySettings?.deleteAccessTokens?.includes(currentUser.id);
+
   const hasSectionAccess = (sec: 'headquarters' | 'factory', companyId: string) => {
     if (isSuperUser) return true;
     const companySet = secSettings.find(s => s.companyId === companyId);
@@ -242,52 +255,108 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
     return `${prefix}/${year}/${seq}`;
   };
 
+  const handleOpenNewLetterModal = () => {
+    resetForm();
+    const currentDate = getCurrentShamsiDate();
+    setNewLetterForm(p => ({
+      ...p,
+      date: `${currentDate.year}/${String(currentDate.month).padStart(2, '0')}/${String(currentDate.day).padStart(2, '0')}`,
+      content: companySettingsForm.meetingMinutesTemplate || ''
+    }));
+    setShowNewLetterModal(true);
+  };
+
+  const handleEditLetterClick = (letter: SecretariatLetter) => {
+    setNewLetterForm({
+      date: letter.date || '',
+      subject: letter.subject || '',
+      content: letter.content || '',
+      sender: letter.sender || '',
+      receiver: letter.receiver || '',
+      type: letter.type || 'internal',
+      attachments: letter.attachments || [],
+      addCompanyStamp: letter.addCompanyStamp || false,
+      signOffText: letter.signOffText || 'با تشکر',
+      signers: letter.signers || [],
+      paperSize: letter.paperSize || 'A4',
+      orientation: letter.orientation || 'portrait',
+      signaturePosition: letter.signaturePosition || 'bottom_left'
+    });
+    setEditingLetterId(letter.id);
+    setSelectedLetterForView(null);
+    setShowNewLetterModal(true);
+  };
+
   // Handlers for Letter Submissions
-  const handleCreateLetter = async (e: React.FormEvent) => {
+  const handleSaveLetter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCompany || !activeSection) return;
 
-    const autoNum = getNextLetterNumber(selectedCompany, activeSection);
-    const newLetter: SecretariatLetter = {
-      id: generateUUID(),
-      companyId: selectedCompany.id,
-      section: activeSection,
-      letterNumber: autoNum,
-      date: newLetterForm.date,
-      subject: newLetterForm.subject,
-      content: newLetterForm.content,
-      sender: newLetterForm.sender,
-      receiver: newLetterForm.receiver,
-      type: newLetterForm.type,
-      status: SecretariatLetterStatus.PENDING,
-      comments: [],
-      attachments: newLetterForm.attachments,
-      addCompanyStamp: newLetterForm.addCompanyStamp,
-      signOffText: newLetterForm.signOffText,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      createdBy: currentUser.fullName
-    };
+    if (editingLetterId) {
+      const existingLetter = letters.find(l => l.id === editingLetterId);
+      if (!existingLetter) return;
+      
+      const updatedLetter: SecretariatLetter = {
+        ...existingLetter,
+        date: newLetterForm.date,
+        subject: newLetterForm.subject,
+        content: newLetterForm.content,
+        sender: newLetterForm.sender,
+        receiver: newLetterForm.receiver,
+        type: newLetterForm.type,
+        attachments: newLetterForm.attachments,
+        addCompanyStamp: newLetterForm.addCompanyStamp,
+        signOffText: newLetterForm.signOffText,
+        signers: newLetterForm.signers,
+        paperSize: newLetterForm.paperSize,
+        orientation: newLetterForm.orientation,
+        signaturePosition: newLetterForm.signaturePosition,
+        updatedAt: Date.now()
+      };
 
-    try {
-      const updatedList = await saveSecretariatLetter(newLetter);
-      setLetters(updatedList);
-      setShowNewLetterModal(false);
-      // Reset form
-      const d = getCurrentShamsiDate();
-      const shamsiStr = `${d.year}/${String(d.month).padStart(2, '0')}/${String(d.day).padStart(2, '0')}`;
-      setNewLetterForm({
-        date: shamsiStr,
-        subject: '',
-        content: '',
-        sender: '',
-        receiver: '',
-        type: 'internal',
-        attachments: [],
-        addCompanyStamp: false
-      });
-    } catch (err) {
-      alert('خطا در ذخیره‌سازی نامه');
+      try {
+        const updatedList = await updateSecretariatLetter(updatedLetter);
+        setLetters(updatedList);
+        setShowNewLetterModal(false);
+        resetForm();
+      } catch (err) {
+        alert('خطا در بروزرسانی نامه');
+      }
+    } else {
+      const autoNum = getNextLetterNumber(selectedCompany, activeSection);
+      const newLetter: SecretariatLetter = {
+        id: generateUUID(),
+        companyId: selectedCompany.id,
+        section: activeSection,
+        letterNumber: autoNum,
+        date: newLetterForm.date,
+        subject: newLetterForm.subject,
+        content: newLetterForm.content,
+        sender: newLetterForm.sender,
+        receiver: newLetterForm.receiver,
+        type: newLetterForm.type,
+        status: SecretariatLetterStatus.PENDING,
+        comments: [],
+        attachments: newLetterForm.attachments,
+        addCompanyStamp: newLetterForm.addCompanyStamp,
+        signOffText: newLetterForm.signOffText,
+        signers: newLetterForm.signers,
+        paperSize: newLetterForm.paperSize,
+        orientation: newLetterForm.orientation,
+        signaturePosition: newLetterForm.signaturePosition,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        createdBy: currentUser.fullName
+      };
+
+      try {
+        const updatedList = await saveSecretariatLetter(newLetter);
+        setLetters(updatedList);
+        setShowNewLetterModal(false);
+        resetForm();
+      } catch (err) {
+        alert('خطا در ذخیره‌سازی نامه');
+      }
     }
   };
 
@@ -784,20 +853,11 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
           >
             <Archive size={15} /> آرشیو و بایگانی
           </button>
-
-          {isSuperUser && (
-            <button 
-              onClick={() => setActiveTab('settings')}
-              className={`flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <Settings2 size={15} /> تنظیمات دبیرخانه
-            </button>
-          )}
         </div>
 
         {activeTab !== 'settings' && (
           <button 
-            onClick={() => setShowNewLetterModal(true)}
+            onClick={handleOpenNewLetterModal}
             className="flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all"
           >
             <Plus size={16} /> ثبت نامه اداری جدید
@@ -949,255 +1009,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
         </div>
       )}
 
-      {/* B. SECRETARIAT SETTINGS TAB */}
-      {activeTab === 'settings' && isSuperUser && (
-        <div className="glass-panel border border-slate-200/60 rounded-2xl bg-white p-6 animate-fade-in space-y-6">
-          <div className="border-b pb-3 flex items-center gap-2">
-            <Settings2 className="text-purple-600" size={20} />
-            <h2 className="text-base font-black text-slate-800">تنظیمات دبیرخانه مرکزی برای: {selectedCompany.name}</h2>
-          </div>
 
-          <form onSubmit={handleSaveSettings} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Access Control: Headquarters */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Lock size={14} className="text-purple-600" /> دسترسی به دبیرخانه دفتر مرکزی
-                </label>
-                <p className="text-[10px] text-gray-400">کاربرانی که مجاز به دسترسی به کارتابل و آرشیو دفتر مرکزی این شرکت هستند را علامت بزنید.</p>
-                
-                <div className="max-h-48 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
-                  {users.map(u => {
-                    const isChecked = companySettingsForm.headquartersAccessTokens?.includes(u.id);
-                    return (
-                      <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={isChecked}
-                          onChange={() => {
-                            let tokens = [...(companySettingsForm.headquartersAccessTokens || [])];
-                            if (tokens.includes(u.id)) {
-                              tokens = tokens.filter(t => t !== u.id);
-                            } else {
-                              tokens.push(u.id);
-                            }
-                            setCompanySettingsForm(p => ({ ...p, headquartersAccessTokens: tokens }));
-                          }}
-                          className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
-                        />
-                        <span className="font-bold text-gray-700">{u.fullName}</span>
-                        <span className="text-[9px] text-gray-400">({u.username})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Access Control: Factory */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Lock size={14} className="text-indigo-600" /> دسترسی به دبیرخانه کارخانه
-                </label>
-                <p className="text-[10px] text-gray-400">کاربرانی که مجاز به دسترسی به کارتابل و آرشیو بخش کارخانه این شرکت هستند را علامت بزنید.</p>
-                
-                <div className="max-h-48 overflow-y-auto border bg-white rounded-lg p-2.5 space-y-1.5">
-                  {users.map(u => {
-                    const isChecked = companySettingsForm.factoryAccessTokens?.includes(u.id);
-                    return (
-                      <label key={u.id} className="flex items-center gap-2 text-xs hover:bg-slate-50 p-1 rounded cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={isChecked}
-                          onChange={() => {
-                            let tokens = [...(companySettingsForm.factoryAccessTokens || [])];
-                            if (tokens.includes(u.id)) {
-                              tokens = tokens.filter(t => t !== u.id);
-                            } else {
-                              tokens.push(u.id);
-                            }
-                            setCompanySettingsForm(p => ({ ...p, factoryAccessTokens: tokens }));
-                          }}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
-                        />
-                        <span className="font-bold text-gray-700">{u.fullName}</span>
-                        <span className="text-[9px] text-gray-400">({u.username})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Design Custom Letterhead and Stamp Uploads */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-              {/* Custom Letterhead Upload */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <ImageIcon size={14} /> بارگذاری تصویر سربرگ اداری اختصاصی شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">تصویر سربرگ شرکت را آپلود کنید تا نامه‌ها با این سربرگ چاپ و خروجی PDF شوند. در صورت عدم تعریف، از قالب پیش‌فرض رسمی سیستم استفاده می‌شود.</p>
-                
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
-                    {companySettingsForm.letterheadUrl ? (
-                      <img src={companySettingsForm.letterheadUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400">بدون سربرگ</span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <input 
-                      type="file" 
-                      ref={letterheadInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleLetterheadUpload} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => letterheadInputRef.current?.click()}
-                      className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs px-3 py-2 rounded-lg transition-colors font-bold border border-purple-200"
-                      disabled={uploadingLetterhead}
-                    >
-                      <Upload size={14} /> {uploadingLetterhead ? 'درحال آپلود...' : 'انتخاب و آپلود تصویر سربرگ'}
-                    </button>
-                    {companySettingsForm.letterheadUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setCompanySettingsForm(p => ({ ...p, letterheadUrl: '' }))}
-                        className="text-[10px] text-red-500 hover:underline block font-bold"
-                      >
-                        حذف سربرگ کنونی
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom Company Stamp Upload */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Award size={14} className="text-red-600" /> بارگذاری تصویر مهر رسمی شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">تصویر مهر شرکت را جهت درج پای نامه‌های اداری آپلود کنید. در صورت فعال بودن تیک مهر، این تصویر در پایین نامه نمایش داده می‌شود.</p>
-                
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center p-1">
-                    {companySettingsForm.companyStampUrl ? (
-                      <img src={companySettingsForm.companyStampUrl} className="w-full h-full object-contain mix-blend-multiply" />
-                    ) : (
-                      <span className="text-[10px] text-slate-400">بدون مهر رسمی</span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <input 
-                      type="file" 
-                      ref={stampInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleStampUpload} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => stampInputRef.current?.click()}
-                      className="flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 text-xs px-3 py-2 rounded-lg transition-colors font-bold border border-red-200"
-                      disabled={uploadingStamp}
-                    >
-                      <Upload size={14} /> {uploadingStamp ? 'درحال آپلود...' : 'انتخاب و آپلود تصویر مهر شرکت'}
-                    </button>
-                    {companySettingsForm.companyStampUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setCompanySettingsForm(p => ({ ...p, companyStampUrl: '' }))}
-                        className="text-[10px] text-red-500 hover:underline block font-bold"
-                      >
-                        حذف مهر کنونی
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Template and Alignment settings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-              {/* Default Meeting Minutes template */}
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  قالب صورتجلسه پیش‌فرض شرکت
-                </label>
-                <p className="text-[10px] text-gray-400">می‌توانید قالب متنی پیش‌فرض صورتجلسات اداری این شرکت را تعریف کنید تا در هنگام ثبت نامه‌های اداری جدید با یک کلیک درج شود.</p>
-                
-                <textarea
-                  value={companySettingsForm.meetingMinutesTemplate || ''}
-                  onChange={e => setCompanySettingsForm(p => ({ ...p, meetingMinutesTemplate: e.target.value }))}
-                  rows={5}
-                  className="w-full border rounded-xl p-3 text-xs focus:ring-1 focus:ring-purple-500"
-                  placeholder="مثال: دستور جلسه مصوبات مورخ... اتخاذ تصمیمات صورت پذیرفته به شرح..."
-                />
-              </div>
-
-              {/* Letterhead Fields Alignment Coordinates */}
-              <div className="space-y-3 bg-slate-50/50 p-4 border rounded-xl">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                  <Settings2 size={14} className="text-purple-600" /> تنظیم دقیق موقعیت اطلاعات سربرگ
-                </label>
-                <p className="text-[10px] text-gray-400">اگر از سربرگ چاپی اختصاصی استفاده می‌کنید، مقادیر زیر را به میلی‌متر (mm) وارد کنید تا اطلاعات (تاریخ، شماره، پیوست) دقیقا در کادر مربوطه روی کاغذ چاپ شوند.</p>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از بالا (mm)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataTop ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataTop: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۲۵"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">فاصله از چپ (mm)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataLeft ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataLeft: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۲۰"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-600 block">اندازه قلم (px)</span>
-                    <input 
-                      type="number"
-                      value={companySettingsForm.metadataFontSize ?? ''}
-                      onChange={e => setCompanySettingsForm(p => ({ ...p, metadataFontSize: e.target.value ? Number(e.target.value) : undefined }))}
-                      placeholder="مثال: ۱۱"
-                      className="w-full border bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-                <div className="text-[9px] text-slate-400 leading-relaxed pt-1">
-                  * در صورت خالی رها کردن مقادیر فوق، از تنظیمات تراز پیش‌فرض سیستم استفاده خواهد شد.
-                </div>
-              </div>
-            </div>
-
-            {/* Save Buttons */}
-            <div className="flex justify-end pt-4 border-t">
-              <button
-                type="submit"
-                className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm hover:shadow transition-colors"
-              >
-                <Save size={15} /> ذخیره کلیه تنظیمات دبیرخانه
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
 
       {/* --- ALL MODALS --- */}
@@ -1205,7 +1017,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 1. REGISTER NEW LETTER MODAL */}
       <AnimatePresence>
         {showNewLetterModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1223,7 +1035,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </button>
               </div>
 
-              <form onSubmit={handleCreateLetter} className="space-y-4">
+              <form onSubmit={handleSaveLetter} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Letter Date */}
                   <div className="space-y-1">
@@ -1321,10 +1133,11 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       className="min-h-[250px] text-sm"
                       modules={{
                         toolbar: [
+                          [{ 'font': [] }, { 'size': [] }],
                           [{ 'header': [1, 2, 3, false] }],
                           ['bold', 'italic', 'underline', 'strike'],
                           [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                          [{ 'align': [] }],
+                          [{ 'align': [] }, { 'direction': 'rtl' }],
                           [{ 'color': [] }, { 'background': [] }],
                           ['clean']
                         ]
@@ -1381,17 +1194,75 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   </div>
                 </div>
 
-                {/* Sign-off text */}
-                <div className="space-y-1 mt-4">
-                  <label className="text-xs text-slate-500 font-bold">متن پایان نامه (با تشکر...)</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={newLetterForm.signOffText}
-                    onChange={e => setNewLetterForm({...newLetterForm, signOffText: e.target.value})}
-                    placeholder="مثال: با تشکر"
-                    className="w-full border rounded-lg px-3 py-2 text-xs"
-                  />
+                {/* Sign-off text and Signers */}
+                <div className="space-y-4 mt-4 border-t pt-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-500 font-bold">متن پایان نامه (با تشکر...)</label>
+                    <textarea 
+                      required 
+                      rows={2}
+                      value={newLetterForm.signOffText}
+                      onChange={e => setNewLetterForm({...newLetterForm, signOffText: e.target.value})}
+                      placeholder="مثال: با تشکر و تقدیم احترام"
+                      className="w-full border rounded-lg px-3 py-2 text-xs"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-slate-500 font-bold">امضاکنندگان نامه</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const s = newLetterForm.signers || [];
+                          setNewLetterForm({...newLetterForm, signers: [...s, { name: '', title: '' }]});
+                        }}
+                        className="text-[10px] text-purple-600 font-bold hover:underline"
+                      >
+                        + افزودن امضاکننده جدید
+                      </button>
+                    </div>
+                    {(!newLetterForm.signers || newLetterForm.signers.length === 0) && (
+                      <div className="text-[10px] text-slate-400">بدون نام امضاکننده (فقط امضای دیجیتال درج می‌شود)</div>
+                    )}
+                    {newLetterForm.signers?.map((signer, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="نام امضاکننده (مثال: محمد احمدی)"
+                          value={signer.name}
+                          onChange={e => {
+                            const newSigners = [...(newLetterForm.signers || [])];
+                            newSigners[idx].name = e.target.value;
+                            setNewLetterForm({...newLetterForm, signers: newSigners});
+                          }}
+                          className="flex-1 border rounded-lg px-2 py-1.5 text-[11px]"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="سمت (مثال: مدیر عامل)"
+                          value={signer.title}
+                          onChange={e => {
+                            const newSigners = [...(newLetterForm.signers || [])];
+                            newSigners[idx].title = e.target.value;
+                            setNewLetterForm({...newLetterForm, signers: newSigners});
+                          }}
+                          className="flex-1 border rounded-lg px-2 py-1.5 text-[11px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newSigners = [...(newLetterForm.signers || [])];
+                            newSigners.splice(idx, 1);
+                            setNewLetterForm({...newLetterForm, signers: newSigners});
+                          }}
+                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* File Attachment Upload */}
@@ -1454,6 +1325,26 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 <div className="flex justify-end gap-2 border-t pt-4">
                   <button
                     type="button"
+                    onClick={() => {
+                      const fakeLetter: SecretariatLetter = {
+                        ...(newLetterForm as any),
+                        id: 'preview_only',
+                        companyId: selectedCompany.id,
+                        status: SecretariatLetterStatus.DRAFT,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        letterNumber: 'پیشنویس',
+                        date: 'پیشنویس'
+                      };
+                      setIsPrintMode(fakeLetter);
+                    }}
+                    className="bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all ml-auto"
+                  >
+                    <Eye size={14} className="inline mr-1" /> مشاهده پیش‌نویس
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setShowNewLetterModal(false)}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all"
                   >
@@ -1475,7 +1366,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 2. DETAILED LETTER VIEW MODAL */}
       <AnimatePresence>
         {selectedLetterForView && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1496,6 +1387,24 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                 </div>
                 
                 <div className="flex items-center gap-2">
+                  {canEditLetters && (
+                    <button 
+                      onClick={() => handleEditLetterClick(selectedLetterForView)}
+                      className="p-1.5 text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                      title="ویرایش نامه"
+                    >
+                      <Edit size={16} /> ویرایش
+                    </button>
+                  )}
+                  {canDeleteLetters && (
+                    <button 
+                      onClick={() => handleDeleteLetter(selectedLetterForView.id)}
+                      className="p-1.5 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                      title="حذف نامه"
+                    >
+                      <Trash2 size={16} /> حذف
+                    </button>
+                  )}
                   <button 
                     onClick={() => setIsPrintMode(selectedLetterForView)}
                     className="p-1.5 text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
@@ -1780,7 +1689,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
       {/* 3. HIGH QUALITY PRINT & PDF GENERATOR LAYOUT MODAL */}
       <AnimatePresence>
         {isPrintMode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1806,21 +1715,30 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       style.id = 'secretariat-print-style';
                       style.innerHTML = `
                         @media print {
+                          @page { 
+                            size: ${isPrintMode.paperSize || 'A4'} ${isPrintMode.orientation || 'portrait'}; 
+                            margin: 0; 
+                          }
                           body * {
                             visibility: hidden;
                           }
                           #print-content-section, #print-content-section * {
                             visibility: visible;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
                           }
                           #print-content-section {
                             position: absolute;
                             left: 0;
                             top: 0;
-                            width: 100%;
-                            height: 100%;
+                            width: 100vw;
+                            min-height: 100vh;
                             background: white !important;
                             color: black !important;
-                            padding: 1.5cm !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                            border: none !important;
+                            box-shadow: none !important;
                           }
                           .print\\:hidden {
                             display: none !important;
@@ -1930,7 +1848,6 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   
                   {/* Salutations */}
                   <div className="font-bold space-y-2 mb-4">
-                    <div className="text-base text-slate-900">{isPrintMode.receiver}</div>
                     <div className="text-base font-medium">موضوع: {isPrintMode.subject}</div>
                     <div className="text-base font-medium">با سلام و احترام،</div>
                   </div>
@@ -1945,14 +1862,23 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                   {/* Signatures & Stamp block */}
                   <div 
                     className={`mt-16 w-64 text-center space-y-2 ${
-                        isPrintMode.signaturePosition === 'bottom_right' ? 'mr-auto ml-0' : 
+                        isPrintMode.signaturePosition === 'bottom_left' ? 'mr-auto ml-0' : 
                         isPrintMode.signaturePosition === 'bottom_center' ? 'mx-auto' : 
                         'ml-auto mr-0'
                     }`}
                   >
-                     <div className="font-bold text-sm mb-4">{isPrintMode.signOffText || 'با تشکر'}</div>
-                     <div className="font-bold text-sm">{selectedCompany?.name || ''}</div>
-                     <div className="font-bold text-sm mb-2">{isPrintMode.sender}</div>
+                     <div className="font-bold text-sm mb-4 whitespace-pre-wrap leading-relaxed">{isPrintMode.signOffText || 'با تشکر'}</div>
+                     
+                     {isPrintMode.signers && isPrintMode.signers.length > 0 && (
+                       <div className="flex gap-4 justify-center flex-wrap mt-2">
+                         {isPrintMode.signers.map((signer, idx) => (
+                           <div key={idx} className="flex flex-col items-center">
+                             <div className="font-bold text-sm">{signer.name}</div>
+                             <div className="text-xs text-gray-600 font-bold">{signer.title}</div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
 
                      <div className="relative mt-2 flex justify-center items-center">
                         {isPrintMode.approvedBy && isPrintMode.approvedBy.length > 0 && (

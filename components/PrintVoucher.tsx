@@ -425,7 +425,7 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
   if (embed) return contentToRender;
 
   return createPortal(
-    <div className="printing-modal fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex flex-col items-center justify-start p-2 animate-fade-in safe-pb">
+    <div className="printing-modal fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex flex-col items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-start p-2 animate-fade-in safe-pb">
       <div className="w-full max-w-4xl mx-auto z-[210] no-print mb-2 shrink-0">
          <div className="bg-white p-2 rounded-xl shadow-lg flex flex-col gap-2 w-full border border-gray-200">
              <div className="flex items-center justify-between border-b pb-1">

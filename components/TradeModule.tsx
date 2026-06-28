@@ -1069,7 +1069,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         if (!tr) return null;
         const deliveries = tr.deliveries || [];
         return (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                 <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl bg-white p-6 animate-scale-in max-h-[90vh] overflow-y-auto text-right" dir="rtl">
                     <div className="flex justify-between items-center mb-6 border-b pb-3">
                         <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
@@ -1240,7 +1240,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                 {/* Proforma Print Overlay */}
                 {showProformaPrint && selectedRecord && (
-                    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                         <div className="bg-white w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col animate-scale-in">
                             <div className="p-4 border-b flex justify-between items-center bg-gray-50/50">
                                 <h3 className="font-black text-gray-700">پیش‌نمایش پروفرما اینویس</h3>
@@ -1260,7 +1260,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                 {/* EDIT METADATA MODAL */}
                 {showEditMetadataModal && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                         <div className="glass-panel rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="font-bold text-xl text-gray-800">ویرایش مشخصات پرونده</h3>
@@ -1283,7 +1283,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
                 {/* Stage Edit Modal */}
                 {editingStage && (
-                    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                         <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-6">
                             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">ویرایش مرحله: {editingStage}</h3><button onClick={() => setEditingStage(null)}><X size={20}/></button></div>
                             <div className="space-y-4">
@@ -2415,7 +2415,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             
             {/* New Record Modal */}
             {showNewModal && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                     <div className="glass-panel rounded-2xl shadow-xl w-full max-w-md p-6 animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-xl text-gray-800">ثبت پرونده جدید</h3>
@@ -2442,7 +2442,7 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
                 if (!tr) return null;
                 const deliveries = tr.deliveries || [];
                 return (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[220] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[220] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
                         <div className="glass-panel rounded-2xl shadow-xl w-full max-w-2xl bg-white p-6 animate-scale-in max-h-[90vh] overflow-y-auto text-right" dir="rtl">
                             <div className="flex justify-between items-center mb-6 border-b pb-3">
                                 <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">

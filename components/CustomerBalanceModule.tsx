@@ -986,7 +986,7 @@ export const CustomerBalanceModule: React.FC<{ currentUser?: any }> = ({ current
         const customerName = balances.find(b => b.accountCode === stmtModalCode)?.name || 'سرفصل نامشخص';
         const customerStmts = statements.filter(s => s.accountCode === stmtModalCode);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/80 backdrop-blur-xs duration-200">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-zinc-900/80 backdrop-blur-xs duration-200">
             <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-right" dir="rtl">
               <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-zinc-800 mb-4">
                 <div>

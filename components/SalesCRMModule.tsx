@@ -512,7 +512,7 @@ export default function SalesCRMModule() {
 
             {/* Edit Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="fixed inset-0 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
                     <div className="glass-panel rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
                         <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                             <h3 className="font-bold text-lg">{editingContact ? 'ویرایش مخاطب' : 'افزودن مخاطب جدید'}</h3>
@@ -647,7 +647,7 @@ export default function SalesCRMModule() {
 
             {/* Lead Merge & Import Dialog Overlay */}
             {mergingLead && (
-                <div role="dialog" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in text-right font-sans" dir="rtl">
+                <div role="dialog" className="fixed inset-0 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in text-right font-sans" dir="rtl">
                     <div className="glass-panel rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 animate-scale-in">
                         <div className="bg-gradient-to-l from-blue-700 to-indigo-700 p-5 text-white flex justify-between items-center">
                             <div>

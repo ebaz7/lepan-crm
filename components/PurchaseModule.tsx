@@ -1080,7 +1080,7 @@ const ProfessionalProformaModal = ({ request, onClose, onSuccess, currentUser }:
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm shadow-2xl">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm shadow-2xl">
             <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in">
                 <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
                     <h3 className="font-black text-xl text-gray-800">ثبت پیش‌فاکتور حرفه‌ای</h3>
@@ -1155,7 +1155,7 @@ const QCApprovalModal = ({ onClose, onConfirm }: any) => {
     const [desc, setDesc] = useState('');
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in text-right">
                 <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><ShieldCheck className="text-green-600"/> بررسی کیفی (QC)</h3>
                 <div className="space-y-6">
@@ -1185,7 +1185,7 @@ const WarehouseReceiptModal = ({ onClose, onConfirm }: any) => {
     const [date, setDate] = useState(`${shamsi.year}/${shamsi.month}/${shamsi.day}`);
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
                 <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><Warehouse className="text-indigo-600"/> صدور رسید انبار</h3>
                 <div className="space-y-6">
@@ -1213,7 +1213,7 @@ const SecurityEntryModal = ({ onClose, onConfirm }: any) => {
     const [weight, setWeight] = useState(0);
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/50 shadow-2xl">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 shadow-2xl">
             <div className="bg-white rounded-2xl p-6 w-full max-w-md">
                 <h3 className="font-black text-lg mb-4">ثبت ورود کالا (انتظامات)</h3>
                 <div className="space-y-4">
@@ -1487,7 +1487,7 @@ const PartsTab = ({ parts, currentUser, onPartUpdate, settings }: any) => {
 
 const DataSheetModal = ({ part, onClose }: { part: PartMasterData, onClose: () => void }) => {
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/70 backdrop-blur-md">
             <div className="bg-white rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl border border-white/20 animate-in fade-in zoom-in h-[90vh] flex flex-col">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-900 text-white">
                     <div className="flex items-center gap-3">
