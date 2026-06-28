@@ -1,6 +1,49 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+
+// Register custom fonts and sizes in Quill using style attributors for 100% universal compatibility
+if (typeof window !== 'undefined' && ReactQuill) {
+  const Quill = (ReactQuill as any).Quill;
+  if (Quill) {
+    // 1. Register Font family style attributor (uses inline style instead of class)
+    const Font = Quill.import('attributors/style/font') as any;
+    if (Font) {
+      Font.whitelist = [
+        'Vazirmatn',
+        'Shabnam',
+        'Sahel',
+        'Gandom',
+        'Estedad',
+        'Tahoma',
+        'Arial',
+        'Times New Roman',
+        'Courier New'
+      ];
+      Quill.register(Font, true);
+    }
+
+    // 2. Register Font size style attributor (uses inline style instead of class)
+    const Size = Quill.import('attributors/style/size') as any;
+    if (Size) {
+      Size.whitelist = [
+        '9px', '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '28px', '32px', '36px', '48px'
+      ];
+      Quill.register(Size, true);
+    }
+
+    // 3. Register align and direction style attributors
+    const Align = Quill.import('attributors/style/align') as any;
+    if (Align) {
+      Quill.register(Align, true);
+    }
+    const Direction = Quill.import('attributors/style/direction') as any;
+    if (Direction) {
+      Quill.register(Direction, true);
+    }
+  }
+}
+
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building, 
@@ -803,6 +846,195 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
   // 4. Main Secretariat Dashboard (when company and section are selected)
   return (
     <div className="space-y-6 animate-fade-in relative min-h-screen">
+      <style>{`
+        /* Custom Quill Toolbar Fonts Dropdown labels & typography rendering in Persian */
+        .ql-snow .ql-picker.ql-font .ql-picker-label::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item::before {
+          content: 'وزیر متن (پیش‌فرض)' !important;
+          font-family: 'Vazirmatn', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Vazirmatn"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Vazirmatn"]::before {
+          content: 'وزیر متن (Vazirmatn)' !important;
+          font-family: 'Vazirmatn', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Shabnam"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Shabnam"]::before {
+          content: 'شبنم (Shabnam)' !important;
+          font-family: 'Shabnam', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Sahel"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Sahel"]::before {
+          content: 'ساحل (Sahel)' !important;
+          font-family: 'Sahel', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Gandom"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Gandom"]::before {
+          content: 'گندم (Gandom)' !important;
+          font-family: 'Gandom', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Estedad"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Estedad"]::before {
+          content: 'استعداد (Estedad)' !important;
+          font-family: 'Estedad', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Tahoma"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Tahoma"]::before {
+          content: 'تاهوما (Tahoma)' !important;
+          font-family: 'Tahoma', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Arial"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before {
+          content: 'آریال (Arial)' !important;
+          font-family: 'Arial', sans-serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Times New Roman"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Times New Roman"]::before {
+          content: 'تایمز (Times New Roman)' !important;
+          font-family: 'Times New Roman', serif !important;
+        }
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Courier New"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Courier New"]::before {
+          content: 'کوریر (Courier New)' !important;
+          font-family: 'Courier New', monospace !important;
+        }
+
+        /* Custom Font Sizes Dropdown labels in Quill Snow theme */
+        .ql-snow .ql-picker.ql-size .ql-picker-label::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item::before {
+          content: '14px (استاندارد)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="9px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="9px"]::before {
+          content: '9px (بسیار ریز)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="10px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="10px"]::before {
+          content: '10px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="11px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="11px"]::before {
+          content: '11px (ریز)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before {
+          content: '12px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="13px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="13px"]::before {
+          content: '13px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="14px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="14px"]::before {
+          content: '14px (پیش‌فرض)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="15px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="15px"]::before {
+          content: '15px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="16px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before {
+          content: '16px (بزرگ)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="17px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="17px"]::before {
+          content: '17px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="18px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="18px"]::before {
+          content: '18px (تیتر ریز)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="20px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before {
+          content: '20px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="22px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="22px"]::before {
+          content: '22px (سربرگ)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="24px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="24px"]::before {
+          content: '24px (تیتر متوسط)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="28px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="28px"]::before {
+          content: '28px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="32px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="32px"]::before {
+          content: '32px (تیتر بزرگ)' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="36px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="36px"]::before {
+          content: '36px' !important;
+        }
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="48px"]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="48px"]::before {
+          content: '48px' !important;
+        }
+
+        /* Force editor content alignment and typography defaults */
+        .ql-editor {
+          font-family: 'Vazirmatn', sans-serif !important;
+          text-align: right !important;
+          direction: rtl !important;
+          line-height: 1.8 !important;
+        }
+
+        /* Robust printing fix */
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          /* Hide absolute top metadata blocks or modals overlay */
+          .fixed.inset-0.z-50 {
+            background: transparent !important;
+            backdrop-filter: none !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .fixed.inset-0.z-50 > div {
+            border: none !important;
+            box-shadow: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          /* Ensure the print content section occupies exactly the whole printable page */
+          #print-content-section {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: white !important;
+            z-index: 9999999 !important;
+            overflow: visible !important;
+          }
+          /* Hide buttons and other non-print elements */
+          .print\\:hidden, button, .border-b.pb-3.print\\:hidden, .flex.items-center.justify-between.border-b.pb-3.print\\:hidden {
+            display: none !important;
+            height: 0 !important;
+            width: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+        }
+      `}</style>
       
       {/* Header Info */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-gray-900 border border-slate-200/60 p-4 rounded-2xl gap-4 shadow-sm">
@@ -1187,12 +1419,15 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                       className="min-h-[250px] text-sm"
                       modules={{
                         toolbar: [
-                          [{ 'font': [] }, { 'size': [] }],
-                          [{ 'header': [1, 2, 3, false] }],
+                          [{ 'font': ['Vazirmatn', 'Shabnam', 'Sahel', 'Gandom', 'Estedad', 'Tahoma', 'Arial', 'Times New Roman', 'Courier New'] }, 
+                           { 'size': ['9px', '10px', '11px', '12px', '13px', '14px', '15px', '16px', '17px', '18px', '19px', '20px', '22px', '24px', '28px', '32px', '36px', '48px'] }],
+                          [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                           ['bold', 'italic', 'underline', 'strike'],
-                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                          [{ 'align': [] }, { 'direction': 'rtl' }],
                           [{ 'color': [] }, { 'background': [] }],
+                          [{ 'script': 'sub'}, { 'script': 'super' }],
+                          [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                          [{ 'align': [] }, { 'direction': 'rtl' }],
+                          ['link', 'blockquote'],
                           ['clean']
                         ]
                       }}

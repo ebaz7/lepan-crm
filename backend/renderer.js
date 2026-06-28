@@ -1039,9 +1039,31 @@ export const generateSecretariatLetterPDF = async (letter, companyName, companyS
         
         const makeAbsolute = (url) => {
             if (!url) return '';
-            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+            if (url.startsWith('data:')) return url;
+            
+            // Check if it is a local upload (contains '/uploads/')
+            if (url.includes('/uploads/')) {
+                try {
+                    const parts = url.split('/uploads/');
+                    const fileName = parts[parts.length - 1].split('?')[0]; // strip query strings
+                    const fullPath = path.join(process.cwd(), 'uploads', fileName);
+                    
+                    if (fs.existsSync(fullPath)) {
+                        const ext = path.extname(fullPath).toLowerCase().replace('.', '');
+                        const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : 'image/png';
+                        const base64 = fs.readFileSync(fullPath).toString('base64');
+                        return `data:${mimeType};base64,${base64}`;
+                    } else {
+                        console.error(`[Renderer] Local upload file not found on disk: ${fullPath}`);
+                    }
+                } catch (e) {
+                    console.error("[Renderer] Error reading file for PDF base64 conversion:", e.message);
+                }
+            }
+            
+            if (url.startsWith('http://') || url.startsWith('https://')) return url;
             const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-            return `http://localhost:3000${cleanUrl}`;
+            return `http://127.0.0.1:3000${cleanUrl}`;
         };
 
         const hasCustomPos = companySettings?.metadataTop !== undefined || companySettings?.metadataLeft !== undefined;
