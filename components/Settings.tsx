@@ -5414,7 +5414,7 @@ const Settings: React.FC<SettingsProps> = ({
 
       {/* --- Secretariat Template Editor Modal --- */}
       {editingSecTemplate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs">
           <div
             className="bg-white dark:bg-slate-900 border dark:border-white/10 rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto text-right"
             dir="rtl"

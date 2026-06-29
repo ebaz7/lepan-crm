@@ -1836,7 +1836,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({
       {/* 1. REGISTER NEW LETTER MODAL */}
       <AnimatePresence>
         {showNewLetterModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -3204,7 +3204,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({
       {/* 2. DETAILED LETTER VIEW MODAL */}
       <AnimatePresence>
         {selectedLetterForView && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/50 p-4 backdrop-blur-xs">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -3640,7 +3640,7 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({
       {/* 3. HIGH QUALITY PRINT & PDF GENERATOR LAYOUT MODAL */}
       <AnimatePresence>
         {isPrintMode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center bg-black/60 p-4 backdrop-blur-xs">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
