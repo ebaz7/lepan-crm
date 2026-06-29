@@ -87,6 +87,10 @@ const SayanReports: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [customerDetails, setCustomerDetails] = useState<any[]>([]);
 
+  // Advanced config states
+  const [availableSalesTypes, setAvailableSalesTypes] = useState<string[]>([]);
+  const [selectedSalesTypes, setSelectedSalesTypes] = useState<string[]>(['2', '4', '1']);
+
   const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
     setError(null);
@@ -116,6 +120,19 @@ const SayanReports: React.FC = () => {
         
         const finalData = await attemptQuery(sqlQuery, 'BUR_TBL_008');
         
+        // Find all available types in the DB
+        const typesSet = new Set<string>();
+        finalData.forEach((row: any) => {
+            const type = String(row.Type || row.Field_004).trim();
+            if (type && type !== 'undefined' && type !== 'null') {
+                typesSet.add(type);
+            }
+        });
+        const typesArr = Array.from(typesSet);
+        if (availableSalesTypes.length === 0 && typesArr.length > 0) {
+            setAvailableSalesTypes(typesArr);
+        }
+
         const processed = finalData.map((row: any) => {
             const amount = parseFloat(row.F25 || row.F10 || row.F11 || row.Field_025 || row.TotalSales || 0);
             const type = String(row.Type || row.Field_004).trim();
@@ -132,13 +149,19 @@ const SayanReports: React.FC = () => {
             let finalAmount = 0;
             let finalWeight = 0;
             
-            // Type 2: فروش (Sales), Type 4: برگشت از فروش (Sales Return)
-            if (type === '2') {
-                finalAmount = amount;
-                finalWeight = weight;
-            } else if (type === '4') {
-                finalAmount = -amount;
-                finalWeight = -weight;
+            // We use user selection or fallback
+            // If selectedSalesTypes has this type, it's positive (sales).
+            // We'll treat '4' as Return (negative) automatically if the user hasn't unchecked it, 
+            // but actually let's just make everything in selectedSalesTypes POSITIVE, except '4' if it's there?
+            // Sayan: 2 is Sales/Receipt, 4 is Sales Return.
+            if (selectedSalesTypes.includes(type)) {
+                if (type === '4' || type === '3') { 
+                    finalAmount = -amount;
+                    finalWeight = -weight;
+                } else {
+                    finalAmount = amount;
+                    finalWeight = weight;
+                }
             }
 
             return {
@@ -148,7 +171,7 @@ const SayanReports: React.FC = () => {
                 Date: row.Date || row.Field_008,
                 Type: type
             };
-        }).filter((r: any) => (r.Type === '2' || r.Type === '4') && isDateInRange(r.Date));
+        }).filter((r: any) => selectedSalesTypes.includes(r.Type) && isDateInRange(r.Date));
         
         setData(processed.reverse());
       } 
@@ -158,22 +181,6 @@ const SayanReports: React.FC = () => {
             sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
             
-            // Fetch customers list to filter
-            let customerNames: string[] = [];
-            try {
-                // Sayan BUR_TBL_002 is Persons (اشخاص)
-                const persons = await attemptQuery("SELECT TOP 2000 * FROM BUR_TBL_002", 'BUR_TBL_002');
-                customerNames = persons.map((p:any) => String(p.Field_004 || p.AccountName).trim()).filter(Boolean);
-            } catch(e) {}
-            
-            if (customerNames.length === 0) {
-                try {
-                    // Fallback to Tafsili (ACT_TBL_004)
-                    const tafsili = await attemptQuery("SELECT TOP 2000 * FROM ACT_TBL_004", 'ACT_TBL_004');
-                    customerNames = tafsili.map((t:any) => String(t.Field_006 || t.AccountName).trim()).filter(Boolean);
-                } catch(e2) {}
-            }
-
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
                 // only consider rows before end date for balance
@@ -187,24 +194,16 @@ const SayanReports: React.FC = () => {
                 if (!name) return;
                 name = String(name).trim();
 
-                let finalCustomerName = name;
-                if (customerNames.length > 0) {
-                    if (f7 && customerNames.includes(f7)) finalCustomerName = f7;
-                    else if (f6 && customerNames.includes(f6)) finalCustomerName = f6;
-                    else if (f5 && customerNames.includes(f5)) finalCustomerName = f5;
-                    else return; // Skip if not found in customer list
-                } else {
-                     // Fallback heuristic if customer list completely failed to load
-                     const keywords = ['صندوق', 'بانک', 'فروش', 'خرید', 'هزینه', 'درآمد', 'موجودی', 'حقوق', 'بیمه', 'مالیات', 'تخفیف', 'سرمایه', 'اسناد', 'سود', 'زیان', 'مستهلک', 'استهلاک', 'جاری'];
-                     if (keywords.some(kw => name.includes(kw) || f6.includes(kw) || f5.includes(kw))) return;
-                }
+                // Simple exclusion of generic accounts so we focus on Persons
+                const keywords = ['صندوق', 'بانک', 'موجودی', 'درآمد', 'هزینه', 'حقوق', 'بیمه', 'سرمایه', 'استهلاک', 'مستهلک', 'تخفیف'];
+                if (keywords.some(kw => name.includes(kw))) return;
 
-                if (!grouped[finalCustomerName]) grouped[finalCustomerName] = { AccountName: finalCustomerName, Debit: 0, Credit: 0 };
+                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
                 // Use Field_009 for Debit, Field_010 for Credit
                 const v1 = parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0;
                 const v2 = parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0;
-                grouped[finalCustomerName].Debit += v1;
-                grouped[finalCustomerName].Credit += v2;
+                grouped[name].Debit += v1;
+                grouped[name].Credit += v2;
             });
             setCustomers(Object.values(grouped));
             setData([]);
@@ -257,7 +256,7 @@ const SayanReports: React.FC = () => {
 
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, startDate, endDate, selectedCustomer]);
+  }, [activeReport, startDate, endDate, selectedCustomer, selectedSalesTypes]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
@@ -294,6 +293,28 @@ const SayanReports: React.FC = () => {
 
       return (
         <div className="space-y-6">
+            {availableSalesTypes.length > 0 && (
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <h4 className="text-xs font-bold text-slate-500 mb-3">تنظیمات پیشرفته گزارش (انواع فاکتور جهت محاسبه به عنوان فروش):</h4>
+                    <div className="flex flex-wrap gap-4">
+                        {availableSalesTypes.map(t => (
+                            <label key={t} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                    checked={selectedSalesTypes.includes(t)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) setSelectedSalesTypes(prev => [...prev, t]);
+                                        else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
+                                    }}
+                                />
+                                نوع فاکتور {t} {t === '4' ? '(کسر می‌شود)' : '(جمع می‌شود)'}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش خالص (کسر مرجوعی)</div>
