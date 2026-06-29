@@ -1640,7 +1640,7 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         
         // Deduplicate the same permit + status notification to avoid "Machine Gun" bursts
         const dedupeKey = `EXIT_${p.id}_${p.status}_${eventType}`;
-        if (isDuplicateNotification(dedupeKey)) return;
+        if (isDuplicateNotification(dedupeKey) && eventType !== 'MANUAL') return;
         
         const imgPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: false });
         const imgNoPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: true });
@@ -1750,6 +1750,10 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
         if (g3Config.activeStatuses && g3Config.activeStatuses.includes(statusKey)) {
             targetGroups.push(3);
+        }
+
+        if (eventType === 'MANUAL' && targetGroups.length === 0) {
+            targetGroups.push(1);
         }
 
         // --- NEW: Customer Notification with Proforma Image ---

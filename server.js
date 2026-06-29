@@ -903,6 +903,14 @@ app.post('/api/exit-permits', (req, res) => {
         [permit.requester] // Exclude requester
     );
 });
+app.post('/api/exit-permits/:id/bot-notify', (req, res) => {
+    const db = getDb();
+    const permit = db.exitPermits.find(p => p.id === req.params.id);
+    if (!permit) return res.status(404).send('Not Found');
+    notifyExitPermitStep(permit, null, null, null, db, permit.status, 'MANUAL').catch(e => console.error("Manual Bot Notify Error:", e));
+    res.json({ success: true });
+});
+
 app.put('/api/exit-permits/:id', (req, res) => { 
     const db = getDb(); 
     const idx = db.exitPermits.findIndex(p => p.id === req.params.id); 

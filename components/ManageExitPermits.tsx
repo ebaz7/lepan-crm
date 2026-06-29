@@ -161,6 +161,20 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         return 'pending';
     };
 
+    const handleManualNotify = async (p: ExitPermit) => {
+        if (!confirm('آیا مطمئن هستید که می‌خواهید مجدداً به ربات تلگرام ارسال کنید؟')) return;
+        setProcessingId(p.id);
+        try {
+            await apiCall(`/exit-permits/${p.id}/bot-notify`, 'POST', {});
+            alert('درخواست ارسال به ربات با موفقیت انجام شد.');
+        } catch (e) {
+            console.error('Manual Notify Error:', e);
+            alert('خطا در ارسال به ربات');
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
     const handleApprove = async (p: ExitPermit) => {
         if ((p.status as ExitPermitStatus) === ExitPermitStatus.PENDING_WAREHOUSE) { 
             setWarehouseFinalize(p); 
@@ -652,6 +666,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO) && (
                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg"><Trash2 size={16}/></button>
                 )}
+                {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                    <button onClick={() => handleManualNotify(p)} title="ارسال مجدد دستی به ربات" className="bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg"><Bell size={16}/></button>
+                )}
             </div>
             
             {processingId === p.id && (
@@ -708,6 +725,9 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                                     <button onClick={() => setEditPermit(p)} className="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-100"><Edit size={18}/></button>
                                     <button onClick={() => handleDelete(p.id)} className="bg-red-50 text-red-500 p-2 rounded-xl hover:bg-red-100"><Trash2 size={18}/></button>
                                 </>
+                            )}
+                            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.CEO || currentUser.role === UserRole.SALES_MANAGER) && (
+                                <button onClick={() => handleManualNotify(p)} title="ارسال مجدد به ربات" className="bg-indigo-50 text-indigo-600 p-2 rounded-xl hover:bg-indigo-100"><Bell size={18}/></button>
                             )}
                         </div>
                     </div>
