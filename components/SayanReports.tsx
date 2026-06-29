@@ -1,191 +1,376 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Download, DollarSign, Users, Calendar, Activity, Loader2, ArrowRight, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Download, DollarSign, Users, Calendar, Activity, Loader2, ArrowRight } from 'lucide-react';
 import { apiCall } from '../services/apiService';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import jMoment from 'moment-jalaali';
+import { jalaliToGregorian, getCurrentShamsiDate, formatDate } from '../constants';
 
 type ReportType = 'SALES' | 'CUSTOMER_STATEMENT' | 'DEBTORS_CREDITORS';
+
+const getShamsiMonthLength = (year: number, month: number) => {
+    if (month <= 6) return 31;
+    if (month <= 11) return 30;
+    const matches = [1, 5, 9, 13, 17, 22, 26, 30];
+    const rem = year % 33;
+    return matches.includes(rem) ? 30 : 29;
+};
+
+const toIsoDateString = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: any) => void, label: string }) => {
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-500">{label}</span>
+            <div className="flex gap-2 text-xs">
+                <select value={date.year} onChange={e => onChange({...date, year: parseInt(e.target.value)})} className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
+                   {Array.from({length: 10}).map((_, i) => <option key={i} value={1403 - i}>{1403 - i}</option>)}
+                </select>
+                <select value={date.month} onChange={e => onChange({...date, month: parseInt(e.target.value)})} className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
+                   {Array.from({length: 12}).map((_, i) => <option key={i} value={i+1}>{i+1}</option>)}
+                </select>
+                <select value={date.day} onChange={e => onChange({...date, day: parseInt(e.target.value)})} className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
+                   {Array.from({length: 31}).map((_, i) => <option key={i} value={i+1}>{i+1}</option>)}
+                </select>
+            </div>
+        </div>
+    );
+};
 
 const SayanReports: React.FC = () => {
   const [activeReport, setActiveReport] = useState<ReportType>('SALES');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   
-  // Date filters in Shamsi
-  const [startDate, setStartDate] = useState(jMoment().format('jYYYY/jMM/jDD'));
-  const [endDate, setEndDate] = useState(jMoment().format('jYYYY/jMM/jDD'));
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCustomer, setActiveCustomer] = useState<{name: string, balance: number, type: 'debit'|'credit'} | null>(null);
+  // Date filters
+  const [targetDate, setTargetDate] = useState(getCurrentShamsiDate());
 
-  const fetchReportData = async (reportType: ReportType, customerName?: string) => {
+  // Customer Statement states
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [searchCustomer, setSearchCustomer] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [customerDetails, setCustomerDetails] = useState<any[]>([]);
+
+  const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
     setError(null);
     let sqlQuery = '';
 
-    // Safely remove single quotes
-    const safeCustomerName = customerName ? customerName.replace(/'/g, "''") : '';
-    // Format dates to handle both with-slash and without-slash cases
-    const safeStart = startDate.replace(/\//g, '');
-    const safeEnd = endDate.replace(/\//g, '');
+    const y = targetDate.year;
+    const m = targetDate.month;
+    const d = targetDate.day;
 
-    const safeSumDebit = "SUM(CASE WHEN ISNUMERIC(Field_010) = 1 THEN CAST(Field_010 AS float) ELSE 0 END)";
-    const safeSumCredit = "SUM(CASE WHEN ISNUMERIC(Field_011) = 1 THEN CAST(Field_011 AS float) ELSE 0 END)";
+    // Daily boundaries
+    const dailyStartIso = toIsoDateString(jalaliToGregorian(y, m, d));
+    const dailyEndIso = toIsoDateString(jalaliToGregorian(y, m, d));
 
-    if (reportType === 'SALES') {
-      sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND Field_025 > 0 ORDER BY Field_008 DESC`;
-    } else if (reportType === 'CUSTOMER_STATEMENT') {
-      if (safeCustomerName) {
-        // Use a simpler query, some fields might be slightly different in actual DB, but we stick to the ones we know work
-        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_006 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${safeCustomerName}' ORDER BY Field_008 ASC`;
-      } else {
-        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit], Field_008 as [Date] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL ORDER BY Field_008 DESC`;
-      }
-    } else if (reportType === 'DEBTORS_CREDITORS') {
-      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_011 WHERE Field_006 IS NOT NULL`;
-    }
+    // Monthly boundaries
+    const monthlyStartIso = toIsoDateString(jalaliToGregorian(y, m, 1));
+    const monthlyEndIso = toIsoDateString(jalaliToGregorian(y, m, getShamsiMonthLength(y, m)));
 
     try {
-      // Try to execute the query
-      let result: any = null;
-      try {
-          result = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
-      } catch (err: any) {
-          console.log("Fallback to path: 'sql'");
-          try {
-              result = await apiCall('/sayan-proxy', 'POST', { path: 'sql', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
-          } catch (err2: any) {
-              console.log("Fallback to path: 'execute'");
-              result = await apiCall('/sayan-proxy', 'POST', { path: 'execute', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
-          }
-      }
-
-      let rawData = Array.isArray(result) ? result : (result?.data || result?.rows || result?.items || result?.result || []);
-      
-      // Post-process the data to handle dates and aggregations
-      const safeStartStr = startDate.replace(/\//g, '');
-      const safeEndStr = endDate.replace(/\//g, '');
-      
-      // Filter dates and normalize
-      rawData = rawData.map((row: any) => {
-        let d = String(row.Date || '').trim();
+      if (reportType === 'SALES') {
+        // Fetch daily and monthly sales together, or fetch the whole month and filter locally
+        sqlQuery = `SELECT Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND Field_025 > 0 AND Field_008 >= '${monthlyStartIso}' AND Field_008 <= '${monthlyEndIso} 23:59:59'`;
         
-        // Handle ISO strings or Gregorian formats
-        if (d.startsWith('20') || d.startsWith('19')) {
-           // If it's 8 digits without separators e.g. 20240625
-           if (/^\d{8}$/.test(d)) {
-               d = `${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}`;
-           }
-           const dateObj = new Date(d);
-           if (!isNaN(dateObj.getTime())) {
-               d = jMoment(dateObj).format('jYYYY/jMM/jDD');
-           }
-        }
+        const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+        const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
         
-        // Fix single digits e.g. 1403/6/5 -> 1403/06/05
-        let parts = d.split('/');
-        if (parts.length === 3) {
-            d = parts[0] + '/' + parts[1].padStart(2, '0') + '/' + parts[2].padStart(2, '0');
+        // Add calculated flag to differentiate daily vs monthly in UI processing if needed
+        const processed = finalData.map(row => ({
+            ...row,
+            isDaily: (row.Date && row.Date.substring(0, 10) === dailyStartIso)
+        }));
+        setData(processed);
+      } 
+      else if (reportType === 'CUSTOMER_STATEMENT') {
+        if (!selectedCustomer) {
+            // Fetch list of customers and their balance for the selected date range
+            sqlQuery = `SELECT Field_006 as [AccountName], SUM(Field_010) as [Debit], SUM(Field_011) as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${monthlyEndIso} 23:59:59' GROUP BY Field_006`;
+            const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+            const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+            setCustomers(finalData);
+            setData([]);
+        } else {
+            // Fetch details for specific customer
+            sqlQuery = `SELECT Field_008 as [Date], Field_006 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${selectedCustomer}' AND Field_008 >= '${monthlyStartIso}' AND Field_008 <= '${monthlyEndIso} 23:59:59' ORDER BY Field_008 ASC`;
+            const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+            const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+            setCustomerDetails(finalData);
         }
+      } 
+      else if (reportType === 'DEBTORS_CREDITORS') {
+        sqlQuery = `SELECT Field_006 as [AccountName], SUM(Field_010) as [Debit], SUM(Field_011) as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${monthlyEndIso} 23:59:59' GROUP BY Field_006`;
+        const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+        const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
         
-        // Normalize slashes for Jalali (if it's 8 chars like 14030625)
-        if (d.length === 8 && !d.includes('/')) {
-           d = d.substring(0, 4) + '/' + d.substring(4, 6) + '/' + d.substring(6, 8);
-        }
-        return { ...row, Date: d, _normalizedDateStr: d.replace(/\//g, '') };
-      }).filter((row: any) => {
-        // Apply date filter if date exists
-        if (row._normalizedDateStr && row._normalizedDateStr.length >= 8 && row._normalizedDateStr !== 'Invalid date') {
-           return row._normalizedDateStr >= safeStartStr && row._normalizedDateStr <= safeEndStr;
-        }
-        return true; 
-      });
-
-      // Perform aggregation in JS to avoid SQL cast issues and 404s
-      if (!safeCustomerName && (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS')) {
-          const accMap = new Map();
-          rawData.forEach((row: any) => {
-              const name = String(row.AccountName || row.Description || '').trim();
-              if (!name) return;
-              const debit = parseFloat(row.Debit) || 0;
-              const credit = parseFloat(row.Credit) || 0;
-              if (debit === 0 && credit === 0) return;
-              
-              if (!accMap.has(name)) {
-                  accMap.set(name, { AccountName: name, TotalDebit: 0, TotalCredit: 0 });
-              }
-              const acc = accMap.get(name);
-              acc.TotalDebit += debit;
-              acc.TotalCredit += credit;
-          });
-          
-          let finalData = Array.from(accMap.values()).filter(x => x.TotalDebit > 0 || x.TotalCredit > 0);
-          finalData.sort((a, b) => b.TotalDebit - a.TotalDebit);
-          setData(finalData);
-      } else {
-          setData(rawData);
+        // Filter out zero balances and calculate net
+        const processed = finalData.map(row => {
+            const deb = parseFloat(row.Debit) || 0;
+            const cred = parseFloat(row.Credit) || 0;
+            const net = deb - cred;
+            return {
+                AccountName: row.AccountName,
+                Debit: deb,
+                Credit: cred,
+                NetBalance: Math.abs(net),
+                Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
+            };
+        }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
+        
+        setData(processed);
       }
     } catch (err: any) {
-      console.error('Sayan Error:', err);
-      let errMsg = err.response ? JSON.stringify(err.response) : err.message;
-      if (errMsg.includes('404') && sqlQuery.includes('ACT_TBL_003')) {
-          errMsg = 'خطای 404: دسترسی به ریز گردش (ACT_TBL_003) با این توکن مسدود است یا جدول یافت نشد.';
-      }
-      setError(errMsg || 'خطا در ارتباط با سرور سایان');
-      setData([]);
+      setError(err.message || 'خطا در ارتباط با سرور سایان');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchReportData(activeReport, activeCustomer?.name);
-  }, [activeReport, activeCustomer]);
+    fetchReportData(activeReport);
+  }, [activeReport, targetDate, selectedCustomer]);
 
   const exportData = () => {
-    if (!data.length) return;
-    const ws = XLSX.utils.json_to_sheet(data);
+    const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
+    if (!exportTarget || !exportTarget.length) return;
+    const ws = XLSX.utils.json_to_sheet(exportTarget);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(wb, `Sayan_Report_${activeReport}.xlsx`);
   };
-  
-  // Calculate aggregated sales data
-  const aggregatedSales = useMemo(() => {
-    if (activeReport !== 'SALES') return [];
-    const aggs: Record<string, number> = {};
-    data.forEach(row => {
-      const d = String(row.Date || '');
-      // Assuming d is like '1403/04/05'
-      const key = timeFilter === 'daily' ? d : d.substring(0, 7);
-      if (key) aggs[key] = (aggs[key] || 0) + (parseFloat(row.TotalSales) || 0);
-    });
-    return Object.entries(aggs).map(([name, value]) => ({ name, value })).sort((a,b) => a.name.localeCompare(b.name));
-  }, [data, timeFilter, activeReport]);
 
-  const totalSalesAmount = useMemo(() => aggregatedSales.reduce((sum, item) => sum + item.value, 0), [aggregatedSales]);
+  const renderSalesDashboard = () => {
+      const dailySales = data.filter(d => d.isDaily).reduce((sum, row) => sum + (parseFloat(row.TotalSales) || 0), 0);
+      const monthlySales = data.reduce((sum, row) => sum + (parseFloat(row.TotalSales) || 0), 0);
+      
+      const dailyChartData = Object.entries(data.reduce((aggs: any, row) => {
+          const d = String(row.Date || '');
+          const key = d.substring(0, 10);
+          if (key) aggs[key] = (aggs[key] || 0) + (parseFloat(row.TotalSales) || 0);
+          return aggs;
+      }, {})).map(([name, value]) => ({ name, value, shamsiName: formatDate(name) })).sort((a,b) => a.name.localeCompare(b.name));
 
-  // Debtors and Creditors totals
-  const dcTotals = useMemo(() => {
-    if (activeReport !== 'DEBTORS_CREDITORS') return { debtors: 0, creditors: 0 };
-    return data.reduce((acc, row) => {
-      const debit = parseFloat(row.TotalDebit) || 0;
-      const credit = parseFloat(row.TotalCredit) || 0;
-      const balance = debit - credit;
-      if (balance > 0) acc.debtors += balance;
-      else if (balance < 0) acc.creditors += Math.abs(balance);
-      return acc;
-    }, { debtors: 0, creditors: 0 });
-  }, [data, activeReport]);
+      return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش روزانه ({targetDate.year}/{targetDate.month}/{targetDate.day})</div>
+                    <div className="text-3xl font-black text-indigo-600" dir="ltr">
+                        {dailySales.toLocaleString()}
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش ماهانه (ماه {targetDate.month})</div>
+                    <div className="text-3xl font-black text-emerald-600" dir="ltr">
+                        {monthlySales.toLocaleString()}
+                    </div>
+                </div>
+            </div>
 
-  const filteredCustomers = useMemo(() => {
-    if (activeReport !== 'CUSTOMER_STATEMENT' || activeCustomer) return [];
-    return data.filter(row => String(row.AccountName || '').toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [data, activeReport, activeCustomer, searchQuery]);
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[400px]">
+                <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش ماهانه (تفكيك روزها)</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="shamsiName" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(val) => (val/1000000).toFixed(0) + 'm'} />
+                        <Tooltip 
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', textAlign: 'right', direction: 'rtl' }}
+                        formatter={(value: number) => [value.toLocaleString(), 'مبلغ']}
+                        labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
+                        />
+                        <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                        {dailyChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.name === toIsoDateString(jalaliToGregorian(targetDate.year, targetDate.month, targetDate.day)) ? '#4f46e5' : '#818cf8'} />
+                        ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-700">
+                    جدول فروش ماهانه
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-right">
+                    <thead className="bg-white text-slate-500 font-bold border-b border-slate-200 text-[11px]">
+                        <tr>
+                            <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مبلغ فروش (ریال)</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono">
+                        {dailyChartData.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-600" dir="ltr">{row.shamsiName}</td>
+                            <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-slate-800" dir="ltr">
+                                {Number(row.value).toLocaleString()}
+                            </td>
+                        </tr>
+                        ))}
+                        <tr className="bg-slate-50 font-bold">
+                            <td className="px-6 py-4 text-xs text-slate-700">جمع کل:</td>
+                            <td className="px-6 py-4 text-xs text-indigo-700" dir="ltr">{monthlySales.toLocaleString()}</td>
+                        </tr>
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+      );
+  };
+
+  const renderCustomerStatement = () => {
+      if (selectedCustomer) {
+          let runningBalance = 0;
+          return (
+              <div className="space-y-4">
+                  <div className="flex items-center gap-4 mb-6">
+                      <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
+                          <ArrowRight size={16} />
+                      </button>
+                      <h2 className="text-xl font-black text-slate-800">
+                          ریز تراکنش‌های مشتری: <span className="text-indigo-600">{selectedCustomer}</span>
+                      </h2>
+                  </div>
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
+                            <tr>
+                                <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
+                                <th className="px-6 py-4 whitespace-nowrap">شرح</th>
+                                <th className="px-6 py-4 whitespace-nowrap">بدهکار</th>
+                                <th className="px-6 py-4 whitespace-nowrap">بستانکار</th>
+                                <th className="px-6 py-4 whitespace-nowrap">مانده</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono text-xs">
+                            {customerDetails.map((row, idx) => {
+                                const deb = parseFloat(row.Debit) || 0;
+                                const cred = parseFloat(row.Credit) || 0;
+                                runningBalance += (deb - cred);
+                                return (
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate((row.Date || '').substring(0, 10))}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800">{row.Description || '-'}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap text-emerald-600" dir="ltr">{deb > 0 ? deb.toLocaleString() : '-'}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap text-rose-600" dir="ltr">{cred > 0 ? cred.toLocaleString() : '-'}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{runningBalance.toLocaleString()} {runningBalance > 0 ? '(بد)' : runningBalance < 0 ? '(بس)' : ''}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        </table>
+                    </div>
+                </div>
+              </div>
+          );
+      }
+
+      const filteredCustomers = customers.filter(c => !searchCustomer || c.AccountName.includes(searchCustomer));
+
+      return (
+          <div className="space-y-4">
+              <div className="relative">
+                  <Search className="w-5 h-5 absolute right-4 top-3.5 text-slate-400" />
+                  <input
+                      type="text"
+                      placeholder="جستجوی نام مشتری..."
+                      value={searchCustomer}
+                      onChange={e => setSearchCustomer(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl py-3 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium"
+                  />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCustomers.map((cust, idx) => {
+                      const deb = parseFloat(cust.Debit) || 0;
+                      const cred = parseFloat(cust.Credit) || 0;
+                      const bal = deb - cred;
+                      const type = bal > 0 ? 'بدهکار' : (bal < 0 ? 'بستانکار' : 'تسویه');
+                      return (
+                          <div key={idx} onClick={() => setSelectedCustomer(cust.AccountName)} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 cursor-pointer transition-all">
+                              <h3 className="font-bold text-slate-800 text-sm mb-3">{cust.AccountName}</h3>
+                              <div className="flex justify-between items-center text-xs">
+                                  <span className="text-slate-500">مانده حساب:</span>
+                                  <span className={`font-black font-mono ${bal > 0 ? 'text-emerald-600' : (bal < 0 ? 'text-rose-600' : 'text-slate-400')}`} dir="ltr">
+                                      {Math.abs(bal).toLocaleString()}
+                                  </span>
+                              </div>
+                              <div className="mt-2 text-[10px] bg-slate-50 inline-block px-2 py-1 rounded text-slate-500 font-bold">
+                                  وضعیت: {type}
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+          </div>
+      );
+  };
+
+  const renderDebtorsCreditors = () => {
+      const totalDebtors = data.filter(d => d.Type === 'بدهکار').reduce((sum, d) => sum + d.NetBalance, 0);
+      const totalCreditors = data.filter(d => d.Type === 'بستانکار').reduce((sum, d) => sum + d.NetBalance, 0);
+
+      return (
+          <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                      <div>
+                          <div className="text-slate-500 text-xs font-bold mb-2">جمع کل بدهکاران (طلب شرکت)</div>
+                          <div className="text-2xl font-black text-emerald-600" dir="ltr">{totalDebtors.toLocaleString()}</div>
+                      </div>
+                      <div className="p-4 bg-emerald-50 rounded-full text-emerald-500"><Activity size={24} /></div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                      <div>
+                          <div className="text-slate-500 text-xs font-bold mb-2">جمع کل بستانکاران (بدهی شرکت)</div>
+                          <div className="text-2xl font-black text-rose-600" dir="ltr">{totalCreditors.toLocaleString()}</div>
+                      </div>
+                      <div className="p-4 bg-rose-50 rounded-full text-rose-500"><Activity size={24} /></div>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-right">
+                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
+                        <tr>
+                            <th className="px-6 py-4 whitespace-nowrap">نام مشتری / حساب</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مبلغ مانده (ریال)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">وضعیت</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono text-xs">
+                        {data.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800 font-medium">{row.AccountName}</td>
+                                <td className={`px-6 py-3 whitespace-nowrap font-bold ${row.Type === 'بدهکار' ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                                    {row.NetBalance.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-3 whitespace-nowrap">
+                                    <span className={`inline-block px-2 py-1 rounded-md text-[10px] font-bold ${row.Type === 'بدهکار' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                        {row.Type}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+          </div>
+      );
+  };
 
   return (
     <div className="flex h-screen bg-[#f8fafc] text-slate-800 font-sans" dir="rtl">
@@ -203,7 +388,7 @@ const SayanReports: React.FC = () => {
 
         <div className="p-4 flex-1 overflow-y-auto space-y-2">
           <button
-            onClick={() => { setActiveReport('SALES'); setActiveCustomer(null); }}
+            onClick={() => { setActiveReport('SALES'); setSelectedCustomer(null); }}
             className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
               activeReport === 'SALES' ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-indigo-200'
             }`}
@@ -216,7 +401,7 @@ const SayanReports: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { setActiveReport('CUSTOMER_STATEMENT'); setActiveCustomer(null); }}
+            onClick={() => { setActiveReport('CUSTOMER_STATEMENT'); setSelectedCustomer(null); }}
             className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
               activeReport === 'CUSTOMER_STATEMENT' ? 'bg-rose-500 text-white shadow-md shadow-rose-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-rose-200'
             }`}
@@ -229,14 +414,14 @@ const SayanReports: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { setActiveReport('DEBTORS_CREDITORS'); setActiveCustomer(null); }}
+            onClick={() => { setActiveReport('DEBTORS_CREDITORS'); setSelectedCustomer(null); }}
             className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
               activeReport === 'DEBTORS_CREDITORS' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-emerald-200'
             }`}
           >
             <Activity size={18} className={activeReport === 'DEBTORS_CREDITORS' ? 'text-emerald-100' : 'text-emerald-500'} />
             <div>
-              <div className="font-bold text-sm">بدهکاران و بستانکاران</div>
+              <div className="font-bold text-sm">جمع بدهکاران و بستانکاران</div>
               <div className={`text-[10px] mt-1 ${activeReport === 'DEBTORS_CREDITORS' ? 'text-emerald-200' : 'text-slate-400'}`}>مانده حساب‌های اشخاص</div>
             </div>
           </button>
@@ -247,55 +432,27 @@ const SayanReports: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 bg-[#f8fafc]">
         {/* Header */}
         <div className="h-20 border-b border-slate-200 bg-white flex items-center justify-between px-8 shadow-sm">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-              <h1 className="font-black text-lg text-slate-800">
-                {activeReport === 'SALES' && 'داشبورد فروش'}
-                {activeReport === 'CUSTOMER_STATEMENT' && !activeCustomer && 'انتخاب مشتری'}
-                {activeReport === 'CUSTOMER_STATEMENT' && activeCustomer && 'صورتحساب مشتری'}
-                {activeReport === 'DEBTORS_CREDITORS' && 'بدهکاران و بستانکاران'}
-              </h1>
-              {loading && <Loader2 size={16} className="animate-spin text-indigo-500" />}
-            </div>
-            {activeCustomer && (
-              <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                <span className="font-bold text-slate-700">{activeCustomer.name}</span>
-                <span>•</span>
-                <span>مانده: <strong className={activeCustomer.type === 'debit' ? 'text-emerald-600' : 'text-rose-600'} dir="ltr">{activeCustomer.balance.toLocaleString()} {activeCustomer.type === 'debit' ? 'بدهکار' : 'بستانکار'}</strong></span>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Date Filters */}
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1 px-3 gap-2">
-              <Calendar size={14} className="text-slate-400" />
-              <div className="flex items-center gap-2 text-xs">
-                <span>از</span>
-                <input 
-                  type="text" 
-                  value={startDate} 
-                  onChange={e => setStartDate(e.target.value)}
-                  className="bg-white border border-slate-200 rounded px-2 py-1 w-24 text-center font-mono focus:outline-none focus:border-indigo-400"
-                  placeholder="1403/01/01"
-                  dir="ltr"
-                />
-                <span>تا</span>
-                <input 
-                  type="text" 
-                  value={endDate} 
-                  onChange={e => setEndDate(e.target.value)}
-                  className="bg-white border border-slate-200 rounded px-2 py-1 w-24 text-center font-mono focus:outline-none focus:border-indigo-400"
-                  placeholder="1403/12/29"
-                  dir="ltr"
-                />
-              </div>
+          <div className="flex items-center gap-6">
+            <h1 className="font-black text-lg text-slate-800 min-w-max">
+              {activeReport === 'SALES' && 'داشبورد فروش'}
+              {activeReport === 'CUSTOMER_STATEMENT' && 'صورتحساب مشتریان'}
+              {activeReport === 'DEBTORS_CREDITORS' && 'بدهکاران و بستانکاران'}
+            </h1>
+            
+            <div className="h-10 w-px bg-slate-200"></div>
+
+            {/* Date Filter */}
+            <div className="flex items-center gap-4">
+                <ShamsiDatePicker date={targetDate} onChange={setTargetDate} label="تنظیم تاریخ گزارش (شمسی)" />
             </div>
 
-             <button onClick={() => fetchReportData(activeReport, activeCustomer?.name)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm shadow-indigo-200">
+            {loading && <Loader2 size={18} className="animate-spin text-indigo-500 ml-4" />}
+          </div>
+          <div className="flex items-center gap-3">
+             <button onClick={() => fetchReportData(activeReport)} className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
               <RefreshCw size={14} /> اعمال و بروزرسانی
             </button>
-            <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-lg transition-colors">
+            <button onClick={exportData} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-colors">
               <Download size={14} /> خروجی اکسل
             </button>
           </div>
@@ -313,250 +470,19 @@ const SayanReports: React.FC = () => {
             </div>
           )}
 
-          {!loading && data.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              
-              {/* Visualizer for Sales */}
-              {activeReport === 'SALES' && (
-                <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                   <div className="lg:col-span-1 space-y-6">
-                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                         <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش در بازه انتخابی</div>
-                         <div className="text-3xl font-black text-indigo-600" dir="ltr">
-                            {totalSalesAmount.toLocaleString()}
-                         </div>
-                      </div>
-                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                         <div className="text-slate-800 text-sm font-bold mb-4">فیلتر زمانی</div>
-                         <div className="flex bg-slate-100 p-1 rounded-lg">
-                           <button onClick={() => setTimeFilter('daily')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${timeFilter === 'daily' ? 'bg-white shadow text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>روزانه</button>
-                           <button onClick={() => setTimeFilter('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${timeFilter === 'monthly' ? 'bg-white shadow text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>ماهانه</button>
-                         </div>
-                      </div>
-                   </div>
-                   
-                   <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[350px]">
-                     <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش {timeFilter === 'daily' ? 'روزانه' : 'ماهانه'}</h3>
-                     <ResponsiveContainer width="100%" height="100%">
-                       <BarChart data={aggregatedSales} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                         <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                         <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(val) => (val/1000000).toFixed(0) + 'm'} />
-                         <Tooltip 
-                           cursor={{ fill: '#f8fafc' }}
-                           contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', textAlign: 'right', direction: 'rtl' }}
-                           formatter={(value: number) => [value.toLocaleString(), 'مبلغ']}
-                           labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
-                         />
-                         <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={40}>
-                           {aggregatedSales.map((_, index) => (
-                             <Cell key={`cell-${index}`} fill={index === aggregatedSales.length - 1 ? '#4f46e5' : '#818cf8'} />
-                           ))}
-                         </Bar>
-                       </BarChart>
-                     </ResponsiveContainer>
-                   </div>
-                </div>
-
-                {/* Sales Table */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                     <h3 className="font-bold text-sm text-slate-800">جدول مبالغ فروش {timeFilter === 'daily' ? 'روزانه' : 'ماهانه'}</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-right">
-                      <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
-                        <tr>
-                          <th className="px-6 py-3 whitespace-nowrap">تاریخ ({timeFilter === 'daily' ? 'روز' : 'ماه'})</th>
-                          <th className="px-6 py-3 whitespace-nowrap text-left">مبلغ کل فروش</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-mono">
-                        {aggregatedSales.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-700">{row.name}</td>
-                            <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-indigo-600 text-left" dir="ltr">{row.value.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                        <tr className="bg-slate-50 font-bold">
-                          <td className="px-6 py-4 text-xs text-slate-800">جمع کل</td>
-                          <td className="px-6 py-4 text-xs text-indigo-700 text-left" dir="ltr">{totalSalesAmount.toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                </>
-              )}
-
-              {/* Debtors & Creditors */}
-              {activeReport === 'DEBTORS_CREDITORS' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
-                     <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
-                       <span className="text-emerald-600/80 text-xs font-bold mb-2">جمع کل بدهکاران</span>
-                       <span className="text-3xl font-black text-emerald-700" dir="ltr">{dcTotals.debtors.toLocaleString()}</span>
-                     </div>
-                     <div className="bg-rose-50 border border-rose-100 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
-                       <span className="text-rose-600/80 text-xs font-bold mb-2">جمع کل بستانکاران</span>
-                       <span className="text-3xl font-black text-rose-700" dir="ltr">{dcTotals.creditors.toLocaleString()}</span>
-                     </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-right">
-                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
-                          <tr>
-                            <th className="px-6 py-3 whitespace-nowrap">نام حساب / شخص</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left">مجموع بدهکار</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left">مجموع بستانکار</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left">مانده نهایی</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-center">وضعیت</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          {data.map((row, idx) => {
-                            const debit = parseFloat(row.TotalDebit) || 0;
-                            const credit = parseFloat(row.TotalCredit) || 0;
-                            const balance = debit - credit;
-                            return (
-                              <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-700 font-sans font-bold">{row.AccountName || '-'}</td>
-                                <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-500 text-left" dir="ltr">{debit > 0 ? debit.toLocaleString() : '-'}</td>
-                                <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-500 text-left" dir="ltr">{credit > 0 ? credit.toLocaleString() : '-'}</td>
-                                <td className={`px-6 py-3 whitespace-nowrap text-sm font-bold text-left ${balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-rose-600' : 'text-slate-400'}`} dir="ltr">
-                                  {Math.abs(balance).toLocaleString()}
-                                </td>
-                                <td className="px-6 py-3 whitespace-nowrap text-xs text-center">
-                                  {balance > 0 ? <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-[10px]">بدهکار</span> : 
-                                   balance < 0 ? <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold text-[10px]">بستانکار</span> : 
-                                   <span className="text-slate-400 font-bold text-[10px]">تسویه</span>}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Customer Statement */}
-              {activeReport === 'CUSTOMER_STATEMENT' && !activeCustomer && (
-                <div className="space-y-6">
-                  <div className="relative max-w-md">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="جستجوی نام مشتری..." 
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all text-sm"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredCustomers.map((row, idx) => {
-                      const debit = parseFloat(row.TotalDebit) || 0;
-                      const credit = parseFloat(row.TotalCredit) || 0;
-                      const balance = debit - credit;
-                      const type = balance >= 0 ? 'debit' : 'credit';
-                      return (
-                        <button 
-                          key={idx}
-                          onClick={() => setActiveCustomer({ name: row.AccountName, balance: Math.abs(balance), type })}
-                          className="bg-white border border-slate-200 p-4 rounded-xl hover:border-rose-300 hover:shadow-md transition-all text-right flex flex-col group"
-                        >
-                          <div className="flex items-start justify-between w-full mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-rose-100 group-hover:text-rose-600 transition-colors">
-                                <User size={14} />
-                              </div>
-                              <span className="font-bold text-sm text-slate-700">{row.AccountName || 'بدون نام'}</span>
-                            </div>
-                            <ArrowRight size={16} className="text-slate-300 group-hover:text-rose-500 transform group-hover:-translate-x-1 transition-all" />
-                          </div>
-                          
-                          <div className="mt-auto pt-3 border-t border-slate-100 w-full flex justify-between items-center">
-                            <span className="text-[10px] text-slate-400 font-bold">مانده حساب:</span>
-                            <div className="flex items-center gap-1.5" dir="ltr">
-                              <span className={`font-mono font-black text-sm ${balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                                {Math.abs(balance).toLocaleString()}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500">{balance >= 0 ? 'بدهکار' : 'بستانکار'}</span>
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                    {filteredCustomers.length === 0 && (
-                      <div className="col-span-full py-12 text-center text-slate-400 text-sm">
-                        مشتری با این نام یافت نشد.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Active Customer Detailed Statement */}
-              {activeReport === 'CUSTOMER_STATEMENT' && activeCustomer && (
-                <div className="space-y-6">
-                  <div className="flex gap-4 mb-4">
-                    <button onClick={() => setActiveCustomer(null)} className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1">
-                      <ArrowRight size={14} /> بازگشت به لیست مشتریان
-                    </button>
-                  </div>
-                  
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-right">
-                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
-                          <tr>
-                            <th className="px-6 py-3 whitespace-nowrap w-32">تاریخ</th>
-                            <th className="px-6 py-3 whitespace-nowrap">شرح آرتیکل</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left w-32">بدهکار</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left w-32">بستانکار</th>
-                            <th className="px-6 py-3 whitespace-nowrap text-left w-32">مانده لحظه‌ای</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          {(()=>{
-                            let runningBalance = 0;
-                            return data.map((row, idx) => {
-                              const debit = parseFloat(row.Debit) || 0;
-                              const credit = parseFloat(row.Credit) || 0;
-                              runningBalance += (debit - credit);
-                              return (
-                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                  <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-600">{row.Date || '-'}</td>
-                                  <td className="px-6 py-3 text-xs text-slate-700 font-sans leading-relaxed">{row.Description || row.AccountName || '-'}</td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-xs text-emerald-600 text-left font-bold" dir="ltr">{debit > 0 ? debit.toLocaleString() : '-'}</td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-xs text-rose-600 text-left font-bold" dir="ltr">{credit > 0 ? credit.toLocaleString() : '-'}</td>
-                                  <td className={`px-6 py-3 whitespace-nowrap text-xs text-left font-bold ${runningBalance > 0 ? 'text-emerald-700' : runningBalance < 0 ? 'text-rose-700' : 'text-slate-400'}`} dir="ltr">
-                                    {Math.abs(runningBalance).toLocaleString()} <span className="text-[9px] font-sans font-normal">{runningBalance > 0 ? 'بد' : runningBalance < 0 ? 'بس' : ''}</span>
-                                  </td>
-                                </tr>
-                              );
-                            });
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+          {!loading && !error && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                {activeReport === 'SALES' && renderSalesDashboard()}
+                {activeReport === 'CUSTOMER_STATEMENT' && renderCustomerStatement()}
+                {activeReport === 'DEBTORS_CREDITORS' && renderDebtorsCreditors()}
             </motion.div>
           )}
 
-          {!loading && data.length === 0 && !error && (
+          {!loading && data.length === 0 && customers.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center py-32 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
               <TableIcon size={64} className="mb-4 stroke-1 text-slate-300" />
               <p className="text-base font-bold text-slate-600">داده‌ای یافت نشد</p>
-              <p className="text-xs mt-2 text-slate-400">برای این گزارش در بازه انتخابی اطلاعاتی وجود ندارد.</p>
+              <p className="text-xs mt-2 text-slate-400">برای این گزارش در بازه زمانی انتخاب شده اطلاعاتی وجود ندارد.</p>
             </div>
           )}
         </div>

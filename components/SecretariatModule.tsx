@@ -570,8 +570,8 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({
   };
 
   // Handlers for Letter Submissions
-  const handleSaveLetter = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSaveLetter = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedCompany || !activeSection) return;
 
     if (editingLetterId) {
