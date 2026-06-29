@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Download, DollarSign, Users, Calendar, Activity, Loader2, ArrowRight } from 'lucide-react';
+import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Download, DollarSign, Users, Calendar, Activity, Loader2, ArrowRight, X } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -75,6 +75,7 @@ const SayanReports: React.FC = () => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   
   // Date filters (defaults to current month start to today)
   const currentShamsi = getCurrentShamsiDate();
@@ -135,17 +136,8 @@ const SayanReports: React.FC = () => {
         }
 
         const processed = finalData.map((row: any) => {
-            // Dynamically find the largest numeric value in the row which is likely the Total Amount
-            // Avoid Date fields (Field_008, Field_013, Field_030, etc) and ID fields
-            let maxAmount = 0;
-            const skipKeys = ['Field_001', 'Field_003', 'Field_004', 'Field_005', 'Field_006', 'Field_007'];
-            Object.keys(row).forEach(k => {
-                if (skipKeys.includes(k) || typeof row[k] !== 'number' && (typeof row[k] === 'string' && (row[k].includes('T00:00') || row[k].includes('-')))) return;
-                const v = parseFloat(row[k]);
-                if (!isNaN(v) && v > maxAmount) maxAmount = v;
-            });
-
-            const amount = maxAmount;
+            // Amount is usually in Field_025 in BUR_TBL_008
+            const amount = parseFloat(row.Field_025 || row.TotalSales || row.F25 || 0);
             const type = String(row.Field_005 || row.Field_004 || '').trim();
             
             // Try to find the weight field (smaller than amount)
@@ -161,8 +153,8 @@ const SayanReports: React.FC = () => {
             let finalWeight = 0;
             
             if (selectedSalesTypes.includes(type)) {
-                // To support subtraction, we could add a toggle, but default all to positive for now
-                // since user complained type 4 was negative
+                // If it's type 4 (usually return/payment), keep it positive as requested by user
+                // Or if it should be negative, let's keep it positive but we will show it as a separate list
                 finalAmount = amount;
                 finalWeight = weight;
             }
@@ -174,7 +166,11 @@ const SayanReports: React.FC = () => {
                 Date: row.Field_008 || row.Date,
                 Type: type
             };
-        }).filter((r: any) => selectedSalesTypes.includes(r.Type) && isDateInRange(r.Date));
+        }).filter((r: any) => {
+            // Field_014 is usually 'Is Cancelled/Deleted' in Sayan. Skip if true.
+            if (String(r.Field_014).toLowerCase() === 'true' || r.Field_014 === 1) return false;
+            return selectedSalesTypes.includes(r.Type) && isDateInRange(r.Date);
+        });
         
         setData(processed.reverse());
       } 
@@ -355,27 +351,15 @@ const SayanReports: React.FC = () => {
 
       return (
         <div className="space-y-6">
-            {availableSalesTypes.length > 0 && (
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <h4 className="text-xs font-bold text-slate-500 mb-3">تنظیمات پیشرفته گزارش (انواع فاکتور جهت محاسبه به عنوان فروش):</h4>
-                    <div className="flex flex-wrap gap-4">
-                        {availableSalesTypes.map(t => (
-                            <label key={t} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
-                                <input 
-                                    type="checkbox" 
-                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                    checked={selectedSalesTypes.includes(t)}
-                                    onChange={(e) => {
-                                        if (e.target.checked) setSelectedSalesTypes(prev => [...prev, t]);
-                                        else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
-                                    }}
-                                />
-                                نوع فاکتور {t} {t === '4' ? '(کسر می‌شود)' : '(جمع می‌شود)'}
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <div className="flex items-center justify-between mb-4">
+                <button 
+                    onClick={() => setShowDetailsModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-bold border border-indigo-200 transition-colors"
+                >
+                    <TableIcon size={16} />
+                    مشاهده ریز اسناد (فاکتورها)
+                </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -601,6 +585,81 @@ const SayanReports: React.FC = () => {
       );
   };
 
+  const renderDetailsModal = () => {
+    if (!showDetailsModal) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200"
+        >
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+            <div>
+                <h3 className="text-lg font-black text-slate-800">ریز اسناد (فاکتورها)</h3>
+                <p className="text-xs text-slate-500 mt-1">مشاهده ریز مبالغ و تنظیمات انواع سند</p>
+            </div>
+            <button onClick={() => setShowDetailsModal(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="p-6 border-b border-slate-100 bg-white">
+            <h4 className="text-xs font-bold text-slate-500 mb-3">تنظیمات پیشرفته گزارش (انواع فاکتور جهت محاسبه به عنوان فروش):</h4>
+            <div className="flex flex-wrap gap-4">
+                {availableSalesTypes.map(t => (
+                    <label key={t} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                        <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            checked={selectedSalesTypes.includes(t)}
+                            onChange={(e) => {
+                                if (e.target.checked) setSelectedSalesTypes(prev => [...prev, t]);
+                                else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
+                            }}
+                        />
+                        نوع فاکتور {t} {t === '4' ? '(کسر می‌شود)' : '(جمع می‌شود)'}
+                    </label>
+                ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto bg-slate-50/30 p-6">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <table className="w-full text-sm text-right">
+                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
+                        <tr>
+                            <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
+                            <th className="px-6 py-4 whitespace-nowrap">نوع سند</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مبلغ (ریال)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">کد شخص / توضیحات</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono text-xs">
+                        {data.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate(row.Date)}</td>
+                                <td className="px-6 py-3 whitespace-nowrap text-slate-800 font-bold">نوع {row.Type}</td>
+                                <td className="px-6 py-3 whitespace-nowrap text-indigo-600 font-bold" dir="ltr">{Number(row.TotalSales || 0).toLocaleString()}</td>
+                                <td className="px-6 py-3 text-slate-500 max-w-[300px] truncate" title={String(row.Field_027 || row.Field_028 || '')}>
+                                    {row.Field_010 ? `شخص: ${row.Field_010}` : '-'} 
+                                </td>
+                            </tr>
+                        ))}
+                        {data.length === 0 && (
+                            <tr>
+                                <td colSpan={4} className="text-center py-8 text-slate-400">هیچ سندی یافت نشد</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-screen bg-[#f8fafc] text-slate-800 font-sans" dir="rtl">
       {/* Sidebar */}
@@ -690,6 +749,7 @@ const SayanReports: React.FC = () => {
 
         {/* Content Area */}
         <div className="flex-1 p-8 overflow-y-auto">
+          {renderDetailsModal()}
           {error && (
             <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-start gap-3">
               <Database size={20} className="mt-0.5 text-rose-500" />
