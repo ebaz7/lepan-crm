@@ -115,15 +115,14 @@ const SayanReports: React.FC = () => {
 
     try {
       if (reportType === 'SALES') {
-        // query BUR_TBL_008 and fallback fields if TotalSales is not Field_025
-        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11], Field_004 as [Type], Field_012, Field_013, Field_014, Field_015, Field_016, Field_017, Field_018 FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
+        sqlQuery = `SELECT TOP 5000 * FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery, 'BUR_TBL_008');
         
-        // Find all available types in the DB
+        // Find all available types in the DB (use Field_005 as Document Type, fallback to Field_004)
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const type = String(row.Type || row.Field_004).trim();
+            const type = String(row.Field_005 || row.Field_004 || '').trim();
             if (type && type !== 'undefined' && type !== 'null') {
                 typesSet.add(type);
             }
@@ -131,13 +130,25 @@ const SayanReports: React.FC = () => {
         const typesArr = Array.from(typesSet);
         if (availableSalesTypes.length === 0 && typesArr.length > 0) {
             setAvailableSalesTypes(typesArr);
+            // Default select commonly used types
+            setSelectedSalesTypes(typesArr);
         }
 
         const processed = finalData.map((row: any) => {
-            const amount = parseFloat(row.F25 || row.F10 || row.F11 || row.Field_025 || row.TotalSales || 0);
-            const type = String(row.Type || row.Field_004).trim();
+            // Dynamically find the largest numeric value in the row which is likely the Total Amount
+            // Avoid Date fields (Field_008, Field_013, Field_030, etc) and ID fields
+            let maxAmount = 0;
+            const skipKeys = ['Field_001', 'Field_003', 'Field_004', 'Field_005', 'Field_006', 'Field_007'];
+            Object.keys(row).forEach(k => {
+                if (skipKeys.includes(k) || typeof row[k] !== 'number' && (typeof row[k] === 'string' && (row[k].includes('T00:00') || row[k].includes('-')))) return;
+                const v = parseFloat(row[k]);
+                if (!isNaN(v) && v > maxAmount) maxAmount = v;
+            });
+
+            const amount = maxAmount;
+            const type = String(row.Field_005 || row.Field_004 || '').trim();
             
-            // Try to find the weight field (usually a smaller number than amount, often in Field_013, 015, or 016)
+            // Try to find the weight field (smaller than amount)
             let weight = 0;
             [row.Field_012, row.Field_013, row.Field_014, row.Field_015, row.Field_016, row.Field_017, row.Field_018].forEach(val => {
                 const w = parseFloat(val);
@@ -149,26 +160,18 @@ const SayanReports: React.FC = () => {
             let finalAmount = 0;
             let finalWeight = 0;
             
-            // We use user selection or fallback
-            // If selectedSalesTypes has this type, it's positive (sales).
-            // We'll treat '4' as Return (negative) automatically if the user hasn't unchecked it, 
-            // but actually let's just make everything in selectedSalesTypes POSITIVE, except '4' if it's there?
-            // Sayan: 2 is Sales/Receipt, 4 is Sales Return.
             if (selectedSalesTypes.includes(type)) {
-                if (type === '4' || type === '3') { 
-                    finalAmount = -amount;
-                    finalWeight = -weight;
-                } else {
-                    finalAmount = amount;
-                    finalWeight = weight;
-                }
+                // To support subtraction, we could add a toggle, but default all to positive for now
+                // since user complained type 4 was negative
+                finalAmount = amount;
+                finalWeight = weight;
             }
 
             return {
                 ...row,
                 TotalSales: finalAmount,
                 Weight: finalWeight,
-                Date: row.Date || row.Field_008,
+                Date: row.Field_008 || row.Date,
                 Type: type
             };
         }).filter((r: any) => selectedSalesTypes.includes(r.Type) && isDateInRange(r.Date));
@@ -177,46 +180,105 @@ const SayanReports: React.FC = () => {
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
-            // Fetch raw rows and aggregate locally
-            sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
-            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
+            // Fetch Tafsili (Detailed Accounts) to map IDs to Names
+            let tafsiliMap: Record<string, string> = {};
+            try {
+                const tafsili = await attemptQuery("SELECT Field_003, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
+                tafsili.forEach((t: any) => {
+                    if (t.Field_003 && t.Field_006) tafsiliMap[String(t.Field_003).trim()] = String(t.Field_006).trim();
+                });
+            } catch(e) { console.error("Tafsili fetch failed", e); }
+
+            // Fetch transaction details
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
-                // only consider rows before end date for balance
-                if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
+                const date = row.Date || row.Field_013;
+                if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
                 
-                let f5 = String(row.Field_005 || '').trim(); // Main acc
-                let f6 = String(row.Field_006 || '').trim(); // Tafsili
-                let f7 = String(row.Field_007 || '').trim(); // Detail (often person name)
+                // Extract Tafsili codes from Field_014 (e.g. "11:112237-12:1211001")
+                const codesStr = String(row.Codes || row.Field_014 || '');
+                const detailsStr = String(row.Details || row.Field_018 || '');
                 
-                let name = f7 || f6 || row.AccountName;
-                if (!name) return;
-                name = String(name).trim();
+                let customerCode = '';
+                let customerName = '';
 
-                // Simple exclusion of generic accounts so we focus on Persons
-                const keywords = ['صندوق', 'بانک', 'موجودی', 'درآمد', 'هزینه', 'حقوق', 'بیمه', 'سرمایه', 'استهلاک', 'مستهلک', 'تخفیف'];
-                if (keywords.some(kw => name.includes(kw))) return;
+                // Try to find an "اشخاص" (Persons) code, typically starting with 11
+                if (detailsStr.includes('اشخاص:')) {
+                    const match = detailsStr.match(/اشخاص:\s*(\d+)/);
+                    if (match) customerCode = match[1];
+                }
+                if (!customerCode) {
+                    const parts = codesStr.split('-');
+                    for (const p of parts) {
+                        const [group, code] = p.split(':');
+                        if (group === '11' && code) {
+                            customerCode = code;
+                            break;
+                        }
+                    }
+                }
+                
+                if (customerCode && tafsiliMap[customerCode]) {
+                    customerName = tafsiliMap[customerCode];
+                } else if (customerCode) {
+                    customerName = `شخص ${customerCode}`;
+                } else {
+                    return; // skip non-person transactions
+                }
 
-                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-                // Use Field_009 for Debit, Field_010 for Credit
-                const v1 = parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0;
-                const v2 = parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0;
-                grouped[name].Debit += v1;
-                grouped[name].Credit += v2;
+                if (!grouped[customerName]) grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
+                
+                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                grouped[customerName].Debit += v1;
+                grouped[customerName].Credit += v2;
             });
             setCustomers(Object.values(grouped));
             setData([]);
         } else {
-            sqlQuery = `SELECT TOP 2000 * FROM ACT_TBL_003 WHERE (Field_006 = N'${selectedCustomer}' OR Field_007 = N'${selectedCustomer}') ORDER BY Field_008 DESC`;
-            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
-            const mapped = finalData.map((row: any) => ({
-                Date: row.Field_008,
-                Description: row.Field_007 || row.Field_006,
-                Debit: parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0,
-                Credit: parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0,
-            })).filter((r: any) => isDateInRange(r.Date));
-            setCustomerDetails(mapped.reverse());
+            // Customer is selected
+            const custObj = customers.find(c => c.AccountName === selectedCustomer);
+            const targetCode = custObj ? custObj.Code : null;
+
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+            
+            const processed = finalData.map((row: any) => {
+                const codesStr = String(row.Codes || row.Field_014 || '');
+                const detailsStr = String(row.Details || row.Field_018 || '');
+                
+                let matches = false;
+                if (targetCode) {
+                    if (codesStr.includes(`:${targetCode}`) || detailsStr.includes(targetCode)) matches = true;
+                } else {
+                    const desc = String(row.Description || row.Field_010 || '');
+                    if (desc.includes(selectedCustomer)) matches = true;
+                }
+
+                if (!matches) return null;
+
+                const d = parseFloat(row.Debit || row.Field_008 || 0);
+                const c = parseFloat(row.Credit || row.Field_009 || 0);
+                
+                return {
+                    Date: row.Date || row.Field_013,
+                    Description: row.Description || row.Field_010,
+                    Debit: d,
+                    Credit: c,
+                    Balance: d - c
+                };
+            }).filter(Boolean).filter((r: any) => isDateInRange(r.Date));
+            
+            // Calculate running balance
+            let run = 0;
+            const finalCust = processed.reverse().map((r: any) => {
+                run += r.Balance;
+                return { ...r, Balance: run };
+            });
+            setCustomerDetails(finalCust.reverse());
         }
       } 
       else if (reportType === 'DEBTORS_CREDITORS') {
