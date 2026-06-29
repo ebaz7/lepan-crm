@@ -1255,6 +1255,7 @@ export interface SecretariatCompanySettings {
     deleteAccessTokens?: string[];     // List of user IDs with delete access
     letterheadUrl?: string;            // سربرگ
     wordLetterheadUrl?: string;        // سربرگ اختصاصی فایل ورد
+    pdfLetterheadUrl?: string;         // سربرگ اختصاصی فایل PDF
     meetingMinutesTemplate?: string;   // قالب صورتجلسه
     companyStampUrl?: string;          // تصویر مهر رسمی شرکت
     companyStampSize?: number;         // اندازه مهر رسمی (پیکسل)
