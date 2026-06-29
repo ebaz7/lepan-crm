@@ -42,13 +42,13 @@ const SecondExitGroupSettings: React.FC<Props> = ({
 
     const statusOptions = [
         { value: 'CREATE', label: '۱. ثبت اولیه (ارجاع به مدیرعامل)' },
-        { value: ExitPermitStatus.PENDING_CEO, label: '۲. تایید مدیرعامل (ارجاع به مدیر کارخانه)' },
-        { value: ExitPermitStatus.PENDING_FACTORY, label: '۳. تایید مدیر کارخانه (ارجاع به سرپرست انبار)' },
-        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: '۴. تایید و توزین انبار (ارجاع به انتظامات)' },
-        { value: ExitPermitStatus.PENDING_SECURITY, label: '۵. تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
-        { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: '۶. تایید نهایی مدیر کارخانه (خروج بار)' },
-        { value: 'ARCHIVED', label: '۷. بایگانی و خروج نهایی (تکمیل شده)' },
+        { value: ExitPermitStatus.PENDING_FACTORY, label: '۲. تایید مدیرعامل (ارجاع به مدیر کارخانه)' },
+        { value: ExitPermitStatus.PENDING_WAREHOUSE, label: '۳. تایید مدیر کارخانه (ارجاع به سرپرست انبار)' },
+        { value: ExitPermitStatus.PENDING_SECURITY, label: '۴. تایید و توزین انبار (ارجاع به انتظامات)' },
+        { value: ExitPermitStatus.PENDING_FACTORY_FINAL, label: '۵. تایید انتظامات (ارجاع تایید خروج مدیر کارخانه)' },
+        { value: 'ARCHIVED', label: '۶. تایید نهایی مدیر کارخانه (خروج بار و بایگانی)' },
         { value: 'CANCELED', label: '❌ ابطال و کنسلی (بار خارج نشود)' },
+        { value: 'REJECTED', label: '❌ رد شده / حذف شده' },
     ];
 
     return (

@@ -1723,13 +1723,11 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         let statusKey = p.status;
         if (eventType === 'DELETE') {
             statusKey = 'REJECTED'; 
-        } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات') {
+        } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات' || p.status === 'در انتظار تایید مدیرعامل') {
             statusKey = 'CREATE';
-        } else if (p.status === 'خارج شده (بایگانی)') {
+        } else if (p.status === 'خارج شده (بایگانی)' || p.status === 'خارج شد') {
             // This is the final archived state
             statusKey = 'ARCHIVED'; 
-        } else if (p.status === 'خارج شد') {
-             statusKey = 'ARCHIVED';
         }
 
         let targetGroups = [];
@@ -1750,14 +1748,6 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
         if (g3Config.activeStatuses && g3Config.activeStatuses.includes(statusKey)) {
             targetGroups.push(3);
-        }
-
-        if (eventType === 'MANUAL') {
-            targetGroups = [];
-            if (g1Config.telegramId || g1Config.baleId || settings.exitPermitNotificationTelegramId || settings.exitPermitNotificationBaleId) targetGroups.push(1);
-            if (g2Config.telegramId || g2Config.baleId) targetGroups.push(2);
-            if (g3Config.telegramId || g3Config.baleId) targetGroups.push(3);
-            if (targetGroups.length === 0) targetGroups.push(1); // Fallback
         }
 
         // --- NEW: Customer Notification with Proforma Image ---
