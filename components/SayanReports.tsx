@@ -330,8 +330,8 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   // حالت‌های کنسول پیشرفته و گزارشات ترکیبی
   const [customMode, setCustomMode] = useState<boolean>(false);
   const [customPath, setCustomPath] = useState<string>('invoices');
-  const [method, setMethod] = useState<'GET' | 'POST' | 'PUT'>('GET');
-  const [reqBody, setReqBody] = useState<string>('{\n  "query": "SELECT * FROM ACT_TBL_001"\n}');
+  const [method, setMethod] = useState<'GET' | 'POST' | 'PUT'>('POST');
+  const [reqBody, setReqBody] = useState<string>('SELECT TOP 100 * FROM ACT_TBL_001');
   const [reportMode, setReportMode] = useState<boolean>(false);
   const [rawResponse, setRawResponse] = useState<any>(null);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
@@ -514,24 +514,31 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       const wb = XLSX.utils.book_new();
       let extractedCount = 0;
 
-      for (const tableName of HARDCODED_TABLES) {
+      const tablesToExtract = discoveredTables.length > 0 
+          ? discoveredTables.map(t => t.TableName || t.name || t.TABLE_NAME || t.TABLE) 
+          : HARDCODED_TABLES;
+
+      for (const tableName of tablesToExtract) {
+        if (!tableName) continue;
         try {
-          // Attempt to fetch up to 1000 rows for each table to avoid memory crash
-          const result: any = await apiCall('/sayan-proxy', 'POST', {
-            path: 'sql',
-            method: 'POST',
-            body: { query: `SELECT TOP 1000 * FROM ${tableName}` }
-          });
-          
+          const query = `SELECT TOP 2000 * FROM ${tableName}`;
+          const pathList = [
+            { path: 'sql', method: 'POST', body: { query } },
+            { path: 'sql', method: 'POST', body: { sql: query } },
+            { path: 'query', method: 'POST', body: { query } },
+            { path: tableName, method: 'GET', body: null }
+          ];
+
           let tableData = [];
-          if (result && result.data && Array.isArray(result.data)) {
-            tableData = result.data;
-          } else if (result && Array.isArray(result)) {
-            tableData = result;
+          for (const attempt of pathList) {
+             try {
+                 const result: any = await apiCall('/sayan-proxy', 'POST', { path: attempt.path, method: attempt.method, body: attempt.body });
+                 if (result && result.data && Array.isArray(result.data)) { tableData = result.data; break; }
+                 else if (result && Array.isArray(result)) { tableData = result; break; }
+             } catch(e) {}
           }
 
           if (tableData.length > 0) {
-            // Sheet names must be 31 chars max
             let sheetName = (customTableNames[tableName] || tableName).replace(/[\*\?\/\\\[\]]/g, '').substring(0, 31);
             const ws = XLSX.utils.json_to_sheet(tableData);
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -546,7 +553,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
         XLSX.writeFile(wb, `Sayan_Full_Database_Dump_${new Date().getTime()}.xlsx`);
         alert(`خروجی اکسل از ${extractedCount} جدول با موفقیت دریافت شد!`);
       } else {
-        alert('هیچ داده‌ای از جداول دریافت نشد. لطفاً ارتباط با وب‌سرویس سایان را بررسی کنید.');
+        alert('هیچ داده‌ای از جداول دریافت نشد. لطفاً ارتباط با وب‌سرویس سایان را بررسی کنید. (برای دریافت کل جداول، ابتدا از بخش Schema جدول‌ها را واکشی کنید)');
       }
     } catch (err: any) {
       console.error("Extraction error:", err);
@@ -667,35 +674,67 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       let finalPath = '';
 
       if (customMode) {
-        let fetchMethod = method;
-        let fetchBody: any = null;
-        let cleanPath = customPath.trim().replace(/^\//, '');
-        
-        if (method === 'POST' || method === 'PUT') {
-          try {
-            if (reqBody.trim()) fetchBody = JSON.parse(reqBody);
-          } catch (e: any) {
-            throw new Error(`خطای سینتکس در بدنه JSON درخواست: ${e.message}`);
-          }
-        }
-        
-        console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
-        finalPath = cleanPath;
-        
-        try {
-          const result: any = await apiCall('/sayan-proxy', 'POST', { path: cleanPath, method: fetchMethod, body: fetchBody });
-          responseJson = result;
-          isSuccess = true;
-          finalStatus = 200;
-          finalStatusText = 'OK';
-        } catch (err: any) {
-          isSuccess = false;
-          responseText = err.message;
-          const statusMatch = err.message.match(/خطای سرور: (\d+)/);
-          finalStatus = statusMatch ? parseInt(statusMatch[1]) : 500;
-          finalStatusText = 'Error';
+        let isRawSql = false;
+        let sqlStr = '';
+        if (reqBody && reqBody.trim().toUpperCase().startsWith('SELECT')) {
+           isRawSql = true;
+           sqlStr = reqBody.trim();
         }
 
+        if (isRawSql && method === 'POST') {
+          const pathList = [
+            { path: 'sql', method: 'POST', body: { query: sqlStr } },
+            { path: 'sql', method: 'POST', body: { sql: sqlStr } },
+            { path: 'query', method: 'POST', body: { query: sqlStr } },
+            { path: 'execute', method: 'POST', body: { query: sqlStr } }
+          ];
+          console.log(`Executing raw SQL query: ${sqlStr}`);
+          finalPath = "RAW_SQL_QUERY";
+          for (const attempt of pathList) {
+            try {
+              const result: any = await apiCall('/sayan-proxy', 'POST', { path: attempt.path, method: attempt.method, body: attempt.body });
+              responseJson = result;
+              isSuccess = true;
+              finalStatus = 200;
+              finalStatusText = 'OK';
+              finalPath = attempt.path;
+              break;
+            } catch (err: any) {
+               finalStatus = 500;
+               finalStatusText = 'Attempt Failed';
+               responseText = err.message;
+            }
+          }
+        } else {
+          let fetchMethod = method;
+          let fetchBody: any = null;
+          let cleanPath = customPath.trim().replace(/^\//, '');
+          
+          if (method === 'POST' || method === 'PUT') {
+            try {
+              if (reqBody.trim()) fetchBody = JSON.parse(reqBody);
+            } catch (e: any) {
+              throw new Error(`خطای سینتکس در بدنه JSON درخواست: ${e.message}`);
+            }
+          }
+          
+          console.log(`Fetching Sayan Data via Secure Server Proxy: Path=[${cleanPath}]`);
+          finalPath = cleanPath;
+          
+          try {
+            const result: any = await apiCall('/sayan-proxy', 'POST', { path: cleanPath, method: fetchMethod, body: fetchBody });
+            responseJson = result;
+            isSuccess = true;
+            finalStatus = 200;
+            finalStatusText = 'OK';
+          } catch (err: any) {
+            isSuccess = false;
+            responseText = err.message;
+            const statusMatch = err.message.match(/خطای سرور: (\d+)/);
+            finalStatus = statusMatch ? parseInt(statusMatch[1]) : 500;
+            finalStatusText = 'Error';
+          }
+        }
       } else {
         const cleanTable = activeTable.includes('dbo.') ? activeTable.replace('dbo.', '') : activeTable;
         
@@ -1281,7 +1320,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
              {/* Raw Query / Body Column */}
              <div className="md:col-span-7">
-                 <label className="text-[10px] font-black text-gray-400 block mb-1">بدنه درخواست یا پارامترهای کوئری (JSON BODY)</label>
+                 <label className="text-[10px] font-black text-gray-400 block mb-1">بدنه درخواست (JSON) یا کوئری مستقیم SQL (مانند SELECT)</label>
                  <textarea 
                      rows={4}
                      value={reqBody}
@@ -1290,7 +1329,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                      className={`w-full border rounded-lg p-2 text-xs font-mono dir-ltr outline-none focus:ring-2 focus:ring-blue-500 ${
                          method === 'GET' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-900 text-green-400'
                      }`}
-                     placeholder={method === 'GET' ? '// متد GET نیازی به بدنه ندارد' : '{\n  "query": "SELECT * FROM tableName"\n}'}
+                     placeholder={method === 'GET' ? '// متد GET نیازی به بدنه ندارد' : 'SELECT TOP 100 * FROM ACT_TBL_001'}
                  />
              </div>
           </div>
