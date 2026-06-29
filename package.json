@@ -48,6 +48,7 @@
     "jspdf": "^2.5.1",
     "lucide-react": "^0.344.0",
     "mammoth": "^1.12.0",
+    "moment-jalaali": "^0.10.4",
     "motion": "^12.38.0",
     "multer": "^2.1.1",
     "node-cron": "^3.0.3",
