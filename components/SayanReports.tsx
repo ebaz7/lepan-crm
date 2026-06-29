@@ -27,24 +27,43 @@ const SayanReports: React.FC = () => {
     setError(null);
     let sqlQuery = '';
 
+    // Safely remove single quotes
+    const safeCustomerName = customerName ? customerName.replace(/'/g, "''") : '';
+    // Format dates to handle both with-slash and without-slash cases
+    const safeStart = startDate.replace(/\//g, '');
+    const safeEnd = endDate.replace(/\//g, '');
+
+    const safeSumDebit = "SUM(CASE WHEN ISNUMERIC(Field_010) = 1 THEN CAST(Field_010 AS float) ELSE 0 END)";
+    const safeSumCredit = "SUM(CASE WHEN ISNUMERIC(Field_011) = 1 THEN CAST(Field_011 AS float) ELSE 0 END)";
+
     if (reportType === 'SALES') {
-      sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND Field_025 > 0 AND Field_008 >= '${startDate}' AND Field_008 <= '${endDate}' ORDER BY Field_008 DESC`;
+      sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND (CASE WHEN ISNUMERIC(Field_025) = 1 THEN CAST(Field_025 AS float) ELSE 0 END) > 0 AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') ORDER BY Field_008 DESC`;
     } else if (reportType === 'CUSTOMER_STATEMENT') {
-      if (customerName) {
-        sqlQuery = `SELECT TOP 1000 Field_008 as [Date], Field_007 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${customerName}' AND Field_008 >= '${startDate}' AND Field_008 <= '${endDate}' ORDER BY Field_008 ASC`;
+      if (safeCustomerName) {
+        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_007 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${safeCustomerName}' AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') ORDER BY Field_008 ASC`;
       } else {
-        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], SUM(Field_010) as [TotalDebit], SUM(Field_011) as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL GROUP BY Field_006 HAVING SUM(Field_010) > 0 OR SUM(Field_011) > 0`;
+        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], ${safeSumDebit} as [TotalDebit], ${safeSumCredit} as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') GROUP BY Field_006 HAVING ${safeSumDebit} > 0 OR ${safeSumCredit} > 0`;
       }
     } else if (reportType === 'DEBTORS_CREDITORS') {
-      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], SUM(Field_010) as [TotalDebit], SUM(Field_011) as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 >= '${startDate}' AND Field_008 <= '${endDate}' GROUP BY Field_006 HAVING SUM(Field_010) > 0 OR SUM(Field_011) > 0 ORDER BY SUM(Field_010) DESC`;
+      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], ${safeSumDebit} as [TotalDebit], ${safeSumCredit} as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') GROUP BY Field_006 HAVING ${safeSumDebit} > 0 OR ${safeSumCredit} > 0 ORDER BY ${safeSumDebit} DESC`;
     }
 
     try {
-      const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
-      const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
-      setData(finalData);
+      // Try to execute the query
+      let result: any = null;
+      try {
+          result = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+      } catch (err: any) {
+          console.log("Fallback to path: 'sql'");
+          result = await apiCall('/sayan-proxy', 'POST', { path: 'sql', method: 'POST', body: { sql: sqlQuery } });
+      }
+
+      const rawData = Array.isArray(result) ? result : (result?.data || result?.rows || result?.items || result?.result || []);
+      setData(rawData);
     } catch (err: any) {
-      setError(err.message || 'خطا در ارتباط با سرور سایان');
+      console.error('Sayan Error:', err);
+      const errMsg = err.response ? JSON.stringify(err.response) : err.message;
+      setError(errMsg || 'خطا در ارتباط با سرور سایان');
       setData([]);
     } finally {
       setLoading(false);
