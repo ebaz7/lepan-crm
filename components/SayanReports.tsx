@@ -116,33 +116,59 @@ const SayanReports: React.FC = () => {
 
     try {
       if (reportType === 'SALES') {
-        sqlQuery = `SELECT TOP 5000 * FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
+        // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
+        sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
         
-        const finalData = await attemptQuery(sqlQuery, 'BUR_TBL_008');
+        const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
-        // Find all available types in the DB (use Field_005 as Document Type, fallback to Field_004)
+        // Fetch document types
+        let docTypes: Record<string, string> = {};
+        try {
+            const types = await attemptQuery("SELECT Field_001, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
+            types.forEach((t: any) => {
+                if (t.Field_001 && t.Field_004) docTypes[String(t.Field_001).trim()] = String(t.Field_004).trim();
+            });
+        } catch(e) { console.error("Doc types fetch failed", e); }
+
+        // Fetch persons
+        let tafsiliMap: Record<string, string> = {};
+        try {
+            const tafsili = await attemptQuery("SELECT Field_003, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
+            tafsili.forEach((t: any) => {
+                if (t.Field_003 && t.Field_006) tafsiliMap[String(t.Field_003).trim()] = String(t.Field_006).trim();
+            });
+        } catch(e) { console.error("Tafsili fetch failed", e); }
+        
+        // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const type = String(row.Field_005 || row.Field_004 || '').trim();
-            if (type && type !== 'undefined' && type !== 'null') {
-                typesSet.add(type);
+            const typeId = String(row.Field_004 || '').trim();
+            if (typeId && typeId !== 'undefined' && typeId !== 'null') {
+                const typeName = docTypes[typeId] || `نوع ${typeId}`;
+                typesSet.add(typeName);
             }
         });
         const typesArr = Array.from(typesSet);
         if (availableSalesTypes.length === 0 && typesArr.length > 0) {
             setAvailableSalesTypes(typesArr);
-            // Default select commonly used types
-            setSelectedSalesTypes(typesArr);
+            // Default select types that are likely sales/invoices
+            const likelySales = typesArr.filter(t => t.includes('فروش') || t.includes('فاکتور') || t.includes('رسید'));
+            setSelectedSalesTypes(likelySales.length > 0 ? likelySales : typesArr);
         }
 
         const processed = finalData.map((row: any) => {
-            // Amount is usually in Field_025 in BUR_TBL_008
-            const amount = parseFloat(row.Field_025 || row.TotalSales || row.F25 || 0);
-            const type = String(row.Field_005 || row.Field_004 || '').trim();
+            // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
+            const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
+            const typeId = String(row.Field_004 || '').trim();
+            const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
+            
+            // Name mapping
+            const personId = String(row.Field_010 || row.Field_011 || '').trim();
+            const personName = personId ? (tafsiliMap[personId] || personId) : '';
             
             // Try to find the weight field (smaller than amount)
             let weight = 0;
-            [row.Field_012, row.Field_013, row.Field_014, row.Field_015, row.Field_016, row.Field_017, row.Field_018].forEach(val => {
+            [row.Field_012, row.Field_013, row.Field_015, row.Field_016].forEach(val => {
                 const w = parseFloat(val);
                 if (!isNaN(w) && w > 0 && w < amount && w > weight) {
                      weight = w;
@@ -152,9 +178,7 @@ const SayanReports: React.FC = () => {
             let finalAmount = 0;
             let finalWeight = 0;
             
-            if (selectedSalesTypes.includes(type)) {
-                // If it's type 4 (usually return/payment), keep it positive as requested by user
-                // Or if it should be negative, let's keep it positive but we will show it as a separate list
+            if (selectedSalesTypes.includes(typeName)) {
                 finalAmount = amount;
                 finalWeight = weight;
             }
@@ -164,11 +188,12 @@ const SayanReports: React.FC = () => {
                 TotalSales: finalAmount,
                 Weight: finalWeight,
                 Date: row.Field_008 || row.Date,
-                Type: type
+                Type: typeName,
+                PersonName: personName
             };
         }).filter((r: any) => {
-            // Field_014 is usually 'Is Cancelled/Deleted' in Sayan. Skip if true.
-            if (String(r.Field_014).toLowerCase() === 'true' || r.Field_014 === 1) return false;
+            // Cancelled flag check
+            if (String(r.Field_019).toLowerCase() === 'true' || r.Field_019 === 1) return false;
             return selectedSalesTypes.includes(r.Type) && isDateInRange(r.Date);
         });
         
@@ -618,7 +643,7 @@ const SayanReports: React.FC = () => {
                                 else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
                             }}
                         />
-                        نوع فاکتور {t} {t === '4' ? '(کسر می‌شود)' : '(جمع می‌شود)'}
+                        {t}
                     </label>
                 ))}
             </div>
@@ -632,17 +657,17 @@ const SayanReports: React.FC = () => {
                             <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
                             <th className="px-6 py-4 whitespace-nowrap">نوع سند</th>
                             <th className="px-6 py-4 whitespace-nowrap">مبلغ (ریال)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">کد شخص / توضیحات</th>
+                            <th className="px-6 py-4 whitespace-nowrap">شخص / توضیحات</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">
                         {data.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate(row.Date)}</td>
-                                <td className="px-6 py-3 whitespace-nowrap text-slate-800 font-bold">نوع {row.Type}</td>
+                                <td className="px-6 py-3 whitespace-nowrap text-slate-800 font-bold">{row.Type}</td>
                                 <td className="px-6 py-3 whitespace-nowrap text-indigo-600 font-bold" dir="ltr">{Number(row.TotalSales || 0).toLocaleString()}</td>
-                                <td className="px-6 py-3 text-slate-500 max-w-[300px] truncate" title={String(row.Field_027 || row.Field_028 || '')}>
-                                    {row.Field_010 ? `شخص: ${row.Field_010}` : '-'} 
+                                <td className="px-6 py-3 text-slate-500 max-w-[300px] truncate" title={String(row.Field_027 || row.Field_028 || row.PersonName || '')}>
+                                    {row.PersonName ? row.PersonName : (row.Field_010 ? row.Field_010 : '-')} 
                                 </td>
                             </tr>
                         ))}
