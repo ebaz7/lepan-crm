@@ -46,7 +46,7 @@ const SayanReports: React.FC = () => {
         sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit], Field_008 as [Date] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL ORDER BY Field_008 DESC`;
       }
     } else if (reportType === 'DEBTORS_CREDITORS') {
-      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit], Field_008 as [Date] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL ORDER BY Field_008 DESC`;
+      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_011 WHERE Field_006 IS NOT NULL`;
     }
 
     try {
@@ -84,6 +84,12 @@ const SayanReports: React.FC = () => {
            if (!isNaN(dateObj.getTime())) {
                d = jMoment(dateObj).format('jYYYY/jMM/jDD');
            }
+        }
+        
+        // Fix single digits e.g. 1403/6/5 -> 1403/06/05
+        let parts = d.split('/');
+        if (parts.length === 3) {
+            d = parts[0] + '/' + parts[1].padStart(2, '0') + '/' + parts[2].padStart(2, '0');
         }
         
         // Normalize slashes for Jalali (if it's 8 chars like 14030625)
@@ -125,7 +131,10 @@ const SayanReports: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Sayan Error:', err);
-      const errMsg = err.response ? JSON.stringify(err.response) : err.message;
+      let errMsg = err.response ? JSON.stringify(err.response) : err.message;
+      if (errMsg.includes('404') && sqlQuery.includes('ACT_TBL_003')) {
+          errMsg = 'خطای 404: دسترسی به ریز گردش (ACT_TBL_003) با این توکن مسدود است یا جدول یافت نشد.';
+      }
       setError(errMsg || 'خطا در ارتباط با سرور سایان');
       setData([]);
     } finally {
