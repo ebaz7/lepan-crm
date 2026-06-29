@@ -112,26 +112,45 @@ const SayanReports: React.FC = () => {
     try {
       if (reportType === 'SALES') {
         // query BUR_TBL_008 and fallback fields if TotalSales is not Field_025
-        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11], Field_004 as [Type] FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
+        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11], Field_004 as [Type], Field_012, Field_013, Field_014, Field_015, Field_016, Field_017, Field_018 FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery, 'BUR_TBL_008');
         
         const processed = finalData.map((row: any) => {
             const amount = parseFloat(row.F25 || row.F10 || row.F11 || row.Field_025 || row.TotalSales || 0);
+            const type = String(row.Type || row.Field_004).trim();
+            
+            // Try to find the weight field (usually a smaller number than amount, often in Field_013, 015, or 016)
+            let weight = 0;
+            [row.Field_012, row.Field_013, row.Field_014, row.Field_015, row.Field_016, row.Field_017, row.Field_018].forEach(val => {
+                const w = parseFloat(val);
+                if (!isNaN(w) && w > 0 && w < amount && w > weight) {
+                     weight = w;
+                }
+            });
+
+            let finalAmount = 0;
+            let finalWeight = 0;
+            
+            // Type 2: فروش (Sales), Type 4: برگشت از فروش (Sales Return)
+            if (type === '2') {
+                finalAmount = amount;
+                finalWeight = weight;
+            } else if (type === '4') {
+                finalAmount = -amount;
+                finalWeight = -weight;
+            }
+
             return {
                 ...row,
-                TotalSales: amount,
+                TotalSales: finalAmount,
+                Weight: finalWeight,
                 Date: row.Date || row.Field_008,
-                Type: row.Type || row.Field_004
+                Type: type
             };
-        }).filter((r: any) => r.TotalSales > 0 && isDateInRange(r.Date));
+        }).filter((r: any) => (r.Type === '2' || r.Type === '4') && isDateInRange(r.Date));
         
-        // Filter by Type=2 (Sales) if Type is provided and has values like 1,2,3,4. 
-        // If all are null or weird, we just take everything.
-        const hasType2 = processed.some((r: any) => String(r.Type) === '2');
-        const salesData = hasType2 ? processed.filter((r: any) => String(r.Type) === '2') : processed;
-        
-        setData(salesData.reverse());
+        setData(processed.reverse());
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
@@ -142,15 +161,17 @@ const SayanReports: React.FC = () => {
             // Fetch customers list to filter
             let customerNames: string[] = [];
             try {
-                const tafsili = await attemptQuery("SELECT TOP 1000 Field_006 as [AccountName] FROM ACT_TBL_004", 'ACT_TBL_004');
-                customerNames = tafsili.map((t:any) => String(t.AccountName || t.Field_006).trim());
-            } catch(e) {
+                // Sayan BUR_TBL_002 is Persons (اشخاص)
+                const persons = await attemptQuery("SELECT TOP 2000 * FROM BUR_TBL_002", 'BUR_TBL_002');
+                customerNames = persons.map((p:any) => String(p.Field_004 || p.AccountName).trim()).filter(Boolean);
+            } catch(e) {}
+            
+            if (customerNames.length === 0) {
                 try {
-                    const persons = await attemptQuery("SELECT TOP 1000 Field_004 as [AccountName] FROM BUR_TBL_002", 'BUR_TBL_002');
-                    customerNames = persons.map((p:any) => String(p.AccountName || p.Field_004).trim());
-                } catch(e2) {
-                    customerNames = [];
-                }
+                    // Fallback to Tafsili (ACT_TBL_004)
+                    const tafsili = await attemptQuery("SELECT TOP 2000 * FROM ACT_TBL_004", 'ACT_TBL_004');
+                    customerNames = tafsili.map((t:any) => String(t.Field_006 || t.AccountName).trim()).filter(Boolean);
+                } catch(e2) {}
             }
 
             const grouped: Record<string, any> = {};
@@ -158,8 +179,10 @@ const SayanReports: React.FC = () => {
                 // only consider rows before end date for balance
                 if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
                 
-                let f6 = String(row.Field_006 || '').trim();
-                let f7 = String(row.Field_007 || '').trim();
+                let f5 = String(row.Field_005 || '').trim(); // Main acc
+                let f6 = String(row.Field_006 || '').trim(); // Tafsili
+                let f7 = String(row.Field_007 || '').trim(); // Detail (often person name)
+                
                 let name = f7 || f6 || row.AccountName;
                 if (!name) return;
                 name = String(name).trim();
@@ -168,16 +191,18 @@ const SayanReports: React.FC = () => {
                 if (customerNames.length > 0) {
                     if (f7 && customerNames.includes(f7)) finalCustomerName = f7;
                     else if (f6 && customerNames.includes(f6)) finalCustomerName = f6;
+                    else if (f5 && customerNames.includes(f5)) finalCustomerName = f5;
                     else return; // Skip if not found in customer list
                 } else {
-                     // Fallback heuristic if customer list failed to load
-                     if (['صندوق', 'بانک', 'فروش', 'خرید', 'هزینه', 'درآمد', 'موجودی', 'حقوق', 'بیمه', 'مالیات', 'تخفیف', 'سرمایه', 'اسناد'].some(kw => name.includes(kw))) return;
+                     // Fallback heuristic if customer list completely failed to load
+                     const keywords = ['صندوق', 'بانک', 'فروش', 'خرید', 'هزینه', 'درآمد', 'موجودی', 'حقوق', 'بیمه', 'مالیات', 'تخفیف', 'سرمایه', 'اسناد', 'سود', 'زیان', 'مستهلک', 'استهلاک', 'جاری'];
+                     if (keywords.some(kw => name.includes(kw) || f6.includes(kw) || f5.includes(kw))) return;
                 }
 
                 if (!grouped[finalCustomerName]) grouped[finalCustomerName] = { AccountName: finalCustomerName, Debit: 0, Credit: 0 };
-                // Guess Debit/Credit from the last numerical fields if not explicitly named
-                const v1 = parseFloat(row.Field_009 || row.Field_010 || row.Debit || 0);
-                const v2 = parseFloat(row.Field_010 || row.Field_011 || row.Credit || 0);
+                // Use Field_009 for Debit, Field_010 for Credit
+                const v1 = parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0;
+                const v2 = parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0;
                 grouped[finalCustomerName].Debit += v1;
                 grouped[finalCustomerName].Credit += v2;
             });
@@ -188,9 +213,9 @@ const SayanReports: React.FC = () => {
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
             const mapped = finalData.map((row: any) => ({
                 Date: row.Field_008,
-                Description: row.Field_009 || row.Field_007 || row.Field_006,
-                Debit: row.Field_009 || row.Field_010 || row.Debit || 0,
-                Credit: row.Field_010 || row.Field_011 || row.Credit || 0,
+                Description: row.Field_007 || row.Field_006,
+                Debit: parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0,
+                Credit: parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0,
             })).filter((r: any) => isDateInRange(r.Date));
             setCustomerDetails(mapped.reverse());
         }
@@ -206,8 +231,8 @@ const SayanReports: React.FC = () => {
             const name = row.Field_006 || row.Field_005 || row.AccountName;
             if (!name) return;
             if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-            const v1 = parseFloat(row.Field_009 || row.Field_010 || row.Debit || 0);
-            const v2 = parseFloat(row.Field_010 || row.Field_011 || row.Credit || 0);
+            const v1 = parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0;
+            const v2 = parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0;
             grouped[name].Debit += v1;
             grouped[name].Credit += v2;
         });
@@ -247,33 +272,51 @@ const SayanReports: React.FC = () => {
       const dailyChartData = Object.entries(data.reduce((aggs: any, row) => {
           const d = String(row.Date || '');
           const key = d.substring(0, 10);
-          if (key) aggs[key] = (aggs[key] || 0) + (parseFloat(row.TotalSales) || 0);
+          if (key) {
+              if (!aggs[key]) aggs[key] = { value: 0, weight: 0 };
+              aggs[key].value += (parseFloat(row.TotalSales) || 0);
+              aggs[key].weight += (parseFloat(row.Weight) || 0);
+          }
           return aggs;
-      }, {})).map(([name, value]) => ({ name, value, shamsiName: formatDate(name) })).sort((a,b) => a.name.localeCompare(b.name));
+      }, {})).map(([name, stats]: any) => ({ 
+          name, 
+          value: stats.value, 
+          weight: stats.weight,
+          shamsiName: formatDate(name) 
+      })).sort((a,b) => a.name.localeCompare(b.name));
 
       const totalSales = dailyChartData.reduce((sum, row) => sum + Number(row.value), 0);
+      const totalWeight = dailyChartData.reduce((sum, row) => sum + Number(row.weight), 0);
+      const avgPrice = totalWeight > 0 ? (totalSales / totalWeight) : 0;
+
       const endDaySalesStr = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
       const dailySpecificSales = dailyChartData.find(d => d.name === endDaySalesStr)?.value || 0;
 
       return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-slate-500 text-xs font-bold mb-2">فروش در روز پایان بازه ({endDate.year}/{endDate.month}/{endDate.day})</div>
-                    <div className="text-3xl font-black text-indigo-600" dir="ltr">
-                        {dailySpecificSales.toLocaleString()}
+                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش خالص (کسر مرجوعی)</div>
+                    <div className="text-2xl font-black text-indigo-600" dir="ltr">
+                        {totalSales.toLocaleString()}
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش در کل بازه انتخابی</div>
-                    <div className="text-3xl font-black text-emerald-600" dir="ltr">
-                        {totalSales.toLocaleString()}
+                    <div className="text-slate-500 text-xs font-bold mb-2">مقدار فروش (کیلوگرم/تعداد)</div>
+                    <div className="text-2xl font-black text-orange-500" dir="ltr">
+                        {totalWeight.toLocaleString()}
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="text-slate-500 text-xs font-bold mb-2">میانگین فی (ریال بر واحد)</div>
+                    <div className="text-2xl font-black text-emerald-600" dir="ltr">
+                        {avgPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
                 </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[400px]">
-                <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش (تفكيك روزها)</h3>
+                <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش خالص (تفكيك روزها)</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -282,10 +325,10 @@ const SayanReports: React.FC = () => {
                         <Tooltip 
                         cursor={{ fill: '#f8fafc' }}
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', textAlign: 'right', direction: 'rtl' }}
-                        formatter={(value: number) => [value.toLocaleString(), 'مبلغ']}
+                        formatter={(value: number, name: string) => [value.toLocaleString(), name === 'value' ? 'مبلغ فروش' : 'مقدار']}
                         labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
                         />
-                        <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                        <Bar dataKey="value" name="مبلغ فروش" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={40}>
                         {dailyChartData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.name === endDaySalesStr ? '#4f46e5' : '#818cf8'} />
                         ))}
@@ -303,7 +346,8 @@ const SayanReports: React.FC = () => {
                     <thead className="bg-white text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                         <tr>
                             <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
-                            <th className="px-6 py-4 whitespace-nowrap">مبلغ فروش (ریال)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مقدار (کیلوگرم/تعداد)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مبلغ فروش خالص (ریال)</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">
@@ -311,12 +355,16 @@ const SayanReports: React.FC = () => {
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-3 whitespace-nowrap text-xs text-slate-600" dir="ltr">{row.shamsiName}</td>
                             <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-slate-800" dir="ltr">
+                                {Number(row.weight).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-3 whitespace-nowrap text-xs font-bold text-slate-800" dir="ltr">
                                 {Number(row.value).toLocaleString()}
                             </td>
                         </tr>
                         ))}
                         <tr className="bg-slate-50 font-bold">
                             <td className="px-6 py-4 text-xs text-slate-700">جمع کل بازه:</td>
+                            <td className="px-6 py-4 text-xs text-indigo-700" dir="ltr">{totalWeight.toLocaleString()}</td>
                             <td className="px-6 py-4 text-xs text-indigo-700" dir="ltr">{totalSales.toLocaleString()}</td>
                         </tr>
                     </tbody>
