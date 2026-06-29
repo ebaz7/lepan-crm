@@ -28,9 +28,13 @@ const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: 
         <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-500">{label}</span>
             <div className="flex gap-2 text-xs">
-                <select value={date.year} onChange={e => onChange({...date, year: parseInt(e.target.value)})} className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
-                   {Array.from({length: 10}).map((_, i) => <option key={i} value={1403 - i}>{1403 - i}</option>)}
-                </select>
+                <input 
+                    type="number" 
+                    value={date.year} 
+                    onChange={e => onChange({...date, year: parseInt(e.target.value) || 1400})} 
+                    className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500 w-20 text-center"
+                    min="1390" max="1500"
+                />
                 <select value={date.month} onChange={e => onChange({...date, month: parseInt(e.target.value)})} className="border border-slate-200 bg-white text-slate-700 p-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
                    {Array.from({length: 12}).map((_, i) => <option key={i} value={i+1}>{i+1}</option>)}
                 </select>
@@ -86,11 +90,25 @@ const SayanReports: React.FC = () => {
 
     const startIso = toIsoDateString(jalaliToGregorian(startDate.year, startDate.month, startDate.day));
     const endIso = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
+    
+    const startShamsiStr1 = `${startDate.year}/${String(startDate.month).padStart(2, '0')}/${String(startDate.day).padStart(2, '0')}`;
+    const startShamsiStr2 = startShamsiStr1.replace(/\//g, '-');
+    const endShamsiStr1 = `${endDate.year}/${String(endDate.month).padStart(2, '0')}/${String(endDate.day).padStart(2, '0')}`;
+    const endShamsiStr2 = endShamsiStr1.replace(/\//g, '-');
+
+    // Local filter function
+    const isDateInRange = (dateVal: any) => {
+        if (!dateVal) return false;
+        const dStr = String(dateVal).substring(0, 10);
+        return (dStr >= startIso && dStr <= endIso) || 
+               (dStr >= startShamsiStr1 && dStr <= endShamsiStr1) ||
+               (dStr >= startShamsiStr2 && dStr <= endShamsiStr2);
+    };
 
     try {
       if (reportType === 'SALES') {
         // query BUR_TBL_008 and fallback fields if TotalSales is not Field_025
-        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11] FROM BUR_TBL_008 WHERE Field_008 >= '${startIso}' AND Field_008 <= '${endIso} 23:59:59'`;
+        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11] FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery);
         
@@ -101,42 +119,59 @@ const SayanReports: React.FC = () => {
                 TotalSales: amount,
                 Date: row.Date || row.Field_008
             };
-        }).filter((r: any) => r.TotalSales > 0);
-        setData(processed);
+        }).filter((r: any) => r.TotalSales > 0 && isDateInRange(r.Date));
+        
+        setData(processed.reverse());
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
             // Fetch raw rows and aggregate locally
-            sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${endIso} 23:59:59'`;
+            sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
             const finalData = await attemptQuery(sqlQuery);
             
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
-                const name = row.AccountName || row.Field_006;
+                // only consider rows before end date for balance
+                if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
+                
+                const name = row.Field_006 || row.Field_005 || row.AccountName;
                 if (!name) return;
                 if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-                grouped[name].Debit += parseFloat(row.Debit || row.Field_010 || 0);
-                grouped[name].Credit += parseFloat(row.Credit || row.Field_011 || 0);
+                // Guess Debit/Credit from the last numerical fields if not explicitly named
+                const v1 = parseFloat(row.Field_009 || row.Field_010 || row.Debit || 0);
+                const v2 = parseFloat(row.Field_010 || row.Field_011 || row.Credit || 0);
+                grouped[name].Debit += v1;
+                grouped[name].Credit += v2;
             });
             setCustomers(Object.values(grouped));
             setData([]);
         } else {
-            sqlQuery = `SELECT TOP 1000 Field_008 as [Date], Field_007 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${selectedCustomer}' AND Field_008 >= '${startIso}' AND Field_008 <= '${endIso} 23:59:59' ORDER BY Field_008 ASC`;
+            sqlQuery = `SELECT TOP 2000 * FROM ACT_TBL_003 WHERE (Field_006 = N'${selectedCustomer}' OR Field_005 = N'${selectedCustomer}') ORDER BY Field_008 DESC`;
             const finalData = await attemptQuery(sqlQuery);
-            setCustomerDetails(finalData);
+            const mapped = finalData.map((row: any) => ({
+                Date: row.Field_008,
+                Description: row.Field_007 || row.Field_006,
+                Debit: row.Field_009 || row.Field_010 || row.Debit || 0,
+                Credit: row.Field_010 || row.Field_011 || row.Credit || 0,
+            })).filter((r: any) => isDateInRange(r.Date));
+            setCustomerDetails(mapped.reverse());
         }
       } 
       else if (reportType === 'DEBTORS_CREDITORS') {
-        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${endIso} 23:59:59'`;
+        sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
         const finalData = await attemptQuery(sqlQuery);
         
         const grouped: Record<string, any> = {};
         finalData.forEach((row: any) => {
-            const name = row.AccountName || row.Field_006;
+            if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
+
+            const name = row.Field_006 || row.Field_005 || row.AccountName;
             if (!name) return;
             if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-            grouped[name].Debit += parseFloat(row.Debit || row.Field_010 || 0);
-            grouped[name].Credit += parseFloat(row.Credit || row.Field_011 || 0);
+            const v1 = parseFloat(row.Field_009 || row.Field_010 || row.Debit || 0);
+            const v2 = parseFloat(row.Field_010 || row.Field_011 || row.Credit || 0);
+            grouped[name].Debit += v1;
+            grouped[name].Credit += v2;
         });
         
         const processed = Object.values(grouped).map((row: any) => {
