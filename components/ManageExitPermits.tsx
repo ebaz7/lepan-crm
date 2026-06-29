@@ -162,14 +162,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
     };
 
     const handleManualNotify = async (p: ExitPermit) => {
-        if (!confirm('آیا مطمئن هستید که می‌خواهید مجدداً به ربات تلگرام ارسال کنید؟')) return;
+        if (!confirm('آیا مطمئن هستید که می‌خواهید مجدداً به ربات‌ها (تلگرام و بله) ارسال کنید؟')) return;
         setProcessingId(p.id);
         try {
             await apiCall(`/exit-permits/${p.id}/bot-notify`, 'POST', {});
-            alert('درخواست ارسال به ربات با موفقیت انجام شد.');
+            alert('درخواست ارسال به ربات‌ها با موفقیت انجام شد.');
         } catch (e) {
             console.error('Manual Notify Error:', e);
-            alert('خطا در ارسال به ربات');
+            alert('خطا در ارسال به ربات‌ها');
         } finally {
             setProcessingId(null);
         }

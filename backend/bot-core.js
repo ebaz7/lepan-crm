@@ -1752,8 +1752,12 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             targetGroups.push(3);
         }
 
-        if (eventType === 'MANUAL' && targetGroups.length === 0) {
-            targetGroups.push(1);
+        if (eventType === 'MANUAL') {
+            targetGroups = [];
+            if (g1Config.telegramId || g1Config.baleId || settings.exitPermitNotificationTelegramId || settings.exitPermitNotificationBaleId) targetGroups.push(1);
+            if (g2Config.telegramId || g2Config.baleId) targetGroups.push(2);
+            if (g3Config.telegramId || g3Config.baleId) targetGroups.push(3);
+            if (targetGroups.length === 0) targetGroups.push(1); // Fallback
         }
 
         // --- NEW: Customer Notification with Proforma Image ---

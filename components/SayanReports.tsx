@@ -721,6 +721,10 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
              sqlQuery = "SELECT TOP 1000 * FROM ACT_TBL_011";
           } else if (activeTable === 'REPORT_ACT_TRANSACTIONS') {
              sqlQuery = "SELECT TOP 1000 * FROM ACT_TBL_003";
+          } else if (activeTable === 'REPORT_DB_SCHEMA') {
+             sqlQuery = "SELECT t.name AS TableName, c.name AS ColumnName, ty.name AS DataType FROM sys.tables t INNER JOIN sys.columns c ON t.object_id = c.object_id INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id ORDER BY t.name, c.column_id";
+          } else if (activeTable === 'REPORT_DB_ROWCOUNTS') {
+             sqlQuery = "SELECT t.NAME AS TableName, p.rows AS RowCounts FROM sys.tables t INNER JOIN sys.indexes i ON t.OBJECT_ID = i.object_id INNER JOIN sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id WHERE t.is_ms_shipped = 0 GROUP BY t.NAME, p.Rows ORDER BY p.rows DESC";
           }
           
           pathList = [
@@ -1120,6 +1124,38 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
               >
                 <span className="font-bold text-[11px] leading-relaxed">ریز گردش و آرتیکل‌های حسابداری</span>
                 <span className="text-[9px] opacity-70 font-mono mt-1" dir="ltr">ACT_TBL_003</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCustomMode(false);
+                  setReportMode(true);
+                  setActiveTable('REPORT_DB_SCHEMA');
+                }}
+                className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
+                  !customMode && activeTable === 'REPORT_DB_SCHEMA'
+                    ? 'bg-violet-500 text-white shadow-md'
+                    : 'bg-white border border-violet-200 text-violet-800 hover:bg-violet-50'
+                }`}
+              >
+                <span className="font-bold text-[11px] leading-relaxed">استخراج ساختار کل دیتابیس (Schema)</span>
+                <span className="text-[9px] opacity-70 font-mono mt-1" dir="ltr">sys.tables & sys.columns</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCustomMode(false);
+                  setReportMode(true);
+                  setActiveTable('REPORT_DB_ROWCOUNTS');
+                }}
+                className={`w-full text-right p-3 rounded-lg transition-all flex flex-col ${
+                  !customMode && activeTable === 'REPORT_DB_ROWCOUNTS'
+                    ? 'bg-indigo-500 text-white shadow-md'
+                    : 'bg-white border border-indigo-200 text-indigo-800 hover:bg-indigo-50'
+                }`}
+              >
+                <span className="font-bold text-[11px] leading-relaxed">حجم جداول دیتابیس (Row Counts)</span>
+                <span className="text-[9px] opacity-70 font-mono mt-1" dir="ltr">sys.partitions</span>
               </button>
             </div>
 
