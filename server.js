@@ -501,6 +501,16 @@ app.get('/api/notifications', (req, res) => {
  * SAYAN API PROXY
  * Used to bypass CORS and Mixed Content (HTTPS -> HTTP) issues.
  */
+app.post('/api/sayan-proxy/dump', (req, res) => {
+    try {
+        const fs = require('fs');
+        fs.writeFileSync('./sayan_db_dump.json', JSON.stringify(req.body, null, 2), 'utf8');
+        res.json({ success: true, message: 'اطلاعات با موفقیت در سرور ذخیره شد.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/sayan-proxy', async (req, res) => {
     let { url, path, headers = {}, method = 'GET', body } = req.body;
     

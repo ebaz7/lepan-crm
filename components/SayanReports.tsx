@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users, Calendar, Edit2, Check, X } from 'lucide-react';
+import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users, Calendar, Edit2, Check, X, Upload } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -508,6 +508,60 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
 
   const [isExtractingAll, setIsExtractingAll] = useState(false);
 
+  const saveAllSayanDataToServer = async () => {
+    setIsExtractingAll(true);
+    try {
+      let extractedCount = 0;
+      let allData: any = {};
+
+      const tablesToExtract = discoveredTables.length > 0 
+          ? discoveredTables.map(t => t.TableName || t.name || t.TABLE_NAME || t.TABLE) 
+          : HARDCODED_TABLES;
+
+      for (const tableName of tablesToExtract) {
+        if (!tableName) continue;
+        try {
+          const query = `SELECT TOP 5 * FROM ${tableName}`;
+          const pathList = [
+            { path: 'sql', method: 'POST', body: { query } },
+            { path: 'sql', method: 'POST', body: { sql: query } },
+            { path: 'query', method: 'POST', body: { query } },
+            { path: tableName, method: 'GET', body: null }
+          ];
+
+          let tableData = [];
+          for (const attempt of pathList) {
+             try {
+                 const result: any = await apiCall('/sayan-proxy', 'POST', { path: attempt.path, method: attempt.method, body: attempt.body });
+                 if (result && result.data && Array.isArray(result.data)) { tableData = result.data; break; }
+                 else if (result && Array.isArray(result)) { tableData = result; break; }
+             } catch(e) {}
+          }
+
+          if (tableData.length > 0) {
+            allData[tableName] = tableData;
+            extractedCount++;
+          }
+        } catch (e) {
+          console.warn(`Failed to extract ${tableName}:`, e);
+        }
+      }
+
+      if (extractedCount > 0) {
+        // Send to server dump endpoint
+        const saveRes: any = await apiCall('/sayan-proxy/dump', 'POST', allData);
+        alert(`نمونه داده‌های ${extractedCount} جدول با موفقیت در فایل سرور ذخیره شد!\n\nحالا به هوش مصنوعی (من) بگو که روی دکمه "ذخیره در سرور" کلیک کردی.`);
+      } else {
+        alert('هیچ داده‌ای از جداول دریافت نشد. لطفاً ارتباط با وب‌سرویس سایان را بررسی کنید. (برای دریافت کل جداول، ابتدا از بخش Schema جدول‌ها را واکشی کنید)');
+      }
+    } catch (err: any) {
+      console.error("Extraction error:", err);
+      alert("خطا در ذخیره‌سازی: " + err.message);
+    } finally {
+      setIsExtractingAll(false);
+    }
+  };
+
   const extractAllSayanDataToExcel = async () => {
     setIsExtractingAll(true);
     try {
@@ -936,12 +990,21 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
              className="w-full py-2 mt-2 px-3 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
            >
              {isExtractingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-             دانلود اکسل کامل از تمام جداول واقعی
+             دانلود اکسل سمپل از تمام جداول
+           </button>
+           <button 
+             type="button"
+             onClick={saveAllSayanDataToServer}
+             disabled={isExtractingAll}
+             className="w-full py-2 mt-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+           >
+             {isExtractingAll ? <Loader2 size={12} className="animate-spin" /> : <ClipboardCheck size={12} />}
+             ذخیره مستقیم JSON سمپل در سرور برای هوش مصنوعی
            </button>
         </div>
 
         {/* API Tester Navigation Button */}
-        <div className="p-2 border-b bg-gray-50/50">
+        <div className="p-2 border-b bg-gray-50/50 space-y-2">
           <button 
             type="button"
             onClick={() => setCustomMode(!customMode)}
@@ -954,6 +1017,43 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
             <Code size={14} />
             {customMode ? 'بازگشت به جداول استاندارد' : 'کنسول توسعه و تست کوئری سایان'}
           </button>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+             <label className="text-[10px] font-black text-blue-800 flex items-center gap-1 mb-2">
+                 <Upload size={12} />
+                 آپلود فایل اکسل دیتابیس (برای استخراج ساختار/ستون‌ها جهت ارسال به هوش مصنوعی)
+             </label>
+             <input 
+                 type="file" 
+                 accept=".xlsx, .xls, .csv" 
+                 className="text-[10px] w-full"
+                 onChange={async (e) => {
+                     const file = e.target.files?.[0];
+                     if (!file) return;
+                     const reader = new FileReader();
+                     reader.onload = (evt) => {
+                         try {
+                             const bstr = evt.target?.result;
+                             const wb = XLSX.read(bstr, { type: 'binary' });
+                             const schema: any = {};
+                             wb.SheetNames.forEach(sheetName => {
+                                 const ws = wb.Sheets[sheetName];
+                                 const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                                 if (data.length > 0) {
+                                     schema[sheetName] = data[0]; // Just the headers
+                                 }
+                             });
+                             const schemaText = JSON.stringify(schema, null, 2);
+                             navigator.clipboard.writeText(schemaText);
+                             alert('ساختار دیتابیس (نام جداول و ستون‌ها) با موفقیت استخراج و در کلیپ‌بورد شما کپی شد!\nحالا می‌توانید آن را مستقیماً برای من در چت بفرستید.');
+                         } catch (err: any) {
+                             alert('خطا در خواندن فایل اکسل: ' + err.message);
+                         }
+                     };
+                     reader.readAsBinaryString(file);
+                 }}
+             />
+          </div>
         </div>
 
         {!customMode ? (
