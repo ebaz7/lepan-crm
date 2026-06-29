@@ -46,12 +46,15 @@ const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: 
     );
 };
 
-const attemptQuery = async (query: string) => {
-    const pathList = [
+const attemptQuery = async (query: string, tableName?: string) => {
+    const pathList: any[] = [
         { path: 'sql', method: 'POST', body: { query } },
         { path: 'sql', method: 'POST', body: { sql: query } },
         { path: 'query', method: 'POST', body: { query } }
     ];
+    if (tableName) {
+        pathList.push({ path: tableName, method: 'GET', body: null });
+    }
     let lastErr: any;
     for (const attempt of pathList) {
         try {
@@ -59,8 +62,9 @@ const attemptQuery = async (query: string) => {
             if (res && (Array.isArray(res) || res.data || res.rows || res.items || res.result)) {
                 return Array.isArray(res) ? res : (res.data || res.rows || res.items || res.result || []);
             }
-        } catch(e) {
+        } catch(e: any) {
             lastErr = e;
+            // if it's 404, we continue to the next attempt
         }
     }
     throw lastErr || new Error("داده‌ای یافت نشد یا خطا در اجرای کوئری");
@@ -108,49 +112,83 @@ const SayanReports: React.FC = () => {
     try {
       if (reportType === 'SALES') {
         // query BUR_TBL_008 and fallback fields if TotalSales is not Field_025
-        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11] FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
+        sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11], Field_004 as [Type] FROM BUR_TBL_008 ORDER BY Field_008 DESC`;
         
-        const finalData = await attemptQuery(sqlQuery);
+        const finalData = await attemptQuery(sqlQuery, 'BUR_TBL_008');
         
         const processed = finalData.map((row: any) => {
             const amount = parseFloat(row.F25 || row.F10 || row.F11 || row.Field_025 || row.TotalSales || 0);
             return {
                 ...row,
                 TotalSales: amount,
-                Date: row.Date || row.Field_008
+                Date: row.Date || row.Field_008,
+                Type: row.Type || row.Field_004
             };
         }).filter((r: any) => r.TotalSales > 0 && isDateInRange(r.Date));
         
-        setData(processed.reverse());
+        // Filter by Type=2 (Sales) if Type is provided and has values like 1,2,3,4. 
+        // If all are null or weird, we just take everything.
+        const hasType2 = processed.some((r: any) => String(r.Type) === '2');
+        const salesData = hasType2 ? processed.filter((r: any) => String(r.Type) === '2') : processed;
+        
+        setData(salesData.reverse());
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
             // Fetch raw rows and aggregate locally
             sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
-            const finalData = await attemptQuery(sqlQuery);
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
             
+            // Fetch customers list to filter
+            let customerNames: string[] = [];
+            try {
+                const tafsili = await attemptQuery("SELECT TOP 1000 Field_006 as [AccountName] FROM ACT_TBL_004", 'ACT_TBL_004');
+                customerNames = tafsili.map((t:any) => String(t.AccountName || t.Field_006).trim());
+            } catch(e) {
+                try {
+                    const persons = await attemptQuery("SELECT TOP 1000 Field_004 as [AccountName] FROM BUR_TBL_002", 'BUR_TBL_002');
+                    customerNames = persons.map((p:any) => String(p.AccountName || p.Field_004).trim());
+                } catch(e2) {
+                    customerNames = [];
+                }
+            }
+
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
                 // only consider rows before end date for balance
                 if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
                 
-                const name = row.Field_006 || row.Field_005 || row.AccountName;
+                let f6 = String(row.Field_006 || '').trim();
+                let f7 = String(row.Field_007 || '').trim();
+                let name = f7 || f6 || row.AccountName;
                 if (!name) return;
-                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                name = String(name).trim();
+
+                let finalCustomerName = name;
+                if (customerNames.length > 0) {
+                    if (f7 && customerNames.includes(f7)) finalCustomerName = f7;
+                    else if (f6 && customerNames.includes(f6)) finalCustomerName = f6;
+                    else return; // Skip if not found in customer list
+                } else {
+                     // Fallback heuristic if customer list failed to load
+                     if (['صندوق', 'بانک', 'فروش', 'خرید', 'هزینه', 'درآمد', 'موجودی', 'حقوق', 'بیمه', 'مالیات', 'تخفیف', 'سرمایه', 'اسناد'].some(kw => name.includes(kw))) return;
+                }
+
+                if (!grouped[finalCustomerName]) grouped[finalCustomerName] = { AccountName: finalCustomerName, Debit: 0, Credit: 0 };
                 // Guess Debit/Credit from the last numerical fields if not explicitly named
                 const v1 = parseFloat(row.Field_009 || row.Field_010 || row.Debit || 0);
                 const v2 = parseFloat(row.Field_010 || row.Field_011 || row.Credit || 0);
-                grouped[name].Debit += v1;
-                grouped[name].Credit += v2;
+                grouped[finalCustomerName].Debit += v1;
+                grouped[finalCustomerName].Credit += v2;
             });
             setCustomers(Object.values(grouped));
             setData([]);
         } else {
-            sqlQuery = `SELECT TOP 2000 * FROM ACT_TBL_003 WHERE (Field_006 = N'${selectedCustomer}' OR Field_005 = N'${selectedCustomer}') ORDER BY Field_008 DESC`;
-            const finalData = await attemptQuery(sqlQuery);
+            sqlQuery = `SELECT TOP 2000 * FROM ACT_TBL_003 WHERE (Field_006 = N'${selectedCustomer}' OR Field_007 = N'${selectedCustomer}') ORDER BY Field_008 DESC`;
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
             const mapped = finalData.map((row: any) => ({
                 Date: row.Field_008,
-                Description: row.Field_007 || row.Field_006,
+                Description: row.Field_009 || row.Field_007 || row.Field_006,
                 Debit: row.Field_009 || row.Field_010 || row.Debit || 0,
                 Credit: row.Field_010 || row.Field_011 || row.Credit || 0,
             })).filter((r: any) => isDateInRange(r.Date));
@@ -159,7 +197,7 @@ const SayanReports: React.FC = () => {
       } 
       else if (reportType === 'DEBTORS_CREDITORS') {
         sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
-        const finalData = await attemptQuery(sqlQuery);
+        const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
         
         const grouped: Record<string, any> = {};
         finalData.forEach((row: any) => {
