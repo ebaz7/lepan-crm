@@ -42,14 +42,36 @@ const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: 
     );
 };
 
+const attemptQuery = async (query: string) => {
+    const pathList = [
+        { path: 'sql', method: 'POST', body: { query } },
+        { path: 'sql', method: 'POST', body: { sql: query } },
+        { path: 'query', method: 'POST', body: { query } }
+    ];
+    let lastErr: any;
+    for (const attempt of pathList) {
+        try {
+            const res: any = await apiCall('/sayan-proxy', 'POST', attempt);
+            if (res && (Array.isArray(res) || res.data || res.rows || res.items || res.result)) {
+                return Array.isArray(res) ? res : (res.data || res.rows || res.items || res.result || []);
+            }
+        } catch(e) {
+            lastErr = e;
+        }
+    }
+    throw lastErr || new Error("داده‌ای یافت نشد یا خطا در اجرای کوئری");
+};
+
 const SayanReports: React.FC = () => {
   const [activeReport, setActiveReport] = useState<ReportType>('SALES');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Date filters
-  const [targetDate, setTargetDate] = useState(getCurrentShamsiDate());
+  // Date filters (defaults to current month start to today)
+  const currentShamsi = getCurrentShamsiDate();
+  const [startDate, setStartDate] = useState({ ...currentShamsi, day: 1 });
+  const [endDate, setEndDate] = useState(currentShamsi);
 
   // Customer Statement states
   const [customers, setCustomers] = useState<any[]>([]);
@@ -62,63 +84,65 @@ const SayanReports: React.FC = () => {
     setError(null);
     let sqlQuery = '';
 
-    const y = targetDate.year;
-    const m = targetDate.month;
-    const d = targetDate.day;
-
-    // Daily boundaries
-    const dailyStartIso = toIsoDateString(jalaliToGregorian(y, m, d));
-    const dailyEndIso = toIsoDateString(jalaliToGregorian(y, m, d));
-
-    // Monthly boundaries
-    const monthlyStartIso = toIsoDateString(jalaliToGregorian(y, m, 1));
-    const monthlyEndIso = toIsoDateString(jalaliToGregorian(y, m, getShamsiMonthLength(y, m)));
+    const startIso = toIsoDateString(jalaliToGregorian(startDate.year, startDate.month, startDate.day));
+    const endIso = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
 
     try {
       if (reportType === 'SALES') {
-        // Fetch daily and monthly sales together, or fetch the whole month and filter locally
-        sqlQuery = `SELECT Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND Field_025 > 0 AND Field_008 >= '${monthlyStartIso}' AND Field_008 <= '${monthlyEndIso} 23:59:59'`;
+        // query BUR_TBL_008 and fallback fields if TotalSales is not Field_025
+        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_025 as [F25], Field_010 as [F10], Field_011 as [F11] FROM BUR_TBL_008 WHERE Field_008 >= '${startIso}' AND Field_008 <= '${endIso} 23:59:59'`;
         
-        const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
-        const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+        const finalData = await attemptQuery(sqlQuery);
         
-        // Add calculated flag to differentiate daily vs monthly in UI processing if needed
-        const processed = finalData.map(row => ({
-            ...row,
-            isDaily: (row.Date && row.Date.substring(0, 10) === dailyStartIso)
-        }));
+        const processed = finalData.map((row: any) => {
+            const amount = parseFloat(row.F25 || row.F10 || row.F11 || row.Field_025 || row.TotalSales || 0);
+            return {
+                ...row,
+                TotalSales: amount,
+                Date: row.Date || row.Field_008
+            };
+        }).filter((r: any) => r.TotalSales > 0);
         setData(processed);
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
-            // Fetch list of customers and their balance for the selected date range
-            sqlQuery = `SELECT Field_006 as [AccountName], SUM(Field_010) as [Debit], SUM(Field_011) as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${monthlyEndIso} 23:59:59' GROUP BY Field_006`;
-            const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
-            const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
-            setCustomers(finalData);
+            // Fetch raw rows and aggregate locally
+            sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${endIso} 23:59:59'`;
+            const finalData = await attemptQuery(sqlQuery);
+            
+            const grouped: Record<string, any> = {};
+            finalData.forEach((row: any) => {
+                const name = row.AccountName || row.Field_006;
+                if (!name) return;
+                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                grouped[name].Debit += parseFloat(row.Debit || row.Field_010 || 0);
+                grouped[name].Credit += parseFloat(row.Credit || row.Field_011 || 0);
+            });
+            setCustomers(Object.values(grouped));
             setData([]);
         } else {
-            // Fetch details for specific customer
-            sqlQuery = `SELECT Field_008 as [Date], Field_006 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${selectedCustomer}' AND Field_008 >= '${monthlyStartIso}' AND Field_008 <= '${monthlyEndIso} 23:59:59' ORDER BY Field_008 ASC`;
-            const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
-            const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+            sqlQuery = `SELECT TOP 1000 Field_008 as [Date], Field_007 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${selectedCustomer}' AND Field_008 >= '${startIso}' AND Field_008 <= '${endIso} 23:59:59' ORDER BY Field_008 ASC`;
+            const finalData = await attemptQuery(sqlQuery);
             setCustomerDetails(finalData);
         }
       } 
       else if (reportType === 'DEBTORS_CREDITORS') {
-        sqlQuery = `SELECT Field_006 as [AccountName], SUM(Field_010) as [Debit], SUM(Field_011) as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${monthlyEndIso} 23:59:59' GROUP BY Field_006`;
-        const result: any = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
-        const finalData = Array.isArray(result) ? result : (result.data || result.rows || result.items || result.result || []);
+        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND Field_008 <= '${endIso} 23:59:59'`;
+        const finalData = await attemptQuery(sqlQuery);
         
-        // Filter out zero balances and calculate net
-        const processed = finalData.map(row => {
-            const deb = parseFloat(row.Debit) || 0;
-            const cred = parseFloat(row.Credit) || 0;
-            const net = deb - cred;
+        const grouped: Record<string, any> = {};
+        finalData.forEach((row: any) => {
+            const name = row.AccountName || row.Field_006;
+            if (!name) return;
+            if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+            grouped[name].Debit += parseFloat(row.Debit || row.Field_010 || 0);
+            grouped[name].Credit += parseFloat(row.Credit || row.Field_011 || 0);
+        });
+        
+        const processed = Object.values(grouped).map((row: any) => {
+            const net = row.Debit - row.Credit;
             return {
-                AccountName: row.AccountName,
-                Debit: deb,
-                Credit: cred,
+                ...row,
                 NetBalance: Math.abs(net),
                 Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
             };
@@ -135,7 +159,7 @@ const SayanReports: React.FC = () => {
 
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, targetDate, selectedCustomer]);
+  }, [activeReport, startDate, endDate, selectedCustomer]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
@@ -147,9 +171,6 @@ const SayanReports: React.FC = () => {
   };
 
   const renderSalesDashboard = () => {
-      const dailySales = data.filter(d => d.isDaily).reduce((sum, row) => sum + (parseFloat(row.TotalSales) || 0), 0);
-      const monthlySales = data.reduce((sum, row) => sum + (parseFloat(row.TotalSales) || 0), 0);
-      
       const dailyChartData = Object.entries(data.reduce((aggs: any, row) => {
           const d = String(row.Date || '');
           const key = d.substring(0, 10);
@@ -157,25 +178,29 @@ const SayanReports: React.FC = () => {
           return aggs;
       }, {})).map(([name, value]) => ({ name, value, shamsiName: formatDate(name) })).sort((a,b) => a.name.localeCompare(b.name));
 
+      const totalSales = dailyChartData.reduce((sum, row) => sum + Number(row.value), 0);
+      const endDaySalesStr = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
+      const dailySpecificSales = dailyChartData.find(d => d.name === endDaySalesStr)?.value || 0;
+
       return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش روزانه ({targetDate.year}/{targetDate.month}/{targetDate.day})</div>
+                    <div className="text-slate-500 text-xs font-bold mb-2">فروش در روز پایان بازه ({endDate.year}/{endDate.month}/{endDate.day})</div>
                     <div className="text-3xl font-black text-indigo-600" dir="ltr">
-                        {dailySales.toLocaleString()}
+                        {dailySpecificSales.toLocaleString()}
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش ماهانه (ماه {targetDate.month})</div>
+                    <div className="text-slate-500 text-xs font-bold mb-2">جمع کل فروش در کل بازه انتخابی</div>
                     <div className="text-3xl font-black text-emerald-600" dir="ltr">
-                        {monthlySales.toLocaleString()}
+                        {totalSales.toLocaleString()}
                     </div>
                 </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[400px]">
-                <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش ماهانه (تفكيك روزها)</h3>
+                <h3 className="text-sm font-bold text-slate-800 mb-6">نمودار فروش (تفكيك روزها)</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -189,7 +214,7 @@ const SayanReports: React.FC = () => {
                         />
                         <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={40}>
                         {dailyChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.name === toIsoDateString(jalaliToGregorian(targetDate.year, targetDate.month, targetDate.day)) ? '#4f46e5' : '#818cf8'} />
+                            <Cell key={`cell-${index}`} fill={entry.name === endDaySalesStr ? '#4f46e5' : '#818cf8'} />
                         ))}
                         </Bar>
                     </BarChart>
@@ -198,7 +223,7 @@ const SayanReports: React.FC = () => {
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-700">
-                    جدول فروش ماهانه
+                    جدول فروش (روزانه در بازه)
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-right">
@@ -218,8 +243,8 @@ const SayanReports: React.FC = () => {
                         </tr>
                         ))}
                         <tr className="bg-slate-50 font-bold">
-                            <td className="px-6 py-4 text-xs text-slate-700">جمع کل:</td>
-                            <td className="px-6 py-4 text-xs text-indigo-700" dir="ltr">{monthlySales.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-xs text-slate-700">جمع کل بازه:</td>
+                            <td className="px-6 py-4 text-xs text-indigo-700" dir="ltr">{totalSales.toLocaleString()}</td>
                         </tr>
                     </tbody>
                     </table>
@@ -443,7 +468,8 @@ const SayanReports: React.FC = () => {
 
             {/* Date Filter */}
             <div className="flex items-center gap-4">
-                <ShamsiDatePicker date={targetDate} onChange={setTargetDate} label="تنظیم تاریخ گزارش (شمسی)" />
+                <ShamsiDatePicker date={startDate} onChange={setStartDate} label="از تاریخ (شمسی)" />
+                <ShamsiDatePicker date={endDate} onChange={setEndDate} label="تا تاریخ (شمسی)" />
             </div>
 
             {loading && <Loader2 size={18} className="animate-spin text-indigo-500 ml-4" />}
