@@ -540,6 +540,9 @@ app.post('/api/sayan-proxy', async (req, res) => {
         console.log(`[Sayan Server Proxy] ${method} -> ${finalUrl}`);
         
         // تنظیم هدر احراز هویت با استفاده از توکن ذخیره شده در سمت سرور
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+
         const fetchOptions = {
             method,
             headers: {
@@ -547,7 +550,8 @@ app.post('/api/sayan-proxy', async (req, res) => {
                 'Authorization': `Bearer ${serverSayanApiKey}`,
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
         };
 
         if (body && (method === 'POST' || method === 'PUT')) {
@@ -555,6 +559,8 @@ app.post('/api/sayan-proxy', async (req, res) => {
         }
 
         const response = await fetch(finalUrl, fetchOptions);
+        clearTimeout(timeoutId);
+        
         const data = await response.json().catch(async () => {
             const text = await response.text().catch(() => '');
             return { rawBody: text };

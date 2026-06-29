@@ -37,29 +37,92 @@ const SayanReports: React.FC = () => {
     const safeSumCredit = "SUM(CASE WHEN ISNUMERIC(Field_011) = 1 THEN CAST(Field_011 AS float) ELSE 0 END)";
 
     if (reportType === 'SALES') {
-      sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND (CASE WHEN ISNUMERIC(Field_025) = 1 THEN CAST(Field_025 AS float) ELSE 0 END) > 0 AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') ORDER BY Field_008 DESC`;
+      sqlQuery = `SELECT TOP 5000 Field_008 as [Date], Field_025 as [TotalSales] FROM BUR_TBL_008 WHERE Field_004=2 AND Field_025 > 0 ORDER BY Field_008 DESC`;
     } else if (reportType === 'CUSTOMER_STATEMENT') {
       if (safeCustomerName) {
-        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_007 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${safeCustomerName}' AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') ORDER BY Field_008 ASC`;
+        // Use a simpler query, some fields might be slightly different in actual DB, but we stick to the ones we know work
+        sqlQuery = `SELECT TOP 2000 Field_008 as [Date], Field_006 as [Description], Field_010 as [Debit], Field_011 as [Credit] FROM ACT_TBL_003 WHERE Field_006 = N'${safeCustomerName}' ORDER BY Field_008 ASC`;
       } else {
-        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], ${safeSumDebit} as [TotalDebit], ${safeSumCredit} as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') GROUP BY Field_006 HAVING ${safeSumDebit} > 0 OR ${safeSumCredit} > 0`;
+        sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit], Field_008 as [Date] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL ORDER BY Field_008 DESC`;
       }
     } else if (reportType === 'DEBTORS_CREDITORS') {
-      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], ${safeSumDebit} as [TotalDebit], ${safeSumCredit} as [TotalCredit] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL AND (REPLACE(Field_008, '/', '') >= '${safeStart}' AND REPLACE(Field_008, '/', '') <= '${safeEnd}') GROUP BY Field_006 HAVING ${safeSumDebit} > 0 OR ${safeSumCredit} > 0 ORDER BY ${safeSumDebit} DESC`;
+      sqlQuery = `SELECT TOP 5000 Field_006 as [AccountName], Field_010 as [Debit], Field_011 as [Credit], Field_008 as [Date] FROM ACT_TBL_003 WHERE Field_006 IS NOT NULL ORDER BY Field_008 DESC`;
     }
 
     try {
       // Try to execute the query
       let result: any = null;
       try {
-          result = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery } });
+          result = await apiCall('/sayan-proxy', 'POST', { path: 'query', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
       } catch (err: any) {
           console.log("Fallback to path: 'sql'");
-          result = await apiCall('/sayan-proxy', 'POST', { path: 'sql', method: 'POST', body: { sql: sqlQuery } });
+          try {
+              result = await apiCall('/sayan-proxy', 'POST', { path: 'sql', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
+          } catch (err2: any) {
+              console.log("Fallback to path: 'execute'");
+              result = await apiCall('/sayan-proxy', 'POST', { path: 'execute', method: 'POST', body: { query: sqlQuery, sql: sqlQuery } });
+          }
       }
 
-      const rawData = Array.isArray(result) ? result : (result?.data || result?.rows || result?.items || result?.result || []);
-      setData(rawData);
+      let rawData = Array.isArray(result) ? result : (result?.data || result?.rows || result?.items || result?.result || []);
+      
+      // Post-process the data to handle dates and aggregations
+      const safeStartStr = startDate.replace(/\//g, '');
+      const safeEndStr = endDate.replace(/\//g, '');
+      
+      // Filter dates and normalize
+      rawData = rawData.map((row: any) => {
+        let d = String(row.Date || '').trim();
+        
+        // Handle ISO strings or Gregorian formats
+        if (d.startsWith('20') || d.startsWith('19')) {
+           // If it's 8 digits without separators e.g. 20240625
+           if (/^\d{8}$/.test(d)) {
+               d = `${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}`;
+           }
+           const dateObj = new Date(d);
+           if (!isNaN(dateObj.getTime())) {
+               d = jMoment(dateObj).format('jYYYY/jMM/jDD');
+           }
+        }
+        
+        // Normalize slashes for Jalali (if it's 8 chars like 14030625)
+        if (d.length === 8 && !d.includes('/')) {
+           d = d.substring(0, 4) + '/' + d.substring(4, 6) + '/' + d.substring(6, 8);
+        }
+        return { ...row, Date: d, _normalizedDateStr: d.replace(/\//g, '') };
+      }).filter((row: any) => {
+        // Apply date filter if date exists
+        if (row._normalizedDateStr && row._normalizedDateStr.length >= 8 && row._normalizedDateStr !== 'Invalid date') {
+           return row._normalizedDateStr >= safeStartStr && row._normalizedDateStr <= safeEndStr;
+        }
+        return true; 
+      });
+
+      // Perform aggregation in JS to avoid SQL cast issues and 404s
+      if (!safeCustomerName && (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS')) {
+          const accMap = new Map();
+          rawData.forEach((row: any) => {
+              const name = String(row.AccountName || row.Description || '').trim();
+              if (!name) return;
+              const debit = parseFloat(row.Debit) || 0;
+              const credit = parseFloat(row.Credit) || 0;
+              if (debit === 0 && credit === 0) return;
+              
+              if (!accMap.has(name)) {
+                  accMap.set(name, { AccountName: name, TotalDebit: 0, TotalCredit: 0 });
+              }
+              const acc = accMap.get(name);
+              acc.TotalDebit += debit;
+              acc.TotalCredit += credit;
+          });
+          
+          let finalData = Array.from(accMap.values()).filter(x => x.TotalDebit > 0 || x.TotalCredit > 0);
+          finalData.sort((a, b) => b.TotalDebit - a.TotalDebit);
+          setData(finalData);
+      } else {
+          setData(rawData);
+      }
     } catch (err: any) {
       console.error('Sayan Error:', err);
       const errMsg = err.response ? JSON.stringify(err.response) : err.message;
