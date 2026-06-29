@@ -570,6 +570,25 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
     reader.readAsDataURL(file);
   };
 
+  const handleSecWordLetterheadUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSecWordLetterhead(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const result = await uploadFile(file.name, ev.target?.result as string);
+        setSecSettingsForm(prev => ({ ...prev, wordLetterheadUrl: result.url }));
+        alert('فایل سربرگ ورد با موفقیت آپلود شد.');
+      } catch (error) {
+        alert('خطا در آپلود سربرگ ورد');
+      } finally {
+        setIsUploadingSecWordLetterhead(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveSecSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCompanyIdForSec) return;
@@ -2016,7 +2035,8 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                 
                                                 {/* Upload Letterhead */}
                                                 <div>
-                                                    <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">سربرگ نامه</h4>
+                                                    <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">سربرگ نامه (با قابلیت آپلود PDF)</h4>
+                                                    <p className="text-[10px] text-gray-500 mb-2">جهت افت نکردن کیفیت در فایل‌های خروجی، لطفا فایل <b>PDF</b> یا <b>Word</b> (به صورت PDF خروجی گرفته شده) را در این بخش آپلود نمایید. در صورت آپلود PDF، متون نامه با کیفیت اصلی بر روی سربرگ چاپ می‌شوند.</p>
                                                     <div className="flex flex-col gap-2">
                                                         <input type="file" ref={secLetterheadInputRef} className="hidden" onChange={handleSecLetterheadUpload} accept="image/*,application/pdf" />
                                                         <button 
@@ -2025,11 +2045,15 @@ const Settings: React.FC<SettingsProps> = ({ financialYear, settings: propSettin
                                                             className="bg-purple-100 text-purple-700 font-bold px-4 py-2 rounded-xl text-xs hover:bg-purple-200 w-full"
                                                             disabled={isUploadingSecLetterhead}
                                                         >
-                                                            {isUploadingSecLetterhead ? 'در حال آپلود...' : 'انتخاب تصویر سربرگ'}
+                                                            {isUploadingSecLetterhead ? 'در حال آپلود...' : 'انتخاب فایل (PDF یا تصویر)'}
                                                         </button>
                                                         {secSettingsForm.letterheadUrl && (
                                                             <div className="mt-2 border rounded-xl overflow-hidden relative">
-                                                                <img src={secSettingsForm.letterheadUrl} className="w-full max-h-40 object-contain bg-gray-100" />
+                                                                {secSettingsForm.letterheadUrl.toLowerCase().endsWith('.pdf') ? (
+                                                                    <div className="w-full h-16 bg-purple-50 flex items-center justify-center text-xs text-purple-700 font-bold">فایل PDF سربرگ بارگذاری شده است</div>
+                                                                ) : (
+                                                                    <img src={secSettingsForm.letterheadUrl} className="w-full max-h-40 object-contain bg-gray-100" />
+                                                                )}
                                                                 <button type="button" onClick={() => setSecSettingsForm({...secSettingsForm, letterheadUrl: ''})} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><X size={14}/></button>
                                                             </div>
                                                         )}

@@ -43,6 +43,14 @@ if (typeof window !== 'undefined' && ReactQuill) {
     if (Direction) {
       Quill.register(Direction, true);
     }
+
+    // 4. Register Line Height
+    const Parchment = Quill.import('parchment');
+    const LineHeightStyle = new Parchment.Attributor.Style('lineHeight', 'line-height', {
+      scope: Parchment.Scope.BLOCK,
+      whitelist: ['1.0', '1.5', '2.0', '2.5', '3.0']
+    });
+    Quill.register(LineHeightStyle, true);
   }
 }
 
@@ -1787,6 +1795,18 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                           <button
                             type="button"
                             onClick={() => {
+                              window.print();
+                              setActiveMenu(null);
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>چاپ سند</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Ctrl+P</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
                               if (!newLetterForm.content) {
                                 alert('ابتدا متنی در سند بنویسید.');
                                 return;
@@ -1896,7 +1916,22 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                         درج
                       </button>
                       {activeMenu === 'insert' && (
-                        <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                        <div className="absolute right-0 mt-1.5 w-60 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => insertHTML('<p style="text-align:right; font-weight:bold;">با سلام و احترام،</p><p style="text-align:justify;">بازگشت به نامه شماره ... مورخ ... به استحضار می‌رساند؛ </p>')}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>شروع رسمی نامه (با سلام و احترام)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertHTML('<p style="text-align:right; font-weight:bold; margin-top:20px;">با تجدید احترام</p><p style="text-align:right; margin-bottom:20px;">مدیریت ...</p>')}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>پایان رسمی نامه (با تجدید احترام)</span>
+                          </button>
+                          <hr className="my-1 border-slate-100 dark:border-slate-700" />
                           <button
                             type="button"
                             onClick={() => insertHTML('<table style="width:100%; border-collapse:collapse; margin:10px 0;"><tr style="background:#f8fafc;"><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">ردیف</th><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">عنوان</th><th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">توضیحات</th></tr><tr><td style="border:1px solid #cbd5e1; padding:8px;">۱</td><td style="border:1px solid #cbd5e1; padding:8px;"></td><td style="border:1px solid #cbd5e1; padding:8px;"></td></tr><tr><td style="border:1px solid #cbd5e1; padding:8px;">۲</td><td style="border:1px solid #cbd5e1; padding:8px;"></td><td style="border:1px solid #cbd5e1; padding:8px;"></td></tr></table>')}
@@ -1915,6 +1950,14 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                           </button>
                           <button
                             type="button"
+                            onClick={() => insertHTML('<br style="page-break-after: always; break-after: page;" />')}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>شکست صفحه (Page Break)</span>
+                          </button>
+                          <hr className="my-1 border-slate-100 dark:border-slate-700" />
+                          <button
+                            type="button"
                             onClick={() => insertHTML(`<b>تاریخ: ${newLetterForm.date || getCurrentShamsiDate()}</b>`)}
                             className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
                           >
@@ -1928,6 +1971,71 @@ const SecretariatModule: React.FC<SecretariatModuleProps> = ({ currentUser }) =>
                           >
                             <span>امضای فرستنده</span>
                             <UserCheck size={12} className="text-slate-400" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Format Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'format' ? null : 'format'); }}
+                        className={`px-3 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 ${activeMenu === 'format' ? 'bg-slate-200 dark:bg-slate-700' : ''}`}
+                      >
+                        قالب‌بندی
+                      </button>
+                      {activeMenu === 'format' && (
+                        <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-800 border dark:border-white/10 rounded-lg shadow-xl py-1 text-right text-xs z-50 text-slate-800 dark:text-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              insertHTML('<div style="line-height: 1.0;">'); // Not perfect but triggers format
+                              if (quillRef.current) {
+                                const q = quillRef.current.getEditor();
+                                q.formatLine(0, q.getLength(), 'lineHeight', '1.0');
+                              }
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>فاصله خطوط: تک (1.0)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (quillRef.current) {
+                                const q = quillRef.current.getEditor();
+                                q.formatLine(0, q.getLength(), 'lineHeight', '1.5');
+                              }
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>فاصله خطوط: 1.5</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (quillRef.current) {
+                                const q = quillRef.current.getEditor();
+                                q.formatLine(0, q.getLength(), 'lineHeight', '2.0');
+                              }
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>فاصله خطوط: دو (2.0)</span>
+                          </button>
+                          <hr className="my-1 border-slate-100 dark:border-slate-700" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (quillRef.current) {
+                                const q = quillRef.current.getEditor();
+                                q.format('align', 'justify');
+                              }
+                            }}
+                            className="w-full text-right px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                          >
+                            <span>تراز دوطرفه (Justify)</span>
                           </button>
                         </div>
                       )}
