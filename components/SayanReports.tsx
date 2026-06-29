@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users, Calendar } from 'lucide-react';
+import { Database, Search, RefreshCw, BarChart2, Table as TableIcon, Settings, Filter, Download, Loader2, Play, AlertTriangle, Code, Terminal, ClipboardCheck, TrendingUp, PieChart, Activity, DollarSign, Package, Users, Calendar, Edit2, Check, X } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { HARDCODED_TABLES } from './sayanTablesData';
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1', '#ec4899'];
 
@@ -344,6 +345,27 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(true);
 
+  // Custom Human Readable Names for Tables
+  const [customTableNames, setCustomTableNames] = useState<Record<string, string>>({});
+  const [editingTableName, setEditingTableName] = useState<string | null>(null);
+  const [tempTableName, setTempTableName] = useState('');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sayanCustomTableNames');
+    if (saved) {
+      try {
+        setCustomTableNames(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
+
+  const saveCustomTableName = (tableId: string) => {
+    const updated = { ...customTableNames, [tableId]: tempTableName };
+    setCustomTableNames(updated);
+    localStorage.setItem('sayanCustomTableNames', JSON.stringify(updated));
+    setEditingTableName(null);
+  };
+
   // واکشی خودکار لیست جداول اس‌کیو‌ال سرور جهت راحتی کاربر
   const [extractingIntelligence, setExtractingIntelligence] = useState(false);
 
@@ -481,6 +503,56 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       alert("خطا در اسکن کامل: " + (err.message || "خطای ناشناخته"));
     } finally {
       setDiagnosing(false);
+    }
+  };
+
+  const [isExtractingAll, setIsExtractingAll] = useState(false);
+
+  const extractAllSayanDataToExcel = async () => {
+    setIsExtractingAll(true);
+    try {
+      const wb = XLSX.utils.book_new();
+      let extractedCount = 0;
+
+      for (const tableName of HARDCODED_TABLES) {
+        try {
+          // Attempt to fetch up to 1000 rows for each table to avoid memory crash
+          const result: any = await apiCall('/sayan-proxy', 'POST', {
+            path: 'sql',
+            method: 'POST',
+            body: { query: `SELECT TOP 1000 * FROM ${tableName}` }
+          });
+          
+          let tableData = [];
+          if (result && result.data && Array.isArray(result.data)) {
+            tableData = result.data;
+          } else if (result && Array.isArray(result)) {
+            tableData = result;
+          }
+
+          if (tableData.length > 0) {
+            // Sheet names must be 31 chars max
+            let sheetName = (customTableNames[tableName] || tableName).replace(/[\*\?\/\\\[\]]/g, '').substring(0, 31);
+            const ws = XLSX.utils.json_to_sheet(tableData);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            extractedCount++;
+          }
+        } catch (e) {
+          console.warn(`Failed to extract ${tableName}:`, e);
+        }
+      }
+
+      if (extractedCount > 0) {
+        XLSX.writeFile(wb, `Sayan_Full_Database_Dump_${new Date().getTime()}.xlsx`);
+        alert(`خروجی اکسل از ${extractedCount} جدول با موفقیت دریافت شد!`);
+      } else {
+        alert('هیچ داده‌ای از جداول دریافت نشد. لطفاً ارتباط با وب‌سرویس سایان را بررسی کنید.');
+      }
+    } catch (err: any) {
+      console.error("Extraction error:", err);
+      alert("خطا در استخراج کلی: " + err.message);
+    } finally {
+      setIsExtractingAll(false);
     }
   };
 
@@ -813,6 +885,16 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
              {diagnosing ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
              عیب‌یابی عمیق و استخراج دیتابیس (Deep Diagnostic)
            </button>
+
+           <button 
+             type="button"
+             onClick={extractAllSayanDataToExcel}
+             disabled={isExtractingAll}
+             className="w-full py-2 mt-2 px-3 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+           >
+             {isExtractingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+             دانلود اکسل کامل از تمام جداول واقعی
+           </button>
         </div>
 
         {/* API Tester Navigation Button */}
@@ -871,6 +953,55 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
                 </div>
               </div>
             )}
+
+            {/* جداول واقعی استخراج شده از سایان */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 rounded-lg mb-2">
+                <Database className="text-indigo-600 dark:text-indigo-400" size={13} />
+                <span className="text-[10px] font-black text-indigo-800 dark:text-indigo-300">جداول واقعی سایان (استخراج شده):</span>
+              </div>
+              <div className="max-h-64 overflow-y-auto border border-indigo-100 rounded-lg p-1 space-y-1">
+                {HARDCODED_TABLES.map((tableName, i) => {
+                  const displayName = customTableNames[tableName] || getTableDisplayName(tableName);
+                  const isEditing = editingTableName === tableName;
+                  return (
+                    <div key={i} className={`rounded-md transition-all ${activeTable === tableName ? 'bg-indigo-100 dark:bg-indigo-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'} flex flex-col border border-transparent`}>
+                      <div className="flex items-center justify-between p-2">
+                        <button
+                          onClick={() => {
+                            setCustomMode(false);
+                            setReportMode(false);
+                            setActiveTable(tableName);
+                          }}
+                          className="flex-1 text-right text-right flex flex-col items-start"
+                        >
+                          <span className={`text-[10px] font-bold leading-tight ${activeTable === tableName ? 'text-indigo-900' : 'text-gray-700'}`}>{displayName}</span>
+                          <span className="text-[9px] font-mono text-gray-500 mt-0.5" dir="ltr">{tableName}</span>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setEditingTableName(tableName); setTempTableName(customTableNames[tableName] || ''); }} className="p-1 text-gray-400 hover:text-indigo-600 rounded">
+                          <Edit2 size={12} />
+                        </button>
+                      </div>
+                      
+                      {isEditing && (
+                        <div className="p-2 bg-indigo-50 border-t border-indigo-100 flex gap-1 items-center">
+                          <input 
+                            type="text" 
+                            autoFocus
+                            value={tempTableName}
+                            onChange={e => setTempTableName(e.target.value)}
+                            placeholder="نام فارسی جدول..."
+                            className="flex-1 text-xs p-1 rounded border border-indigo-200 outline-none"
+                          />
+                          <button onClick={() => saveCustomTableName(tableName)} className="p-1 bg-indigo-600 text-white rounded"><Check size={12}/></button>
+                          <button onClick={() => setEditingTableName(null)} className="p-1 bg-red-500 text-white rounded"><X size={12}/></button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* گزارش‌های ترکیبی ویژه‌ */}
             <div className="mb-4 space-y-1">
