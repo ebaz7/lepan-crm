@@ -521,7 +521,7 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       for (const tableName of tablesToExtract) {
         if (!tableName) continue;
         try {
-          const query = `SELECT TOP 2000 * FROM ${tableName}`;
+          const query = `SELECT TOP 5 * FROM ${tableName}`;
           const pathList = [
             { path: 'sql', method: 'POST', body: { query } },
             { path: 'sql', method: 'POST', body: { sql: query } },
@@ -550,8 +550,8 @@ const SayanReports: React.FC<{ settings?: SystemSettings | null }> = ({ settings
       }
 
       if (extractedCount > 0) {
-        XLSX.writeFile(wb, `Sayan_Full_Database_Dump_${new Date().getTime()}.xlsx`);
-        alert(`خروجی اکسل از ${extractedCount} جدول با موفقیت دریافت شد!`);
+        XLSX.writeFile(wb, `Sayan_DB_Dictionary_Samples_${new Date().getTime()}.xlsx`);
+        alert(`خروجی سمپل از ${extractedCount} جدول با موفقیت دریافت شد!\n\nلطفاً این فایل اکسل را ذخیره کرده و به عنوان فایل ضمیمه برای هوش مصنوعی (من) ارسال کنید تا بتوانم جداول را رمزگشایی کنم.`);
       } else {
         alert('هیچ داده‌ای از جداول دریافت نشد. لطفاً ارتباط با وب‌سرویس سایان را بررسی کنید. (برای دریافت کل جداول، ابتدا از بخش Schema جدول‌ها را واکشی کنید)');
       }
