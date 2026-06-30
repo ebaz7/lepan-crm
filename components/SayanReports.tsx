@@ -106,7 +106,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   // Advanced config states
   const [availableSalesTypes, setAvailableSalesTypes] = useState<string[]>([]);
-  const [selectedSalesTypes, setSelectedSalesTypes] = useState<string[]>(['2', '4', '1']);
+  const [selectedSalesTypes, setSelectedSalesTypes] = useState<string[]>([]);
+  const [availableStores, setAvailableStores] = useState<string[]>([]);
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
   const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
@@ -246,11 +248,17 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
         // Find all available types in the DB
         const typesSet = new Set<string>();
+        const storesSet = new Set<string>();
         finalData.forEach((row: any) => {
             const typeId = String(row.Field_004 || '').trim();
             if (typeId && typeId !== 'undefined' && typeId !== 'null') {
                 const typeName = docTypes[typeId] || `نوع ${typeId}`;
                 typesSet.add(typeName);
+            }
+            const storeId = String(row.Field_005 || row.Field_006 || '').trim();
+            if (storeId) {
+                const storeName = storeMap[storeId] || `انبار ${storeId}`;
+                storesSet.add(storeName);
             }
         });
         const typesArr = Array.from(typesSet);
@@ -259,6 +267,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             // Default select types that are likely sales/invoices, excluding proforma
             const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت') || t.includes('فاکتور')) && !t.includes('پیش فاکتور'));
             setSelectedSalesTypes(likelySales.length > 0 ? likelySales : typesArr);
+        }
+        
+        const storesArr = Array.from(storesSet);
+        if (availableStores.length === 0 && storesArr.length > 0) {
+            setAvailableStores(storesArr);
+            setSelectedStores(storesArr);
         }
 
         const processed = finalData.map((row: any) => {
@@ -271,10 +285,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
-            // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
-            // The user explicitly stated that the negative values Sayan shows are SALES, not returns.
-            // We use absolute values and only consider it a return if explicitly named as such.
-            let isReturn = typeName.includes('برگشت از') || typeName.includes('مرجوعی فروش') || typeName.includes('برگشت فروش');
+            // Strictly base "Return" logic on the Type Name containing "برگشت" or "مرجوع"
+            let isReturn = typeName.includes('برگشت') || typeName.includes('مرجوع');
             if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
                 isReturn = false;
             }
@@ -455,20 +467,31 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       } 
       else if (reportType === 'CUSTOMER_STATEMENT') {
         if (!selectedCustomer) {
-            // Fetch Tafsili (Detailed Accounts) to map IDs to Names
+            // Fetch Tafsili (Detailed Accounts) to map IDs to Names and pre-populate list
             let tafsiliMap: Record<string, string> = {};
+            const grouped: Record<string, any> = {};
+            
             try {
-                const tafsili = await attemptQuery("SELECT Field_003, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
+                const tafsili = await attemptQuery("SELECT Field_003, Field_004, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
                 tafsili.forEach((t: any) => {
-                    if (t.Field_003 && t.Field_006) tafsiliMap[String(t.Field_003).trim()] = String(t.Field_006).trim();
+                    const code = String(t.Field_003).trim();
+                    const name = String(t.Field_006).trim();
+                    const parent = String(t.Field_004).trim();
+                    
+                    if (code && name) {
+                        tafsiliMap[code] = name;
+                        // Pre-populate grouped with people (usually group 11 or 111)
+                        if (parent === '11' || parent === '111') {
+                            grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
+                        }
+                    }
                 });
             } catch(e) { console.error("Tafsili fetch failed", e); }
 
-            // Fetch transaction details
+            // Fetch transaction details to update balances
             sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
-            const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
                 const date = row.Date || row.Field_013;
                 if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
@@ -1241,10 +1264,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
       Object.keys(groupStats).sort().forEach(mg => {
           const grps = Object.values(groupStats[mg]).sort((a: any, b: any) => b.amount - a.amount);
+          
+          let mgSalesW = 0, mgSalesA = 0, mgRetW = 0, mgRetA = 0, mgNetW = 0, mgNetA = 0;
+
           grps.forEach((g: any, idx) => {
               const netW = g.weight - g.returnsWeight;
               const netA = g.amount - g.returnsAmount;
               
+              mgSalesW += g.weight;
+              mgSalesA += g.amount;
+              mgRetW += g.returnsWeight;
+              mgRetA += g.returnsAmount;
+              mgNetW += netW;
+              mgNetA += netA;
+
               totalSalesW += g.weight;
               totalSalesA += g.amount;
               totalRetW += g.returnsWeight;
@@ -1257,8 +1290,22 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                   netWeight: netW,
                   netAmount: netA,
                   isFirstOfMain: idx === 0,
-                  mainRowSpan: grps.length
+                  mainRowSpan: grps.length + 1 // +1 for the subtotal row
               });
+          });
+          
+          // Subtotal row for the Main Group
+          itemsArray.push({
+              isSubtotal: true,
+              mainGroup: mg,
+              groupName: `جمع ${mg}`,
+              weight: mgSalesW,
+              amount: mgSalesA,
+              returnsWeight: mgRetW,
+              returnsAmount: mgRetA,
+              netWeight: mgNetW,
+              netAmount: mgNetA,
+              isFirstOfMain: false
           });
       });
 
@@ -1306,19 +1353,19 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                           </thead>
                           <tbody className="divide-y text-slate-700 font-mono text-[11px]">
                               {itemsArray.map((item: any, idx: number) => (
-                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                  <tr key={idx} className={item.isSubtotal ? "bg-indigo-50/50 border-t border-indigo-100" : "hover:bg-slate-50/50"}>
                                       {item.isFirstOfMain && (
                                           <td className="p-3 border-l font-sans font-black bg-slate-50/30 align-top" rowSpan={item.mainRowSpan}>
                                               {item.mainGroup}
                                           </td>
                                       )}
-                                      <td className="p-3 border-l font-sans font-bold text-slate-800 text-right">{item.groupName}</td>
-                                      <td className="p-3 border-l text-emerald-700">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
-                                      <td className="p-3 border-l text-emerald-700 font-bold">{item.amount > 0 ? item.amount.toLocaleString() : '-'}</td>
-                                      <td className="p-3 border-l text-rose-500">{item.returnsWeight > 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
-                                      <td className="p-3 border-l text-rose-500 font-bold">{item.returnsAmount > 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
-                                      <td className="p-3 border-l text-slate-800">{item.netWeight > 0 ? item.netWeight.toLocaleString() : '-'}</td>
-                                      <td className="p-3 font-black text-slate-800">{item.netAmount > 0 ? item.netAmount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-sans text-right ${item.isSubtotal ? 'font-black text-indigo-800' : 'font-bold text-slate-800'}`}>{item.groupName}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-700 font-bold' : 'text-emerald-700'}`}>{item.weight !== 0 ? item.weight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-bold ${item.isSubtotal ? 'text-indigo-700' : 'text-emerald-700'}`}>{item.amount !== 0 ? item.amount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-700 font-bold' : 'text-rose-500'}`}>{item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-bold ${item.isSubtotal ? 'text-indigo-700' : 'text-rose-500'}`}>{item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-900 font-black' : 'text-slate-800'}`}>{item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 font-black ${item.isSubtotal ? 'text-indigo-900' : 'text-slate-800'}`}>{item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</td>
                                   </tr>
                               ))}
                               {itemsArray.length > 0 && (
@@ -1353,9 +1400,39 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       
       let p1TotalW = 0, p1TotalA = 0, p2TotalW = 0, p2TotalA = 0;
 
+      const startIso = toIsoDateString(jalaliToGregorian(startDate.year, startDate.month, startDate.day));
+      const endIso = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
+      const startShamsiStr1 = `${startDate.year}/${String(startDate.month).padStart(2, '0')}/${String(startDate.day).padStart(2, '0')}`;
+      const startShamsiStr2 = startShamsiStr1.replace(/\//g, '-');
+      const endShamsiStr1 = `${endDate.year}/${String(endDate.month).padStart(2, '0')}/${String(endDate.day).padStart(2, '0')}`;
+      const endShamsiStr2 = endShamsiStr1.replace(/\//g, '-');
+
+      const compStartIso = toIsoDateString(jalaliToGregorian(compareStartDate.year, compareStartDate.month, compareStartDate.day));
+      const compEndIso = toIsoDateString(jalaliToGregorian(compareEndDate.year, compareEndDate.month, compareEndDate.day));
+      const compStartShamsiStr1 = `${compareStartDate.year}/${String(compareStartDate.month).padStart(2, '0')}/${String(compareStartDate.day).padStart(2, '0')}`;
+      const compEndShamsiStr1 = `${compareEndDate.year}/${String(compareEndDate.month).padStart(2, '0')}/${String(compareEndDate.day).padStart(2, '0')}`;
+      const compStartShamsiStr2 = compStartShamsiStr1.replace(/\//g, '-');
+      const compEndShamsiStr2 = compEndShamsiStr1.replace(/\//g, '-');
+
+      const checkP1 = (dateVal: any) => {
+          if (!dateVal) return false;
+          const dStr = String(dateVal).substring(0, 10);
+          return (dStr >= startIso && dStr <= endIso) || 
+                 (dStr >= startShamsiStr1 && dStr <= endShamsiStr1) ||
+                 (dStr >= startShamsiStr2 && dStr <= endShamsiStr2);
+      };
+
+      const checkP2 = (dateVal: any) => {
+          if (!dateVal) return false;
+          const dStr = String(dateVal).substring(0, 10);
+          return (dStr >= compStartIso && dStr <= compEndIso) || 
+                 (dStr >= compStartShamsiStr1 && dStr <= compEndShamsiStr1) ||
+                 (dStr >= compStartShamsiStr2 && dStr <= compEndShamsiStr2);
+      };
+
       data.forEach(row => {
-          const isP1 = isDateInRange(row.Date);
-          const isP2 = isDateInCompareRange(row.Date);
+          const isP1 = checkP1(row.Date);
+          const isP2 = checkP2(row.Date);
           if (!isP1 && !isP2) return;
 
           if (row.Items) {
@@ -1654,22 +1731,46 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           </div>
           
           <div className="p-6 border-b border-slate-100 bg-white">
-            <h4 className="text-xs font-bold text-slate-500 mb-3">تنظیمات پیشرفته گزارش (انواع فاکتور جهت محاسبه به عنوان فروش):</h4>
-            <div className="flex flex-wrap gap-4">
-                {availableSalesTypes.map(t => (
-                    <label key={t} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
-                        <input 
-                            type="checkbox" 
-                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            checked={selectedSalesTypes.includes(t)}
-                            onChange={(e) => {
-                                if (e.target.checked) setSelectedSalesTypes(prev => [...prev, t]);
-                                else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
-                            }}
-                        />
-                        {t}
-                    </label>
-                ))}
+            <h4 className="text-xs font-bold text-slate-500 mb-3">تنظیمات پیشرفته گزارش:</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h5 className="text-[11px] font-bold text-slate-700 mb-2">انواع اسناد فروش و مرجوعی:</h5>
+                    <div className="flex flex-wrap gap-4">
+                        {availableSalesTypes.map(t => (
+                            <label key={t} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                    checked={selectedSalesTypes.includes(t)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) setSelectedSalesTypes(prev => [...prev, t]);
+                                        else setSelectedSalesTypes(prev => prev.filter(x => x !== t));
+                                    }}
+                                />
+                                {t}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <h5 className="text-[11px] font-bold text-slate-700 mb-2">انبارهای مجاز جهت گزارش گیری:</h5>
+                    <div className="flex flex-wrap gap-4">
+                        {availableStores.map(s => (
+                            <label key={s} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                    checked={selectedStores.includes(s)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) setSelectedStores(prev => [...prev, s]);
+                                        else setSelectedStores(prev => prev.filter(x => x !== s));
+                                    }}
+                                />
+                                {s}
+                            </label>
+                        ))}
+                    </div>
+                </div>
             </div>
           </div>
 
