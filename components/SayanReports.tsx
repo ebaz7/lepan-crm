@@ -221,7 +221,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const typeId = String(row.Field_004 || '').trim();
+            const typeId = String(row.Field_009 || '').trim();
             if (typeId && typeId !== 'undefined' && typeId !== 'null') {
                 const typeName = docTypes[typeId] || `نوع ${typeId}`;
                 typesSet.add(typeName);
@@ -230,28 +230,38 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         const typesArr = Array.from(typesSet);
         if (availableSalesTypes.length === 0 && typesArr.length > 0) {
             setAvailableSalesTypes(typesArr);
-            // Default select types that are likely sales/invoices
-            const likelySales = typesArr.filter(t => t.includes('فروش') || t.includes('فاکتور') || t.includes('رسید'));
+            // Default select types that are likely sales/invoices, excluding proforma
+            const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت')) && !t.includes('پیش فاکتور'));
             setSelectedSalesTypes(likelySales.length > 0 ? likelySales : typesArr);
         }
 
         const processed = finalData.map((row: any) => {
+            // Cancelled flag check
+            if (String(row.Field_019).toLowerCase() === 'true' || row.Field_019 === 1) return null;
+
             // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
             const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
-            const typeId = String(row.Field_004 || '').trim();
+            const typeId = String(row.Field_009 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
             // Differentiate based on prefix: 12 is Sales (فروش), 13 is Return (مرجوعی)
             const isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
             
+            // Only keep Sales Invoices (12) and Sales Returns (13)
+            const hasValidPrefix = prefixCode.startsWith('12') || prefixCode.startsWith('13');
+            const hasValidName = (typeName.includes('فروش') || typeName.includes('مرجوع') || typeName.includes('برگشت')) && !typeName.includes('پیش فاکتور');
+            const isValidDoc = prefixCode ? hasValidPrefix : hasValidName;
+
+            if (!isValidDoc) return null;
+
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
             const personName = personId ? (tafsiliMap[personId] || personId) : '';
 
-            // Match invoice details (rows)
+            // Match invoice details (rows) using Field_013 as the parent document link field
             const docId = String(row.Field_001).trim();
-            let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId);
+            let matchedDetails = detailsList.filter((det: any) => String(det.Field_013).trim() === docId);
             
             // Offline/Mock Fallback: If no matched details were found due to database subset mismatch,
             // we dynamically partition the details list so that the offline UI has fully functioning items.
@@ -364,18 +374,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 });
             }
 
-            let finalAmount = 0;
-            let finalWeight = 0;
-            
-            // Allow matching on either type name or type ID
-            const matchesTypeSelection = selectedSalesTypes.includes(typeId) || selectedSalesTypes.includes(typeName);
-            if (matchesTypeSelection) {
-                finalAmount = amount;
-                finalWeight = weight;
-            }
+            let finalAmount = amount;
+            let finalWeight = weight;
 
             return {
-                ...row,
+                Field_001: row.Field_001,
+                Field_005: row.Field_005,
                 TotalSales: finalAmount,
                 Weight: finalWeight,
                 Date: row.Field_008 || row.Date,
@@ -385,10 +389,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 Items: invoiceItems
             };
         }).filter((r: any) => {
-            // Cancelled flag check
-            if (String(r.Field_019).toLowerCase() === 'true' || r.Field_019 === 1) return false;
-            const typeId = String(r.Field_004 || '').trim();
-            const matchesTypeSelection = selectedSalesTypes.includes(typeId) || selectedSalesTypes.includes(r.Type);
+            if (!r) return false;
+            const matchesTypeSelection = selectedSalesTypes.includes(r.Type);
             return matchesTypeSelection && isDateInRange(r.Date);
         });
         
