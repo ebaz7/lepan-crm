@@ -135,12 +135,17 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         
         const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
-        // Fetch document types
+        // Fetch document types with accounting prefix (Field_003)
         let docTypes: Record<string, string> = {};
+        let docPrefixes: Record<string, string> = {};
         try {
-            const types = await attemptQuery("SELECT Field_001, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
+            const types = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
             types.forEach((t: any) => {
-                if (t.Field_001 && t.Field_004) docTypes[String(t.Field_001).trim()] = String(t.Field_004).trim();
+                const id = String(t.Field_001 || '').trim();
+                if (id) {
+                    if (t.Field_004) docTypes[id] = String(t.Field_004).trim();
+                    if (t.Field_003) docPrefixes[id] = String(t.Field_003).trim();
+                }
             });
         } catch(e) { console.error("Doc types fetch failed", e); }
 
@@ -186,6 +191,32 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
             setGroupMap(gMap);
         } catch(e) { console.error("GNR_TBL_007 groups fetch failed", e); }
+
+        // Fetch IND_TBL_002 (Product Groups Hierarchy Names)
+        let productGroupNames: Record<string, string> = {};
+        try {
+            const indGroups = await attemptQuery("SELECT Field_003, Field_008 FROM IND_TBL_002", 'IND_TBL_002');
+            indGroups.forEach((g: any) => {
+                const name = String(g.Field_003 || '').trim();
+                const code = String(g.Field_008 || '').trim();
+                if (code && name) {
+                    productGroupNames[code] = name;
+                }
+            });
+        } catch(e) { console.error("IND_TBL_002 groups fetch failed", e); }
+
+        // Fetch IND_TBL_021 (Product Code to Group Code Links)
+        let productCodeToGroupCode: Record<string, string> = {};
+        try {
+            const indLinks = await attemptQuery("SELECT Field_003, Field_004 FROM IND_TBL_021", 'IND_TBL_021');
+            indLinks.forEach((l: any) => {
+                const groupCode = String(l.Field_003 || '').trim();
+                const productCode = String(l.Field_004 || '').trim();
+                if (productCode && groupCode) {
+                    productCodeToGroupCode[productCode] = groupCode;
+                }
+            });
+        } catch(e) { console.error("IND_TBL_021 links fetch failed", e); }
         
         // Find all available types in the DB
         const typesSet = new Set<string>();
@@ -209,7 +240,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
-            const isReturn = typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
+            const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
+            
+            // Differentiate based on prefix: 12 is Sales (فروش), 13 is Return (مرجوعی)
+            const isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
             
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
@@ -232,10 +266,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
             const invoiceItems = matchedDetails.map((det: any) => {
                 const code = String(det.Field_005 || '').trim();
-                let name = pMap[code];
+                let rawItemName = pMap[code];
                 
                 // Smart fallback for product name based on prefix
-                if (!name && code) {
+                if (!rawItemName && code) {
                     const prefix = code.substring(0, 4);
                     const suffix = code.substring(4);
                     let baseName = '';
@@ -249,34 +283,69 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         default: baseName = 'کالای عمومی';
                     }
                     if (baseName !== 'کالای عمومی' && suffix) {
-                        name = `${baseName} (کد فرعی: ${suffix})`;
+                        rawItemName = `${baseName} (کد فرعی: ${suffix})`;
                     } else {
-                        name = baseName || code || 'کالای عمومی';
+                        rawItemName = baseName || code || 'کالای عمومی';
                     }
-                } else if (!name) {
-                    name = 'کالای عمومی';
+                } else if (!rawItemName) {
+                    rawItemName = 'کالای عمومی';
                 }
 
-                const prefix = code.substring(0, 4);
-                let group = gMap[prefix] || 'سایر گروه‌ها';
-                if (group === 'سایر گروه‌ها') {
-                    switch(prefix) {
-                        case '0101': group = 'گروه نخ POY'; break;
-                        case '0102': group = 'گروه نخ FDY'; break;
-                        case '0103': group = 'گروه نخ DTY'; break;
-                        case '0401': group = 'گروه نخ اسپندکس'; break;
-                        case '0402': group = 'ملزومات تولید و کارتن'; break;
-                        case '1000': group = 'نایلون و بسته‌بندی'; break;
+                // Determine Main Group and Sub-Group names using IND_TBL_021 & IND_TBL_002
+                let mainGroup = '';
+                let subGroup = '';
+
+                const linkedGroupCode = productCodeToGroupCode[code];
+                if (linkedGroupCode) {
+                    const codeLen = linkedGroupCode.length;
+                    
+                    // Main Group (usually length 2 or 4)
+                    for (let len = 2; len <= Math.min(codeLen, 4); len += 2) {
+                        const partialCode = linkedGroupCode.substring(0, len);
+                        if (productGroupNames[partialCode]) {
+                            mainGroup = productGroupNames[partialCode];
+                        }
+                    }
+                    
+                    // Sub-Group (usually matching the full or longer code)
+                    for (let len = 4; len <= codeLen; len += 2) {
+                        const partialCode = linkedGroupCode.substring(0, len);
+                        if (productGroupNames[partialCode] && productGroupNames[partialCode] !== mainGroup) {
+                            subGroup = productGroupNames[partialCode];
+                        }
                     }
                 }
+
+                // If not found in dynamic product group maps, use prefix fallback
+                const prefix = code.substring(0, 4);
+                if (!mainGroup) {
+                    switch (prefix) {
+                        case '0101': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ POY'; break;
+                        case '0102': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ FDY'; break;
+                        case '0103': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ DTY'; break;
+                        case '0401': mainGroup = 'مواد اولیه کمکی'; subGroup = 'نخ اسپندکس'; break;
+                        case '0402': mainGroup = 'ملزومات بسته‌بندی'; subGroup = 'کارتن و بوبین'; break;
+                        case '1000': mainGroup = 'ملزومات بسته‌بندی'; subGroup = 'نایلون'; break;
+                        default: mainGroup = 'کالای عمومی'; subGroup = 'سایر موارد';
+                    }
+                }
+
+                if (!subGroup) {
+                    subGroup = 'سایر گروه‌ها';
+                }
+
+                // Exactly matches requested format: [گروه اصلی] - [گروه زیرمجموعه] - [اسم خود کالا]
+                const formattedFullName = `${mainGroup} - ${subGroup} - ${rawItemName}`;
+
                 const w = parseFloat(det.Field_006) || 0;
                 const qty = parseFloat(det.Field_012) || 0;
                 const fee = parseFloat(det.Field_037 || det.Field_038 || 0);
                 const totalPrice = w * fee || qty * fee || parseFloat(det.Field_027 || 0);
                 return {
                     code,
-                    name,
-                    group,
+                    name: formattedFullName,
+                    rawName: rawItemName,
+                    group: subGroup,
                     weight: w,
                     quantity: qty,
                     fee,
@@ -780,7 +849,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                                         </span>
                                                     </td>
                                                     <td className="p-4 text-left font-bold text-orange-500">{(inv.Weight || 0).toLocaleString()}</td>
-                                                    <td className={`p-4 text-left font-black text-sm ${inv.IsReturn ? 'text-rose-600' : 'text-indigo-600'}`}>{(inv.TotalSales || 0).toLocaleString()}</td>
+                                                    <td className={`p-4 text-left font-black text-sm ${inv.IsReturn ? 'text-rose-600' : 'text-indigo-600'}`}>{inv.IsReturn ? '-' : ''}{(inv.TotalSales || 0).toLocaleString()}</td>
                                                     <td className="p-4 text-center" onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}>
                                                         <button className="px-3 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-[10px] font-bold transition-all">مشاهده فاکتور</button>
                                                     </td>
@@ -813,7 +882,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                                     وزن: <span className="font-bold text-orange-500">{(inv.Weight || 0).toLocaleString()} kg</span>
                                                 </div>
                                                 <div className={`font-black text-sm ${inv.IsReturn ? 'text-rose-600' : 'text-indigo-600'}`}>
-                                                    {(inv.TotalSales || 0).toLocaleString()} <span className="text-[9px] font-normal">ریال</span>
+                                                    {inv.IsReturn ? '-' : ''}{(inv.TotalSales || 0).toLocaleString()} <span className="text-[9px] font-normal">ریال</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -897,8 +966,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                                 <td className="p-3 font-sans text-xs text-slate-500">{item.group}</td>
                                                 <td className="p-3 text-center font-bold text-slate-800">{item.quantity > 0 ? item.quantity : '-'}</td>
                                                 <td className="p-3 text-left text-orange-500 font-bold">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
-                                                <td className="p-3 text-left text-slate-500">{item.fee > 0 ? item.fee.toLocaleString() : '-'}</td>
-                                                <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? item.totalPrice.toLocaleString() : '-'}</td>
+                                                <td className="p-3 text-left text-slate-500">{item.fee > 0 ? Math.round(item.fee).toLocaleString() : '-'}</td>
+                                                <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? Math.round(item.totalPrice).toLocaleString() : '-'}</td>
                                             </tr>
                                         ))}
                                         {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
@@ -918,7 +987,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                 <div className="text-xs space-y-1">
                                     <span className="text-slate-400 block font-bold">مبلغ به حروف:</span>
                                     <span className="text-slate-700 font-extrabold font-sans">
-                                        {selectedInvoice.TotalSales > 0 ? `${selectedInvoice.TotalSales.toLocaleString()} ریال` : 'صفر ریال'}
+                                        {selectedInvoice.IsReturn ? 'منفی ' : ''}{selectedInvoice.TotalSales > 0 ? `${Math.round(selectedInvoice.TotalSales).toLocaleString()} ریال` : 'صفر ریال'}
                                     </span>
                                 </div>
                                 <div className="flex flex-wrap gap-6 justify-end text-xs font-mono">
@@ -933,8 +1002,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                         </span>
                                     </div>
                                     <div className="space-y-1">
-                                        <span className="text-indigo-500 font-sans block font-bold">مبلغ نهایی فاکتور:</span>
-                                        <span className="text-lg font-black text-indigo-600">{(selectedInvoice.TotalSales || 0).toLocaleString()} <span className="text-[10px] font-sans">ریال</span></span>
+                                        <span className={`${selectedInvoice.IsReturn ? 'text-rose-500' : 'text-indigo-500'} font-sans block font-bold`}>مبلغ نهایی فاکتور:</span>
+                                        <span className={`text-lg font-black ${selectedInvoice.IsReturn ? 'text-rose-600' : 'text-indigo-600'}`}>
+                                            {selectedInvoice.IsReturn ? '-' : ''}{(selectedInvoice.TotalSales || 0).toLocaleString()} <span className="text-[10px] font-sans">ریال</span>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
