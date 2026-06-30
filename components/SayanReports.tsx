@@ -64,7 +64,6 @@ const attemptQuery = async (query: string, tableName?: string) => {
             }
         } catch(e: any) {
             lastErr = e;
-            // if it's 404, we continue to the next attempt
         }
     }
     throw lastErr || new Error("داده‌ای یافت نشد یا خطا در اجرای کوئری");
@@ -415,9 +414,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
     }
   };
 
+  const startDateStr = `${startDate.year}-${startDate.month}-${startDate.day}`;
+  const endDateStr = `${endDate.year}-${endDate.month}-${endDate.day}`;
+  const selectedSalesTypesStr = selectedSalesTypes.join(',');
+
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, startDate, endDate, selectedCustomer, selectedSalesTypes]);
+  }, [activeReport, startDateStr, endDateStr, selectedCustomer, selectedSalesTypesStr]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
