@@ -263,7 +263,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
             // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
-            let isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
+            let isReturn = typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
             if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
                 isReturn = false;
             }
@@ -1336,34 +1336,56 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const compEndShamsiStr = `${compareEndDate.year}/${String(compareEndDate.month).padStart(2, '0')}/${String(compareEndDate.day).padStart(2, '0')}`;
 
   const renderSalesComparison = () => {
-      const p1Stats = { sales: 0, returns: 0, weight: 0 };
-      const p2Stats = { sales: 0, returns: 0, weight: 0 };
+      const compGroups: Record<string, { p1: { w: number, a: number, rw: number, ra: number }, p2: { w: number, a: number, rw: number, ra: number } }> = {};
       
+      let p1TotalW = 0, p1TotalA = 0, p2TotalW = 0, p2TotalA = 0;
+
       data.forEach(row => {
           const isP1 = isDateInRange(row.Date);
           const isP2 = isDateInCompareRange(row.Date);
-          
-          const amt = parseFloat(row.TotalSales) || 0;
-          const w = parseFloat(row.Weight) || 0;
+          if (!isP1 && !isP2) return;
 
-          if (isP1) {
-              if (row.IsReturn) p1Stats.returns += amt;
-              else { p1Stats.sales += amt; p1Stats.weight += w; }
-          }
-          if (isP2) {
-              if (row.IsReturn) p2Stats.returns += amt;
-              else { p2Stats.sales += amt; p2Stats.weight += w; }
+          if (row.Items) {
+              row.Items.forEach((item: any) => {
+                  const grp = item.group || 'نامشخص';
+                  if (!compGroups[grp]) {
+                      compGroups[grp] = { p1: { w: 0, a: 0, rw: 0, ra: 0 }, p2: { w: 0, a: 0, rw: 0, ra: 0 } };
+                  }
+                  
+                  const w = item.weight || 0;
+                  const a = item.totalPrice || 0;
+                  
+                  if (isP1) {
+                      if (row.IsReturn) { compGroups[grp].p1.rw += w; compGroups[grp].p1.ra += a; }
+                      else { compGroups[grp].p1.w += w; compGroups[grp].p1.a += a; }
+                  }
+                  if (isP2) {
+                      if (row.IsReturn) { compGroups[grp].p2.rw += w; compGroups[grp].p2.ra += a; }
+                      else { compGroups[grp].p2.w += w; compGroups[grp].p2.a += a; }
+                  }
+              });
           }
       });
 
-      const net1 = p1Stats.sales - p1Stats.returns;
-      const net2 = p2Stats.sales - p2Stats.returns;
+      const groupArray = Object.keys(compGroups).map(grp => {
+          const g = compGroups[grp];
+          const netW1 = g.p1.w - g.p1.rw;
+          const netA1 = g.p1.a - g.p1.ra;
+          const netW2 = g.p2.w - g.p2.rw;
+          const netA2 = g.p2.a - g.p2.ra;
 
-      const diffAmount = net1 - net2;
-      const diffWeight = p1Stats.weight - p2Stats.weight;
-      
-      const pctAmount = net2 === 0 ? 100 : (diffAmount / net2) * 100;
-      const pctWeight = p2Stats.weight === 0 ? 100 : (diffWeight / p2Stats.weight) * 100;
+          p1TotalW += netW1;
+          p1TotalA += netA1;
+          p2TotalW += netW2;
+          p2TotalA += netA2;
+
+          return { group: grp, netW1, netA1, netW2, netA2 };
+      }).sort((a, b) => b.netA1 - a.netA1); // sort by period 1 amount DESC
+
+      const diffTotalA = p1TotalA - p2TotalA;
+      const diffTotalW = p1TotalW - p2TotalW;
+      const pctTotalA = p2TotalA === 0 ? (p1TotalA > 0 ? 100 : 0) : (diffTotalA / p2TotalA) * 100;
+      const pctTotalW = p2TotalW === 0 ? (p1TotalW > 0 ? 100 : 0) : (diffTotalW / p2TotalW) * 100;
 
       const printReport = () => {
           const style = document.createElement('style');
@@ -1377,7 +1399,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           <div className="space-y-6 animate-scale-up" id="printable-comparison">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print:border-none print:shadow-none print:p-0 gap-4">
                   <div>
-                      <h2 className="text-xl font-black text-slate-800">گزارش مقایسه‌ای فروش</h2>
+                      <h2 className="text-xl font-black text-slate-800">گزارش مقایسه‌ای فروش (به تفکیک گروه)</h2>
                       <p className="text-sm font-bold text-slate-500 mt-2">مقایسه دو بازه زمانی</p>
                   </div>
                   <button onClick={printReport} className="no-print flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
@@ -1390,41 +1412,64 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <table className="w-full text-center text-sm">
                           <thead className="bg-slate-50 border-b text-slate-500 text-xs">
                               <tr>
-                                  <th className="p-4 border-l">شاخص</th>
-                                  <th className="p-4 border-l">بازه اول<br/><span className="text-[10px] font-mono">{formatDate(startDateStr)} تا {formatDate(endDateStr)}</span></th>
-                                  <th className="p-4 border-l">بازه دوم<br/><span className="text-[10px] font-mono">{formatDate(compStartShamsiStr)} تا {formatDate(compEndShamsiStr)}</span></th>
-                                  <th className="p-4">رشد / افت</th>
+                                  <th className="p-4 border-l" rowSpan={2}>گروه کالا</th>
+                                  <th className="p-2 border-l border-b" colSpan={2}>بازه اول: {formatDate(startDateStr)} تا {formatDate(endDateStr)}</th>
+                                  <th className="p-2 border-l border-b" colSpan={2}>بازه دوم: {formatDate(compStartShamsiStr)} تا {formatDate(compEndShamsiStr)}</th>
+                                  <th className="p-2 border-b" colSpan={2}>تغییرات (نسبت به بازه دوم)</th>
+                              </tr>
+                              <tr>
+                                  <th className="p-2 border-l">وزن خالص (kg)</th>
+                                  <th className="p-2 border-l">مبلغ خالص (ریال)</th>
+                                  <th className="p-2 border-l">وزن خالص (kg)</th>
+                                  <th className="p-2 border-l">مبلغ خالص (ریال)</th>
+                                  <th className="p-2 border-l">رشد وزن</th>
+                                  <th className="p-2">رشد مبلغ</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y text-slate-700 font-mono">
-                              <tr className="hover:bg-slate-50/50">
-                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">مبلغ خالص فروش (ریال)</td>
-                                  <td className="p-4 border-l font-black text-indigo-600">{net1.toLocaleString()}</td>
-                                  <td className="p-4 border-l font-black text-slate-600">{net2.toLocaleString()}</td>
-                                  <td className={`p-4 font-bold ${diffAmount > 0 ? 'text-emerald-600' : 'text-rose-500'} flex items-center justify-center gap-1`} dir="ltr">
-                                      {diffAmount > 0 ? '▲' : '▼'} {Math.abs(pctAmount).toFixed(1)}%
-                                  </td>
-                              </tr>
-                              <tr className="hover:bg-slate-50/50">
-                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">وزن خالص فروش (kg)</td>
-                                  <td className="p-4 border-l font-bold text-orange-600">{p1Stats.weight.toLocaleString()}</td>
-                                  <td className="p-4 border-l font-bold text-slate-600">{p2Stats.weight.toLocaleString()}</td>
-                                  <td className={`p-4 font-bold ${diffWeight > 0 ? 'text-emerald-600' : 'text-rose-500'} flex items-center justify-center gap-1`} dir="ltr">
-                                      {diffWeight > 0 ? '▲' : '▼'} {Math.abs(pctWeight).toFixed(1)}%
-                                  </td>
-                              </tr>
-                              <tr className="hover:bg-slate-50/50">
-                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">فروش ناخالص (ریال)</td>
-                                  <td className="p-4 border-l">{p1Stats.sales.toLocaleString()}</td>
-                                  <td className="p-4 border-l">{p2Stats.sales.toLocaleString()}</td>
-                                  <td className="p-4 text-slate-400">-</td>
-                              </tr>
-                              <tr className="hover:bg-slate-50/50">
-                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">مرجوعی (ریال)</td>
-                                  <td className="p-4 border-l text-rose-500">{p1Stats.returns.toLocaleString()}</td>
-                                  <td className="p-4 border-l text-rose-500">{p2Stats.returns.toLocaleString()}</td>
-                                  <td className="p-4 text-slate-400">-</td>
-                              </tr>
+                              {groupArray.map((g, idx) => {
+                                  const dW = g.netW1 - g.netW2;
+                                  const dA = g.netA1 - g.netA2;
+                                  const pW = g.netW2 === 0 ? (g.netW1 > 0 ? 100 : 0) : (dW / g.netW2) * 100;
+                                  const pA = g.netA2 === 0 ? (g.netA1 > 0 ? 100 : 0) : (dA / g.netA2) * 100;
+
+                                  return (
+                                      <tr key={idx} className="hover:bg-slate-50/50">
+                                          <td className="p-4 border-l font-sans font-bold text-slate-800">{g.group}</td>
+                                          <td className="p-4 border-l text-emerald-600">{g.netW1.toLocaleString()}</td>
+                                          <td className="p-4 border-l font-bold text-indigo-600">{g.netA1.toLocaleString()}</td>
+                                          <td className="p-4 border-l text-emerald-600">{g.netW2.toLocaleString()}</td>
+                                          <td className="p-4 border-l font-bold text-slate-600">{g.netA2.toLocaleString()}</td>
+                                          <td className={`p-4 border-l font-bold ${dW > 0 ? 'text-emerald-600' : (dW < 0 ? 'text-rose-500' : 'text-slate-400')} text-xs`} dir="ltr">
+                                              {dW > 0 ? '▲' : (dW < 0 ? '▼' : '-')} {dW !== 0 ? `${Math.abs(pW).toFixed(1)}%` : ''}
+                                          </td>
+                                          <td className={`p-4 font-bold ${dA > 0 ? 'text-emerald-600' : (dA < 0 ? 'text-rose-500' : 'text-slate-400')} text-xs`} dir="ltr">
+                                              {dA > 0 ? '▲' : (dA < 0 ? '▼' : '-')} {dA !== 0 ? `${Math.abs(pA).toFixed(1)}%` : ''}
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
+                              
+                              {groupArray.length > 0 && (
+                                  <tr className="bg-slate-50 font-black text-slate-800 border-t-2 border-slate-300">
+                                      <td className="p-4 border-l font-sans">جمع کل</td>
+                                      <td className="p-4 border-l text-emerald-700">{p1TotalW.toLocaleString()}</td>
+                                      <td className="p-4 border-l text-indigo-700">{p1TotalA.toLocaleString()}</td>
+                                      <td className="p-4 border-l text-emerald-700">{p2TotalW.toLocaleString()}</td>
+                                      <td className="p-4 border-l text-slate-700">{p2TotalA.toLocaleString()}</td>
+                                      <td className={`p-4 border-l ${diffTotalW > 0 ? 'text-emerald-600' : (diffTotalW < 0 ? 'text-rose-500' : 'text-slate-400')} text-xs`} dir="ltr">
+                                          {diffTotalW > 0 ? '▲' : (diffTotalW < 0 ? '▼' : '-')} {diffTotalW !== 0 ? `${Math.abs(pctTotalW).toFixed(1)}%` : ''}
+                                      </td>
+                                      <td className={`p-4 ${diffTotalA > 0 ? 'text-emerald-600' : (diffTotalA < 0 ? 'text-rose-500' : 'text-slate-400')} text-xs`} dir="ltr">
+                                          {diffTotalA > 0 ? '▲' : (diffTotalA < 0 ? '▼' : '-')} {diffTotalA !== 0 ? `${Math.abs(pctTotalA).toFixed(1)}%` : ''}
+                                      </td>
+                                  </tr>
+                              )}
+                              {groupArray.length === 0 && (
+                                  <tr>
+                                      <td colSpan={7} className="text-center py-12 text-slate-400 font-sans">داده‌ای برای مقایسه یافت نشد</td>
+                                  </tr>
+                              )}
                           </tbody>
                       </table>
                   </div>
