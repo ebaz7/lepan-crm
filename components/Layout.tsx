@@ -320,7 +320,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   if (canViewInvoices) navItems.push({ id: 'manage-invoices', label: 'مدیریت فاکتورها', icon: FileText });
   if (canViewExit) navItems.push({ id: 'manage-exit', label: 'سوابق خروج', icon: ClipboardList });
   if (canManageWarehouse) navItems.push({ id: 'warehouse', label: 'مدیریت انبار', icon: Package });
-  if (canSeeSayan) navItems.push({ id: 'sayan', label: 'گزارشات سایان', icon: FileText });
+  if (canSeeSayan) {
+      navItems.push({ id: 'sayan', label: 'گزارشات سایان', icon: FileText });
+      navItems.push({ id: 'sales-reports', label: 'گزارشات فروش', icon: FileText });
+  }
   if (canSeeSecurity) navItems.push({ id: 'security', label: 'انتظامات', icon: Shield });
   if (canSeeMeetings) navItems.push({ id: 'meetings', label: 'جلسات تولید', icon: ClipboardList });
   if (canSeePurchase) navItems.push({ id: 'purchase', label: 'درخواست خرید', icon: ShoppingCart });
