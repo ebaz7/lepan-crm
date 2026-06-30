@@ -24,7 +24,6 @@ import KnowledgeBaseModule from './components/KnowledgeBaseModule';
 import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import CctiConverter from './components/CctiConverter';
 import SayanReports from './components/SayanReports';
-import SalesReports from './components/SalesReports';
 import SecretariatModule from './components/SecretariatModule';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers, getRolePermissions, logout as authLogout } from './services/authService';
@@ -243,7 +242,7 @@ function App() {
                 if (path.includes('invoices') || path.includes('manage-invoices')) return 'manage-invoices';
                 
                 const cleaned = path.replace(/^\//, ''); // remove leading slash
-                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan', 'sales-reports'];
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan'];
                 if (validTabs.includes(cleaned)) {
                     return cleaned;
                 }
@@ -487,7 +486,7 @@ function App() {
                     });
                 }
 
-                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan', 'sales-reports'];
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan'];
                 if (validTabs.includes(path) || path === '') {
                     setActiveTab(path || 'dashboard');
                     if (url.search) {
@@ -1227,7 +1226,6 @@ function App() {
                 {activeTab === 'tickets' && <div className="page-transition flex flex-col flex-1 min-h-0"><Tickets /></div>}
                 {activeTab === 'ccti' && <div className="page-transition flex flex-col flex-1 min-h-0"><CctiConverter financialYear={financialYear} currentUser={currentUser} canManageArchive={currentUser.role === UserRole.ADMIN || (settings && getRolePermissions(currentUser.role, settings, currentUser).canManageCctiArchive === true)} /></div>}
                 {activeTab === 'sayan' && <div className="page-transition flex flex-col flex-1 min-h-0"><SayanReports settings={settings} /></div>}
-                {activeTab === 'sales-reports' && <div className="page-transition flex flex-col flex-1 min-h-0"><SalesReports settings={settings} /></div>}
                 {activeTab === 'users' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageUsers /></div>}
                 {activeTab === 'settings' && <div className="page-transition flex flex-col flex-1 min-h-0"><Settings financialYear={financialYear} settings={settings} onUpdateSettings={setSettings} /></div>}
                 {(activeTab === 'knowledge' || activeTab === 'notes') && <div className="page-transition flex flex-col flex-1 min-h-0"><KnowledgeBaseModule currentUser={currentUser} settings={settings} onUpdateSettings={setSettings} /></div>}

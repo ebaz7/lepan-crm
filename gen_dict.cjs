@@ -9,4 +9,4 @@ const mapping = fs.readFileSync('mapping.txt', 'utf8').split('\n').filter(Boolea
 
 const output = `${mapping.join('\n')}`;
 
-fs.writeFileSync('new_dict.ts', output);
+fs.writeFileSync('new_dict.txt', output);
