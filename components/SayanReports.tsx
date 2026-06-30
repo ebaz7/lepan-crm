@@ -221,7 +221,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const typeId = String(row.Field_009 || '').trim();
+            const typeId = String(row.Field_004 || '').trim();
             if (typeId && typeId !== 'undefined' && typeId !== 'null') {
                 const typeName = docTypes[typeId] || `نوع ${typeId}`;
                 typesSet.add(typeName);
@@ -231,7 +231,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         if (availableSalesTypes.length === 0 && typesArr.length > 0) {
             setAvailableSalesTypes(typesArr);
             // Default select types that are likely sales/invoices, excluding proforma
-            const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت')) && !t.includes('پیش فاکتور'));
+            const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت') || t.includes('فاکتور')) && !t.includes('پیش فاکتور'));
             setSelectedSalesTypes(likelySales.length > 0 ? likelySales : typesArr);
         }
 
@@ -241,27 +241,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
             // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
             const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
-            const typeId = String(row.Field_009 || '').trim();
+            const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
             // Differentiate based on prefix: 12 is Sales (فروش), 13 is Return (مرجوعی)
             const isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
             
-            // Only keep Sales Invoices (12) and Sales Returns (13)
-            const hasValidPrefix = prefixCode.startsWith('12') || prefixCode.startsWith('13');
-            const hasValidName = (typeName.includes('فروش') || typeName.includes('مرجوع') || typeName.includes('برگشت')) && !typeName.includes('پیش فاکتور');
-            const isValidDoc = prefixCode ? hasValidPrefix : hasValidName;
-
-            if (!isValidDoc) return null;
-
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
             const personName = personId ? (tafsiliMap[personId] || personId) : '';
 
-            // Match invoice details (rows) using Field_013 as the parent document link field
+            // Match invoice details (rows) using Field_004 as the parent document link field
             const docId = String(row.Field_001).trim();
-            let matchedDetails = detailsList.filter((det: any) => String(det.Field_013).trim() === docId);
+            let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId);
             
             // Offline/Mock Fallback: If no matched details were found due to database subset mismatch,
             // we dynamically partition the details list so that the offline UI has fully functioning items.
@@ -378,8 +371,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             let finalWeight = weight;
 
             return {
-                Field_001: row.Field_001,
-                Field_005: row.Field_005,
+                ...row,
                 TotalSales: finalAmount,
                 Weight: finalWeight,
                 Date: row.Field_008 || row.Date,
@@ -390,7 +382,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             };
         }).filter((r: any) => {
             if (!r) return false;
-            const matchesTypeSelection = selectedSalesTypes.includes(r.Type);
+            const docTypeId = String(r.Field_004 || '').trim();
+            const matchesTypeSelection = selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
             return matchesTypeSelection && isDateInRange(r.Date);
         });
         
