@@ -235,6 +235,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
         } catch(e) { console.error("IND_TBL_021 links fetch failed", e); }
         
+        // Fetch stores (Warehouses) from STR_TBL_015
+        const storeMap: Record<string, string> = {};
+        try {
+            const storesList = await attemptQuery("SELECT Field_001, Field_004 FROM STR_TBL_015", 'STR_TBL_015');
+            storesList.forEach((s: any) => {
+                if (s.Field_001 && s.Field_004) storeMap[String(s.Field_001).trim()] = String(s.Field_004).trim();
+            });
+        } catch(e) { console.error("STR_TBL_015 stores fetch failed", e); }
+
         // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
@@ -257,13 +266,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             if (String(row.Field_019).toLowerCase() === 'true' || row.Field_019 === 1) return null;
 
             // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
-            const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
+            const amount = Math.abs(parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0));
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
             // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
-            let isReturn = typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
+            // The user explicitly stated that the negative values Sayan shows are SALES, not returns.
+            // We use absolute values and only consider it a return if explicitly named as such.
+            let isReturn = typeName.includes('برگشت از') || typeName.includes('مرجوعی فروش') || typeName.includes('برگشت فروش');
             if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
                 isReturn = false;
             }
@@ -271,13 +282,16 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
             const personName = personId ? (tafsiliMap[personId] || personId) : '';
+            
+            // Get Store Name
+            const storeId = String(row.Field_005 || row.Field_006 || '').trim();
+            const storeName = storeId ? (storeMap[storeId] || `انبار ${storeId}`) : 'انبار نامشخص';
 
             // Match invoice details (rows) using Field_004 as the parent document link field
             const docId = String(row.Field_001).trim();
             let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId || String(det.Field_003).trim() === docId);
             
-            // Offline/Mock Fallback: If no matched details were found due to database subset mismatch,
-            // we dynamically partition the details list so that the offline UI has fully functioning items.
+            // Offline/Mock Fallback
             if (matchedDetails.length === 0 && detailsList.length > 0) {
                 const rowIndex = finalData.indexOf(row);
                 if (rowIndex >= 0) {
@@ -314,54 +328,47 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     rawItemName = 'کالای عمومی';
                 }
 
-                // Determine Main Group and Sub-Group names using IND_TBL_021 & IND_TBL_002
-                let mainGroup = '';
-                let subGroup = '';
+                // Determine Main Group and Sub-Group names directly from Sayan's Database Tables (IND_TBL_002 and IND_TBL_021)
+                let mainGroup = 'نامشخص';
+                let subGroup = 'سایر گروه‌ها';
 
                 const linkedGroupCode = productCodeToGroupCode[code];
                 if (linkedGroupCode) {
-                    const codeLen = linkedGroupCode.length;
-                    
-                    // Main Group (usually length 2 or 4)
-                    for (let len = 2; len <= Math.min(codeLen, 4); len += 2) {
-                        const partialCode = linkedGroupCode.substring(0, len);
-                        if (productGroupNames[partialCode]) {
-                            mainGroup = productGroupNames[partialCode];
+                    // Main Group (گروه اصلی) is usually Level 1 (Length 2) in Sayan
+                    if (linkedGroupCode.length >= 2) {
+                        const level1Code = linkedGroupCode.substring(0, 2);
+                        if (productGroupNames[level1Code]) {
+                            mainGroup = productGroupNames[level1Code];
                         }
                     }
                     
-                    // Sub-Group (usually matching the full or longer code)
+                    // Sub Group (گروه فرعی) is the deepest level available
+                    let bestSubGroup = '';
+                    const codeLen = linkedGroupCode.length;
                     for (let len = 4; len <= codeLen; len += 2) {
                         const partialCode = linkedGroupCode.substring(0, len);
-                        if (productGroupNames[partialCode] && productGroupNames[partialCode] !== mainGroup) {
-                            subGroup = productGroupNames[partialCode];
+                        if (productGroupNames[partialCode]) {
+                            bestSubGroup = productGroupNames[partialCode];
                         }
                     }
-                }
-
-                // If not found in dynamic product group maps, use prefix fallback
-                const prefix = code.substring(0, 4);
-                if (!mainGroup) {
-                    switch (prefix) {
-                        case '0101': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ POY'; break;
-                        case '0102': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ FDY'; break;
-                        case '0103': mainGroup = 'محصولات ریسندگی'; subGroup = 'نخ DTY'; break;
-                        case '0401': mainGroup = 'مواد اولیه کمکی'; subGroup = 'نخ اسپندکس'; break;
-                        case '0402': mainGroup = 'ملزومات بسته‌بندی'; subGroup = 'کارتن و بوبین'; break;
-                        case '1000': mainGroup = 'ملزومات بسته‌بندی'; subGroup = 'نایلون'; break;
-                        default: mainGroup = 'کالای عمومی'; subGroup = 'سایر موارد';
+                    
+                    if (bestSubGroup) {
+                        subGroup = bestSubGroup;
+                    } else if (mainGroup !== 'نامشخص') {
+                        subGroup = mainGroup;
                     }
                 }
 
-                if (!subGroup) {
-                    subGroup = 'سایر گروه‌ها';
+                // Only fallback to Store Name if absolutely no group is found in DB
+                if (mainGroup === 'نامشخص' && storeName) {
+                    mainGroup = storeName;
                 }
 
                 // Exactly matches requested format: [گروه اصلی] - [گروه زیرمجموعه] - [اسم خود کالا]
-                const formattedFullName = `${mainGroup} - ${subGroup} - ${rawItemName}`;
+                const formattedFullName = `${subGroup} - ${rawItemName}`; // Only showing Sub Group and Name since Main Group is displayed in a grouped column
 
-                const w = parseFloat(det.Field_006) || 0;
-                const qty = parseFloat(det.Field_012) || 0;
+                const w = Math.abs(parseFloat(det.Field_006) || 0);
+                const qty = Math.abs(parseFloat(det.Field_012) || 0);
 
                 // Parse Field_031 for metadata like gross weight, cartons, bobbins, grade, etc.
                 let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
@@ -374,20 +381,17 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 if (detailsStr) {
                     const parts = detailsStr.split('|').map(p => p.trim());
                     parts.forEach(p => {
-                        if (p.includes('وزن ناخالص:')) grossWeight = parseFloat(p.split(':')[1]) || 0;
-                        if (p.includes('تعداد بوبین:')) bobbinCount = parseFloat(p.split(':')[1]) || 0;
-                        if (p.includes('تعداد کارتن:')) cartonCount = parseFloat(p.split(':')[1]) || cartonCount;
+                        if (p.includes('وزن ناخالص:')) grossWeight = Math.abs(parseFloat(p.split(':')[1]) || 0);
+                        if (p.includes('تعداد بوبین:')) bobbinCount = Math.abs(parseFloat(p.split(':')[1]) || 0);
+                        if (p.includes('تعداد کارتن:')) cartonCount = Math.abs(parseFloat(p.split(':')[1]) || cartonCount);
                         if (p.includes('گرید:')) grade = String(p.split(':')[1] || '').trim();
                         if (p.includes('جهت تاب:')) twist = String(p.split(':')[1] || '').trim();
                     });
                 }
 
-                // Field_027 is total amount (مبلغ) or Field_037 is unit price (فی)
-                // Sayan has variations based on table customization
-                let fee = parseFloat(det.Field_037 || det.Field_038 || det.Field_023 || 0); 
-                let totalPrice = parseFloat(det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0);
+                let fee = Math.abs(parseFloat(det.Field_037 || det.Field_038 || det.Field_023 || 0)); 
+                let totalPrice = Math.abs(parseFloat(det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0));
                 
-                // Prioritize calculating fee from totalPrice if available, to fix scaling issues
                 if (totalPrice && w) fee = totalPrice / w;
                 else if (totalPrice && qty) fee = totalPrice / qty;
                 else if (fee && !totalPrice && w) totalPrice = fee * w;
@@ -397,6 +401,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     code,
                     name: formattedFullName,
                     rawName: rawItemName,
+                    mainGroup: mainGroup,
                     group: subGroup,
                     weight: w,
                     grossWeight,
@@ -1194,61 +1199,68 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [groupBy, setGroupBy] = useState<'DAY' | 'MONTH'>('DAY');
 
   const renderSalesByGroup = () => {
-      // Group by date (day or month based on range) and then by group
-      // Let's create a combined table
-      const groupStats: Record<string, any> = {};
+      // Group by mainGroup (Store) and then by group (Product Group)
+      const groupStats: Record<string, Record<string, any>> = {};
       
       data.forEach(row => {
           if (!row.Items) return;
-          const d = String(row.Date || '');
-          let dateKey = d.substring(0, 10);
-          if (groupBy === 'MONTH') {
-              dateKey = dateKey.substring(0, 7); // e.g. "1402-05" or "1402/05"
-          }
           
           row.Items.forEach((item: any) => {
+              const mg = item.mainGroup || 'نامشخص';
               const grp = item.group || 'نامشخص';
-              const key = `${dateKey}_${grp}`;
               
-              if (!groupStats[key]) {
-                  groupStats[key] = { date: dateKey, groupName: grp, weight: 0, amount: 0, returnsWeight: 0, returnsAmount: 0 };
+              if (!groupStats[mg]) {
+                  groupStats[mg] = {};
+              }
+              if (!groupStats[mg][grp]) {
+                  groupStats[mg][grp] = { 
+                      mainGroup: mg, 
+                      groupName: grp, 
+                      weight: 0, 
+                      amount: 0, 
+                      returnsWeight: 0, 
+                      returnsAmount: 0 
+                  };
               }
               
               const w = item.weight || 0;
               const a = item.totalPrice || 0;
               
               if (row.IsReturn) {
-                  groupStats[key].returnsWeight += w;
-                  groupStats[key].returnsAmount += a;
+                  groupStats[mg][grp].returnsWeight += w;
+                  groupStats[mg][grp].returnsAmount += a;
               } else {
-                  groupStats[key].weight += w;
-                  groupStats[key].amount += a;
+                  groupStats[mg][grp].weight += w;
+                  groupStats[mg][grp].amount += a;
               }
           });
       });
 
-      const getMonthName = (dateStr: string) => {
-          const parts = dateStr.split(/[-/]/);
-          if (parts.length >= 2) {
-              const year = parts[0];
-              const month = parseInt(parts[1], 10);
-              const months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-              if (month >= 1 && month <= 12) {
-                  return `${months[month - 1]} ${year}`;
-              }
-          }
-          return dateStr;
-      };
+      const itemsArray: any[] = [];
+      let totalSalesW = 0, totalSalesA = 0, totalRetW = 0, totalRetA = 0, totalNetW = 0, totalNetA = 0;
 
-      const itemsArray = Object.values(groupStats).map((s: any) => ({
-          ...s,
-          netWeight: s.weight - s.returnsWeight,
-          netAmount: s.amount - s.returnsAmount,
-          shamsiDate: groupBy === 'MONTH' ? getMonthName(s.date) : formatDate(s.date)
-      })).sort((a, b) => b.date.localeCompare(a.date) || b.netAmount - a.netAmount);
+      Object.keys(groupStats).sort().forEach(mg => {
+          const grps = Object.values(groupStats[mg]).sort((a: any, b: any) => b.amount - a.amount);
+          grps.forEach((g: any, idx) => {
+              const netW = g.weight - g.returnsWeight;
+              const netA = g.amount - g.returnsAmount;
+              
+              totalSalesW += g.weight;
+              totalSalesA += g.amount;
+              totalRetW += g.returnsWeight;
+              totalRetA += g.returnsAmount;
+              totalNetW += netW;
+              totalNetA += netA;
 
-      const totalWeight = itemsArray.reduce((acc, i) => acc + i.netWeight, 0);
-      const totalAmount = itemsArray.reduce((acc, i) => acc + i.netAmount, 0);
+              itemsArray.push({
+                  ...g,
+                  netWeight: netW,
+                  netAmount: netA,
+                  isFirstOfMain: idx === 0,
+                  mainRowSpan: grps.length
+              });
+          });
+      });
 
       const printReport = () => {
           const style = document.createElement('style');
@@ -1262,18 +1274,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           <div className="space-y-6 animate-scale-up" id="printable-sales-group">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print:border-none print:shadow-none print:p-0 gap-4">
                   <div>
-                      <h2 className="text-xl font-black text-slate-800">گزارش فروش به تفکیک گروه کالا</h2>
-                      <p className="text-sm font-bold text-slate-500 mt-2">بازه: {formatDate(startDateStr)} تا {formatDate(endDateStr)}</p>
+                      <h2 className="text-xl font-black text-slate-800">گزارش وضعیت فروش و برگشت از فروش به تفکیک گروه بندی کالا</h2>
+                      <p className="text-sm font-bold text-slate-500 mt-2">از تاریخ {formatDate(startDateStr)} الی {formatDate(endDateStr)}</p>
                   </div>
                   <div className="flex items-center gap-3 no-print">
-                      <select 
-                          value={groupBy} 
-                          onChange={e => setGroupBy(e.target.value as any)}
-                          className="px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm font-bold focus:outline-none"
-                      >
-                          <option value="DAY">گزارش روزانه</option>
-                          <option value="MONTH">گزارش ماهانه</option>
-                      </select>
                       <button onClick={printReport} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
                           <Printer size={16} /> چاپ گزارش
                       </button>
@@ -1282,41 +1286,50 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
                   <div className="overflow-x-auto">
-                      <table className="w-full text-right text-xs">
-                          <thead className="bg-slate-50 border-b text-slate-500 text-[11px]">
+                      <table className="w-full text-center text-xs">
+                          <thead className="bg-slate-50 border-b text-slate-800 text-[11px] font-black">
                               <tr>
-                                  <th className="p-4 text-center">تاریخ</th>
-                                  <th className="p-4">گروه کالا</th>
-                                  <th className="p-4 text-left">وزن فروش (kg)</th>
-                                  <th className="p-4 text-left">مبلغ فروش (ریال)</th>
-                                  <th className="p-4 text-left">وزن مرجوعی (kg)</th>
-                                  <th className="p-4 text-left">مبلغ مرجوعی (ریال)</th>
-                                  <th className="p-4 text-left">وزن خالص (kg)</th>
-                                  <th className="p-4 text-left">مبلغ خالص (ریال)</th>
+                                  <th className="p-3 border-l" rowSpan={2}>گروه اصلی</th>
+                                  <th className="p-3 border-l" rowSpan={2}>گروه فرعی</th>
+                                  <th className="p-2 border-l border-b" colSpan={2}>فروش</th>
+                                  <th className="p-2 border-l border-b" colSpan={2}>برگشت از فروش</th>
+                                  <th className="p-2 border-b" colSpan={2}>فروش خالص</th>
+                              </tr>
+                              <tr>
+                                  <th className="p-2 border-l">جمع تعداد</th>
+                                  <th className="p-2 border-l">جمع مبلغ</th>
+                                  <th className="p-2 border-l">جمع تعداد</th>
+                                  <th className="p-2 border-l">جمع مبلغ</th>
+                                  <th className="p-2 border-l">تعداد</th>
+                                  <th className="p-2">مبلغ</th>
                               </tr>
                           </thead>
-                          <tbody className="divide-y text-slate-600 font-mono">
+                          <tbody className="divide-y text-slate-700 font-mono text-[11px]">
                               {itemsArray.map((item: any, idx: number) => (
                                   <tr key={idx} className="hover:bg-slate-50/50">
-                                      <td className="p-4 text-center font-bold text-slate-700">{item.shamsiDate}</td>
-                                      <td className="p-4 font-sans font-bold text-slate-800">{item.groupName}</td>
-                                      <td className="p-4 text-left text-emerald-600">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
-                                      <td className="p-4 text-left text-emerald-600">{item.amount > 0 ? item.amount.toLocaleString() : '-'}</td>
-                                      <td className="p-4 text-left text-rose-500">{item.returnsWeight > 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
-                                      <td className="p-4 text-left text-rose-500">{item.returnsAmount > 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
-                                      <td className="p-4 text-left font-bold text-slate-800">{item.netWeight.toLocaleString()}</td>
-                                      <td className="p-4 text-left font-black text-indigo-600">{item.netAmount.toLocaleString()}</td>
+                                      {item.isFirstOfMain && (
+                                          <td className="p-3 border-l font-sans font-black bg-slate-50/30 align-top" rowSpan={item.mainRowSpan}>
+                                              {item.mainGroup}
+                                          </td>
+                                      )}
+                                      <td className="p-3 border-l font-sans font-bold text-slate-800 text-right">{item.groupName}</td>
+                                      <td className="p-3 border-l text-emerald-700">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
+                                      <td className="p-3 border-l text-emerald-700 font-bold">{item.amount > 0 ? item.amount.toLocaleString() : '-'}</td>
+                                      <td className="p-3 border-l text-rose-500">{item.returnsWeight > 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
+                                      <td className="p-3 border-l text-rose-500 font-bold">{item.returnsAmount > 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
+                                      <td className="p-3 border-l text-slate-800">{item.netWeight > 0 ? item.netWeight.toLocaleString() : '-'}</td>
+                                      <td className="p-3 font-black text-slate-800">{item.netAmount > 0 ? item.netAmount.toLocaleString() : '-'}</td>
                                   </tr>
                               ))}
                               {itemsArray.length > 0 && (
-                                  <tr className="bg-slate-50 font-black text-slate-800 border-t-2 border-slate-300">
-                                      <td className="p-4 text-center font-sans" colSpan={2}>جمع کل بازه</td>
-                                      <td className="p-4 text-left text-emerald-600">{itemsArray.reduce((acc, i) => acc + i.weight, 0).toLocaleString()}</td>
-                                      <td className="p-4 text-left text-emerald-600">{itemsArray.reduce((acc, i) => acc + i.amount, 0).toLocaleString()}</td>
-                                      <td className="p-4 text-left text-rose-500">{itemsArray.reduce((acc, i) => acc + i.returnsWeight, 0).toLocaleString()}</td>
-                                      <td className="p-4 text-left text-rose-500">{itemsArray.reduce((acc, i) => acc + i.returnsAmount, 0).toLocaleString()}</td>
-                                      <td className="p-4 text-left text-slate-800">{totalWeight.toLocaleString()}</td>
-                                      <td className="p-4 text-left text-indigo-600">{totalAmount.toLocaleString()}</td>
+                                  <tr className="bg-slate-100 font-black text-slate-800 border-t-2 border-slate-400">
+                                      <td className="p-4 border-l font-sans text-left" colSpan={2}>جمع کل</td>
+                                      <td className="p-4 border-l text-emerald-700">{totalSalesW > 0 ? totalSalesW.toLocaleString() : '-'}</td>
+                                      <td className="p-4 border-l text-emerald-700">{totalSalesA > 0 ? totalSalesA.toLocaleString() : '-'}</td>
+                                      <td className="p-4 border-l text-rose-600">{totalRetW > 0 ? totalRetW.toLocaleString() : '-'}</td>
+                                      <td className="p-4 border-l text-rose-600">{totalRetA > 0 ? totalRetA.toLocaleString() : '-'}</td>
+                                      <td className="p-4 border-l">{totalNetW.toLocaleString()}</td>
+                                      <td className="p-4 text-indigo-700">{totalNetA.toLocaleString()}</td>
                                   </tr>
                               )}
                               {itemsArray.length === 0 && (
