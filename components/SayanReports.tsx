@@ -221,7 +221,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const typeId = String(row.Field_004 || '').trim();
+            const typeId = String(row.Field_005 || row.Field_009 || '').trim();
             if (typeId && typeId !== 'undefined' && typeId !== 'null') {
                 const typeName = docTypes[typeId] || `نوع ${typeId}`;
                 typesSet.add(typeName);
@@ -241,20 +241,25 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
             // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
             const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
-            const typeId = String(row.Field_004 || '').trim();
+            const typeId = String(row.Field_005 || row.Field_009 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
-            // Differentiate based on prefix: 12 is Sales (فروش), 13 is Return (مرجوعی)
-            const isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
-            
+            // Swap logic requested by user: Fix Return vs Sales detection
+            // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
+            // If prefix starts with 13 or name explicitly says return, mark as return.
+            let isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
+            if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
+                isReturn = false; // Force non-return for explicit sales
+            }
+
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
             const personName = personId ? (tafsiliMap[personId] || personId) : '';
 
             // Match invoice details (rows) using Field_004 as the parent document link field
             const docId = String(row.Field_001).trim();
-            let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId);
+            let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId || String(det.Field_003).trim() === docId);
             
             // Offline/Mock Fallback: If no matched details were found due to database subset mismatch,
             // we dynamically partition the details list so that the offline UI has fully functioning items.
@@ -342,14 +347,46 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
                 const w = parseFloat(det.Field_006) || 0;
                 const qty = parseFloat(det.Field_012) || 0;
-                const fee = parseFloat(det.Field_037 || det.Field_038 || 0);
-                const totalPrice = w * fee || qty * fee || parseFloat(det.Field_027 || 0);
+
+                // Parse Field_031 for metadata like gross weight, cartons, bobbins, grade, etc.
+                let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
+                let grossWeight = 0;
+                let bobbinCount = 0;
+                let cartonCount = qty;
+                let grade = '';
+                let twist = '';
+                
+                if (detailsStr) {
+                    const parts = detailsStr.split('|').map(p => p.trim());
+                    parts.forEach(p => {
+                        if (p.includes('وزن ناخالص:')) grossWeight = parseFloat(p.split(':')[1]) || 0;
+                        if (p.includes('تعداد بوبین:')) bobbinCount = parseFloat(p.split(':')[1]) || 0;
+                        if (p.includes('تعداد کارتن:')) cartonCount = parseFloat(p.split(':')[1]) || cartonCount;
+                        if (p.includes('گرید:')) grade = String(p.split(':')[1] || '').trim();
+                        if (p.includes('جهت تاب:')) twist = String(p.split(':')[1] || '').trim();
+                    });
+                }
+
+                // Field_027 is total amount (مبلغ) or Field_037 is unit price (فی)
+                // Sayan has variations based on table customization
+                let fee = parseFloat(det.Field_037 || det.Field_038 || det.Field_023 || 0); 
+                let totalPrice = parseFloat(det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0);
+                
+                if (fee && !totalPrice && w) totalPrice = fee * w;
+                if (fee && !totalPrice && qty) totalPrice = fee * qty;
+                if (totalPrice && !fee && w) fee = totalPrice / w;
+
                 return {
                     code,
                     name: formattedFullName,
                     rawName: rawItemName,
                     group: subGroup,
                     weight: w,
+                    grossWeight,
+                    cartonCount,
+                    bobbinCount,
+                    grade,
+                    twist,
                     quantity: qty,
                     fee,
                     totalPrice
@@ -943,11 +980,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px]">
                                         <tr>
                                             <th className="p-3 text-center">ردیف</th>
-                                            <th className="p-3">کد کالا</th>
                                             <th className="p-3">نام و شرح کالا</th>
-                                            <th className="p-3">گروه کالا</th>
-                                            <th className="p-3 text-center">تعداد (کارتن)</th>
-                                            <th className="p-3 text-left">وزن خالص (kg)</th>
+                                            <th className="p-3 text-left">مقدار (kg)</th>
+                                            <th className="p-3 text-left">وزن ناخالص</th>
+                                            <th className="p-3 text-center">کارتن</th>
+                                            <th className="p-3 text-center">بوبین</th>
+                                            <th className="p-3 text-center">گرید</th>
+                                            <th className="p-3 text-center">تاب</th>
                                             <th className="p-3 text-left">فی واحد (ریال)</th>
                                             <th className="p-3 text-left">مبلغ کل (ریال)</th>
                                         </tr>
@@ -956,18 +995,23 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                         {(selectedInvoice.Items || []).map((item: any, idx: number) => (
                                             <tr key={idx} className="hover:bg-slate-50/30">
                                                 <td className="p-3 text-center font-sans text-slate-400">{idx + 1}</td>
-                                                <td className="p-3 text-slate-500">{item.code}</td>
-                                                <td className="p-3 font-sans font-bold text-slate-800">{item.name}</td>
-                                                <td className="p-3 font-sans text-xs text-slate-500">{item.group}</td>
-                                                <td className="p-3 text-center font-bold text-slate-800">{item.quantity > 0 ? item.quantity : '-'}</td>
+                                                <td className="p-3 font-sans font-bold text-slate-800 text-[11px] leading-relaxed">
+                                                    {item.name}
+                                                    <div className="text-[10px] text-slate-400 mt-1 font-mono">{item.code}</div>
+                                                </td>
                                                 <td className="p-3 text-left text-orange-500 font-bold">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
+                                                <td className="p-3 text-left text-slate-500">{item.grossWeight > 0 ? item.grossWeight.toLocaleString() : '-'}</td>
+                                                <td className="p-3 text-center font-bold text-slate-800">{item.cartonCount > 0 ? item.cartonCount : '-'}</td>
+                                                <td className="p-3 text-center text-slate-600">{item.bobbinCount > 0 ? item.bobbinCount : '-'}</td>
+                                                <td className="p-3 text-center font-sans text-[10px] text-slate-500">{item.grade || '-'}</td>
+                                                <td className="p-3 text-center font-sans text-[10px] text-slate-500">{item.twist || '-'}</td>
                                                 <td className="p-3 text-left text-slate-500">{item.fee > 0 ? Math.round(item.fee).toLocaleString() : '-'}</td>
                                                 <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? Math.round(item.totalPrice).toLocaleString() : '-'}</td>
                                             </tr>
                                         ))}
                                         {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
                                             <tr>
-                                                <td colSpan={8} className="p-6 text-center text-slate-400 font-sans">
+                                                <td colSpan={10} className="p-6 text-center text-slate-400 font-sans">
                                                     جزئیات اقلام کالا برای این فاکتور در دیتابیس لوکال یافت نشد. 
                                                     <span className="block mt-1 text-[10px] text-indigo-500">مبلغ کل فاکتور به صورت سند تلفیقی در هدر ثبت شده است.</span>
                                                 </td>
