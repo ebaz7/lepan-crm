@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { jalaliToGregorian, getCurrentShamsiDate, formatDate } from '../constants';
 
-type ReportType = 'SALES' | 'CUSTOMER_STATEMENT' | 'DEBTORS_CREDITORS';
+type ReportType = 'SALES' | 'CUSTOMER_STATEMENT' | 'DEBTORS_CREDITORS' | 'SALES_BY_GROUP' | 'SALES_COMPARISON';
 
 const getShamsiMonthLength = (year: number, month: number) => {
     if (month <= 6) return 31;
@@ -95,6 +95,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const currentShamsi = getCurrentShamsiDate();
   const [startDate, setStartDate] = useState({ ...currentShamsi, day: 1 });
   const [endDate, setEndDate] = useState(currentShamsi);
+  const [compareStartDate, setCompareStartDate] = useState({ year: currentShamsi.year - 1, month: 1, day: 1 });
+  const [compareEndDate, setCompareEndDate] = useState({ year: currentShamsi.year - 1, month: 12, day: 29 });
 
   // Customer Statement states
   const [customers, setCustomers] = useState<any[]>([]);
@@ -128,8 +130,23 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                (dStr >= startShamsiStr2 && dStr <= endShamsiStr2);
     };
 
+    const compStartIso = toIsoDateString(jalaliToGregorian(compareStartDate.year, compareStartDate.month, compareStartDate.day));
+    const compEndIso = toIsoDateString(jalaliToGregorian(compareEndDate.year, compareEndDate.month, compareEndDate.day));
+    const compStartShamsiStr1 = `${compareStartDate.year}/${String(compareStartDate.month).padStart(2, '0')}/${String(compareStartDate.day).padStart(2, '0')}`;
+    const compEndShamsiStr1 = `${compareEndDate.year}/${String(compareEndDate.month).padStart(2, '0')}/${String(compareEndDate.day).padStart(2, '0')}`;
+    const compStartShamsiStr2 = compStartShamsiStr1.replace(/\//g, '-');
+    const compEndShamsiStr2 = compEndShamsiStr1.replace(/\//g, '-');
+
+    const isDateInCompareRange = (dateVal: any) => {
+        if (!dateVal) return false;
+        const dStr = String(dateVal).substring(0, 10);
+        return (dStr >= compStartIso && dStr <= compEndIso) || 
+               (dStr >= compStartShamsiStr1 && dStr <= compEndShamsiStr1) ||
+               (dStr >= compStartShamsiStr2 && dStr <= compEndShamsiStr2);
+    };
+
     try {
-      if (reportType === 'SALES') {
+      if (reportType === 'SALES' || reportType === 'SALES_BY_GROUP' || reportType === 'SALES_COMPARISON') {
         // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
         sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
         
@@ -245,12 +262,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
-            // Swap logic requested by user: Fix Return vs Sales detection
             // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
-            // The user stated that sales are showing as returns and vice versa, so we invert the check.
             let isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
-            isReturn = !isReturn; // Inverting to fix the display issue as requested by the user
-
+            if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
+                isReturn = false;
+            }
 
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
@@ -371,9 +387,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 let fee = parseFloat(det.Field_037 || det.Field_038 || det.Field_023 || 0); 
                 let totalPrice = parseFloat(det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0);
                 
-                if (fee && !totalPrice && w) totalPrice = fee * w;
-                if (fee && !totalPrice && qty) totalPrice = fee * qty;
-                if (totalPrice && !fee && w) fee = totalPrice / w;
+                // Prioritize calculating fee from totalPrice if available, to fix scaling issues
+                if (totalPrice && w) fee = totalPrice / w;
+                else if (totalPrice && qty) fee = totalPrice / qty;
+                else if (fee && !totalPrice && w) totalPrice = fee * w;
+                else if (fee && !totalPrice && qty) totalPrice = fee * qty;
 
                 return {
                     code,
@@ -420,7 +438,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             if (!r) return false;
             const docTypeId = String(r.Field_004 || '').trim();
             const matchesTypeSelection = selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
-            return matchesTypeSelection && isDateInRange(r.Date);
+            if (!matchesTypeSelection) return false;
+
+            if (reportType === 'SALES_COMPARISON') {
+                return isDateInRange(r.Date) || isDateInCompareRange(r.Date);
+            }
+            return isDateInRange(r.Date);
         });
         
         setData(processed.reverse());
@@ -565,11 +588,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   const startDateStr = `${startDate.year}-${startDate.month}-${startDate.day}`;
   const endDateStr = `${endDate.year}-${endDate.month}-${endDate.day}`;
+  const compStartDateStr = `${compareStartDate.year}-${compareStartDate.month}-${compareStartDate.day}`;
+  const compEndDateStr = `${compareEndDate.year}-${compareEndDate.month}-${compareEndDate.day}`;
   const selectedSalesTypesStr = selectedSalesTypes.join(',');
 
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, startDateStr, endDateStr, selectedCustomer, selectedSalesTypesStr]);
+  }, [activeReport, startDateStr, endDateStr, compStartDateStr, compEndDateStr, selectedCustomer, selectedSalesTypesStr]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
@@ -926,14 +951,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         </div>
                     ) : (
                         /* REALISTIC PERSIAN FACTOR SHEET VIEW */
-                        <div className="bg-white border rounded-2xl shadow-md p-6 max-w-4xl mx-auto animate-scale-up space-y-6" id="printable-invoice-sheet">
+                        <div className="bg-white border print:border-none print:shadow-none rounded-2xl shadow-md p-6 print:p-0 max-w-4xl mx-auto animate-scale-up space-y-6" id="printable-invoice-sheet">
                             {/* Invoice Sheet Header */}
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-6 gap-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-6 print:pb-4 gap-4">
                                 <div className="space-y-1">
                                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                                        <span>{selectedInvoice.IsReturn ? '🔴 برگشت از فروش کالا و خدمات' : '🟢 فاکتور فروش رسمی کالا'}</span>
+                                        <span>{selectedInvoice.IsReturn ? '🔴 برگشت از فروش کالا و خدمات' : '🟢 صورتحساب فروش کالا و خدمات'}</span>
                                     </h2>
-                                    <p className="text-xs text-slate-400">شرکت ریسندگی و نساجی هوشکار سایان</p>
+                                    <p className="text-sm font-bold text-slate-600 mt-2">فروشنده: شرکت لپان بافت</p>
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto no-print">
                                     <button 
@@ -952,24 +977,18 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             </div>
 
                             {/* Factor Meta Info Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/50 p-4 rounded-xl border text-xs">
-                                <div className="space-y-1">
-                                    <span className="text-slate-400 font-bold block">نام خریدار / شخص:</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 print:gap-4 bg-slate-50/50 print:bg-transparent p-4 print:p-0 rounded-xl border print:border-none text-xs">
+                                <div className="space-y-1 print:col-span-2 print:border-b print:pb-2">
+                                    <span className="text-slate-400 print:text-slate-600 font-bold block">خریدار:</span>
                                     <span className="text-slate-800 font-extrabold text-sm">{selectedInvoice.PersonName || 'خریدار متفرقه'}</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <span className="text-slate-400 font-bold block">شماره سند سایان:</span>
+                                <div className="space-y-1 print:border-b print:pb-2">
+                                    <span className="text-slate-400 print:text-slate-600 font-bold block">شماره فاکتور:</span>
                                     <span className="text-slate-800 font-mono font-bold">{selectedInvoice.Field_005 || selectedInvoice.Field_001}</span>
                                 </div>
-                                <div className="space-y-1">
-                                    <span className="text-slate-400 font-bold block">تاریخ ثبت فاکتور:</span>
+                                <div className="space-y-1 print:border-b print:pb-2">
+                                    <span className="text-slate-400 print:text-slate-600 font-bold block">تاریخ ثبت فاکتور:</span>
                                     <span className="text-slate-800 font-bold">{formatDate(selectedInvoice.Date)}</span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-slate-400 font-bold block">نوع سند مالی:</span>
-                                    <span className={`inline-block px-2 py-0.5 rounded font-black text-[10px] ${selectedInvoice.IsReturn ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                                        {selectedInvoice.Type || (selectedInvoice.IsReturn ? 'مرجوعی از مشتری' : 'فروش داخلی')}
-                                    </span>
                                 </div>
                             </div>
 
@@ -984,8 +1003,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                             <th className="p-3 text-left">وزن ناخالص</th>
                                             <th className="p-3 text-center">کارتن</th>
                                             <th className="p-3 text-center">بوبین</th>
-                                            <th className="p-3 text-center">گرید</th>
-                                            <th className="p-3 text-center">تاب</th>
                                             <th className="p-3 text-left">فی واحد (ریال)</th>
                                             <th className="p-3 text-left">مبلغ کل (ریال)</th>
                                         </tr>
@@ -1002,15 +1019,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                                 <td className="p-3 text-left text-slate-500">{item.grossWeight > 0 ? item.grossWeight.toLocaleString() : '-'}</td>
                                                 <td className="p-3 text-center font-bold text-slate-800">{item.cartonCount > 0 ? item.cartonCount : '-'}</td>
                                                 <td className="p-3 text-center text-slate-600">{item.bobbinCount > 0 ? item.bobbinCount : '-'}</td>
-                                                <td className="p-3 text-center font-sans text-[10px] text-slate-500">{item.grade || '-'}</td>
-                                                <td className="p-3 text-center font-sans text-[10px] text-slate-500">{item.twist || '-'}</td>
                                                 <td className="p-3 text-left text-slate-500">{item.fee > 0 ? Math.round(item.fee).toLocaleString() : '-'}</td>
                                                 <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? Math.round(item.totalPrice).toLocaleString() : '-'}</td>
                                             </tr>
                                         ))}
                                         {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
                                             <tr>
-                                                <td colSpan={10} className="p-6 text-center text-slate-400 font-sans">
+                                                <td colSpan={8} className="p-6 text-center text-slate-400 font-sans">
                                                     جزئیات اقلام کالا برای این فاکتور در دیتابیس لوکال یافت نشد. 
                                                     <span className="block mt-1 text-[10px] text-indigo-500">مبلغ کل فاکتور به صورت سند تلفیقی در هدر ثبت شده است.</span>
                                                 </td>
@@ -1173,6 +1188,248 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 </div>
             )}
         </div>
+      );
+  };
+
+  const [groupBy, setGroupBy] = useState<'DAY' | 'MONTH'>('DAY');
+
+  const renderSalesByGroup = () => {
+      // Group by date (day or month based on range) and then by group
+      // Let's create a combined table
+      const groupStats: Record<string, any> = {};
+      
+      data.forEach(row => {
+          if (!row.Items) return;
+          const d = String(row.Date || '');
+          let dateKey = d.substring(0, 10);
+          if (groupBy === 'MONTH') {
+              dateKey = dateKey.substring(0, 7); // e.g. "1402-05" or "1402/05"
+          }
+          
+          row.Items.forEach((item: any) => {
+              const grp = item.group || 'نامشخص';
+              const key = `${dateKey}_${grp}`;
+              
+              if (!groupStats[key]) {
+                  groupStats[key] = { date: dateKey, groupName: grp, weight: 0, amount: 0, returnsWeight: 0, returnsAmount: 0 };
+              }
+              
+              const w = item.weight || 0;
+              const a = item.totalPrice || 0;
+              
+              if (row.IsReturn) {
+                  groupStats[key].returnsWeight += w;
+                  groupStats[key].returnsAmount += a;
+              } else {
+                  groupStats[key].weight += w;
+                  groupStats[key].amount += a;
+              }
+          });
+      });
+
+      const getMonthName = (dateStr: string) => {
+          const parts = dateStr.split(/[-/]/);
+          if (parts.length >= 2) {
+              const year = parts[0];
+              const month = parseInt(parts[1], 10);
+              const months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+              if (month >= 1 && month <= 12) {
+                  return `${months[month - 1]} ${year}`;
+              }
+          }
+          return dateStr;
+      };
+
+      const itemsArray = Object.values(groupStats).map((s: any) => ({
+          ...s,
+          netWeight: s.weight - s.returnsWeight,
+          netAmount: s.amount - s.returnsAmount,
+          shamsiDate: groupBy === 'MONTH' ? getMonthName(s.date) : formatDate(s.date)
+      })).sort((a, b) => b.date.localeCompare(a.date) || b.netAmount - a.netAmount);
+
+      const totalWeight = itemsArray.reduce((acc, i) => acc + i.netWeight, 0);
+      const totalAmount = itemsArray.reduce((acc, i) => acc + i.netAmount, 0);
+
+      const printReport = () => {
+          const style = document.createElement('style');
+          style.innerHTML = `@media print { body * { visibility: hidden; } #printable-sales-group, #printable-sales-group * { visibility: visible; } #printable-sales-group { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; } .no-print { display: none !important; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; } th { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; } }`;
+          document.head.appendChild(style);
+          window.print();
+          document.head.removeChild(style);
+      };
+
+      return (
+          <div className="space-y-6 animate-scale-up" id="printable-sales-group">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print:border-none print:shadow-none print:p-0 gap-4">
+                  <div>
+                      <h2 className="text-xl font-black text-slate-800">گزارش فروش به تفکیک گروه کالا</h2>
+                      <p className="text-sm font-bold text-slate-500 mt-2">بازه: {formatDate(startDateStr)} تا {formatDate(endDateStr)}</p>
+                  </div>
+                  <div className="flex items-center gap-3 no-print">
+                      <select 
+                          value={groupBy} 
+                          onChange={e => setGroupBy(e.target.value as any)}
+                          className="px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-sm font-bold focus:outline-none"
+                      >
+                          <option value="DAY">گزارش روزانه</option>
+                          <option value="MONTH">گزارش ماهانه</option>
+                      </select>
+                      <button onClick={printReport} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
+                          <Printer size={16} /> چاپ گزارش
+                      </button>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-right text-xs">
+                          <thead className="bg-slate-50 border-b text-slate-500 text-[11px]">
+                              <tr>
+                                  <th className="p-4 text-center">تاریخ</th>
+                                  <th className="p-4">گروه کالا</th>
+                                  <th className="p-4 text-left">وزن فروش (kg)</th>
+                                  <th className="p-4 text-left">مبلغ فروش (ریال)</th>
+                                  <th className="p-4 text-left">وزن مرجوعی (kg)</th>
+                                  <th className="p-4 text-left">مبلغ مرجوعی (ریال)</th>
+                                  <th className="p-4 text-left">وزن خالص (kg)</th>
+                                  <th className="p-4 text-left">مبلغ خالص (ریال)</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y text-slate-600 font-mono">
+                              {itemsArray.map((item: any, idx: number) => (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                      <td className="p-4 text-center font-bold text-slate-700">{item.shamsiDate}</td>
+                                      <td className="p-4 font-sans font-bold text-slate-800">{item.groupName}</td>
+                                      <td className="p-4 text-left text-emerald-600">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-left text-emerald-600">{item.amount > 0 ? item.amount.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-left text-rose-500">{item.returnsWeight > 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-left text-rose-500">{item.returnsAmount > 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-left font-bold text-slate-800">{item.netWeight.toLocaleString()}</td>
+                                      <td className="p-4 text-left font-black text-indigo-600">{item.netAmount.toLocaleString()}</td>
+                                  </tr>
+                              ))}
+                              {itemsArray.length > 0 && (
+                                  <tr className="bg-slate-50 font-black text-slate-800 border-t-2 border-slate-300">
+                                      <td className="p-4 text-center font-sans" colSpan={2}>جمع کل بازه</td>
+                                      <td className="p-4 text-left text-emerald-600">{itemsArray.reduce((acc, i) => acc + i.weight, 0).toLocaleString()}</td>
+                                      <td className="p-4 text-left text-emerald-600">{itemsArray.reduce((acc, i) => acc + i.amount, 0).toLocaleString()}</td>
+                                      <td className="p-4 text-left text-rose-500">{itemsArray.reduce((acc, i) => acc + i.returnsWeight, 0).toLocaleString()}</td>
+                                      <td className="p-4 text-left text-rose-500">{itemsArray.reduce((acc, i) => acc + i.returnsAmount, 0).toLocaleString()}</td>
+                                      <td className="p-4 text-left text-slate-800">{totalWeight.toLocaleString()}</td>
+                                      <td className="p-4 text-left text-indigo-600">{totalAmount.toLocaleString()}</td>
+                                  </tr>
+                              )}
+                              {itemsArray.length === 0 && (
+                                  <tr>
+                                      <td colSpan={8} className="text-center py-12 text-slate-400 font-sans">داده‌ای یافت نشد</td>
+                                  </tr>
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const compStartShamsiStr = `${compareStartDate.year}/${String(compareStartDate.month).padStart(2, '0')}/${String(compareStartDate.day).padStart(2, '0')}`;
+  const compEndShamsiStr = `${compareEndDate.year}/${String(compareEndDate.month).padStart(2, '0')}/${String(compareEndDate.day).padStart(2, '0')}`;
+
+  const renderSalesComparison = () => {
+      const p1Stats = { sales: 0, returns: 0, weight: 0 };
+      const p2Stats = { sales: 0, returns: 0, weight: 0 };
+      
+      data.forEach(row => {
+          const isP1 = isDateInRange(row.Date);
+          const isP2 = isDateInCompareRange(row.Date);
+          
+          const amt = parseFloat(row.TotalSales) || 0;
+          const w = parseFloat(row.Weight) || 0;
+
+          if (isP1) {
+              if (row.IsReturn) p1Stats.returns += amt;
+              else { p1Stats.sales += amt; p1Stats.weight += w; }
+          }
+          if (isP2) {
+              if (row.IsReturn) p2Stats.returns += amt;
+              else { p2Stats.sales += amt; p2Stats.weight += w; }
+          }
+      });
+
+      const net1 = p1Stats.sales - p1Stats.returns;
+      const net2 = p2Stats.sales - p2Stats.returns;
+
+      const diffAmount = net1 - net2;
+      const diffWeight = p1Stats.weight - p2Stats.weight;
+      
+      const pctAmount = net2 === 0 ? 100 : (diffAmount / net2) * 100;
+      const pctWeight = p2Stats.weight === 0 ? 100 : (diffWeight / p2Stats.weight) * 100;
+
+      const printReport = () => {
+          const style = document.createElement('style');
+          style.innerHTML = `@media print { body * { visibility: hidden; } #printable-comparison, #printable-comparison * { visibility: visible; } #printable-comparison { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; } .no-print { display: none !important; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #cbd5e1; padding: 12px; text-align: center; } th { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; } }`;
+          document.head.appendChild(style);
+          window.print();
+          document.head.removeChild(style);
+      };
+
+      return (
+          <div className="space-y-6 animate-scale-up" id="printable-comparison">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print:border-none print:shadow-none print:p-0 gap-4">
+                  <div>
+                      <h2 className="text-xl font-black text-slate-800">گزارش مقایسه‌ای فروش</h2>
+                      <p className="text-sm font-bold text-slate-500 mt-2">مقایسه دو بازه زمانی</p>
+                  </div>
+                  <button onClick={printReport} className="no-print flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
+                      <Printer size={16} /> چاپ گزارش
+                  </button>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-center text-sm">
+                          <thead className="bg-slate-50 border-b text-slate-500 text-xs">
+                              <tr>
+                                  <th className="p-4 border-l">شاخص</th>
+                                  <th className="p-4 border-l">بازه اول<br/><span className="text-[10px] font-mono">{formatDate(startDateStr)} تا {formatDate(endDateStr)}</span></th>
+                                  <th className="p-4 border-l">بازه دوم<br/><span className="text-[10px] font-mono">{formatDate(compStartShamsiStr)} تا {formatDate(compEndShamsiStr)}</span></th>
+                                  <th className="p-4">رشد / افت</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y text-slate-700 font-mono">
+                              <tr className="hover:bg-slate-50/50">
+                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">مبلغ خالص فروش (ریال)</td>
+                                  <td className="p-4 border-l font-black text-indigo-600">{net1.toLocaleString()}</td>
+                                  <td className="p-4 border-l font-black text-slate-600">{net2.toLocaleString()}</td>
+                                  <td className={`p-4 font-bold ${diffAmount > 0 ? 'text-emerald-600' : 'text-rose-500'} flex items-center justify-center gap-1`} dir="ltr">
+                                      {diffAmount > 0 ? '▲' : '▼'} {Math.abs(pctAmount).toFixed(1)}%
+                                  </td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/50">
+                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">وزن خالص فروش (kg)</td>
+                                  <td className="p-4 border-l font-bold text-orange-600">{p1Stats.weight.toLocaleString()}</td>
+                                  <td className="p-4 border-l font-bold text-slate-600">{p2Stats.weight.toLocaleString()}</td>
+                                  <td className={`p-4 font-bold ${diffWeight > 0 ? 'text-emerald-600' : 'text-rose-500'} flex items-center justify-center gap-1`} dir="ltr">
+                                      {diffWeight > 0 ? '▲' : '▼'} {Math.abs(pctWeight).toFixed(1)}%
+                                  </td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/50">
+                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">فروش ناخالص (ریال)</td>
+                                  <td className="p-4 border-l">{p1Stats.sales.toLocaleString()}</td>
+                                  <td className="p-4 border-l">{p2Stats.sales.toLocaleString()}</td>
+                                  <td className="p-4 text-slate-400">-</td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/50">
+                                  <td className="p-4 border-l font-sans font-bold bg-slate-50">مرجوعی (ریال)</td>
+                                  <td className="p-4 border-l text-rose-500">{p1Stats.returns.toLocaleString()}</td>
+                                  <td className="p-4 border-l text-rose-500">{p2Stats.returns.toLocaleString()}</td>
+                                  <td className="p-4 text-slate-400">-</td>
+                              </tr>
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
       );
   };
 
@@ -1440,6 +1697,32 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           </button>
  
           <button
+            onClick={() => { setActiveReport('SALES_BY_GROUP'); setSelectedCustomer(null); setShowSidebar(false); }}
+            className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
+              activeReport === 'SALES_BY_GROUP' ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-indigo-200'
+            }`}
+          >
+            <BarChart2 size={18} className={activeReport === 'SALES_BY_GROUP' ? 'text-indigo-100' : 'text-indigo-500'} />
+            <div>
+              <div className="font-bold text-sm">فروش به تفکیک گروه</div>
+              <div className={`text-[10px] mt-1 ${activeReport === 'SALES_BY_GROUP' ? 'text-indigo-200' : 'text-slate-400'}`}>گزارش وزنی و مبلغی کالاها</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { setActiveReport('SALES_COMPARISON'); setSelectedCustomer(null); setShowSidebar(false); }}
+            className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
+              activeReport === 'SALES_COMPARISON' ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-indigo-200'
+            }`}
+          >
+            <Activity size={18} className={activeReport === 'SALES_COMPARISON' ? 'text-indigo-100' : 'text-indigo-500'} />
+            <div>
+              <div className="font-bold text-sm">مقایسه فروش دوره‌ای</div>
+              <div className={`text-[10px] mt-1 ${activeReport === 'SALES_COMPARISON' ? 'text-indigo-200' : 'text-slate-400'}`}>مقایسه دو بازه زمانی</div>
+            </div>
+          </button>
+
+          <button
             onClick={() => { setActiveReport('CUSTOMER_STATEMENT'); setSelectedCustomer(null); setShowSidebar(false); }}
             className={`w-full text-right p-4 rounded-xl transition-all flex items-center gap-3 ${
               activeReport === 'CUSTOMER_STATEMENT' ? 'bg-rose-500 text-white shadow-md shadow-rose-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-rose-200'
@@ -1481,6 +1764,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               </button>
               <h1 className="font-black text-base sm:text-lg text-slate-800 min-w-max">
                 {activeReport === 'SALES' && 'داشبورد فروش'}
+                {activeReport === 'SALES_BY_GROUP' && 'فروش به تفکیک گروه'}
+                {activeReport === 'SALES_COMPARISON' && 'مقایسه فروش دوره‌ای'}
                 {activeReport === 'CUSTOMER_STATEMENT' && 'صورتحساب مشتریان'}
                 {activeReport === 'DEBTORS_CREDITORS' && 'بدهکاران و بستانکاران'}
               </h1>
@@ -1490,8 +1775,16 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
  
             {/* Date Filter */}
             <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                <ShamsiDatePicker date={startDate} onChange={setStartDate} label="از" />
-                <ShamsiDatePicker date={endDate} onChange={setEndDate} label="تا" />
+                <ShamsiDatePicker date={startDate} onChange={setStartDate} label={activeReport === 'SALES_COMPARISON' ? "از (بازه اول)" : "از"} />
+                <ShamsiDatePicker date={endDate} onChange={setEndDate} label={activeReport === 'SALES_COMPARISON' ? "تا (بازه اول)" : "تا"} />
+                
+                {activeReport === 'SALES_COMPARISON' && (
+                  <>
+                    <div className="hidden sm:block h-6 w-px bg-slate-200 mx-2"></div>
+                    <ShamsiDatePicker date={compareStartDate} onChange={setCompareStartDate} label="از (بازه دوم)" />
+                    <ShamsiDatePicker date={compareEndDate} onChange={setCompareEndDate} label="تا (بازه دوم)" />
+                  </>
+                )}
             </div>
  
             {loading && <Loader2 size={16} className="animate-spin text-indigo-500" />}
@@ -1522,6 +1815,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           {!loading && !error && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 {activeReport === 'SALES' && renderSalesDashboard()}
+                {activeReport === 'SALES_BY_GROUP' && renderSalesByGroup()}
+                {activeReport === 'SALES_COMPARISON' && renderSalesComparison()}
                 {activeReport === 'CUSTOMER_STATEMENT' && renderCustomerStatement()}
                 {activeReport === 'DEBTORS_CREDITORS' && renderDebtorsCreditors()}
             </motion.div>
