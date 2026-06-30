@@ -221,7 +221,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Find all available types in the DB
         const typesSet = new Set<string>();
         finalData.forEach((row: any) => {
-            const typeId = String(row.Field_005 || row.Field_009 || '').trim();
+            const typeId = String(row.Field_004 || '').trim();
             if (typeId && typeId !== 'undefined' && typeId !== 'null') {
                 const typeName = docTypes[typeId] || `نوع ${typeId}`;
                 typesSet.add(typeName);
@@ -241,17 +241,16 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
             // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
             const amount = parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0);
-            const typeId = String(row.Field_005 || row.Field_009 || '').trim();
+            const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             
             // Swap logic requested by user: Fix Return vs Sales detection
             // In Sayan, usually Sales (فروش) and Return (مرجوعی) are mapped differently. 
-            // If prefix starts with 13 or name explicitly says return, mark as return.
+            // The user stated that sales are showing as returns and vice versa, so we invert the check.
             let isReturn = prefixCode.startsWith('13') || typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی');
-            if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
-                isReturn = false; // Force non-return for explicit sales
-            }
+            isReturn = !isReturn; // Inverting to fix the display issue as requested by the user
+
 
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
