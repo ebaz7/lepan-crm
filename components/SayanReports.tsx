@@ -465,147 +465,154 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         
         setData(processed.reverse());
       } 
-      else if (reportType === 'CUSTOMER_STATEMENT') {
-        if (!selectedCustomer) {
-            // Fetch Tafsili (Detailed Accounts) to map IDs to Names and pre-populate list
-            let tafsiliMap: Record<string, string> = {};
-            const grouped: Record<string, any> = {};
-            
-            try {
-                const tafsili = await attemptQuery("SELECT Field_003, Field_004, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
-                tafsili.forEach((t: any) => {
-                    const code = String(t.Field_003).trim();
-                    const name = String(t.Field_006).trim();
-                    const parent = String(t.Field_004).trim();
-                    
-                    if (code && name) {
-                        tafsiliMap[code] = name;
-                        // Pre-populate grouped with people (usually group 11 or 111)
-                        if (parent === '11' || parent === '111') {
-                            grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
-                        }
-                    }
+      else if (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS') {
+          
+        // 1. Fetch exactly the same Accounts (Tafsili) mapping used in Invoices
+        const accountsData = await attemptQuery("SELECT Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007').catch(() => []);
+        const accountMap: Record<string, string> = {};
+        accountsData.forEach((a: any) => {
+            const name = String(a.Field_006 || '').trim();
+            if (name) {
+                if (a.Field_003) accountMap[String(a.Field_003).trim()] = name;
+                if (a.Field_005) accountMap[String(a.Field_005).trim()] = name;
+            }
+        });
+
+        // 2. Fetch exactly the same Account IDs used in Invoices (these are the proven customers)
+        const invoices = await attemptQuery("SELECT Field_010, Field_011 FROM STR_TBL_010", 'STR_TBL_010').catch(() => []);
+        const customerCodesSet = new Set<string>();
+        invoices.forEach((r: any) => {
+           if (r.Field_010) customerCodesSet.add(String(r.Field_010).trim());
+           if (r.Field_011) customerCodesSet.add(String(r.Field_011).trim());
+        });
+
+        if (reportType === 'CUSTOMER_STATEMENT') {
+            if (!selectedCustomer) {
+                // Fetch transaction details to update balances
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+                
+                const grouped: Record<string, any> = {};
+                
+                // First ensure all known customers are in the list (so they can be selected even if no recent transactions)
+                customerCodesSet.forEach(code => {
+                    const name = accountMap[code] || `شخص ${code}`;
+                    grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
                 });
-            } catch(e) { console.error("Tafsili fetch failed", e); }
 
-            // Fetch transaction details to update balances
-            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
-            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-            
-            finalData.forEach((row: any) => {
-                const date = row.Date || row.Field_013;
-                if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
-                
-                // Extract Tafsili codes from Field_014 (e.g. "11:112237-12:1211001")
-                const codesStr = String(row.Codes || row.Field_014 || '');
-                const detailsStr = String(row.Details || row.Field_018 || '');
-                
-                let customerCode = '';
-                let customerName = '';
-
-                // Try to find an "اشخاص" (Persons) code, typically starting with 11
-                if (detailsStr.includes('اشخاص:')) {
-                    const match = detailsStr.match(/اشخاص:\s*(\d+)/);
-                    if (match) customerCode = match[1];
-                }
-                if (!customerCode) {
-                    const parts = codesStr.split('-');
+                finalData.forEach((row: any) => {
+                    const date = row.Date || row.Field_013;
+                    if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
+                    
+                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    
+                    let customerCode = null;
+                    const parts = codesStr.split(/[:\-]/);
                     for (const p of parts) {
-                        const [group, code] = p.split(':');
-                        if (group === '11' && code) {
-                            customerCode = code;
+                        if (customerCodesSet.has(p)) {
+                            customerCode = p;
                             break;
                         }
                     }
-                }
-                
-                if (customerCode && tafsiliMap[customerCode]) {
-                    customerName = tafsiliMap[customerCode];
-                } else if (customerCode) {
-                    customerName = `شخص ${customerCode}`;
-                } else {
-                    return; // skip non-person transactions
-                }
+                    
+                    if (!customerCode) return; // Not a customer transaction
+                    
+                    const customerName = accountMap[customerCode] || `شخص ${customerCode}`;
+                    
+                    if (!grouped[customerName]) {
+                        grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
+                    }
+                    
+                    const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                    const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                    grouped[customerName].Debit += v1;
+                    grouped[customerName].Credit += v2;
+                });
+                setCustomers(Object.values(grouped));
+                setData([]);
+            } else {
+                // Customer is selected
+                const custObj = customers.find(c => c.AccountName === selectedCustomer);
+                const targetCode = custObj ? custObj.Code : null;
 
-                if (!grouped[customerName]) grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
-                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
-                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
-                grouped[customerName].Debit += v1;
-                grouped[customerName].Credit += v2;
-            });
-            setCustomers(Object.values(grouped));
-            setData([]);
-        } else {
-            // Customer is selected
-            const custObj = customers.find(c => c.AccountName === selectedCustomer);
-            const targetCode = custObj ? custObj.Code : null;
+                const processed = finalData.map((row: any) => {
+                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    
+                    let matches = false;
+                    if (targetCode) {
+                        const parts = codesStr.split(/[:\-]/);
+                        if (parts.includes(targetCode)) matches = true;
+                    } else {
+                        const desc = String(row.Description || row.Field_010 || '');
+                        if (desc.includes(selectedCustomer)) matches = true;
+                    }
 
-            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                    if (!matches) return null;
+
+                    const d = parseFloat(row.Debit || row.Field_008 || 0);
+                    const c = parseFloat(row.Credit || row.Field_009 || 0);
+                    
+                    return {
+                        Date: row.Date || row.Field_013,
+                        Description: row.Description || row.Field_010,
+                        Debit: d,
+                        Credit: c,
+                        Balance: d - c
+                    };
+                }).filter(Boolean).filter((r: any) => isDateInRange(r.Date));
+                
+                // Calculate running balance
+                let run = 0;
+                const finalCust = processed.reverse().map((r: any) => {
+                    run += r.Balance;
+                    return { ...r, Balance: run };
+                });
+                setCustomerDetails(finalCust.reverse());
+            }
+        } 
+        else if (reportType === 'DEBTORS_CREDITORS') {
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
-            const processed = finalData.map((row: any) => {
+            const grouped: Record<string, any> = {};
+            finalData.forEach((row: any) => {
+                const date = row.Date || row.Field_013;
+                if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
+
                 const codesStr = String(row.Codes || row.Field_014 || '');
-                const detailsStr = String(row.Details || row.Field_018 || '');
-                
-                let matches = false;
-                if (targetCode) {
-                    if (codesStr.includes(`:${targetCode}`) || detailsStr.includes(targetCode)) matches = true;
-                } else {
-                    const desc = String(row.Description || row.Field_010 || '');
-                    if (desc.includes(selectedCustomer)) matches = true;
+                let customerCode = null;
+                const parts = codesStr.split(/[:\-]/);
+                for (const p of parts) {
+                    if (customerCodesSet.has(p)) {
+                        customerCode = p;
+                        break;
+                    }
                 }
+                if (!customerCode) return;
 
-                if (!matches) return null;
-
-                const d = parseFloat(row.Debit || row.Field_008 || 0);
-                const c = parseFloat(row.Credit || row.Field_009 || 0);
+                const name = accountMap[customerCode] || `شخص ${customerCode}`;
                 
-                return {
-                    Date: row.Date || row.Field_013,
-                    Description: row.Description || row.Field_010,
-                    Debit: d,
-                    Credit: c,
-                    Balance: d - c
-                };
-            }).filter(Boolean).filter((r: any) => isDateInRange(r.Date));
-            
-            // Calculate running balance
-            let run = 0;
-            const finalCust = processed.reverse().map((r: any) => {
-                run += r.Balance;
-                return { ...r, Balance: run };
+                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                grouped[name].Debit += v1;
+                grouped[name].Credit += v2;
             });
-            setCustomerDetails(finalCust.reverse());
+            
+            const processed = Object.values(grouped).map((row: any) => {
+                const net = row.Debit - row.Credit;
+                return {
+                    ...row,
+                    NetBalance: Math.abs(net),
+                    Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
+                };
+            }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
+            
+            setData(processed);
         }
-      } 
-      else if (reportType === 'DEBTORS_CREDITORS') {
-        sqlQuery = `SELECT TOP 5000 * FROM ACT_TBL_003 ORDER BY Field_008 DESC`;
-        const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_003');
-        
-        const grouped: Record<string, any> = {};
-        finalData.forEach((row: any) => {
-            if (row.Field_008 && !isDateInRange(row.Field_008) && row.Field_008 > endShamsiStr1 && row.Field_008 > endIso) return;
-
-            const name = row.Field_006 || row.Field_005 || row.AccountName;
-            if (!name) return;
-            if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-            const v1 = parseFloat(row.Field_009 || 0) || parseFloat(row.Debit || 0) || 0;
-            const v2 = parseFloat(row.Field_010 || 0) || parseFloat(row.Credit || 0) || 0;
-            grouped[name].Debit += v1;
-            grouped[name].Credit += v2;
-        });
-        
-        const processed = Object.values(grouped).map((row: any) => {
-            const net = row.Debit - row.Credit;
-            return {
-                ...row,
-                NetBalance: Math.abs(net),
-                Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
-            };
-        }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
-        
-        setData(processed);
       }
     } catch (err: any) {
       setError(err.message || 'خطا در ارتباط با سرور سایان');
@@ -1571,15 +1578,82 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const renderCustomerStatement = () => {
       if (selectedCustomer) {
           let runningBalance = 0;
+          let printRunningBalance = 0;
+          
+          const printStatement = () => {
+              let html = `
+              <html>
+              <head>
+                  <title>صورتحساب مشتری - ${selectedCustomer}</title>
+                  <style>
+                      body { font-family: Tahoma, Arial; direction: rtl; padding: 20px; }
+                      h2 { text-align: center; }
+                      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                      th, td { border: 1px solid #000; padding: 8px; text-align: right; }
+                      th { background-color: #f2f2f2; }
+                  </style>
+              </head>
+              <body>
+                  <h2>صورتحساب مشتری: ${selectedCustomer}</h2>
+                  <table>
+                      <thead>
+                          <tr>
+                              <th>ردیف</th>
+                              <th>تاریخ</th>
+                              <th>شرح</th>
+                              <th>بدهکار</th>
+                              <th>بستانکار</th>
+                              <th>مانده</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${customerDetails.map((row, idx) => {
+                              const deb = parseFloat(row.Debit) || 0;
+                              const cred = parseFloat(row.Credit) || 0;
+                              printRunningBalance += (deb - cred);
+                              return `
+                              <tr>
+                                  <td>${idx + 1}</td>
+                                  <td dir="ltr" style="text-align: left;">${formatDate((row.Date || '').substring(0, 10))}</td>
+                                  <td>${row.Description || '-'}</td>
+                                  <td dir="ltr" style="text-align: left;">${deb > 0 ? deb.toLocaleString() : '-'}</td>
+                                  <td dir="ltr" style="text-align: left;">${cred > 0 ? cred.toLocaleString() : '-'}</td>
+                                  <td dir="ltr" style="text-align: left; font-weight: bold;">${printRunningBalance.toLocaleString()} ${printRunningBalance > 0 ? '(بد)' : printRunningBalance < 0 ? '(بس)' : ''}</td>
+                              </tr>
+                              `;
+                          }).join('')}
+                      </tbody>
+                  </table>
+              </body>
+              </html>
+              `;
+              
+              const printWindow = window.open('', '_blank');
+              if (printWindow) {
+                  printWindow.document.write(html);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => {
+                      printWindow.print();
+                      printWindow.close();
+                  }, 250);
+              }
+          };
+
           return (
               <div className="space-y-4">
-                  <div className="flex items-center gap-4 mb-6">
-                      <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
-                          <ArrowRight size={16} />
+                  <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                          <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
+                              <ArrowRight size={16} />
+                          </button>
+                          <h2 className="text-xl font-black text-slate-800">
+                              ریز تراکنش‌های مشتری: <span className="text-indigo-600">{selectedCustomer}</span>
+                          </h2>
+                      </div>
+                      <button onClick={printStatement} className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-100 transition-colors">
+                          <Printer size={16} /> چاپ صورتحساب
                       </button>
-                      <h2 className="text-xl font-black text-slate-800">
-                          ریز تراکنش‌های مشتری: <span className="text-indigo-600">{selectedCustomer}</span>
-                      </h2>
                   </div>
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
@@ -1657,11 +1731,80 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   };
 
   const renderDebtorsCreditors = () => {
-      const totalDebtors = data.filter(d => d.Type === 'بدهکار').reduce((sum, d) => sum + d.NetBalance, 0);
-      const totalCreditors = data.filter(d => d.Type === 'بستانکار').reduce((sum, d) => sum + d.NetBalance, 0);
+      const debtors = data.filter(d => d.Type === 'بدهکار');
+      const creditors = data.filter(d => d.Type === 'بستانکار');
+      
+      const totalDebtors = debtors.reduce((sum, d) => sum + d.NetBalance, 0);
+      const totalCreditors = creditors.reduce((sum, d) => sum + d.NetBalance, 0);
+
+      const printList = (listType: 'بدهکار' | 'بستانکار') => {
+          const list = listType === 'بدهکار' ? debtors : creditors;
+          const total = listType === 'بدهکار' ? totalDebtors : totalCreditors;
+          
+          let html = `
+          <html>
+          <head>
+              <title>لیست ${listType}ان</title>
+              <style>
+                  body { font-family: Tahoma, Arial; direction: rtl; padding: 20px; }
+                  h2 { text-align: center; }
+                  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                  th, td { border: 1px solid #000; padding: 8px; text-align: right; }
+                  th { background-color: #f2f2f2; }
+                  .total { font-weight: bold; background-color: #e6e6e6; }
+              </style>
+          </head>
+          <body>
+              <h2>لیست ${listType}ان</h2>
+              <table>
+                  <thead>
+                      <tr>
+                          <th>ردیف</th>
+                          <th>نام مشتری / حساب</th>
+                          <th>مبلغ مانده (ریال)</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${list.map((row, idx) => `
+                      <tr>
+                          <td>${idx + 1}</td>
+                          <td>${row.AccountName}</td>
+                          <td dir="ltr" style="text-align: left;">${row.NetBalance.toLocaleString()}</td>
+                      </tr>
+                      `).join('')}
+                      <tr class="total">
+                          <td colspan="2" style="text-align: left;">جمع کل:</td>
+                          <td dir="ltr" style="text-align: left;">${total.toLocaleString()}</td>
+                      </tr>
+                  </tbody>
+              </table>
+          </body>
+          </html>
+          `;
+          
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+              printWindow.document.write(html);
+              printWindow.document.close();
+              printWindow.focus();
+              // Small timeout to allow styles to load
+              setTimeout(() => {
+                  printWindow.print();
+                  printWindow.close();
+              }, 250);
+          }
+      };
 
       return (
           <div className="space-y-6">
+              <div className="flex justify-end gap-3 mb-4">
+                  <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
+                      <Printer size={16} /> چاپ بدهکاران
+                  </button>
+                  <button onClick={() => printList('بستانکار')} className="bg-rose-50 text-rose-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-rose-100 transition-colors">
+                      <Printer size={16} /> چاپ بستانکاران
+                  </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                       <div>
