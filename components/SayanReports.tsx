@@ -331,13 +331,21 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
+            const invoiceItemsRaw = (detailsList || []).filter((d: any) => String(d.Field_004).trim() === String(row.Field_001).trim());
+            
             // Check transaction type (Field_003: 1=Receipt, 2=Issue)
-            // Sales are Issues (حواله). Returns are Receipts (رسید).
+            // Sales are Issues (حواله) which is 2. Returns are Receipts (رسید) which is 1.
             let isReturn = false;
+            
             if (typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی')) {
                  isReturn = true;
+            } else if (prefixCode.startsWith('1')) {
+                 isReturn = true;
+            } else if (prefixCode.startsWith('2')) {
+                 isReturn = false;
+            } else {
+                 isReturn = false; // Default to sales
             }
-
 
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
@@ -349,16 +357,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
             // Match invoice details (rows) using Field_004 as the parent document link field
             const docId = String(row.Field_001).trim();
-            let matchedDetails = detailsList.filter((det: any) => String(det.Field_004).trim() === docId || String(det.Field_003).trim() === docId);
+            let matchedDetails = invoiceItemsRaw;
             
-            // Offline/Mock Fallback
-            if (matchedDetails.length === 0 && detailsList.length > 0) {
-                const rowIndex = finalData.indexOf(row);
-                if (rowIndex >= 0) {
-                    const itemsPerDoc = Math.ceil(detailsList.length / finalData.length);
-                    const startIdx = rowIndex * itemsPerDoc;
-                    matchedDetails = detailsList.slice(startIdx, startIdx + itemsPerDoc);
-                }
+            if (matchedDetails.length === 0) {
+                return null;
             }
             const invoiceItems = matchedDetails.map((det: any) => {
                 let code = '';

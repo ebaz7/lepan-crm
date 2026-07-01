@@ -517,8 +517,12 @@ app.post('/api/sayan-proxy', async (req, res) => {
     // واکشی مستقیم اطلاعات آدرس و توکن سایان از دیتابیس لوکال سرور بدون اتکا به پی‌لود کلاینت
     const db = getDb();
     const settings = db.settings || {};
-    const serverSayanBaseUrl = settings.sayanApiUrl || 'http://192.168.41.225:3000/api/external/v1';
-    const serverSayanApiKey = settings.sayanApiKey || 's_gate_live_urp2vvxzpik4';
+    const serverSayanBaseUrl = settings.sayanApiUrl;
+    const serverSayanApiKey = settings.sayanApiKey;
+    
+    if (!serverSayanBaseUrl || !serverSayanApiKey) {
+        return res.status(400).json({ error: 'تنظیمات اتصال به سرور سایان (آدرس و رمز API) یافت نشد. لطفاً در بخش تنظیمات وارد کنید.' });
+    }
 
     let finalUrl = '';
     if (path) {
