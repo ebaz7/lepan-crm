@@ -187,29 +187,76 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011", 'STR_TBL_011');
         } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
 
-        // Fetch product names list (IND_TBL_022)
+        
+        // --- SMART PRODUCT MAP BUILDER ---
         const pMap: Record<string, string> = {};
-        try {
-            const productsList = await attemptQuery("SELECT Field_003, Field_005, Field_004 FROM IND_TBL_022", 'IND_TBL_022');
-            productsList.forEach((p: any) => {
-                const name = String(p.Field_004 || '').trim();
-                if (name) {
-                    if (p.Field_003) pMap[String(p.Field_003).trim()] = name;
-                    if (p.Field_005) pMap[String(p.Field_005).trim()] = name;
-                }
-            });
-            setProductMap(pMap);
-        } catch(e) { console.error("IND_TBL_022 products fetch failed", e); }
+        const fetchProductTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
+            try {
+                const cols = [...new Set([...codeCols, ...nameCols])];
+                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
+                list.forEach((p: any) => {
+                    let name = '';
+                    for (const col of nameCols) {
+                        if (p[col] && String(p[col]).trim().length > 1) {
+                            name = String(p[col]).trim();
+                            break;
+                        }
+                    }
+                    if (!name) return;
+                    for (const col of codeCols) {
+                        if (p[col] && String(p[col]).trim()) {
+                            pMap[String(p[col]).trim()] = name;
+                        }
+                    }
+                });
+            } catch(e) { /* ignore silently */ }
+        };
 
-        // Fetch product groups (GNR_TBL_007)
+        
+        // Try standard Sayan product tables
+        await fetchProductTable('IND_TBL_022', ['Field_001', 'Field_003', 'Field_005'], ['Field_004', 'Field_006']);
+        await fetchProductTable('COM_TBL_008', ['Field_001', 'Field_003'], ['Field_004', 'Field_003']);
+        await fetchProductTable('STR_TBL_008', ['Field_001', 'Field_003', 'Field_004'], ['Field_006', 'Field_004']);
+        await fetchProductTable('GNR_TBL_019', ['Field_001', 'Field_003', 'Field_004'], ['Field_005', 'Field_006']);
+        await fetchProductTable('GNR_TBL_003', ['Field_001', 'Field_003', 'Field_004'], ['Field_006', 'Field_007']);
+        await fetchProductTable('GNR_TBL_015', ['Field_001', 'Field_003'], ['Field_004']);
+        await fetchProductTable('IND_TBL_002', ['Field_001', 'Field_003', 'Field_004', 'Field_005'], ['Field_006', 'Field_007', 'Field_008', 'Field_004']);
+
+
+        setProductMap(pMap);
+
+        // --- SMART GROUP MAP BUILDER ---
         const gMap: Record<string, string> = {};
-        try {
-            const groupsList = await attemptQuery("SELECT Field_003, Field_006 FROM GNR_TBL_007", 'GNR_TBL_007');
-            groupsList.forEach((g: any) => {
-                if (g.Field_003 && g.Field_006) gMap[String(g.Field_003).trim()] = String(g.Field_006).trim();
-            });
-            setGroupMap(gMap);
-        } catch(e) { console.error("GNR_TBL_007 groups fetch failed", e); }
+        const fetchGroupTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
+            try {
+                const cols = [...new Set([...codeCols, ...nameCols])];
+                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
+                list.forEach((g: any) => {
+                    let name = '';
+                    for (const col of nameCols) {
+                        if (g[col] && String(g[col]).trim().length > 1) {
+                            name = String(g[col]).trim();
+                            break;
+                        }
+                    }
+                    if (!name) return;
+                    for (const col of codeCols) {
+                        if (g[col] && String(g[col]).trim()) {
+                            gMap[String(g[col]).trim()] = name;
+                        }
+                    }
+                });
+            } catch(e) { /* ignore */ }
+        };
+
+        await fetchGroupTable('GNR_TBL_007', ['Field_001', 'Field_003'], ['Field_006', 'Field_004']);
+        await fetchGroupTable('IND_TBL_021', ['Field_001', 'Field_003'], ['Field_004']);
+        await fetchGroupTable('IND_TBL_002', ['Field_001', 'Field_003'], ['Field_004', 'Field_006']);
+        await fetchGroupTable('GNR_TBL_002', ['Field_001', 'Field_003'], ['Field_004']);
+        await fetchGroupTable('STR_TBL_001', ['Field_001', 'Field_003'], ['Field_004', 'Field_006']);
+
+        setGroupMap(gMap);
+
 
         // Fetch IND_TBL_002 (Product Groups Hierarchy Names)
         let productGroupNames: Record<string, string> = {};
@@ -312,13 +359,21 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     matchedDetails = detailsList.slice(startIdx, startIdx + itemsPerDoc);
                 }
             }
-
             const invoiceItems = matchedDetails.map((det: any) => {
-                const code = String(det.Field_005 || '').trim();
+                let code = String(det.Field_004 || '').trim();
                 let rawItemName = pMap[code];
+                
+                if (!rawItemName) {
+                    const fallbackCode = String(det.Field_005 || '').trim();
+                    if (fallbackCode && pMap[fallbackCode]) {
+                        code = fallbackCode;
+                        rawItemName = pMap[fallbackCode];
+                    }
+                }
                 
                 // Smart fallback for product name based on prefix
                 if (!rawItemName && code) {
+
                     const prefix = code.substring(0, 4);
                     const suffix = code.substring(4);
                     let baseName = '';
@@ -379,14 +434,18 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 // Exactly matches requested format: [گروه اصلی] - [گروه زیرمجموعه] - [اسم خود کالا]
                 const formattedFullName = `${subGroup} - ${rawItemName}`; // Only showing Sub Group and Name since Main Group is displayed in a grouped column
 
-                const w = Math.abs(parseFloat(det.Field_006) || 0);
-                const qty = Math.abs(parseFloat(det.Field_012) || 0);
+                let qty1 = Math.abs(parseFloat(det.Field_006) || 0);
+                let qty2 = Math.abs(parseFloat(det.Field_012) || 0);
+                let isYarn = det.Field_031 && (det.Field_031.includes('وزن') || det.Field_031.includes('بوبین'));
+                
+                let w = isYarn ? qty1 : qty2;
+                let qty = isYarn ? (qty2 > 0 ? qty2 : 1) : qty1;
 
                 // Parse Field_031 for metadata like gross weight, cartons, bobbins, grade, etc.
                 let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
                 let grossWeight = 0;
                 let bobbinCount = 0;
-                let cartonCount = qty;
+                let cartonCount = isYarn ? qty : 0;
                 let grade = '';
                 let twist = '';
                 
@@ -401,13 +460,36 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     });
                 }
 
-                let fee = Math.abs(parseFloat(det.Field_037 || det.Field_038 || det.Field_023 || 0)); 
-                let totalPrice = Math.abs(parseFloat(det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0));
+                let fee = Math.abs(parseFloat(det.Field_015 || det.Field_013 || det.Field_025 || det.Field_037 || det.Field_023 || 0)); 
+                let totalPrice = Math.abs(parseFloat(det.Field_016 || det.Field_014 || det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0));
                 
-                if (totalPrice && w) fee = totalPrice / w;
-                else if (totalPrice && qty) fee = totalPrice / qty;
-                else if (fee && !totalPrice && w) totalPrice = fee * w;
-                else if (fee && !totalPrice && qty) totalPrice = fee * qty;
+                if (fee === 0 || totalPrice <= 12) {
+                    const allVals = [
+                        det.Field_013, det.Field_014, det.Field_015, det.Field_016,
+                        det.Field_023, det.Field_024, det.Field_025, det.Field_026, det.Field_027,
+                        det.Field_035, det.Field_036, det.Field_037, det.Field_038
+                    ].map(v => Math.abs(parseFloat(v)) || 0).filter(v => v > 0);
+                    
+                    if (allVals.length >= 2) {
+                        allVals.sort((a,b) => b - a);
+                        totalPrice = allVals[0];
+                        fee = allVals[1];
+                        for (let t of allVals) {
+                            for (let f of allVals) {
+                                if (t !== f && Math.abs(f * qty1 - t) < 10) { fee = f; totalPrice = t; }
+                                else if (t !== f && Math.abs(f * qty2 - t) < 10) { fee = f; totalPrice = t; }
+                            }
+                        }
+                    } else if (allVals.length === 1) {
+                        totalPrice = allVals[0];
+                    }
+                }
+
+                if (totalPrice > 0 && (fee === 0 || fee === 1 || fee === totalPrice)) {
+                    fee = totalPrice / (qty1 > 0 ? qty1 : 1);
+                } else if (fee > 0 && (totalPrice === 0 || totalPrice === 1 || totalPrice === fee)) {
+                    totalPrice = fee * (qty1 > 0 ? qty1 : 1);
+                }
 
                 return {
                     code,
@@ -439,6 +521,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
 
             let finalAmount = amount;
+            if (finalAmount === 0 || isNaN(finalAmount)) {
+                finalAmount = invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0);
+            }
             let finalWeight = weight;
 
             return {
