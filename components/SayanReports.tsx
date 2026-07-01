@@ -334,9 +334,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             // Check transaction type (Field_003: 1=Receipt, 2=Issue)
             // Sales are Issues (حواله). Returns are Receipts (رسید).
             let isReturn = false;
-            if (row.Field_003 == 1 && (typeName.includes('فروش') || typeName.includes('برگشت') || typeName.includes('مرجوع'))) {
-                 isReturn = true;
-            } else if (typeName.includes('برگشت') || typeName.includes('مرجوع')) {
+            if (typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی')) {
                  isReturn = true;
             }
 
@@ -379,26 +377,23 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 // Smart fallback for product name based on prefix
 
                 if (!rawItemName && code) {
-
-                    const prefix = code.substring(0, 4);
-                    const suffix = code.substring(4);
-                    let baseName = '';
-                    switch (prefix) {
-                        case '0101': baseName = 'نخ POY'; break;
-                        case '0102': baseName = 'نخ FDY'; break;
-                        case '0103': baseName = 'نخ DTY'; break;
-                        case '0401': baseName = 'نخ اسپندکس'; break;
-                        case '0402': baseName = 'ملزومات تولید و کارتن'; break;
-                        case '1000': baseName = 'نایلون و بسته‌بندی'; break;
-                        default: baseName = 'کالای عمومی';
+                    // Start by looking up the productCodeToGroupCode link
+                    const linkedGroupCode = productCodeToGroupCode[code];
+                    if (linkedGroupCode) {
+                         // Find the deepest available group name
+                         let bestName = '';
+                         for (let len = linkedGroupCode.length; len >= 2; len -= 2) {
+                             const partialCode = linkedGroupCode.substring(0, len);
+                             if (productGroupNames[partialCode]) {
+                                 bestName = productGroupNames[partialCode];
+                                 break;
+                             }
+                         }
+                         if (bestName) rawItemName = bestName;
                     }
-                    if (baseName !== 'کالای عمومی' && suffix) {
-                        rawItemName = `${baseName} (کد فرعی: ${suffix})`;
-                    } else {
-                        rawItemName = baseName || code || 'کالای عمومی';
-                    }
+                    if (!rawItemName) rawItemName = `کالا ${code}`;
                 } else if (!rawItemName) {
-                    rawItemName = 'کالای عمومی';
+                    rawItemName = 'کالای نامشخص';
                 }
 
                 // Determine Main Group and Sub-Group names directly from Sayan's Database Tables (IND_TBL_002 and IND_TBL_021)
@@ -415,12 +410,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         }
                     }
                     
-                    // Sub Group (گروه فرعی) is the deepest level available
+                    // Sub Group (گروه فرعی) is the deepest level available before the product itself
                     let bestSubGroup = '';
                     const codeLen = linkedGroupCode.length;
                     for (let len = 4; len <= codeLen; len += 2) {
                         const partialCode = linkedGroupCode.substring(0, len);
-                        if (productGroupNames[partialCode]) {
+                        if (productGroupNames[partialCode] && productGroupNames[partialCode] !== rawItemName) {
                             bestSubGroup = productGroupNames[partialCode];
                         }
                     }
@@ -437,16 +432,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     mainGroup = storeName;
                 }
 
-                // Exactly matches requested format: [گروه اصلی] - [گروه زیرمجموعه] - [اسم خود کالا]
-                const formattedFullName = `${subGroup} - ${rawItemName}`; // Only showing Sub Group and Name since Main Group is displayed in a grouped column
+                const formattedFullName = subGroup !== 'سایر گروه‌ها' ? `${subGroup} - ${rawItemName}` : rawItemName;
                 let qty1 = Math.abs(parseFloat(det.Field_006) || 0);
                 let qty2 = Math.abs(parseFloat(det.Field_012 || det.Field_008 || det.Field_010) || 0);
                 
-                // Usually weight is larger than carton count
-                let w = Math.max(qty1, qty2);
-                let qty = Math.min(qty1, qty2);
+                // Field_006 is consistently the primary quantity (Weight) in Sayan STR_TBL_011
+                // Field_012/008 is the secondary quantity (Count/Cartons)
+                let w = qty1;
+                let qty = qty2;
                 
-                // If one of them is 0, weight gets the non-zero one.
+                // If one of them is 0, weight gets the non-zero one if it makes sense.
+                if (w === 0 && qty > 0) {
+                     w = qty;
+                     qty = 1;
+                }
                 if (qty === 0) qty = 1;
 
 
@@ -563,13 +562,41 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       else if (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS') {
           
         // 1. Fetch exactly the same Accounts (Tafsili) mapping used in Invoices
-        const accountsData = await attemptQuery("SELECT Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007').catch(() => []);
+        // First find the group IDs for Persons / Current Liabilities
+        const moeinGroups = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM ACT_TBL_004", 'ACT_TBL_004').catch(() => []);
+        const validPersonGroupIds = new Set<string>();
+        moeinGroups.forEach((g: any) => {
+             const gName = String(g.Field_004 || g.Field_003 || '').trim();
+             if (gName.includes('اشخاص') || gName.includes('بدهی') || gName.includes('مشتری') || gName.includes('حسابهای دریافتنی')) {
+                  if (g.Field_001) validPersonGroupIds.add(String(g.Field_001).trim());
+                  if (g.Field_003) validPersonGroupIds.add(String(g.Field_003).trim());
+             }
+        });
+        // Default fallbacks if none found
+        if (validPersonGroupIds.size === 0) {
+             validPersonGroupIds.add('11');
+        }
+
+        const accountsData = await attemptQuery("SELECT Field_003, Field_004, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007').catch(() => []);
         const accountMap: Record<string, string> = {};
+        const personAccountsSet = new Set<string>();
+        
         accountsData.forEach((a: any) => {
             const name = String(a.Field_006 || '').trim();
+            const moeinGroup = String(a.Field_004 || '').trim();
             if (name) {
-                if (a.Field_003) accountMap[String(a.Field_003).trim()] = name;
-                if (a.Field_005) accountMap[String(a.Field_005).trim()] = name;
+                if (a.Field_003) {
+                    accountMap[String(a.Field_003).trim()] = name;
+                    if (validPersonGroupIds.has(moeinGroup)) {
+                         personAccountsSet.add(String(a.Field_003).trim());
+                    }
+                }
+                if (a.Field_005) {
+                    accountMap[String(a.Field_005).trim()] = name;
+                    if (validPersonGroupIds.has(moeinGroup)) {
+                         personAccountsSet.add(String(a.Field_005).trim());
+                    }
+                }
             }
         });
 
@@ -580,6 +607,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
            if (r.Field_010) customerCodesSet.add(String(r.Field_010).trim());
            if (r.Field_011) customerCodesSet.add(String(r.Field_011).trim());
         });
+        
+        // ADD all Persons from the accounting groups to the customer set
+        personAccountsSet.forEach(code => customerCodesSet.add(code));
 
         if (reportType === 'CUSTOMER_STATEMENT') {
             if (!selectedCustomer) {
@@ -772,39 +802,51 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
       // Aggregate sales by Item Group
       const groupStats = Object.values(data.reduce((acc: Record<string, any>, row) => {
-          if (row.IsReturn) return acc; // skip returns for group/item stats or handle as needed
           (row.Items || []).forEach((item: any) => {
               const gName = item.group || 'سایر گروه‌ها';
               if (!acc[gName]) {
                   acc[gName] = { groupName: gName, weight: 0, quantity: 0, totalPrice: 0 };
               }
-              acc[gName].weight += item.weight;
-              acc[gName].quantity += item.quantity;
-              acc[gName].totalPrice += item.totalPrice;
+              if (row.IsReturn) {
+                  // if you want to subtract returns from group stats:
+                  // acc[gName].weight -= item.weight;
+                  // acc[gName].quantity -= item.quantity;
+                  // acc[gName].totalPrice -= item.totalPrice;
+              } else {
+                  acc[gName].weight += item.weight;
+                  acc[gName].quantity += item.quantity;
+                  acc[gName].totalPrice += item.totalPrice;
+              }
           });
           return acc;
       }, {})).map((g: any) => ({
           ...g,
           avgPrice: g.weight > 0 ? (g.totalPrice / g.weight) : (g.quantity > 0 ? g.totalPrice / g.quantity : 0)
-      })).sort((a,b) => b.totalPrice - a.totalPrice);
+      })).filter((g: any) => g.totalPrice > 0).sort((a: any, b: any) => b.totalPrice - a.totalPrice);
 
       // Aggregate sales by Item Name
       const itemStats = Object.values(data.reduce((acc: Record<string, any>, row) => {
-          if (row.IsReturn) return acc;
           (row.Items || []).forEach((item: any) => {
               const iName = item.name || 'کالای نامشخص';
               if (!acc[iName]) {
                   acc[iName] = { itemName: iName, groupName: item.group || 'سایر گروه‌ها', weight: 0, quantity: 0, totalPrice: 0 };
               }
-              acc[iName].weight += item.weight;
-              acc[iName].quantity += item.quantity;
-              acc[iName].totalPrice += item.totalPrice;
+              if (row.IsReturn) {
+                  // acc[iName].weight -= item.weight;
+                  // acc[iName].quantity -= item.quantity;
+                  // acc[iName].totalPrice -= item.totalPrice;
+              } else {
+                  acc[iName].weight += item.weight;
+                  acc[iName].quantity += item.quantity;
+                  acc[iName].totalPrice += item.totalPrice;
+              }
           });
           return acc;
       }, {})).map((i: any) => ({
           ...i,
           avgPrice: i.weight > 0 ? (i.totalPrice / i.weight) : (i.quantity > 0 ? i.totalPrice / i.quantity : 0)
-      })).sort((a,b) => b.totalPrice - a.totalPrice);
+      })).filter((i: any) => i.totalPrice > 0).sort((a: any, b: any) => b.totalPrice - a.totalPrice);
+
 
       // Filtered invoices for the list tab
       const filteredInvoices = data.filter(inv => {
