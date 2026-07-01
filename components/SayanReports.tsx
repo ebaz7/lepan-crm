@@ -331,12 +331,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
-            
-            // Strictly base "Return" logic on the Type Name containing "برگشت" or "مرجوع"
-            let isReturn = typeName.includes('برگشت') || typeName.includes('مرجوع');
-            if (typeName.includes('فروش') && !typeName.includes('مرجوع') && !typeName.includes('برگشت')) {
-                isReturn = false;
+            // Check transaction type (Field_003: 1=Receipt, 2=Issue)
+            // Sales are Issues (حواله). Returns are Receipts (رسید).
+            let isReturn = false;
+            if (row.Field_003 == 1 && (typeName.includes('فروش') || typeName.includes('برگشت') || typeName.includes('مرجوع'))) {
+                 isReturn = true;
+            } else if (typeName.includes('برگشت') || typeName.includes('مرجوع')) {
+                 isReturn = true;
             }
+
 
             // Name mapping
             const personId = String(row.Field_010 || row.Field_011 || '').trim();
@@ -360,18 +363,21 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 }
             }
             const invoiceItems = matchedDetails.map((det: any) => {
-                let code = String(det.Field_004 || '').trim();
-                let rawItemName = pMap[code];
+                let code = '';
+                let rawItemName = '';
+                const possibleCodeFields = [det.Field_005, det.Field_007, det.Field_008, det.Field_009, det.Field_010, det.Field_011, det.Field_004, det.Field_003];
                 
-                if (!rawItemName) {
-                    const fallbackCode = String(det.Field_005 || '').trim();
-                    if (fallbackCode && pMap[fallbackCode]) {
-                        code = fallbackCode;
-                        rawItemName = pMap[fallbackCode];
+                for (const f of possibleCodeFields) {
+                    const c = String(f || '').trim();
+                    if (c && pMap[c] && c !== String(docId).trim()) {
+                        code = c;
+                        rawItemName = pMap[c];
+                        break;
                     }
                 }
                 
                 // Smart fallback for product name based on prefix
+
                 if (!rawItemName && code) {
 
                     const prefix = code.substring(0, 4);
@@ -433,13 +439,16 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
                 // Exactly matches requested format: [گروه اصلی] - [گروه زیرمجموعه] - [اسم خود کالا]
                 const formattedFullName = `${subGroup} - ${rawItemName}`; // Only showing Sub Group and Name since Main Group is displayed in a grouped column
-
                 let qty1 = Math.abs(parseFloat(det.Field_006) || 0);
-                let qty2 = Math.abs(parseFloat(det.Field_012) || 0);
-                let isYarn = det.Field_031 && (det.Field_031.includes('وزن') || det.Field_031.includes('بوبین'));
+                let qty2 = Math.abs(parseFloat(det.Field_012 || det.Field_008 || det.Field_010) || 0);
                 
-                let w = isYarn ? qty1 : qty2;
-                let qty = isYarn ? (qty2 > 0 ? qty2 : 1) : qty1;
+                // Usually weight is larger than carton count
+                let w = Math.max(qty1, qty2);
+                let qty = Math.min(qty1, qty2);
+                
+                // If one of them is 0, weight gets the non-zero one.
+                if (qty === 0) qty = 1;
+
 
                 // Parse Field_031 for metadata like gross weight, cartons, bobbins, grade, etc.
                 let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
@@ -574,7 +583,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         if (reportType === 'CUSTOMER_STATEMENT') {
             if (!selectedCustomer) {
                 // Fetch transaction details to update balances
-                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
                 const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const grouped: Record<string, any> = {};
@@ -620,7 +629,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 const custObj = customers.find(c => c.AccountName === selectedCustomer);
                 const targetCode = custObj ? custObj.Code : null;
 
-                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
                 const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const processed = finalData.map((row: any) => {
@@ -659,7 +668,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
         } 
         else if (reportType === 'DEBTORS_CREDITORS') {
-            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes] FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             const grouped: Record<string, any> = {};
