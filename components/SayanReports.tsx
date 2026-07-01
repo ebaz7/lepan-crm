@@ -454,6 +454,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
                 let grossWeight = 0;
                 let bobbinCount = 0;
+                let isYarn = detailsStr.includes('وزن') || detailsStr.includes('بوبین');
                 let cartonCount = isYarn ? qty : 0;
                 let grade = '';
                 let twist = '';
