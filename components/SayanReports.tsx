@@ -23,6 +23,16 @@ const toIsoDateString = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
+const normalizePersian = (str: string) => {
+    if (!str) return '';
+    return str
+        .replace(/ي/g, 'ی')
+        .replace(/ك/g, 'ک')
+        .replace(/\u064a/g, '\u06cc')
+        .replace(/\u0643/g, '\u06a9')
+        .trim();
+};
+
 const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: any) => void, label: string }) => {
     return (
         <div className="flex flex-col gap-1">
@@ -596,24 +606,17 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
         const invoices = await attemptQuery("SELECT Field_010, Field_011 FROM STR_TBL_010", 'STR_TBL_010').catch(() => []);
         const customerCodesSet = new Set<string>();
-        invoices.forEach((r: any) => {
-           if (r.Field_010) customerCodesSet.add(String(r.Field_010).trim());
-           if (r.Field_011) customerCodesSet.add(String(r.Field_011).trim());
-        });
-        personAccountsSet.forEach(code => customerCodesSet.add(code));
-
-        if (!selectedCustomer) {
+               if (!selectedCustomer) {
             sqlQuery = `
                 SELECT 
                     t2.Field_015 as [Codes],
                     t2.Field_018 as [Details],
-                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
-                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
-                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
-                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
+                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
+                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
+                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
+                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
                 FROM ACT_TBL_009 t2
-                LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001
-                LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004
+                LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
                 WHERE t2.Field_005 != '9'
                 GROUP BY t2.Field_015, t2.Field_018
             `;
@@ -629,7 +632,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             finalData.forEach((row: any) => {
                 const codesStr = String(row.Codes || row.Details || '');
                 let customerCode = null;
-                const parts = codesStr.split(/[:\-]/);
+                const parts = codesStr.split(/[^0-9a-zA-Z]+/);
                 for (const p of parts) {
                     const trimmed = p.trim();
                     if (customerCodesSet.has(trimmed)) {
@@ -643,7 +646,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 const customerName = accountMap[customerCode] || `شخص ${customerCode}`;
                 
                 if (!grouped[customerName]) {
-                    grouped[customerName] = { AccountName: customerName, Code: customerCode, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0 };
+                     grouped[customerName] = { AccountName: customerName, Code: customerCode, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0 };
                 }
                 
                 grouped[customerName].OpeningDebit += parseFloat(row.OpeningDebit || 0) || 0;
@@ -667,18 +670,32 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             setCustomers(customersList);
             setData([]);
         } else {
+            // Robust targetCode lookup
+            let targetCode: string | null = null;
             const custObj = customers.find(c => c.AccountName === selectedCustomer);
-            const targetCode = custObj ? custObj.Code : null;
+            if (custObj && custObj.Code) {
+                targetCode = custObj.Code;
+            } else {
+                for (const key in accountMap) {
+                    if (accountMap[key] === selectedCustomer) {
+                        targetCode = key;
+                        break;
+                    }
+                }
+            }
 
             let customerFilterSql = '';
             if (targetCode) {
                 customerFilterSql = `AND (t2.Field_015 LIKE '%${targetCode}%' OR t2.Field_018 LIKE '%${targetCode}%')`;
             } else {
-                customerFilterSql = `AND (t2.Field_011 LIKE N'%${selectedCustomer}%' OR t2.Field_018 LIKE N'%${selectedCustomer}%')`;
+                // Normalize selectedCustomer to handle both Arabic and Persian keyboard inputs
+                const normCust = selectedCustomer.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+                const normCust2 = selectedCustomer.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+                customerFilterSql = `AND (t2.Field_011 LIKE N'%${selectedCustomer}%' OR t2.Field_011 LIKE N'%${normCust}%' OR t2.Field_011 LIKE N'%${normCust2}%' OR t2.Field_018 LIKE N'%${selectedCustomer}%')`;
             }
 
             sqlQuery = `SELECT 
-                COALESCE(t1a.Field_008, t1b.Field_008) as [Date], 
+                t1.Field_008 as [Date], 
                 t2.Field_011 as [Description], 
                 t2.Field_009 as [Debit], 
                 t2.Field_010 as [Credit], 
@@ -687,10 +704,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 t2.Field_018 as [Details], 
                 t2.Field_005, t2.Field_006, t2.Field_007 
             FROM ACT_TBL_009 t2 
-            LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 
-            LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 
+            LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004 
             WHERE t2.Field_005 != '9' ${customerFilterSql}
-            ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) ASC`;
+            ORDER BY t1.Field_008 ASC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             let openingBalance = 0;
@@ -700,18 +716,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
                 let matches = false;
                 if (targetCode) {
-                    const parts = codesStr.split(/[:\-]/);
+                    const parts = codesStr.split(/[^0-9a-zA-Z]+/);
                     if (parts.map(p => p.trim()).includes(targetCode)) matches = true;
                 } else {
                     const desc = String(row.Description || row.Field_011 || '');
-                    if (desc.includes(selectedCustomer)) matches = true;
+                    const normDesc = normalizePersian(desc);
+                    const normSel = normalizePersian(selectedCustomer);
+                    if (normDesc.includes(normSel)) matches = true;
                 }
 
                 if (!matches) return;
 
                 const d = parseFloat(row.Debit || row.Field_009 || 0) || 0;
                 const c = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-                const date = row.Date || row.Field_014;
+                const date = row.Date;
                 
                 if (date) {
                     const dStr = String(date).substring(0, 10);
@@ -757,7 +775,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                  });
             }
             
-            setCustomerDetails(finalCust.reverse());
+            setCustomerDetails(finalCust);
         }
       }
       else if (reportType === 'DEBTORS_CREDITORS') {
@@ -809,13 +827,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             SELECT 
                 t2.Field_015 as [Codes],
                 t2.Field_018 as [Details],
-                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
-                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
-                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
-                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
+                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
+                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
+                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
+                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
             FROM ACT_TBL_009 t2
-            LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001
-            LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004
+            LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
             WHERE t2.Field_005 != '9'
             GROUP BY t2.Field_015, t2.Field_018
         `;
