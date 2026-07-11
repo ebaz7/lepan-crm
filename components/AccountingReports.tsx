@@ -155,11 +155,13 @@ export default function AccountingReports() {
 
     // --- TAB 2: STATEMENT STATE ---
     const [tafsilis, setTafsilis] = useState<any[]>([]);
+    const [tafsiliSearch, setTafsiliSearch] = useState('');
     const [selectedTafsili, setSelectedTafsili] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
+    const [salesSearch, setSalesSearch] = useState('');
     const [compareMode, setCompareMode] = useState(false);
     // Period B for sales comparison
     const [salesDateFromB, setSalesDateFromB] = useState('');
@@ -276,6 +278,13 @@ export default function AccountingReports() {
                     Field_005 as TafsiliCode 
                 FROM ACT_TBL_007 
                 WHERE Field_004 = '11' 
+                  AND Field_006 IS NOT NULL 
+                  AND LTRIM(RTRIM(Field_006)) <> ''
+                  AND Field_006 NOT LIKE N'%قرارداد%'
+                  AND Field_006 NOT LIKE N'%بانک %'
+                  AND Field_006 NOT LIKE N'%تسهیلات%'
+                  AND Field_006 NOT LIKE N'%وام %'
+                  AND Field_006 NOT LIKE N'%سود %'
                 ORDER BY Field_006 ASC
             `;
             const data = await runSayanQuery(sql);
@@ -301,8 +310,7 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE t9.Field_015 LIKE '%11:%' 
-                      AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
+                    WHERE (t9.Field_015 LIKE '11:%' OR t9.Field_015 LIKE '%*11:%' OR t9.Field_015 LIKE '%|11:%' OR t9.Field_015 LIKE '% 11:%')
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
                     GROUP BY t9.Field_015
                 `;
@@ -314,7 +322,7 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
-                    WHERE t24.Field_010 LIKE '11:%'
+                    WHERE (t24.Field_010 LIKE '11:%' OR t24.Field_010 LIKE '%*11:%' OR t24.Field_010 LIKE '%|11:%' OR t24.Field_010 LIKE '% 11:%')
                     GROUP BY t24.Field_010
                 `;
             }
@@ -332,6 +340,13 @@ export default function AccountingReports() {
                             Field_005 as TafsiliCode 
                         FROM ACT_TBL_007 
                         WHERE Field_004 = '11' 
+                          AND Field_006 IS NOT NULL 
+                          AND LTRIM(RTRIM(Field_006)) <> ''
+                          AND Field_006 NOT LIKE N'%قرارداد%'
+                          AND Field_006 NOT LIKE N'%بانک %'
+                          AND Field_006 NOT LIKE N'%تسهیلات%'
+                          AND Field_006 NOT LIKE N'%وام %'
+                          AND Field_006 NOT LIKE N'%سود %'
                         ORDER BY Field_006 ASC
                     `;
                     currentTafsilis = await runSayanQuery(sqlTaf);
@@ -348,7 +363,8 @@ export default function AccountingReports() {
                 let code = '';
                 if (row.TafsiliRaw) {
                     const rawStr = row.TafsiliRaw.toString();
-                    const match = rawStr.match(/11:([a-zA-Z0-9_-]+)/);
+                    // strictly match 11: followed by code, ensuring it doesn't match 211:
+                    const match = rawStr.match(/(?:^|[\*\|\s])11:([a-zA-Z0-9_-]+)/);
                     if (match) {
                         code = match[1];
                     }
@@ -363,7 +379,12 @@ export default function AccountingReports() {
                 );
                 
                 const finalCode = tafsili ? (tafsili.Code || tafsili.TafsiliCode || code) : code;
-                const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
+                const name = tafsili ? tafsili.Name : '';
+                
+                // Filter out unrecognized persons or those clearly misclassified as persons (e.g., contracts, banks)
+                if (!name || name.trim() === '') return;
+                if (name.includes('قرارداد') || name.includes('بانک ') || name.includes('تسهیلات') || name.includes('وام ') || name.includes('سود ')) return;
+                
                 const bed = parseFloat(row.TotalBed || 0);
                 const bes = parseFloat(row.TotalBes || 0);
                 
@@ -517,13 +538,35 @@ export default function AccountingReports() {
         }
         setIsLoading(true);
         try {
-            // Build filter that checks both leading-zero and stripped numeric variations
-            let tafsiliFilter = `t9.Field_015 LIKE '%11:${selectedTafsili}%'`;
+            // Build filter that checks both leading-zero and stripped numeric variations, strictly for '11:'
+            let codeVal = selectedTafsili;
+            let tafsiliFilter = `(t9.Field_015 LIKE '11:${codeVal}%' OR t9.Field_015 LIKE '%*11:${codeVal}%' OR t9.Field_015 LIKE '%|11:${codeVal}%' OR t9.Field_015 LIKE '% 11:${codeVal}%')`;
+            
             const numericCode = parseInt(selectedTafsili, 10);
             if (!isNaN(numericCode) && String(numericCode) !== selectedTafsili) {
-                tafsiliFilter = `(t9.Field_015 LIKE '%11:${selectedTafsili}%' OR t9.Field_015 LIKE '%11:${numericCode}%')`;
+                let numCodeVal = String(numericCode);
+                tafsiliFilter = `(${tafsiliFilter} OR t9.Field_015 LIKE '11:${numCodeVal}%' OR t9.Field_015 LIKE '%*11:${numCodeVal}%' OR t9.Field_015 LIKE '%|11:${numCodeVal}%' OR t9.Field_015 LIKE '% 11:${numCodeVal}%')`;
             }
 
+            // 1. Calculate Initial Balance (مانده از قبل)
+            const sqlInitial = `
+                DECLARE @YearId NVARCHAR(10) = (SELECT TOP 1 Field_004 FROM ACT_TBL_008 WHERE Field_008 <= '${dateFrom}T23:59:59.000Z' ORDER BY Field_008 DESC);
+                SELECT 
+                    SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
+                    SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
+                FROM ACT_TBL_009 t9
+                LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
+                WHERE ${tafsiliFilter}
+                  AND t8.Field_004 = @YearId
+                  AND t8.Field_009 <> 2
+                  AND (t8.Field_008 < '${dateFrom}T00:00:00.000Z' OR t8.Field_009 = 1)
+            `;
+            const initialData = await runSayanQuery(sqlInitial);
+            const initialBed = parseFloat(initialData[0]?.TotalBed || 0);
+            const initialBes = parseFloat(initialData[0]?.TotalBes || 0);
+            const initialBalance = initialBed - initialBes;
+
+            // 2. Fetch Period Transactions
             const sql = `
                 SELECT 
                     t9.Field_004 as SanadNo,
@@ -534,13 +577,15 @@ export default function AccountingReports() {
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
                 WHERE ${tafsiliFilter}
+                  AND t8.Field_009 <> 1
+                  AND t8.Field_009 <> 2
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
             
-            let balanceAccumulator = 0;
+            let balanceAccumulator = initialBalance;
             const processed = data.map((row: any) => {
                 const bed = parseFloat(row.Bed || 0);
                 const bes = parseFloat(row.Bes || 0);
@@ -552,6 +597,18 @@ export default function AccountingReports() {
                     balance: balanceAccumulator
                 };
             });
+            
+            if (initialBalance !== 0 || processed.length > 0) {
+                 processed.unshift({
+                     Date: `${dateFrom}T00:00:00.000Z`,
+                     SanadNo: '-',
+                     Description: 'مانده از قبل',
+                     bed: initialBalance > 0 ? initialBalance : 0,
+                     bes: initialBalance < 0 ? Math.abs(initialBalance) : 0,
+                     balance: initialBalance
+                 });
+            }
+
             setStatementData(processed);
         } catch (err: any) {
             toast.error(`خطا در واکشی صورتحساب: ${err.message}`);
@@ -1082,18 +1139,14 @@ export default function AccountingReports() {
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
                     t10.Field_009 as DocType,
-                    t11.Field_005 as ItemCode,
-                    t22.Field_004 as ItemName,
-                    t11.Field_006 as Quantity,
-                    t11.Field_031 as ItemNotes,
-                    t11.Field_037 as Amount,
-                    t02.Field_003 as GroupName
+                    '-' as ItemCode,
+                    'فاکتور فروش' as ItemName,
+                    1 as Quantity,
+                    '-' as ItemNotes,
+                    t10.Field_037 as Amount,
+                    '-' as GroupName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
-                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
-                LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                WHERE t10.Field_009 IN ('3', '12')
+                WHERE t10.Field_009 = '12'
                   AND t10.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                   AND t10.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t10.Field_008 DESC
@@ -1110,18 +1163,14 @@ export default function AccountingReports() {
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
                         t10.Field_009 as DocType,
-                        t11.Field_005 as ItemCode,
-                        t22.Field_004 as ItemName,
-                        t11.Field_006 as Quantity,
-                        t11.Field_031 as ItemNotes,
-                        t11.Field_037 as Amount,
-                        t02.Field_003 as GroupName
+                        '-' as ItemCode,
+                        'فاکتور فروش' as ItemName,
+                        1 as Quantity,
+                        '-' as ItemNotes,
+                        t10.Field_037 as Amount,
+                        '-' as GroupName
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
-                    LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
-                    LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                    LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                    WHERE t10.Field_009 IN ('3', '12')
+                    WHERE t10.Field_009 = '12'
                       AND t10.Field_008 >= '${salesDateFromB}T00:00:00.000Z' 
                       AND t10.Field_008 <= '${salesDateToB}T23:59:59.000Z'
                     ORDER BY t10.Field_008 DESC
@@ -1149,8 +1198,8 @@ export default function AccountingReports() {
             yearQty: 0
         };
 
-        const now = new Date();
-        const jNow = jalaali.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        const referenceDate = dateTo ? new Date(dateTo) : new Date();
+        const jNow = jalaali.toJalaali(referenceDate.getFullYear(), referenceDate.getMonth() + 1, referenceDate.getDate());
 
         salesData.forEach(row => {
             const date = new Date(row.Date);
@@ -1717,16 +1766,26 @@ export default function AccountingReports() {
                         <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-xl">
                             <div className="flex-1 w-full relative">
                                 <label className="block text-xs font-bold mb-1.5 text-slate-700">انتخاب شخص تفصیلی (ACT_TBL_007)</label>
-                                <select 
-                                    className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
-                                    value={selectedTafsili}
-                                    onChange={(e) => setSelectedTafsili(e.target.value)}
-                                >
-                                    <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
-                                    {tafsilis.map(t => (
-                                        <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
-                                    ))}
-                                </select>
+                                <div className="space-y-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="جستجوی نام یا کد شخص..." 
+                                        className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={tafsiliSearch}
+                                        onChange={(e) => setTafsiliSearch(e.target.value)}
+                                    />
+                                    <select 
+                                        className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
+                                        value={selectedTafsili}
+                                        onChange={(e) => setSelectedTafsili(e.target.value)}
+                                        size={tafsiliSearch ? 5 : 1}
+                                    >
+                                        <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
+                                        {tafsilis.filter(t => !tafsiliSearch || (t.Name && t.Name.includes(tafsiliSearch)) || (t.Code && t.Code.includes(tafsiliSearch))).map(t => (
+                                            <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             <div className="flex gap-2 w-full md:w-auto">
                                 <button 
@@ -1975,6 +2034,13 @@ export default function AccountingReports() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="جستجوی شخص..." 
+                                            className="border border-slate-300 rounded-lg py-1.5 px-3 text-xs w-48 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={salesSearch}
+                                            onChange={(e) => setSalesSearch(e.target.value)}
+                                        />
                                         <button
                                             onClick={handlePrintSales}
                                             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 text-xs font-bold transition-colors"
@@ -2068,7 +2134,7 @@ export default function AccountingReports() {
                                                     <td colSpan={7} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
                                                 </tr>
                                             ) : (
-                                                salesData.map((row, idx) => {
+                                            salesData.filter(row => !salesSearch || (row.Notes && row.Notes.includes(salesSearch))).map((row, idx) => {
                                                     const isReturn = String(row.DocType) === '12';
                                                     return (
                                                         <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${isReturn ? 'bg-rose-50/20' : ''}`}>
@@ -2077,7 +2143,7 @@ export default function AccountingReports() {
                                                             <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
                                                             <td className="p-3 font-semibold text-slate-900">
                                                                 {row.ItemName || 'کالای فروخته شده'}
-                                                                {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
+                                                                {(row.ItemNotes || row.Notes) && <span className="block text-[10px] text-slate-400 font-normal">{row.Notes || row.ItemNotes}</span>}
                                                             </td>
                                                             <td className="p-3 text-center">
                                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isReturn ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
