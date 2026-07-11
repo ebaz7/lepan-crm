@@ -603,7 +603,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         personAccountsSet.forEach(code => customerCodesSet.add(code));
 
         if (!selectedCustomer) {
-            sqlQuery = `SELECT TOP 30000 COALESCE(t1a.Field_008, t1b.Field_008) as [Date], t2.Field_011 as [Description], t2.Field_009 as [Debit], t2.Field_010 as [Credit], t2.Field_015 as [Codes], t2.Field_013 as [SanadNumber], t2.Field_018 as [Details], t2.Field_005, t2.Field_006, t2.Field_007 FROM ACT_TBL_009 t2 LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 WHERE t2.Field_005 != '9' ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) DESC`;
+            sqlQuery = `
+                SELECT 
+                    t2.Field_015 as [Codes],
+                    t2.Field_018 as [Details],
+                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
+                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
+                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
+                    SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
+                FROM ACT_TBL_009 t2
+                LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001
+                LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004
+                WHERE t2.Field_005 != '9'
+                GROUP BY t2.Field_015, t2.Field_018
+            `;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             const grouped: Record<string, any> = {};
@@ -614,24 +627,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
 
             finalData.forEach((row: any) => {
-                const date = row.Date || row.Field_014;
-                let isBeforeStart = false;
-                let isAfterEnd = false;
-                
-                if (date) {
-                    const dStr = String(date).substring(0, 10);
-                    if (startIso && dStr < startIso) isBeforeStart = true;
-                    if (endIso && dStr > endIso) isAfterEnd = true;
-                }
-                
-                if (isAfterEnd) return;
-
-                const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
+                const codesStr = String(row.Codes || row.Details || '');
                 let customerCode = null;
                 const parts = codesStr.split(/[:\-]/);
                 for (const p of parts) {
-                    if (customerCodesSet.has(p)) {
-                        customerCode = p;
+                    const trimmed = p.trim();
+                    if (customerCodesSet.has(trimmed)) {
+                        customerCode = trimmed;
                         break;
                     }
                 }
@@ -644,16 +646,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     grouped[customerName] = { AccountName: customerName, Code: customerCode, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0 };
                 }
                 
-                const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
-                const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-                
-                if (isBeforeStart) {
-                    grouped[customerName].OpeningDebit += v1;
-                    grouped[customerName].OpeningCredit += v2;
-                } else {
-                    grouped[customerName].PeriodDebit += v1;
-                    grouped[customerName].PeriodCredit += v2;
-                }
+                grouped[customerName].OpeningDebit += parseFloat(row.OpeningDebit || 0) || 0;
+                grouped[customerName].OpeningCredit += parseFloat(row.OpeningCredit || 0) || 0;
+                grouped[customerName].PeriodDebit += parseFloat(row.PeriodDebit || 0) || 0;
+                grouped[customerName].PeriodCredit += parseFloat(row.PeriodCredit || 0) || 0;
             });
 
             const customersList = Object.values(grouped).map((cust: any) => {
@@ -674,7 +670,27 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const custObj = customers.find(c => c.AccountName === selectedCustomer);
             const targetCode = custObj ? custObj.Code : null;
 
-            sqlQuery = `SELECT TOP 30000 COALESCE(t1a.Field_008, t1b.Field_008) as [Date], t2.Field_011 as [Description], t2.Field_009 as [Debit], t2.Field_010 as [Credit], t2.Field_015 as [Codes], t2.Field_013 as [SanadNumber], t2.Field_018 as [Details], t2.Field_005, t2.Field_006, t2.Field_007 FROM ACT_TBL_009 t2 LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 WHERE t2.Field_005 != '9' ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) ASC`;
+            let customerFilterSql = '';
+            if (targetCode) {
+                customerFilterSql = `AND (t2.Field_015 LIKE '%${targetCode}%' OR t2.Field_018 LIKE '%${targetCode}%')`;
+            } else {
+                customerFilterSql = `AND (t2.Field_011 LIKE N'%${selectedCustomer}%' OR t2.Field_018 LIKE N'%${selectedCustomer}%')`;
+            }
+
+            sqlQuery = `SELECT 
+                COALESCE(t1a.Field_008, t1b.Field_008) as [Date], 
+                t2.Field_011 as [Description], 
+                t2.Field_009 as [Debit], 
+                t2.Field_010 as [Credit], 
+                t2.Field_015 as [Codes], 
+                t2.Field_013 as [SanadNumber], 
+                t2.Field_018 as [Details], 
+                t2.Field_005, t2.Field_006, t2.Field_007 
+            FROM ACT_TBL_009 t2 
+            LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 
+            LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 
+            WHERE t2.Field_005 != '9' ${customerFilterSql}
+            ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) ASC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             let openingBalance = 0;
@@ -685,7 +701,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 let matches = false;
                 if (targetCode) {
                     const parts = codesStr.split(/[:\-]/);
-                    if (parts.includes(targetCode)) matches = true;
+                    if (parts.map(p => p.trim()).includes(targetCode)) matches = true;
                 } else {
                     const desc = String(row.Description || row.Field_011 || '');
                     if (desc.includes(selectedCustomer)) matches = true;
@@ -724,9 +740,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
             
             let run = openingBalance;
-            const ascRows = periodRows;
-            
-            const finalCust = ascRows.map((r: any) => {
+            const finalCust = periodRows.map((r: any) => {
                 run += r.Balance;
                 return { ...r, Balance: run };
             });
@@ -791,29 +805,31 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         });
         personAccountsSet.forEach(code => customerCodesSet.add(code));
 
-        sqlQuery = `SELECT TOP 30000 COALESCE(t1a.Field_008, t1b.Field_008) as [Date], t2.Field_009 as [Debit], t2.Field_010 as [Credit], t2.Field_015 as [Codes], t2.Field_018 as [Details], t2.Field_005, t2.Field_006, t2.Field_007 FROM ACT_TBL_009 t2 LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 WHERE t2.Field_005 != '9' ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) DESC`;
+        sqlQuery = `
+            SELECT 
+                t2.Field_015 as [Codes],
+                t2.Field_018 as [Details],
+                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
+                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
+                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
+                SUM(CASE WHEN COALESCE(t1a.Field_008, t1b.Field_008) >= '${startIso}' AND COALESCE(t1a.Field_008, t1b.Field_008) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
+            FROM ACT_TBL_009 t2
+            LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001
+            LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004
+            WHERE t2.Field_005 != '9'
+            GROUP BY t2.Field_015, t2.Field_018
+        `;
         const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
         
         const grouped: Record<string, any> = {};
         finalData.forEach((row: any) => {
-            const date = row.Date || row.Field_014;
-            let isBeforeStart = false;
-            let isAfterEnd = false;
-            
-            if (date) {
-                const dStr = String(date).substring(0, 10);
-                if (startIso && dStr < startIso) isBeforeStart = true;
-                if (endIso && dStr > endIso) isAfterEnd = true;
-            }
-            
-            if (isAfterEnd) return;
-
-            const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
+            const codesStr = String(row.Codes || row.Details || '');
             let customerCode = null;
             const parts = codesStr.split(/[:\-]/);
             for (const p of parts) {
-                if (customerCodesSet.has(p)) {
-                    customerCode = p;
+                const trimmed = p.trim();
+                if (customerCodesSet.has(trimmed)) {
+                    customerCode = trimmed;
                     break;
                 }
             }
@@ -825,16 +841,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 grouped[name] = { AccountName: name, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0, Code: customerCode };
             }
             
-            const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
-            const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-            
-            if (isBeforeStart) {
-                grouped[name].OpeningDebit += v1;
-                grouped[name].OpeningCredit += v2;
-            } else {
-                grouped[name].PeriodDebit += v1;
-                grouped[name].PeriodCredit += v2;
-            }
+            grouped[name].OpeningDebit += parseFloat(row.OpeningDebit || 0) || 0;
+            grouped[name].OpeningCredit += parseFloat(row.OpeningCredit || 0) || 0;
+            grouped[name].PeriodDebit += parseFloat(row.PeriodDebit || 0) || 0;
+            grouped[name].PeriodCredit += parseFloat(row.PeriodCredit || 0) || 0;
         });
         
         const processed = Object.values(grouped).map((row: any) => {
