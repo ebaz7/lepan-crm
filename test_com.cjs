@@ -2,11 +2,11 @@ const axios = require('axios');
 async function run() {
     try {
         const res = await axios.post('http://80.210.31.176:5000/api/external/v1/query', {
-            query: `SELECT TOP 5 Field_001, Field_003, Field_004, Field_005, Field_006, Field_007, Field_008, Field_009 FROM STR_TBL_011`
+            query: `SELECT * FROM STR_TBL_010 WHERE Field_001 = '204316'`
         }, { headers: { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' }});
-        console.log("STR_TBL_011 sample:", res.data.data);
+        console.log("Invoice 204316:", res.data.data.length ? "EXISTS" : "MISSING");
     } catch(e) {
-        console.error(e.response ? e.response.data : e.message);
+        // ignore
     }
 }
 run();

@@ -356,14 +356,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             let matchedDetails = invoiceItemsRaw;
             
             if (matchedDetails.length === 0) {
-                matchedDetails = [{
-                    _isFallback: true,
-                    Field_005: '', // Product Code
-                    Field_006: 0,  // Qty1
-                    Field_008: 0,  // Qty2
-                    Field_007: 0,  // Unit Price
-                    Field_016: amount, // Total Price
-                }];
+                return null;
             }
             const invoiceItems = matchedDetails.map((det: any) => {
                 let code = '';
@@ -553,24 +546,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         }).filter((r: any) => {
             if (!r) return false;
             const docTypeId = String(r.Field_004 || '').trim();
-            let currentSelected = selectedSalesTypes;
-            if (currentSelected.length === 0) {
-                 const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت') || t.includes('فاکتور')) && !t.includes('پیش فاکتور'));
-                 currentSelected = likelySales.length > 0 ? likelySales : typesArr;
-            }
-            const matchesTypeSelection = currentSelected.includes(r.Type) || currentSelected.includes(docTypeId);
+            const matchesTypeSelection = selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
             if (!matchesTypeSelection) return false;
-            
-            // Check Store Selection
-            let currentStores = selectedStores;
-            if (currentStores.length === 0) {
-                currentStores = availableStores.length > 0 ? availableStores : storesArr;
-            }
-            const storeId = String(r.Field_005 || r.Field_006 || '').trim();
-            const rStoreName = storeId ? (storeMap[storeId] || `انبار ${storeId}`) : 'انبار نامشخص';
-            if (currentStores.length > 0 && !currentStores.includes(rStoreName)) {
-                 return false;
-            }
 
             if (reportType === 'SALES_COMPARISON') {
                 return isDateInRange(r.Date) || isDateInCompareRange(r.Date);
