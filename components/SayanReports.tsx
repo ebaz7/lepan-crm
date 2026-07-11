@@ -322,416 +322,108 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             setSelectedStores(storesArr);
         }
 
-        const processed = finalData.map((row: any) => {
-            // Cancelled flag check
-            if (String(row.Field_019).toLowerCase() === 'true' || row.Field_019 === 1) return null;
-
-            // Amount is usually in Field_027, Field_037, or Field_038 in STR_TBL_010
-            const amount = Math.abs(parseFloat(row.Field_027 || row.Field_038 || row.Field_037 || row.Field_025 || 0));
-            const typeId = String(row.Field_004 || '').trim();
-            const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
-            const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
-            const invoiceItemsRaw = (detailsList || []).filter((d: any) => String(d.Field_004).trim() === String(row.Field_001).trim());
-            
-            // Check transaction type (Field_003: 1=Receipt, 2=Issue)
-            // Sales are Issues (حواله) which is 2. Returns are Receipts (رسید) which is 1.
-            let isReturn = false;
-            
-            if (typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی')) {
-                 isReturn = true;
-            } else {
-                 isReturn = false; // Default to sales
-            }
-
-            // Name mapping
-            const personId = String(row.Field_010 || row.Field_011 || '').trim();
-            const personName = personId ? (tafsiliMap[personId] || personId) : '';
-            
-            // Get Store Name
-            const storeId = String(row.Field_005 || row.Field_006 || '').trim();
-            const storeName = storeId ? (storeMap[storeId] || `انبار ${storeId}`) : 'انبار نامشخص';
-
-            // Match invoice details (rows) using Field_004 as the parent document link field
-            const docId = String(row.Field_001).trim();
-            let matchedDetails = invoiceItemsRaw;
-            
-            if (matchedDetails.length === 0) {
-                matchedDetails = [{
-                    _isFallback: true,
-                    Field_005: '', // Product Code
-                    Field_006: 0,  // Qty1
-                    Field_008: 0,  // Qty2
-                    Field_007: 0,  // Unit Price
-                    Field_016: amount, // Total Price
-                }];
-            }
-            const invoiceItems = matchedDetails.map((det: any) => {
-                let code = '';
-                let rawItemName = '';
-                const possibleCodeFields = [det.Field_005, det.Field_007, det.Field_008, det.Field_009, det.Field_010, det.Field_011, det.Field_004, det.Field_003];
-                
-                for (const f of possibleCodeFields) {
-                    const c = String(f || '').trim();
-                    if (c && pMap[c] && c !== String(docId).trim()) {
-                        code = c;
-                        rawItemName = pMap[c];
-                        break;
-                    }
-                }
-                
-                // Smart fallback for product name based on prefix
-
-                if (!rawItemName && code) {
-                    // Start by looking up the productCodeToGroupCode link
-                    const linkedGroupCode = productCodeToGroupCode[code];
-                    if (linkedGroupCode) {
-                         // Find the deepest available group name
-                         let bestName = '';
-                         for (let len = linkedGroupCode.length; len >= 2; len -= 2) {
-                             const partialCode = linkedGroupCode.substring(0, len);
-                             if (productGroupNames[partialCode]) {
-                                 bestName = productGroupNames[partialCode];
-                                 break;
-                             }
-                         }
-                         if (bestName) rawItemName = bestName;
-                    }
-                    if (!rawItemName) rawItemName = `کالا ${code}`;
-                } else if (!rawItemName) {
-                    rawItemName = 'کالای نامشخص';
-                }
-
-                // Determine Main Group and Sub-Group names directly from Sayan's Database Tables (IND_TBL_002 and IND_TBL_021)
-                let mainGroup = 'نامشخص';
-                let subGroup = 'سایر گروه‌ها';
-
-                const linkedGroupCode = productCodeToGroupCode[code];
-                if (linkedGroupCode) {
-                    // Main Group (گروه اصلی) is usually Level 1 (Length 2) in Sayan
-                    if (linkedGroupCode.length >= 2) {
-                        const level1Code = linkedGroupCode.substring(0, 2);
-                        if (productGroupNames[level1Code]) {
-                            mainGroup = productGroupNames[level1Code];
-                        }
-                    }
-                    
-                    // Sub Group (گروه فرعی) is the deepest level available before the product itself
-                    let bestSubGroup = '';
-                    const codeLen = linkedGroupCode.length;
-                    for (let len = 4; len <= codeLen; len += 2) {
-                        const partialCode = linkedGroupCode.substring(0, len);
-                        if (productGroupNames[partialCode] && productGroupNames[partialCode] !== rawItemName) {
-                            bestSubGroup = productGroupNames[partialCode];
-                        }
-                    }
-                    
-                    if (bestSubGroup) {
-                        subGroup = bestSubGroup;
-                    } else if (mainGroup !== 'نامشخص') {
-                        subGroup = mainGroup;
-                    }
-                }
-
-                // Only fallback to Store Name if absolutely no group is found in DB
-                if (mainGroup === 'نامشخص' && storeName) {
-                    mainGroup = storeName;
-                }
-
-                const formattedFullName = subGroup !== 'سایر گروه‌ها' ? `${subGroup} - ${rawItemName}` : rawItemName;
-                let qty1 = Math.abs(parseFloat(det.Field_006) || 0);
-                let qty2 = Math.abs(parseFloat(det.Field_012 || det.Field_008 || det.Field_010) || 0);
-                
-                // Field_006 is consistently the primary quantity (Weight) in Sayan STR_TBL_011
-                // Field_012/008 is the secondary quantity (Count/Cartons)
-                let w = qty1;
-                let qty = qty2;
-                
-                // If one of them is 0, weight gets the non-zero one if it makes sense.
-                if (w === 0 && qty > 0) {
-                     w = qty;
-                     qty = 1;
-                }
-                if (qty === 0) qty = 1;
-
-
-                // Parse Field_031 for metadata like gross weight, cartons, bobbins, grade, etc.
-                let detailsStr = String(det.Field_031 || det.Field_032 || det.Field_033 || det.Field_034 || '');
-                let grossWeight = 0;
-                let bobbinCount = 0;
-                let isYarn = detailsStr.includes('وزن') || detailsStr.includes('بوبین');
-                let cartonCount = isYarn ? qty : 0;
-                let grade = '';
-                let twist = '';
-                
-                if (detailsStr) {
-                    const parts = detailsStr.split('|').map(p => p.trim());
-                    parts.forEach(p => {
-                        if (p.includes('وزن ناخالص:')) grossWeight = Math.abs(parseFloat(p.split(':')[1]) || 0);
-                        if (p.includes('تعداد بوبین:')) bobbinCount = Math.abs(parseFloat(p.split(':')[1]) || 0);
-                        if (p.includes('تعداد کارتن:')) cartonCount = Math.abs(parseFloat(p.split(':')[1]) || cartonCount);
-                        if (p.includes('گرید:')) grade = String(p.split(':')[1] || '').trim();
-                        if (p.includes('جهت تاب:')) twist = String(p.split(':')[1] || '').trim();
-                    });
-                }
-
-                let fee = Math.abs(parseFloat(det.Field_015 || det.Field_013 || det.Field_025 || det.Field_037 || det.Field_023 || 0)); 
-                let totalPrice = Math.abs(parseFloat(det.Field_016 || det.Field_014 || det.Field_027 || det.Field_026 || det.Field_035 || det.Field_036 || 0));
-                
-                if (fee === 0 || totalPrice <= 12) {
-                    const allVals = [
-                        det.Field_013, det.Field_014, det.Field_015, det.Field_016,
-                        det.Field_023, det.Field_024, det.Field_025, det.Field_026, det.Field_027,
-                        det.Field_035, det.Field_036, det.Field_037, det.Field_038
-                    ].map(v => Math.abs(parseFloat(v)) || 0).filter(v => v > 0);
-                    
-                    if (allVals.length >= 2) {
-                        allVals.sort((a,b) => b - a);
-                        totalPrice = allVals[0];
-                        fee = allVals[1];
-                        for (let t of allVals) {
-                            for (let f of allVals) {
-                                if (t !== f && Math.abs(f * qty1 - t) < 10) { fee = f; totalPrice = t; }
-                                else if (t !== f && Math.abs(f * qty2 - t) < 10) { fee = f; totalPrice = t; }
-                            }
-                        }
-                    } else if (allVals.length === 1) {
-                        totalPrice = allVals[0];
-                    }
-                }
-
-                if (totalPrice > 0 && (fee === 0 || fee === 1 || fee === totalPrice)) {
-                    fee = totalPrice / (qty1 > 0 ? qty1 : 1);
-                } else if (fee > 0 && (totalPrice === 0 || totalPrice === 1 || totalPrice === fee)) {
-                    totalPrice = fee * (qty1 > 0 ? qty1 : 1);
-                }
-
-                return {
-                    code,
-                    name: formattedFullName,
-                    rawName: rawItemName,
-                    mainGroup: mainGroup,
-                    group: subGroup,
-                    weight: w,
-                    grossWeight,
-                    cartonCount,
-                    bobbinCount,
-                    grade,
-                    twist,
-                    quantity: qty,
-                    fee,
-                    totalPrice
-                };
-            });
-            
-            // Try to find the weight field (smaller than amount)
-            let weight = invoiceItems.reduce((sum, item) => sum + item.weight, 0);
-            if (weight === 0) {
-                [row.Field_012, row.Field_013, row.Field_015, row.Field_016].forEach(val => {
-                    const w = parseFloat(val);
-                    if (!isNaN(w) && w > 0 && w < amount && w > weight) {
-                         weight = w;
-                    }
-                });
-            }
-
-            let finalAmount = amount;
-            if (finalAmount === 0 || isNaN(finalAmount)) {
-                finalAmount = invoiceItems.reduce((sum, item) => sum + item.totalPrice, 0);
-            }
-            let finalWeight = weight;
-
-            return {
-                ...row,
-                TotalSales: finalAmount,
-                Weight: finalWeight,
-                Date: row.Field_008 || row.Date,
-                Type: typeName,
-                IsReturn: isReturn,
-                PersonName: personName,
-                Items: invoiceItems
-            };
-        }).filter((r: any) => {
-            if (!r) return false;
-            const docTypeId = String(r.Field_004 || '').trim();
-            let currentSelected = selectedSalesTypes;
-            if (currentSelected.length === 0) {
-                 const likelySales = typesArr.filter(t => (t.includes('فروش') || t.includes('مرجوع') || t.includes('برگشت') || t.includes('فاکتور')) && !t.includes('پیش فاکتور'));
-                 currentSelected = likelySales.length > 0 ? likelySales : typesArr;
-            }
-            const matchesTypeSelection = currentSelected.includes(r.Type) || currentSelected.includes(docTypeId);
-            if (!matchesTypeSelection) return false;
-            
-            // Check Store Selection
-            let currentStores = selectedStores;
-            if (currentStores.length === 0) {
-                currentStores = availableStores.length > 0 ? availableStores : storesArr;
-            }
-            const storeId = String(r.Field_005 || r.Field_006 || '').trim();
-            const rStoreName = storeId ? (storeMap[storeId] || `انبار ${storeId}`) : 'انبار نامشخص';
-            if (currentStores.length > 0 && !currentStores.includes(rStoreName)) {
-                 return false;
-            }
-
-            if (reportType === 'SALES_COMPARISON') {
-                return isDateInRange(r.Date) || isDateInCompareRange(r.Date);
-            }
-            return isDateInRange(r.Date);
-        });
         
-        setData(processed.reverse());
-      } 
-      else if (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS') {
-          
-        // 1. Fetch exactly the same Accounts (Tafsili) mapping used in Invoices
-        // First find the group IDs for Persons / Current Liabilities
-        const moeinGroups = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM ACT_TBL_004", 'ACT_TBL_004').catch(() => []);
-        const validPersonGroupIds = new Set<string>();
-        moeinGroups.forEach((g: any) => {
-             const gName = String(g.Field_004 || g.Field_003 || '').trim();
-             if (gName.includes('اشخاص') || gName.includes('بدهی') || gName.includes('مشتری') || gName.includes('حسابهای دریافتنی')) {
-                  if (g.Field_001) validPersonGroupIds.add(String(g.Field_001).trim());
-                  if (g.Field_003) validPersonGroupIds.add(String(g.Field_003).trim());
-             }
-        });
-        // Default fallbacks if none found
-        if (validPersonGroupIds.size === 0) {
-             validPersonGroupIds.add('11');
-        }
-
-        const accountsData = await attemptQuery("SELECT Field_003, Field_004, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007').catch(() => []);
-        const accountMap: Record<string, string> = {};
-        const personAccountsSet = new Set<string>();
-        
-        accountsData.forEach((a: any) => {
-            const name = String(a.Field_006 || '').trim();
-            const moeinGroup = String(a.Field_004 || '').trim();
-            if (name) {
-                if (a.Field_003) {
-                    accountMap[String(a.Field_003).trim()] = name;
-                    if (validPersonGroupIds.has(moeinGroup)) {
-                         personAccountsSet.add(String(a.Field_003).trim());
-                    }
-                }
-                if (a.Field_005) {
-                    accountMap[String(a.Field_005).trim()] = name;
-                    if (validPersonGroupIds.has(moeinGroup)) {
-                         personAccountsSet.add(String(a.Field_005).trim());
-                    }
-                }
-            }
-        });
-
-        // 2. Fetch exactly the same Account IDs used in Invoices (these are the proven customers)
-        const invoices = await attemptQuery("SELECT Field_010, Field_011 FROM STR_TBL_010", 'STR_TBL_010').catch(() => []);
-        const customerCodesSet = new Set<string>();
-        invoices.forEach((r: any) => {
-           if (r.Field_010) customerCodesSet.add(String(r.Field_010).trim());
-           if (r.Field_011) customerCodesSet.add(String(r.Field_011).trim());
-        });
-        
-        // ADD all Persons from the accounting groups to the customer set
-        personAccountsSet.forEach(code => customerCodesSet.add(code));
-
-        if (reportType === 'CUSTOMER_STATEMENT') {
-            if (!selectedCustomer) {
-                // Fetch transaction details to update balances
-                sqlQuery = `SELECT TOP 20000 Field_014 as [Date], Field_011 as [Description], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_013 as [SanadNumber], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' AND Field_003 = '4' ORDER BY Field_014 DESC`;
-                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+                let openingBalance = 0;
+                const periodRows: any[] = [];
                 
-                const grouped: Record<string, any> = {};
-                
-                // First ensure all known customers are in the list (so they can be selected even if no recent transactions)
-                customerCodesSet.forEach(code => {
-                    const name = accountMap[code] || `شخص ${code}`;
-                    grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
-                });
-
                 finalData.forEach((row: any) => {
-                    const date = row.Date || row.Field_014;
-                    if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
-                    
                     const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
-                    
-                    let customerCode = null;
-                    const parts = codesStr.split(/[:\-]/);
-                    for (const p of parts) {
-                        if (customerCodesSet.has(p)) {
-                            customerCode = p;
-                            break;
-                        }
-                    }
-                    
-                    if (!customerCode) return; // Not a customer transaction
-                    
-                    const customerName = accountMap[customerCode] || `شخص ${customerCode}`;
-                    
-                    if (!grouped[customerName]) {
-                        grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
-                    }
-                    
-                    const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
-                    const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-                    grouped[customerName].Debit += v1;
-                    grouped[customerName].Credit += v2;
-                });
-                setCustomers(Object.values(grouped));
-                setData([]);
-            } else {
-                // Customer is selected
-                const custObj = customers.find(c => c.AccountName === selectedCustomer);
-                const targetCode = custObj ? custObj.Code : null;
-
-                sqlQuery = `SELECT TOP 20000 Field_014 as [Date], Field_011 as [Description], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_013 as [SanadNumber], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' AND Field_003 = '4' ORDER BY Field_014 ASC`;
-                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-                
-                const processed = finalData.map((row: any) => {
-                    const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
-                    
                     let matches = false;
                     if (targetCode) {
-                        const parts = codesStr.split(/[:\-]/);
+                        const parts = codesStr.split(/[\:\-]/);
                         if (parts.includes(targetCode)) matches = true;
                     } else {
                         const desc = String(row.Description || row.Field_011 || '');
                         if (desc.includes(selectedCustomer)) matches = true;
                     }
+                    if (!matches) return;
 
-                    if (!matches) return null;
-
-                    const d = parseFloat(row.Debit || row.Field_009 || 0);
-                    const c = parseFloat(row.Credit || row.Field_010 || 0);
+                    const d = parseFloat(row.Debit || row.Field_009 || 0) || 0;
+                    const c = parseFloat(row.Credit || row.Field_010 || 0) || 0;
+                    const date = row.Date || row.Field_014;
                     
-                    return {
-                        Date: row.Date || row.Field_014,
-                        Description: row.Description || row.Field_011,
-                        SanadNumber: row.SanadNumber || row.Field_013,
-                        Debit: d,
-                        Credit: c,
-                        Balance: d - c
-                    };
-                }).filter(Boolean).filter((r: any) => isDateInRange(r.Date));
+                    if (date) {
+                        const dObj = new Date(date);
+                        const sObj = startIso ? new Date(startIso) : null;
+                        const eObj = endIso ? new Date(endIso) : null;
+                        
+                        // Sayan Dates are usually ISO. Check if strictly before start date
+                        if (sObj && dObj < sObj) {
+                             openingBalance += (d - c);
+                        } else if ((!sObj || dObj >= sObj) && (!eObj || dObj <= eObj)) {
+                             periodRows.push({
+                                Date: date,
+                                Description: row.Description || row.Field_011,
+                                SanadNumber: row.SanadNumber || row.Field_013,
+                                Debit: d,
+                                Credit: c,
+                                Balance: d - c
+                             });
+                        }
+                    } else {
+                        // If no date at all, assume past? Let's just put it in period
+                        periodRows.push({
+                            Date: date,
+                            Description: row.Description || row.Field_011,
+                            SanadNumber: row.SanadNumber || row.Field_013,
+                            Debit: d,
+                            Credit: c,
+                            Balance: d - c
+                         });
+                    }
+                });
                 
                 // Calculate running balance
-                let run = 0;
-                const finalCust = processed.reverse().map((r: any) => {
+                let run = openingBalance;
+                
+                // periodRows are currently DESC from DB. So reverse them to ASC for running balance
+                const ascRows = periodRows.reverse();
+                
+                const finalCust = ascRows.map((r: any) => {
                     run += r.Balance;
                     return { ...r, Balance: run };
                 });
+                
+                // Add Opening Balance as a first row
+                if (openingBalance !== 0 || finalCust.length === 0) {
+                     finalCust.unshift({
+                         Date: '',
+                         Description: 'مانده از قبل',
+                         SanadNumber: '-',
+                         Debit: openingBalance > 0 ? openingBalance : 0,
+                         Credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+                         Balance: openingBalance,
+                         isOpening: true
+                     });
+                }
+                
                 setCustomerDetails(finalCust.reverse());
             }
         } 
         else if (reportType === 'DEBTORS_CREDITORS') {
-            sqlQuery = `SELECT TOP 20000 Field_014 as [Date], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' AND Field_003 = '4' ORDER BY Field_014 DESC`;
+            sqlQuery = `SELECT TOP 30000 COALESCE(t1a.Field_008, t1b.Field_008) as [Date], t2.Field_009 as [Debit], t2.Field_010 as [Credit], t2.Field_015 as [Codes], t2.Field_018 as [Details], t2.Field_005, t2.Field_006, t2.Field_007 FROM ACT_TBL_009 t2 LEFT JOIN ACT_TBL_008 t1a ON t2.Field_003 = '4' AND t2.Field_004 = t1a.Field_001 LEFT JOIN ACT_TBL_008 t1b ON (t2.Field_003 = '2' OR t2.Field_003 = '3') AND t2.Field_004 = t1b.Field_005 AND t2.Field_003 = t1b.Field_004 WHERE t2.Field_005 != '9' ORDER BY COALESCE(t1a.Field_008, t1b.Field_008) DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+            
             
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
                 const date = row.Date || row.Field_014;
-                if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
+                let isBeforeStart = false;
+                let isAfterEnd = false;
+                
+                if (date) {
+                    const dObj = new Date(date);
+                    const sObj = startIso ? new Date(startIso) : null;
+                    const eObj = endIso ? new Date(endIso) : null;
+                    if (sObj && dObj < sObj) isBeforeStart = true;
+                    if (eObj && dObj > eObj) isAfterEnd = true;
+                }
+                
+                if (isAfterEnd) return; // Ignore future transactions
 
                 const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
                 let customerCode = null;
-                const parts = codesStr.split(/[:\-]/);
+                const parts = codesStr.split(/[\:\-]/);
                 for (const p of parts) {
                     if (customerCodesSet.has(p)) {
                         customerCode = p;
@@ -739,24 +431,39 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     }
                 }
                 if (!customerCode) return;
-
+                
                 const name = accountMap[customerCode] || `شخص ${customerCode}`;
                 
-                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                if (!grouped[name]) {
+                    grouped[name] = { AccountName: name, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0, Code: customerCode };
+                }
+                
                 const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
                 const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-                grouped[name].Debit += v1;
-                grouped[name].Credit += v2;
+                
+                if (isBeforeStart) {
+                    grouped[name].OpeningDebit += v1;
+                    grouped[name].OpeningCredit += v2;
+                } else {
+                    grouped[name].PeriodDebit += v1;
+                    grouped[name].PeriodCredit += v2;
+                }
             });
             
             const processed = Object.values(grouped).map((row: any) => {
-                const net = row.Debit - row.Credit;
+                const openingBalance = row.OpeningDebit - row.OpeningCredit;
+                const periodNet = row.PeriodDebit - row.PeriodCredit;
+                const net = openingBalance + periodNet;
                 return {
                     ...row,
+                    Debit: row.PeriodDebit, // using for UI period totals
+                    Credit: row.PeriodCredit,
+                    OpeningBalance: openingBalance,
                     NetBalance: Math.abs(net),
-                    Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
+                    Type: net > 0 ? 'بدهکار' : net < 0 ? 'بستانکار' : 'تسویه',
+                    RawBalance: net
                 };
-            }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
+            }).filter((row: any) => row.NetBalance > 0 || row.Debit > 0 || row.Credit > 0).sort((a, b) => b.NetBalance - a.NetBalance);
             
             setData(processed);
         }
@@ -1736,8 +1443,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   const renderCustomerStatement = () => {
       if (selectedCustomer) {
-          let runningBalance = 0;
-          let printRunningBalance = 0;
+          
+          
           
           const printStatement = () => {
               let html = `
@@ -1830,14 +1537,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             {customerDetails.map((row, idx) => {
                                 const deb = parseFloat(row.Debit) || 0;
                                 const cred = parseFloat(row.Credit) || 0;
-                                runningBalance += (deb - cred);
                                 return (
-                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    <tr key={idx} className={`hover:bg-slate-50 transition-colors ${row.isOpening ? 'bg-slate-100 font-bold' : ''}`}>
                                         <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate((row.Date || '').substring(0, 10))}</td>
                                         <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800">{row.Description || '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-emerald-600" dir="ltr">{deb > 0 ? deb.toLocaleString() : '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-rose-600" dir="ltr">{cred > 0 ? cred.toLocaleString() : '-'}</td>
-                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{runningBalance.toLocaleString()} {runningBalance > 0 ? '(بد)' : runningBalance < 0 ? '(بس)' : ''}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{Math.abs(row.Balance).toLocaleString()} {row.Balance > 0 ? '(بد)' : row.Balance < 0 ? '(بس)' : ''}</td>
                                     </tr>
                                 );
                             })}
