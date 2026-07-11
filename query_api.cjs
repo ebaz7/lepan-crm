@@ -1,5 +1,5 @@
 const http = require('http');
-const data = JSON.stringify({ query: 'SELECT TOP 1 * FROM STR_TBL_011' });
+const data = JSON.stringify({ query: 'SELECT TOP 10 * FROM ACT_TBL_009 WHERE Field_014 LIKE '%112447%'' });
 const options = {
   hostname: 'localhost',
   port: 3000,

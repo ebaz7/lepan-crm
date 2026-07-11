@@ -26,10 +26,20 @@ export const persianQuotes = [
   { text: "روزی که دلی را به نگاهی بنوازند\nاز عمر حساب است، همان روز و دگر هیچ", author: "ملک‌الشعرای بهار" }
 ];
 
-export const getRandomQuote = () => {
-    const today = new Date();
-    // Use day of year to show the same quote for the whole day, or just random
-    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
-    const index = dayOfYear % persianQuotes.length;
+export const getRandomQuote = async () => {
+    try {
+        const res = await fetch('/api/quote');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.text && data.author) {
+                return data;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch online quote", e);
+    }
+    
+    // Fallback to random local quote
+    const index = Math.floor(Math.random() * persianQuotes.length);
     return persianQuotes[index];
 };

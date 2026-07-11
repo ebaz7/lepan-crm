@@ -158,7 +158,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         let docTypes: Record<string, string> = {};
         let docPrefixes: Record<string, string> = {};
         try {
-            const types = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
+            const types = await attemptQuery("SELECT TOP 20000 Field_001, Field_003, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
             types.forEach((t: any) => {
                 const id = String(t.Field_001 || '').trim();
                 if (id) {
@@ -171,7 +171,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch persons
         let tafsiliMap: Record<string, string> = {};
         try {
-            const tafsili = await attemptQuery("SELECT Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
+            const tafsili = await attemptQuery("SELECT TOP 50000 Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
             tafsili.forEach((t: any) => {
                 const name = String(t.Field_006 || '').trim();
                 if (name) {
@@ -184,7 +184,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch warehouse document details (STR_TBL_011)
         let detailsList: any[] = [];
         try {
-            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011", 'STR_TBL_011');
+            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011 ORDER BY Field_001 DESC", 'STR_TBL_011');
         } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
 
         
@@ -193,7 +193,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         const fetchProductTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
             try {
                 const cols = [...new Set([...codeCols, ...nameCols])];
-                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
+                const list = await attemptQuery(`SELECT TOP 20000 ${cols.join(', ')} FROM ${tableName}`, tableName);
                 list.forEach((p: any) => {
                     let name = '';
                     for (const col of nameCols) {
@@ -230,7 +230,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         const fetchGroupTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
             try {
                 const cols = [...new Set([...codeCols, ...nameCols])];
-                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
+                const list = await attemptQuery(`SELECT TOP 10000 ${cols.join(', ')} FROM ${tableName}`, tableName);
                 list.forEach((g: any) => {
                     let name = '';
                     for (const col of nameCols) {
@@ -261,7 +261,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch IND_TBL_002 (Product Groups Hierarchy Names)
         let productGroupNames: Record<string, string> = {};
         try {
-            const indGroups = await attemptQuery("SELECT Field_003, Field_008 FROM IND_TBL_002", 'IND_TBL_002');
+            const indGroups = await attemptQuery("SELECT TOP 20000 Field_003, Field_008 FROM IND_TBL_002", 'IND_TBL_002');
             indGroups.forEach((g: any) => {
                 const name = String(g.Field_003 || '').trim();
                 const code = String(g.Field_008 || '').trim();
@@ -274,7 +274,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch IND_TBL_021 (Product Code to Group Code Links)
         let productCodeToGroupCode: Record<string, string> = {};
         try {
-            const indLinks = await attemptQuery("SELECT Field_003, Field_004 FROM IND_TBL_021", 'IND_TBL_021');
+            const indLinks = await attemptQuery("SELECT TOP 50000 Field_003, Field_004 FROM IND_TBL_021", 'IND_TBL_021');
             indLinks.forEach((l: any) => {
                 const groupCode = String(l.Field_003 || '').trim();
                 const productCode = String(l.Field_004 || '').trim();
@@ -287,7 +287,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch stores (Warehouses) from STR_TBL_015
         const storeMap: Record<string, string> = {};
         try {
-            const storesList = await attemptQuery("SELECT Field_001, Field_004 FROM STR_TBL_015", 'STR_TBL_015');
+            const storesList = await attemptQuery("SELECT TOP 1000 Field_001, Field_004 FROM STR_TBL_015", 'STR_TBL_015');
             storesList.forEach((s: any) => {
                 if (s.Field_001 && s.Field_004) storeMap[String(s.Field_001).trim()] = String(s.Field_004).trim();
             });
@@ -339,10 +339,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             
             if (typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی')) {
                  isReturn = true;
-            } else if (prefixCode.startsWith('1')) {
-                 isReturn = true;
-            } else if (prefixCode.startsWith('2')) {
-                 isReturn = false;
             } else {
                  isReturn = false; // Default to sales
             }
@@ -616,7 +612,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         if (reportType === 'CUSTOMER_STATEMENT') {
             if (!selectedCustomer) {
                 // Fetch transaction details to update balances
-                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `SELECT TOP 5000 Field_014 as [Date], Field_011 as [Description], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_013 as [SanadNumber], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' ORDER BY Field_014 DESC`;
                 const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const grouped: Record<string, any> = {};
@@ -628,10 +624,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 });
 
                 finalData.forEach((row: any) => {
-                    const date = row.Date || row.Field_013;
+                    const date = row.Date || row.Field_014;
                     if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
                     
-                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
                     
                     let customerCode = null;
                     const parts = codesStr.split(/[:\-]/);
@@ -650,8 +646,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
                     }
                     
-                    const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
-                    const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                    const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
+                    const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
                     grouped[customerName].Debit += v1;
                     grouped[customerName].Credit += v2;
                 });
@@ -662,29 +658,30 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 const custObj = customers.find(c => c.AccountName === selectedCustomer);
                 const targetCode = custObj ? custObj.Code : null;
 
-                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `SELECT TOP 5000 Field_014 as [Date], Field_011 as [Description], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_013 as [SanadNumber], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' ORDER BY Field_014 ASC`;
                 const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const processed = finalData.map((row: any) => {
-                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
                     
                     let matches = false;
                     if (targetCode) {
                         const parts = codesStr.split(/[:\-]/);
                         if (parts.includes(targetCode)) matches = true;
                     } else {
-                        const desc = String(row.Description || row.Field_010 || '');
+                        const desc = String(row.Description || row.Field_011 || '');
                         if (desc.includes(selectedCustomer)) matches = true;
                     }
 
                     if (!matches) return null;
 
-                    const d = parseFloat(row.Debit || row.Field_008 || 0);
-                    const c = parseFloat(row.Credit || row.Field_009 || 0);
+                    const d = parseFloat(row.Debit || row.Field_009 || 0);
+                    const c = parseFloat(row.Credit || row.Field_010 || 0);
                     
                     return {
-                        Date: row.Date || row.Field_013,
-                        Description: row.Description || row.Field_010,
+                        Date: row.Date || row.Field_014,
+                        Description: row.Description || row.Field_011,
+                        SanadNumber: row.SanadNumber || row.Field_013,
                         Debit: d,
                         Credit: c,
                         Balance: d - c
@@ -701,15 +698,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
         } 
         else if (reportType === 'DEBTORS_CREDITORS') {
-            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            sqlQuery = `SELECT TOP 5000 Field_014 as [Date], Field_009 as [Debit], Field_010 as [Credit], Field_015 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_005 != '9' ORDER BY Field_014 DESC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             const grouped: Record<string, any> = {};
             finalData.forEach((row: any) => {
-                const date = row.Date || row.Field_013;
+                const date = row.Date || row.Field_014;
                 if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
 
-                const codesStr = String(row.Codes || row.Field_014 || '');
+                const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
                 let customerCode = null;
                 const parts = codesStr.split(/[:\-]/);
                 for (const p of parts) {
@@ -723,8 +720,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 const name = accountMap[customerCode] || `شخص ${customerCode}`;
                 
                 if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
-                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                const v1 = parseFloat(row.Debit || row.Field_009 || 0) || 0;
+                const v2 = parseFloat(row.Credit || row.Field_010 || 0) || 0;
                 grouped[name].Debit += v1;
                 grouped[name].Credit += v2;
             });

@@ -312,6 +312,7 @@ export default function AccountingReports() {
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
                     WHERE (t9.Field_015 LIKE '11:%' OR t9.Field_015 LIKE '%*11:%' OR t9.Field_015 LIKE '%|11:%' OR t9.Field_015 LIKE '% 11:%')
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
+                      AND t9.Field_005 <> '9'
                     GROUP BY t9.Field_015
                 `;
             } else {
@@ -323,6 +324,7 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
                     WHERE (t24.Field_010 LIKE '11:%' OR t24.Field_010 LIKE '%*11:%' OR t24.Field_010 LIKE '%|11:%' OR t24.Field_010 LIKE '% 11:%')
+                      AND t24.Field_003 <> '9'
                     GROUP BY t24.Field_010
                 `;
             }
@@ -558,6 +560,7 @@ export default function AccountingReports() {
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
                 WHERE ${tafsiliFilter}
                   AND t8.Field_004 = @YearId
+                  AND t9.Field_005 <> '9'
                   AND t8.Field_009 <> 2
                   AND (t8.Field_008 < '${dateFrom}T00:00:00.000Z' OR t8.Field_009 = 1)
             `;
@@ -577,6 +580,7 @@ export default function AccountingReports() {
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
                 WHERE ${tafsiliFilter}
+                  AND t9.Field_005 <> '9'
                   AND t8.Field_009 <> 1
                   AND t8.Field_009 <> 2
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
@@ -620,7 +624,7 @@ export default function AccountingReports() {
     const getGroupedSales = (interval: 'detailed' | 'daily' | 'monthly' | 'quarterly' | 'yearly') => {
         if (interval === 'detailed') {
             return salesData.map((row: any) => {
-                const isReturn = String(row.DocType) === '12';
+                const isReturn = String(row.DocType) === '13';
                 const amt = parseFloat(row.Amount || 0);
                 const qty = parseFloat(row.Quantity || 0);
                 return {
@@ -635,7 +639,7 @@ export default function AccountingReports() {
         const groups: { [key: string]: { key: string; salesAmt: number; returnAmt: number; netAmt: number; salesQty: number; returnQty: number; netQty: number; count: number } } = {};
 
         salesData.forEach((row: any) => {
-            const isReturn = String(row.DocType) === '12';
+            const isReturn = String(row.DocType) === '13';
             const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
             
@@ -902,6 +906,7 @@ export default function AccountingReports() {
                 'تاریخ فاکتور',
                 'شماره سند',
                 'گروه کالا',
+                'شخص/مشتری',
                 'شرح کالای فاکتور',
                 'نوع سند',
                 'وزن خالص (کیلوگرم)',
@@ -912,6 +917,7 @@ export default function AccountingReports() {
                 formatDateToJalali(row.Date),
                 row.DocId,
                 row.GroupName || 'سایر گروه‌ها',
+                row.PersonName || '-',
                 row.ItemName || '',
                 row.isReturn ? 'مرجوعی' : 'فروش',
                 row.netQty,
@@ -1022,6 +1028,7 @@ export default function AccountingReports() {
                     <th>تاریخ فاکتور</th>
                     <th>شماره سند</th>
                     <th>گروه کالا</th>
+                    <th>شخص/مشتری</th>
                     <th>شرح کالا</th>
                     <th>نوع سند</th>
                     <th>وزن خالص (kg)</th>
@@ -1034,6 +1041,7 @@ export default function AccountingReports() {
                     <td>${formatDateToJalali(row.Date)}</td>
                     <td>${row.DocId}</td>
                     <td>${row.GroupName || 'سایر گروه‌ها'}</td>
+                    <td>${row.PersonName || '-'}</td>
                     <td>${row.ItemName || ''}</td>
                     <td><span style="color: ${row.isReturn ? '#dc2626' : '#16a34a'}; font-weight: bold;">${row.isReturn ? 'مرجوعی' : 'فروش'}</span></td>
                     <td>${row.netQty.toFixed(1)}</td>
@@ -1139,14 +1147,20 @@ export default function AccountingReports() {
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
                     t10.Field_009 as DocType,
-                    '-' as ItemCode,
-                    'فاکتور فروش' as ItemName,
-                    1 as Quantity,
-                    '-' as ItemNotes,
-                    t10.Field_037 as Amount,
-                    '-' as GroupName
+                    t11.Field_005 as ItemCode,
+                    t22.Field_004 as ItemName,
+                    t11.Field_006 as Quantity,
+                    t11.Field_031 as ItemNotes,
+                    t11.Field_013 as Amount,
+                    t02.Field_003 as GroupName,
+                    t07.Field_006 as PersonName
                 FROM STR_TBL_010 t10
-                WHERE t10.Field_009 = '12'
+                INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
+                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
+                LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
+                LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_003 AND t07.Field_004 = '11'
+                WHERE t10.Field_009 IN ('12', '13')
                   AND t10.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                   AND t10.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t10.Field_008 DESC
@@ -1163,14 +1177,20 @@ export default function AccountingReports() {
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
                         t10.Field_009 as DocType,
-                        '-' as ItemCode,
-                        'فاکتور فروش' as ItemName,
-                        1 as Quantity,
-                        '-' as ItemNotes,
-                        t10.Field_037 as Amount,
-                        '-' as GroupName
+                        t11.Field_005 as ItemCode,
+                        t22.Field_004 as ItemName,
+                        t11.Field_006 as Quantity,
+                        t11.Field_031 as ItemNotes,
+                        t11.Field_013 as Amount,
+                        t02.Field_003 as GroupName,
+                        t07.Field_006 as PersonName
                     FROM STR_TBL_010 t10
-                    WHERE t10.Field_009 = '12'
+                    INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
+                    LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                    LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
+                    LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
+                    LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_003 AND t07.Field_004 = '11'
+                    WHERE t10.Field_009 IN ('12', '13')
                       AND t10.Field_008 >= '${salesDateFromB}T00:00:00.000Z' 
                       AND t10.Field_008 <= '${salesDateToB}T23:59:59.000Z'
                     ORDER BY t10.Field_008 DESC
@@ -1205,7 +1225,7 @@ export default function AccountingReports() {
             const date = new Date(row.Date);
             const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '12';
+            const isReturn = String(row.DocType) === '13';
             
             const netAmt = isReturn ? -amt : amt;
             const netQty = isReturn ? -qty : qty;
@@ -1253,7 +1273,7 @@ export default function AccountingReports() {
             }
             const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '12';
+            const isReturn = String(row.DocType) === '13';
             
             groups[grp].amountA += isReturn ? -amt : amt;
             groups[grp].weightA += isReturn ? -qty : qty;
@@ -1266,7 +1286,7 @@ export default function AccountingReports() {
             }
             const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '12';
+            const isReturn = String(row.DocType) === '13';
             
             groups[grp].amountB += isReturn ? -amt : amt;
             groups[grp].weightB += isReturn ? -qty : qty;
@@ -1703,7 +1723,7 @@ export default function AccountingReports() {
                         </div>
 
                         {/* Traz Data Table */}
-                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[500px] overflow-y-auto">
+                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[500px] overflow-y-auto overflow-x-auto">
                             <table className="w-full text-right text-xs">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>
@@ -1809,7 +1829,7 @@ export default function AccountingReports() {
 
                         {statementData.length > 0 ? (
                             <div className="space-y-4">
-                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
+                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
                                     <table className="w-full text-right text-xs">
                                         <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                             <tr>
@@ -2061,7 +2081,7 @@ export default function AccountingReports() {
                                 {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : salesInterval === 'detailed' ? 'جدول ریز فاکتورهای فروش و مرجوعی' : `گزارش تجمعی ${salesInterval === 'daily' ? 'روزانه' : salesInterval === 'monthly' ? 'ماهانه' : salesInterval === 'quarterly' ? 'فصلی' : 'سالانه'} فروش خالص`}
                             </h3>
                             
-                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
+                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto overflow-x-auto">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         {compareMode ? (
@@ -2079,6 +2099,7 @@ export default function AccountingReports() {
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">تاریخ فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">شماره سند</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-44">گروه کالا</th>
+                                                <th className="p-3.5 font-bold text-slate-700 w-32">شخص/مشتری</th>
                                                 <th className="p-3.5 font-bold text-slate-700">شرح کالای فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-center w-24">نوع سند</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-left w-32">وزن خالص (کیلوگرم)</th>
@@ -2135,12 +2156,13 @@ export default function AccountingReports() {
                                                 </tr>
                                             ) : (
                                             salesData.filter(row => !salesSearch || (row.Notes && row.Notes.includes(salesSearch))).map((row, idx) => {
-                                                    const isReturn = String(row.DocType) === '12';
+                                                    const isReturn = String(row.DocType) === '13';
                                                     return (
                                                         <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${isReturn ? 'bg-rose-50/20' : ''}`}>
                                                             <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
                                                             <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
                                                             <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
+                                                            <td className="p-3 font-bold text-slate-800">{row.PersonName || '-'}</td>
                                                             <td className="p-3 font-semibold text-slate-900">
                                                                 {row.ItemName || 'کالای فروخته شده'}
                                                                 {(row.ItemNotes || row.Notes) && <span className="block text-[10px] text-slate-400 font-normal">{row.Notes || row.ItemNotes}</span>}
@@ -2250,7 +2272,7 @@ export default function AccountingReports() {
 
                         {/* Grouped Lists */}
                         <div className="space-y-4">
-                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
+                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         <tr>
@@ -2374,7 +2396,7 @@ export default function AccountingReports() {
                         </div>
 
                         {/* Cheques table */}
-                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
+                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
                             <table className="w-full text-right text-xs">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>
