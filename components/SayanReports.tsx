@@ -159,8 +159,31 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
     try {
       if (reportType === 'SALES' || reportType === 'SALES_BY_GROUP' || reportType === 'SALES_COMPARISON') {
+        let dateSql = '';
+        if (startDate) {
+            const startIsoStr = toIsoDateString(jalaliToGregorian(startDate.year, startDate.month, startDate.day));
+            dateSql += ` AND CONVERT(VARCHAR(10), Field_008, 120) >= '${startIsoStr}'`;
+        }
+        if (endDate) {
+            const endIsoStr = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
+            dateSql += ` AND CONVERT(VARCHAR(10), Field_008, 120) <= '${endIsoStr}'`;
+        }
+
+        // Add comparison date ranges for SALES_COMPARISON
+        if (reportType === 'SALES_COMPARISON') {
+            let compSql = '';
+            if (compareStartDate && compareEndDate) {
+                const cStartIso = toIsoDateString(jalaliToGregorian(compareStartDate.year, compareStartDate.month, compareStartDate.day));
+                const cEndIso = toIsoDateString(jalaliToGregorian(compareEndDate.year, compareEndDate.month, compareEndDate.day));
+                compSql = ` OR (CONVERT(VARCHAR(10), Field_008, 120) >= '${cStartIso}' AND CONVERT(VARCHAR(10), Field_008, 120) <= '${cEndIso}')`;
+            }
+            if (dateSql && compSql) {
+                dateSql = ` AND ((${dateSql.substring(4)})${compSql})`;
+            }
+        }
+
         // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
-        sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
+        sqlQuery = `SELECT * FROM STR_TBL_010 WHERE 1=1 ${dateSql} ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
@@ -193,16 +216,18 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
         // Fetch warehouse document details (STR_TBL_011)
         let detailsList: any[] = [];
-        try {
-            const docIds = finalData.map((r: any) => r.Field_001).filter(Boolean);
-            if (docIds.length > 0) {
-                for (let i = 0; i < docIds.length; i += 1000) {
-                    const chunk = docIds.slice(i, i + 1000).map(id => `'${id}'`).join(',');
+        const docIds = finalData.map((r: any) => r.Field_001).filter(Boolean);
+        if (docIds.length > 0) {
+            for (let i = 0; i < docIds.length; i += 200) {
+                try {
+                    const chunk = docIds.slice(i, i + 200).map(id => `'${id}'`).join(',');
                     const chunkData = await attemptQuery(`SELECT * FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
-                    detailsList = detailsList.concat(chunkData);
-                }
+                    if (Array.isArray(chunkData)) {
+                        detailsList = detailsList.concat(chunkData);
+                    }
+                } catch(e) { console.error("STR_TBL_011 chunk fetch failed", e); }
             }
-        } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
+        }
 
         
         // --- SMART PRODUCT MAP BUILDER ---
@@ -624,7 +649,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
                 FROM ACT_TBL_009 t2
                 LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
-                WHERE t2.Field_005 != '9'
+                WHERE 1=1
                 GROUP BY t2.Field_015, t2.Field_018
             `;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
@@ -700,7 +725,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
 
             let customerFilterSql = '';
-            if (targetCode) {
+            if (targetCodes.length > 0) {
+                const conditions = targetCodes.map(tc => `t2.Field_015 LIKE '%${tc}%' OR t2.Field_018 LIKE '%${tc}%'`);
+                customerFilterSql = `AND (${conditions.join(' OR ')})`;
+            } else if (targetCode) {
                 customerFilterSql = `AND (t2.Field_015 LIKE '%${targetCode}%' OR t2.Field_018 LIKE '%${targetCode}%')`;
             } else {
                 // Normalize selectedCustomer to handle both Arabic and Persian keyboard inputs
@@ -720,7 +748,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 t2.Field_005, t2.Field_006, t2.Field_007 
             FROM ACT_TBL_009 t2 
             LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004 
-            WHERE t2.Field_005 != '9' ${customerFilterSql}
+            WHERE 1=1 ${customerFilterSql}
             ORDER BY t1.Field_008 ASC`;
             const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
@@ -837,7 +865,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
             FROM ACT_TBL_009 t2
             LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
-            WHERE t2.Field_005 != '9'
+            WHERE 1=1
             GROUP BY t2.Field_015, t2.Field_018
         `;
         const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
