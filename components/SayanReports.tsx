@@ -617,14 +617,49 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         personAccountsSet.forEach(code => customerCodesSet.add(code));
 
         if (reportType === 'CUSTOMER_STATEMENT') {
+            const isGuaranteeText = (text: string) => {
+                if (!text) return false;
+                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+                const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
+                return keywords.some(keyword => normalized.includes(keyword));
+            };
+
+            const isOpeningText = (text: string) => {
+                if (!text) return false;
+                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+                return normalized.includes('افتتاحیه');
+            };
+
             if (!selectedCustomer) {
                 // Fetch transaction details to update balances
                 let finalData = [];
                 try {
-                    sqlQuery = `SELECT TOP 25000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                    sqlQuery = `
+                      SELECT TOP 25000 
+                        t8.Field_008 as [Date], 
+                        t9.Field_011 as [Description], 
+                        t9.Field_009 as [Debit], 
+                        t9.Field_010 as [Credit], 
+                        t9.Field_015 as [Codes], 
+                        t9.Field_018 as [Details] 
+                      FROM ACT_TBL_009 t9 
+                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                      ORDER BY t8.Field_008 DESC
+                    `;
                     finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 } catch (e) {
-                    sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                    sqlQuery = `
+                      SELECT TOP 5000 
+                        t8.Field_008 as [Date], 
+                        t9.Field_011 as [Description], 
+                        t9.Field_009 as [Debit], 
+                        t9.Field_010 as [Credit], 
+                        t9.Field_015 as [Codes], 
+                        t9.Field_018 as [Details] 
+                      FROM ACT_TBL_009 t9 
+                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                      ORDER BY t8.Field_008 DESC
+                    `;
                     finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 }
                 
@@ -637,10 +672,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 });
 
                 finalData.forEach((row: any) => {
-                    const date = row.Date || row.Field_013;
+                    const date = row.Date;
                     if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
                     
-                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    const desc = String(row.Description || '');
+                    if (isGuaranteeText(desc) || isOpeningText(desc)) return;
+
+                    const codesStr = String(row.Codes || '');
                     
                     let customerCode = null;
                     const parts = codesStr.split(/[:\-]/);
@@ -659,18 +697,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
                     }
                     
-                    const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
-                    const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                    const v1 = parseFloat(row.Debit || 0) || 0;
+                    const v2 = parseFloat(row.Credit || 0) || 0;
                     grouped[customerName].Debit += v1;
                     grouped[customerName].Credit += v2;
                 });
-                
-                const isGuaranteeText = (text: string) => {
-                    if (!text) return false;
-                    const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                    const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
-                    return keywords.some(keyword => normalized.includes(keyword.replace(/ی/g, 'ي').replace(/ک/g, 'ك')));
-                };
 
                 const customerList = Object.values(grouped).map((c: any) => ({
                     ...c,
@@ -686,36 +717,74 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 let finalData = [];
                 try {
                     if (targetCode) {
-                        sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_014 LIKE '%${targetCode}%' ORDER BY Field_013 DESC`;
+                        sqlQuery = `
+                          SELECT TOP 10000 
+                            t8.Field_008 as [Date], 
+                            t9.Field_011 as [Description], 
+                            t9.Field_009 as [Debit], 
+                            t9.Field_010 as [Credit], 
+                            t9.Field_015 as [Codes], 
+                            t9.Field_018 as [Details] 
+                          FROM ACT_TBL_009 t9 
+                          LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                          WHERE t9.Field_015 LIKE '%${targetCode}%' 
+                          ORDER BY t8.Field_008 DESC
+                        `;
                     } else {
-                        sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 WHERE Field_010 LIKE '%${selectedCustomer}%' ORDER BY Field_013 DESC`;
+                        sqlQuery = `
+                          SELECT TOP 10000 
+                            t8.Field_008 as [Date], 
+                            t9.Field_011 as [Description], 
+                            t9.Field_009 as [Debit], 
+                            t9.Field_010 as [Credit], 
+                            t9.Field_015 as [Codes], 
+                            t9.Field_018 as [Details] 
+                          FROM ACT_TBL_009 t9 
+                          LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                          WHERE t9.Field_011 LIKE N'%${selectedCustomer}%' 
+                          ORDER BY t8.Field_008 DESC
+                        `;
                     }
                     finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 } catch (e) {
-                    sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                    sqlQuery = `
+                      SELECT TOP 5000 
+                        t8.Field_008 as [Date], 
+                        t9.Field_011 as [Description], 
+                        t9.Field_009 as [Debit], 
+                        t9.Field_010 as [Credit], 
+                        t9.Field_015 as [Codes], 
+                        t9.Field_018 as [Details] 
+                      FROM ACT_TBL_009 t9 
+                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                      ORDER BY t8.Field_008 DESC
+                    `;
                     finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 }
                 
                 const processed = finalData.map((row: any) => {
-                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    const codesStr = String(row.Codes || '');
                     
                     let matches = false;
                     if (targetCode) {
                         const parts = codesStr.split(/[:\-]/);
                         if (parts.includes(targetCode)) matches = true;
                     } else {
-                        const desc = String(row.Description || row.Field_010 || '');
+                        const desc = String(row.Description || '');
                         if (desc.includes(selectedCustomer)) matches = true;
                     }
 
                     if (!matches) return null;
 
-                    const d = parseFloat(row.Debit || row.Field_008 || 0);
-                    const c = parseFloat(row.Credit || row.Field_009 || 0);
+                    const desc = String(row.Description || '');
+                    if (isGuaranteeText(desc) || isOpeningText(desc)) return null;
+
+                    const d = parseFloat(row.Debit || 0);
+                    const c = parseFloat(row.Credit || 0);
                     
                     return {
-                        Date: row.Date || row.Field_013,
-                        Description: row.Description || row.Field_010,
+                        Date: row.Date,
+                        Description: desc,
                         Debit: d,
                         Credit: c,
                         Balance: d - c
@@ -732,21 +801,66 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
         } 
         else if (reportType === 'DEBTORS_CREDITORS') {
+            const isGuaranteeText = (text: string) => {
+                if (!text) return false;
+                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+                const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
+                return keywords.some(keyword => normalized.includes(keyword));
+            };
+
+            const isOpeningText = (text: string) => {
+                if (!text) return false;
+                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
+                return normalized.includes('افتتاحیه');
+            };
+
             let finalData = [];
             try {
-                sqlQuery = `SELECT TOP 25000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `
+                  SELECT TOP 25000 
+                    t8.Field_008 as [Date], 
+                    t9.Field_011 as [Description], 
+                    t9.Field_009 as [Debit], 
+                    t9.Field_010 as [Credit], 
+                    t9.Field_015 as [Codes], 
+                    t9.Field_018 as [Details] 
+                  FROM ACT_TBL_009 t9 
+                  LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                  ORDER BY t8.Field_008 DESC
+                `;
                 finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             } catch (e) {
-                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                sqlQuery = `
+                  SELECT TOP 5000 
+                    t8.Field_008 as [Date], 
+                    t9.Field_011 as [Description], 
+                    t9.Field_009 as [Debit], 
+                    t9.Field_010 as [Credit], 
+                    t9.Field_015 as [Codes], 
+                    t9.Field_018 as [Details] 
+                  FROM ACT_TBL_009 t9 
+                  LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
+                  ORDER BY t8.Field_008 DESC
+                `;
                 finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             }
             
             const grouped: Record<string, any> = {};
+
+            // First ensure all known customers are in the list (so they are visible even with 0 balance)
+            customerCodesSet.forEach(code => {
+                const name = accountMap[code] || `شخص ${code}`;
+                grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
+            });
+
             finalData.forEach((row: any) => {
-                const date = row.Date || row.Field_013;
+                const date = row.Date;
                 if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
 
-                const codesStr = String(row.Codes || row.Field_014 || '');
+                const desc = String(row.Description || '');
+                if (isGuaranteeText(desc) || isOpeningText(desc)) return;
+
+                const codesStr = String(row.Codes || '');
                 let customerCode = null;
                 const parts = codesStr.split(/[:\-]/);
                 for (const p of parts) {
@@ -759,20 +873,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
                 const name = accountMap[customerCode] || `شخص ${customerCode}`;
                 
-                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
-                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
-                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                if (!grouped[name]) grouped[name] = { AccountName: name, Code: customerCode, Debit: 0, Credit: 0 };
+                const v1 = parseFloat(row.Debit || 0) || 0;
+                const v2 = parseFloat(row.Credit || 0) || 0;
                 grouped[name].Debit += v1;
                 grouped[name].Credit += v2;
             });
             
-            const isGuaranteeText = (text: string) => {
-                if (!text) return false;
-                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
-                return keywords.some(keyword => normalized.includes(keyword.replace(/ی/g, 'ي').replace(/ک/g, 'ك')));
-            };
-
             const processed = Object.values(grouped).map((row: any) => {
                 const net = row.Debit - row.Credit;
                 return {

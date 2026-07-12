@@ -155,6 +155,7 @@ export default function AccountingReports() {
     const [tafsilis, setTafsilis] = useState<any[]>([]);
     const [selectedTafsili, setSelectedTafsili] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
+    const [searchStatementText, setSearchStatementText] = useState('');
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
@@ -1266,61 +1267,111 @@ export default function AccountingReports() {
 
                         {statementData.length > 0 ? (
                             <div className="space-y-4">
-                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
-                                    <table className="w-full text-right text-xs">
-                                        <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
-                                            <tr>
-                                                <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
-                                                <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
-                                                <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {statementData.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                    <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
-                                                    <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
-                                                    <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
-                                                    <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
-                                                    <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                        {formatMoney(row.balance)}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                                            row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
-                                                        }`}>
-                                                            {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            
-                                            {/* Summary Sticky Foot */}
-                                            <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
-                                                <td colSpan={3} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
-                                                <td className="p-4 text-left text-rose-700 font-mono text-sm">
-                                                    {formatMoney(statementData.reduce((sum, r) => sum + r.bed, 0))}
-                                                </td>
-                                                <td className="p-4 text-left text-emerald-700 font-mono text-sm">
-                                                    {formatMoney(statementData.reduce((sum, r) => sum + r.bes, 0))}
-                                                </td>
-                                                <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
-                                                    statementData[statementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
-                                                }`}>
-                                                    {formatMoney(statementData[statementData.length - 1]?.balance || 0)}
-                                                    <span className="text-[10px] font-bold mr-1">
-                                                        ({(statementData[statementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="relative flex-1">
+                                        <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="جستجو در شرح، سند، تاریخ، بدهکار یا بستانکار..."
+                                            value={searchStatementText}
+                                            onChange={e => setSearchStatementText(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 rounded-lg py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs font-bold"
+                                        />
+                                    </div>
+                                    {searchStatementText && (
+                                        <button 
+                                            onClick={() => setSearchStatementText('')}
+                                            className="text-xs text-rose-500 hover:text-rose-600 font-bold px-2 py-1"
+                                        >
+                                            پاک کردن فیلتر
+                                        </button>
+                                    )}
+                                    <div className="text-xs text-slate-500 font-bold sm:mr-auto">
+                                        تعداد اقلام: <span className="text-blue-600 font-mono">{
+                                            statementData.filter(row => {
+                                                const text = searchStatementText.trim().toLowerCase();
+                                                if (!text) return true;
+                                                const desc = String(row.Description || '').toLowerCase();
+                                                const date = String(row.Date || '').toLowerCase();
+                                                const sanadNo = String(row.SanadNo || '').toLowerCase();
+                                                const bed = String(row.bed || '').toLowerCase();
+                                                const bes = String(row.bes || '').toLowerCase();
+                                                return desc.includes(text) || date.includes(text) || sanadNo.includes(text) || bed.includes(text) || bes.includes(text);
+                                            }).length
+                                        }</span> از <span className="text-slate-600 font-mono">{statementData.length}</span>
+                                    </div>
                                 </div>
+
+                                {(() => {
+                                    const filteredStatementData = statementData.filter(row => {
+                                        const text = searchStatementText.trim().toLowerCase();
+                                        if (!text) return true;
+                                        const desc = String(row.Description || '').toLowerCase();
+                                        const date = String(row.Date || '').toLowerCase();
+                                        const sanadNo = String(row.SanadNo || '').toLowerCase();
+                                        const bed = String(row.bed || '').toLowerCase();
+                                        const bes = String(row.bes || '').toLowerCase();
+                                        return desc.includes(text) || date.includes(text) || sanadNo.includes(text) || bed.includes(text) || bes.includes(text);
+                                    });
+
+                                    return (
+                                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
+                                            <table className="w-full text-right text-xs">
+                                                <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
+                                                    <tr>
+                                                        <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
+                                                        <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
+                                                        <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
+                                                        <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
+                                                        <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
+                                                        <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
+                                                        <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {filteredStatementData.map((row, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
+                                                            <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
+                                                            <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
+                                                            <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
+                                                            <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                                {formatMoney(row.balance)}
+                                                            </td>
+                                                            <td className="p-3 text-center">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                                                    row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                                                                }`}>
+                                                                    {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    
+                                                    {/* Summary Sticky Foot */}
+                                                    <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
+                                                        <td colSpan={3} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
+                                                        <td className="p-4 text-left text-rose-700 font-mono text-sm">
+                                                            {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
+                                                        </td>
+                                                        <td className="p-4 text-left text-emerald-700 font-mono text-sm">
+                                                            {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}
+                                                        </td>
+                                                        <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
+                                                            filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                                                        }`}>
+                                                            {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}
+                                                            <span className="text-[10px] font-bold mr-1">
+                                                                ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         ) : (
                             <div className="text-center py-16 text-slate-400 font-medium border-2 border-dashed border-slate-200 rounded-xl">
