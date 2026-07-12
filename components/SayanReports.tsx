@@ -103,9 +103,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [searchCustomer, setSearchCustomer] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [customerDetails, setCustomerDetails] = useState<any[]>([]);
-  const [searchStatementText, setSearchStatementText] = useState('');
-  const [debtorsTab, setDebtorsTab] = useState<'REGULAR' | 'GUARANTEES'>('REGULAR');
-  const [searchDebtorsText, setSearchDebtorsText] = useState('');
 
   // Advanced config states
   const [availableSalesTypes, setAvailableSalesTypes] = useState<string[]>([]);
@@ -617,51 +614,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         personAccountsSet.forEach(code => customerCodesSet.add(code));
 
         if (reportType === 'CUSTOMER_STATEMENT') {
-            const isGuaranteeText = (text: string) => {
-                if (!text) return false;
-                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
-                return keywords.some(keyword => normalized.includes(keyword));
-            };
-
-            const isOpeningText = (text: string) => {
-                if (!text) return false;
-                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                return normalized.includes('افتتاحیه');
-            };
-
             if (!selectedCustomer) {
                 // Fetch transaction details to update balances
-                let finalData = [];
-                try {
-                    sqlQuery = `
-                      SELECT TOP 25000 
-                        t8.Field_008 as [Date], 
-                        t9.Field_011 as [Description], 
-                        t9.Field_009 as [Debit], 
-                        t9.Field_010 as [Credit], 
-                        t9.Field_015 as [Codes], 
-                        t9.Field_018 as [Details] 
-                      FROM ACT_TBL_009 t9 
-                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                      ORDER BY t8.Field_008 DESC
-                    `;
-                    finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-                } catch (e) {
-                    sqlQuery = `
-                      SELECT TOP 5000 
-                        t8.Field_008 as [Date], 
-                        t9.Field_011 as [Description], 
-                        t9.Field_009 as [Debit], 
-                        t9.Field_010 as [Credit], 
-                        t9.Field_015 as [Codes], 
-                        t9.Field_018 as [Details] 
-                      FROM ACT_TBL_009 t9 
-                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                      ORDER BY t8.Field_008 DESC
-                    `;
-                    finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-                }
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const grouped: Record<string, any> = {};
                 
@@ -672,13 +628,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 });
 
                 finalData.forEach((row: any) => {
-                    const date = row.Date;
+                    const date = row.Date || row.Field_013;
                     if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
                     
-                    const desc = String(row.Description || '');
-                    if (isGuaranteeText(desc) || isOpeningText(desc)) return;
-
-                    const codesStr = String(row.Codes || '');
+                    const codesStr = String(row.Codes || row.Field_014 || '');
                     
                     let customerCode = null;
                     const parts = codesStr.split(/[:\-]/);
@@ -697,94 +650,41 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
                     }
                     
-                    const v1 = parseFloat(row.Debit || 0) || 0;
-                    const v2 = parseFloat(row.Credit || 0) || 0;
+                    const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                    const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
                     grouped[customerName].Debit += v1;
                     grouped[customerName].Credit += v2;
                 });
-
-                const customerList = Object.values(grouped).map((c: any) => ({
-                    ...c,
-                    IsGuarantee: isGuaranteeText(c.AccountName)
-                }));
-                setCustomers(customerList);
+                setCustomers(Object.values(grouped));
                 setData([]);
             } else {
                 // Customer is selected
                 const custObj = customers.find(c => c.AccountName === selectedCustomer);
                 const targetCode = custObj ? custObj.Code : null;
 
-                let finalData = [];
-                try {
-                    if (targetCode) {
-                        sqlQuery = `
-                          SELECT TOP 10000 
-                            t8.Field_008 as [Date], 
-                            t9.Field_011 as [Description], 
-                            t9.Field_009 as [Debit], 
-                            t9.Field_010 as [Credit], 
-                            t9.Field_015 as [Codes], 
-                            t9.Field_018 as [Details] 
-                          FROM ACT_TBL_009 t9 
-                          LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                          WHERE t9.Field_015 LIKE '%${targetCode}%' 
-                          ORDER BY t8.Field_008 DESC
-                        `;
-                    } else {
-                        sqlQuery = `
-                          SELECT TOP 10000 
-                            t8.Field_008 as [Date], 
-                            t9.Field_011 as [Description], 
-                            t9.Field_009 as [Debit], 
-                            t9.Field_010 as [Credit], 
-                            t9.Field_015 as [Codes], 
-                            t9.Field_018 as [Details] 
-                          FROM ACT_TBL_009 t9 
-                          LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                          WHERE t9.Field_011 LIKE N'%${selectedCustomer}%' 
-                          ORDER BY t8.Field_008 DESC
-                        `;
-                    }
-                    finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-                } catch (e) {
-                    sqlQuery = `
-                      SELECT TOP 5000 
-                        t8.Field_008 as [Date], 
-                        t9.Field_011 as [Description], 
-                        t9.Field_009 as [Debit], 
-                        t9.Field_010 as [Credit], 
-                        t9.Field_015 as [Codes], 
-                        t9.Field_018 as [Details] 
-                      FROM ACT_TBL_009 t9 
-                      LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                      ORDER BY t8.Field_008 DESC
-                    `;
-                    finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-                }
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
                 
                 const processed = finalData.map((row: any) => {
-                    const codesStr = String(row.Codes || '');
+                    const codesStr = String(row.Codes || row.Field_014 || '');
                     
                     let matches = false;
                     if (targetCode) {
                         const parts = codesStr.split(/[:\-]/);
                         if (parts.includes(targetCode)) matches = true;
                     } else {
-                        const desc = String(row.Description || '');
+                        const desc = String(row.Description || row.Field_010 || '');
                         if (desc.includes(selectedCustomer)) matches = true;
                     }
 
                     if (!matches) return null;
 
-                    const desc = String(row.Description || '');
-                    if (isGuaranteeText(desc) || isOpeningText(desc)) return null;
-
-                    const d = parseFloat(row.Debit || 0);
-                    const c = parseFloat(row.Credit || 0);
+                    const d = parseFloat(row.Debit || row.Field_008 || 0);
+                    const c = parseFloat(row.Credit || row.Field_009 || 0);
                     
                     return {
-                        Date: row.Date,
-                        Description: desc,
+                        Date: row.Date || row.Field_013,
+                        Description: row.Description || row.Field_010,
                         Debit: d,
                         Credit: c,
                         Balance: d - c
@@ -801,66 +701,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
         } 
         else if (reportType === 'DEBTORS_CREDITORS') {
-            const isGuaranteeText = (text: string) => {
-                if (!text) return false;
-                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                const keywords = ['تضمین', 'تضامین', 'ضمانت', 'انتظامی', 'تضمين', 'تضامين', 'انتظامي', 'وثیقه', 'تعهدات'];
-                return keywords.some(keyword => normalized.includes(keyword));
-            };
-
-            const isOpeningText = (text: string) => {
-                if (!text) return false;
-                const normalized = text.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                return normalized.includes('افتتاحیه');
-            };
-
-            let finalData = [];
-            try {
-                sqlQuery = `
-                  SELECT TOP 25000 
-                    t8.Field_008 as [Date], 
-                    t9.Field_011 as [Description], 
-                    t9.Field_009 as [Debit], 
-                    t9.Field_010 as [Credit], 
-                    t9.Field_015 as [Codes], 
-                    t9.Field_018 as [Details] 
-                  FROM ACT_TBL_009 t9 
-                  LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                  ORDER BY t8.Field_008 DESC
-                `;
-                finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-            } catch (e) {
-                sqlQuery = `
-                  SELECT TOP 5000 
-                    t8.Field_008 as [Date], 
-                    t9.Field_011 as [Description], 
-                    t9.Field_009 as [Debit], 
-                    t9.Field_010 as [Credit], 
-                    t9.Field_015 as [Codes], 
-                    t9.Field_018 as [Details] 
-                  FROM ACT_TBL_009 t9 
-                  LEFT JOIN ACT_TBL_008 t8 ON t9.Field_003 = t8.Field_004 AND t9.Field_004 = t8.Field_005 
-                  ORDER BY t8.Field_008 DESC
-                `;
-                finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-            }
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
             
             const grouped: Record<string, any> = {};
-
-            // First ensure all known customers are in the list (so they are visible even with 0 balance)
-            customerCodesSet.forEach(code => {
-                const name = accountMap[code] || `شخص ${code}`;
-                grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
-            });
-
             finalData.forEach((row: any) => {
-                const date = row.Date;
+                const date = row.Date || row.Field_013;
                 if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
 
-                const desc = String(row.Description || '');
-                if (isGuaranteeText(desc) || isOpeningText(desc)) return;
-
-                const codesStr = String(row.Codes || '');
+                const codesStr = String(row.Codes || row.Field_014 || '');
                 let customerCode = null;
                 const parts = codesStr.split(/[:\-]/);
                 for (const p of parts) {
@@ -873,9 +722,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
                 const name = accountMap[customerCode] || `شخص ${customerCode}`;
                 
-                if (!grouped[name]) grouped[name] = { AccountName: name, Code: customerCode, Debit: 0, Credit: 0 };
-                const v1 = parseFloat(row.Debit || 0) || 0;
-                const v2 = parseFloat(row.Credit || 0) || 0;
+                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
                 grouped[name].Debit += v1;
                 grouped[name].Credit += v2;
             });
@@ -885,8 +734,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 return {
                     ...row,
                     NetBalance: Math.abs(net),
-                    Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه'),
-                    IsGuarantee: isGuaranteeText(row.AccountName)
+                    Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
                 };
             }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
             
@@ -1868,24 +1716,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   const renderCustomerStatement = () => {
       if (selectedCustomer) {
-          // Calculate historical running balances for all rows chronologically once so search won't break balances
-          let runningAcc = 0;
-          const detailsWithBalance = [...customerDetails].reverse().map(row => {
-              const deb = parseFloat(row.Debit) || 0;
-              const cred = parseFloat(row.Credit) || 0;
-              runningAcc += (deb - cred);
-              return { ...row, accumulatedBalance: runningAcc };
-          }).reverse(); // Keep the original sorting (descending by date)
-
-          const filteredDetails = detailsWithBalance.filter(row => {
-              const text = searchStatementText.trim().toLowerCase();
-              if (!text) return true;
-              const desc = String(row.Description || '').toLowerCase();
-              const date = String(row.Date || '').toLowerCase();
-              const deb = String(row.Debit || '').toLowerCase();
-              const cred = String(row.Credit || '').toLowerCase();
-              return desc.includes(text) || date.includes(text) || deb.includes(text) || cred.includes(text);
-          });
+          let runningBalance = 0;
+          let printRunningBalance = 0;
           
           const printStatement = () => {
               let html = `
@@ -1914,9 +1746,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                           </tr>
                       </thead>
                       <tbody>
-                          ${filteredDetails.map((row, idx) => {
+                          ${customerDetails.map((row, idx) => {
                               const deb = parseFloat(row.Debit) || 0;
                               const cred = parseFloat(row.Credit) || 0;
+                              printRunningBalance += (deb - cred);
                               return `
                               <tr>
                                   <td>${idx + 1}</td>
@@ -1924,7 +1757,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                   <td>${row.Description || '-'}</td>
                                   <td dir="ltr" style="text-align: left;">${deb > 0 ? deb.toLocaleString() : '-'}</td>
                                   <td dir="ltr" style="text-align: left;">${cred > 0 ? cred.toLocaleString() : '-'}</td>
-                                  <td dir="ltr" style="text-align: left; font-weight: bold;">${row.accumulatedBalance.toLocaleString()} ${row.accumulatedBalance > 0 ? '(بد)' : row.accumulatedBalance < 0 ? '(بس)' : ''}</td>
+                                  <td dir="ltr" style="text-align: left; font-weight: bold;">${printRunningBalance.toLocaleString()} ${printRunningBalance > 0 ? '(بد)' : printRunningBalance < 0 ? '(بس)' : ''}</td>
                               </tr>
                               `;
                           }).join('')}
@@ -1950,7 +1783,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               <div className="space-y-4">
                   <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-4">
-                          <button onClick={() => { setSelectedCustomer(null); setSearchStatementText(''); }} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
+                          <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
                               <ArrowRight size={16} />
                           </button>
                           <h2 className="text-xl font-black text-slate-800">
@@ -1961,31 +1794,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                           <Printer size={16} /> چاپ صورتحساب
                       </button>
                   </div>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                      <div className="relative flex-1">
-                          <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
-                          <input
-                              type="text"
-                              placeholder="جستجو در شرح، تاریخ، بدهکار یا بستانکار..."
-                              value={searchStatementText}
-                              onChange={e => setSearchStatementText(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-medium"
-                          />
-                      </div>
-                      {searchStatementText && (
-                          <button 
-                              onClick={() => setSearchStatementText('')}
-                              className="text-xs text-rose-500 hover:text-rose-600 font-bold px-2 py-1"
-                          >
-                              پاک کردن فیلتر
-                          </button>
-                      )}
-                      <div className="text-xs text-slate-500 font-bold sm:mr-auto">
-                          تعداد اقلام: <span className="text-indigo-600 font-mono">{filteredDetails.length}</span> از <span className="text-slate-600 font-mono">{customerDetails.length}</span>
-                      </div>
-                  </div>
-
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-right">
@@ -1999,16 +1807,17 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono text-xs">
-                            {filteredDetails.map((row, idx) => {
+                            {customerDetails.map((row, idx) => {
                                 const deb = parseFloat(row.Debit) || 0;
                                 const cred = parseFloat(row.Credit) || 0;
+                                runningBalance += (deb - cred);
                                 return (
                                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate((row.Date || '').substring(0, 10))}</td>
                                         <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800">{row.Description || '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-emerald-600" dir="ltr">{deb > 0 ? deb.toLocaleString() : '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-rose-600" dir="ltr">{cred > 0 ? cred.toLocaleString() : '-'}</td>
-                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{row.accumulatedBalance.toLocaleString()} {row.accumulatedBalance > 0 ? '(بد)' : row.accumulatedBalance < 0 ? '(بس)' : ''}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{runningBalance.toLocaleString()} {runningBalance > 0 ? '(بد)' : runningBalance < 0 ? '(بس)' : ''}</td>
                                     </tr>
                                 );
                             })}
@@ -2020,7 +1829,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
           );
       }
 
-      const filteredCustomers = customers.filter(c => !c.IsGuarantee).filter(c => !searchCustomer || c.AccountName.includes(searchCustomer));
+      const filteredCustomers = customers.filter(c => !searchCustomer || c.AccountName.includes(searchCustomer));
 
       return (
           <div className="space-y-4">
@@ -2061,44 +1870,20 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   };
 
   const renderDebtorsCreditors = () => {
-      // Filter list based on whether we are viewing commercial accounts or guarantee checks
-      const filteredListByTab = data.filter(d => {
-          if (debtorsTab === 'GUARANTEES') {
-              return !!d.IsGuarantee;
-          } else {
-              return !d.IsGuarantee;
-          }
-      });
-
-      // Filter list based on search text
-      const filteredBySearch = filteredListByTab.filter(d => {
-          if (!searchDebtorsText) return true;
-          return d.AccountName.toLowerCase().includes(searchDebtorsText.toLowerCase());
-      });
-
-      const debtors = filteredBySearch.filter(d => d.Type === 'بدهکار');
-      const creditors = filteredBySearch.filter(d => d.Type === 'بستانکار');
+      const debtors = data.filter(d => d.Type === 'بدهکار');
+      const creditors = data.filter(d => d.Type === 'بستانکار');
       
-      const regularDebtorsTotal = data.filter(d => !d.IsGuarantee && d.Type === 'بدهکار').reduce((sum, d) => sum + d.NetBalance, 0);
-      const regularCreditorsTotal = data.filter(d => !d.IsGuarantee && d.Type === 'بستانکار').reduce((sum, d) => sum + d.NetBalance, 0);
-
-      const guaranteeDebtorsTotal = data.filter(d => d.IsGuarantee && d.Type === 'بدهکار').reduce((sum, d) => sum + d.NetBalance, 0);
-      const guaranteeCreditorsTotal = data.filter(d => d.IsGuarantee && d.Type === 'بستانکار').reduce((sum, d) => sum + d.NetBalance, 0);
-
-      const totalDebtors = debtorsTab === 'GUARANTEES' ? guaranteeDebtorsTotal : regularDebtorsTotal;
-      const totalCreditors = debtorsTab === 'GUARANTEES' ? guaranteeCreditorsTotal : regularCreditorsTotal;
+      const totalDebtors = debtors.reduce((sum, d) => sum + d.NetBalance, 0);
+      const totalCreditors = creditors.reduce((sum, d) => sum + d.NetBalance, 0);
 
       const printList = (listType: 'بدهکار' | 'بستانکار') => {
           const list = listType === 'بدهکار' ? debtors : creditors;
-          const total = list.reduce((sum, d) => sum + d.NetBalance, 0);
-          const listTitle = debtorsTab === 'GUARANTEES' 
-              ? `لیست اسناد تضامینی (${listType === 'بدهکار' ? 'بدهکاران' : 'بستانکاران'})` 
-              : `لیست مانده حساب تجاری اشخاص (${listType === 'بدهکار' ? 'بدهکاران' : 'بستانکاران'})`;
+          const total = listType === 'بدهکار' ? totalDebtors : totalCreditors;
           
           let html = `
           <html>
           <head>
-              <title>${listTitle}</title>
+              <title>لیست ${listType}ان</title>
               <style>
                   body { font-family: Tahoma, Arial; direction: rtl; padding: 20px; }
                   h2 { text-align: center; }
@@ -2109,7 +1894,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               </style>
           </head>
           <body>
-              <h2>${listTitle}</h2>
+              <h2>لیست ${listType}ان</h2>
               <table>
                   <thead>
                       <tr>
@@ -2151,55 +1936,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
       return (
           <div className="space-y-6">
-              {/* Tab Selector for separation of Guarantee checks and Regular Commercial accounts */}
-              <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200">
-                  <button
-                      onClick={() => { setDebtorsTab('REGULAR'); setSearchDebtorsText(''); }}
-                      className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all ${
-                          debtorsTab === 'REGULAR'
-                              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
-                              : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                  >
-                      💼 مانده حساب‌های تجاری اشخاص (منهای تضامین)
-                  </button>
-                  <button
-                      onClick={() => { setDebtorsTab('GUARANTEES'); setSearchDebtorsText(''); }}
-                      className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all ${
-                          debtorsTab === 'GUARANTEES'
-                              ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
-                              : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                  >
-                      🛡️ اسناد و چک‌های تضامینی و تعهدات
-                  </button>
-              </div>
-
-              {/* Advanced Search Interface */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="relative flex-1">
-                      <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
-                      <input
-                          type="text"
-                          placeholder="جستجو در حساب‌ها و اشخاص..."
-                          value={searchDebtorsText}
-                          onChange={e => setSearchDebtorsText(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-medium"
-                      />
-                  </div>
-                  {searchDebtorsText && (
-                      <button 
-                          onClick={() => setSearchDebtorsText('')}
-                          className="text-xs text-rose-500 hover:text-rose-600 font-bold px-2 py-1"
-                      >
-                          پاک کردن فیلتر
-                      </button>
-                  )}
-                  <div className="text-xs text-slate-500 font-bold sm:mr-auto">
-                      یافت شده: <span className="text-indigo-600 font-mono">{filteredBySearch.length}</span> مورد از <span className="text-slate-600 font-mono">{filteredListByTab.length}</span>
-                  </div>
-              </div>
-
               <div className="flex justify-end gap-3 mb-4">
                   <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
                       <Printer size={16} /> چاپ بدهکاران
@@ -2211,18 +1947,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                       <div>
-                          <div className="text-slate-500 text-xs font-bold mb-2">
-                              {debtorsTab === 'GUARANTEES' ? 'جمع چک‌ها و اسناد تضامینی دریافتنی' : 'جمع کل بدهکاران (طلب شرکت)'}
-                          </div>
+                          <div className="text-slate-500 text-xs font-bold mb-2">جمع کل بدهکاران (طلب شرکت)</div>
                           <div className="text-2xl font-black text-emerald-600" dir="ltr">{totalDebtors.toLocaleString()}</div>
                       </div>
                       <div className="p-4 bg-emerald-50 rounded-full text-emerald-500"><Activity size={24} /></div>
                   </div>
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                       <div>
-                          <div className="text-slate-500 text-xs font-bold mb-2">
-                              {debtorsTab === 'GUARANTEES' ? 'جمع چک‌ها و اسناد تضامینی پرداختنی' : 'جمع کل بستانکاران (بدهی شرکت)'}
-                          </div>
+                          <div className="text-slate-500 text-xs font-bold mb-2">جمع کل بستانکاران (بدهی شرکت)</div>
                           <div className="text-2xl font-black text-rose-600" dir="ltr">{totalCreditors.toLocaleString()}</div>
                       </div>
                       <div className="p-4 bg-rose-50 rounded-full text-rose-500"><Activity size={24} /></div>
@@ -2240,7 +1972,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">
-                        {filteredBySearch.map((row, idx) => (
+                        {data.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800 font-medium">{row.AccountName}</td>
                                 <td className={`px-6 py-3 whitespace-nowrap font-bold ${row.Type === 'بدهکار' ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">

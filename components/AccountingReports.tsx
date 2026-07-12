@@ -30,112 +30,6 @@ import {
     Line
 } from 'recharts';
 
-// ==========================================
-// SHAMSI (FA/PERSIAN) DATE PICKER WRAPPER
-// ==========================================
-function ShamsiDatePicker({ 
-    value, 
-    onChange, 
-    label 
-}: { 
-    value: string; 
-    onChange: (val: string) => void; 
-    label?: string; 
-}) {
-    // If value is empty, default to today
-    const date = value ? new Date(value) : new Date();
-    const jDate = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
-
-    const years = Array.from({ length: 15 }, (_, i) => 1395 + i); // 1395 to 1409
-    const months = [
-        { val: 1, name: 'فروردین' },
-        { val: 2, name: 'اردیبهشت' },
-        { val: 3, name: 'خرداد' },
-        { val: 4, name: 'تیر' },
-        { val: 5, name: 'مرداد' },
-        { val: 6, name: 'شهریور' },
-        { val: 7, name: 'مهر' },
-        { val: 8, name: 'آبان' },
-        { val: 9, name: 'آذر' },
-        { val: 10, name: 'دی' },
-        { val: 11, name: 'بهمن' },
-        { val: 12, name: 'اسفند' },
-    ];
-    const days = Array.from({ length: 31 }, (_, i) => i + 1);
-
-    const handleDateChange = (newJy: number, newJm: number, newJd: number) => {
-        const maxDays = jalaali.jalaaliMonthLength(newJy, newJm);
-        const validatedJd = Math.min(newJd, maxDays);
-        const g = jalaali.toGregorian(newJy, newJm, validatedJd);
-        const gStr = `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
-        onChange(gStr);
-    };
-
-    return (
-        <div className="flex items-center gap-1">
-            {label && <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap ml-1">{label}</span>}
-            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-md p-1 shadow-sm">
-                <select 
-                    value={jDate.jy}
-                    onChange={(e) => handleDateChange(parseInt(e.target.value), jDate.jm, jDate.jd)}
-                    className="text-xs bg-white rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                >
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <span className="text-slate-400 mx-1 text-xs">/</span>
-                <select 
-                    value={jDate.jm}
-                    onChange={(e) => handleDateChange(jDate.jy, parseInt(e.target.value), jDate.jd)}
-                    className="text-xs bg-white rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-800"
-                >
-                    {months.map(m => <option key={m.val} value={m.val}>{m.name}</option>)}
-                </select>
-                <span className="text-slate-400 mx-1 text-xs">/</span>
-                <select 
-                    value={jDate.jd}
-                    onChange={(e) => handleDateChange(jDate.jy, jDate.jm, parseInt(e.target.value))}
-                    className="text-xs bg-white rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-800"
-                >
-                    {days.map(d => <option key={d} value={d}>{String(d).padStart(2, '0')}</option>)}
-                </select>
-            </div>
-        </div>
-    );
-}
-
-// ==========================================
-// RELIABLE IFRAME-BASED PRINT HELPER
-// ==========================================
-const printHtml = (docHtml: string) => {
-    let printFrame = document.getElementById('sayan-print-frame') as HTMLIFrameElement;
-    if (!printFrame) {
-        printFrame = document.createElement('iframe');
-        printFrame.id = 'sayan-print-frame';
-        printFrame.style.position = 'fixed';
-        printFrame.style.bottom = '0';
-        printFrame.style.right = '0';
-        printFrame.style.width = '0';
-        printFrame.style.height = '0';
-        printFrame.style.border = 'none';
-        printFrame.style.zIndex = '-9999';
-        document.body.appendChild(printFrame);
-    }
-
-    const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
-    if (frameDoc) {
-        frameDoc.open();
-        frameDoc.write(docHtml);
-        frameDoc.close();
-        
-        setTimeout(() => {
-            if (printFrame.contentWindow) {
-                printFrame.contentWindow.focus();
-                printFrame.contentWindow.print();
-            }
-        }, 500);
-    }
-};
-
 export default function AccountingReports() {
     const [activeTab, setActiveTab] = useState('traz');
     const [isLoading, setIsLoading] = useState(false);
@@ -149,13 +43,13 @@ export default function AccountingReports() {
     const [trazSearch, setTrazSearch] = useState('');
     const [trazCategory, setTrazCategory] = useState('all'); // all, customers, suppliers, personnel, shareholders
     const [trazSortOrder, setTrazSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [trazFilterMode, setTrazFilterMode] = useState<'all' | 'debtors' | 'creditors'>('all');
 
     // --- TAB 2: STATEMENT STATE ---
     const [tafsilis, setTafsilis] = useState<any[]>([]);
     const [selectedTafsili, setSelectedTafsili] = useState('');
+    const [tafsiliSearch, setTafsiliSearch] = useState('');
+    const [statementSearch, setStatementSearch] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
-    const [searchStatementText, setSearchStatementText] = useState('');
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
@@ -180,10 +74,7 @@ export default function AccountingReports() {
     // DATE INITIALIZATION & CONVERSIONS
     // ==========================================
     useEffect(() => {
-        // Load default date range from localStorage if available
-        const savedFrom = localStorage.getItem('sayan_default_date_from');
-        const savedTo = localStorage.getItem('sayan_default_date_to');
-
+        // Initialize Date range: Farvardin 1st of current Persian year to today
         const today = new Date();
         const jToday = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
         
@@ -192,13 +83,8 @@ export default function AccountingReports() {
         const startStr = `${gStart.gy}-${String(gStart.gm).padStart(2, '0')}-${String(gStart.gd).padStart(2, '0')}`;
         const endStr = today.toISOString().split('T')[0];
         
-        if (savedFrom && savedTo) {
-            setDateFrom(savedFrom);
-            setDateTo(savedTo);
-        } else {
-            setDateFrom(startStr);
-            setDateTo(endStr);
-        }
+        setDateFrom(startStr);
+        setDateTo(endStr);
 
         // Previous year default for comparisons
         const startPrev = `${gStart.gy - 1}-${String(gStart.gm).padStart(2, '0')}-${String(gStart.gd).padStart(2, '0')}`;
@@ -208,27 +94,6 @@ export default function AccountingReports() {
 
         fetchTafsilis();
     }, []);
-
-    const handleSaveAsDefaultDates = () => {
-        localStorage.setItem('sayan_default_date_from', dateFrom);
-        localStorage.setItem('sayan_default_date_to', dateTo);
-        toast.success('بازه زمانی جاری به عنوان بازه پیش‌فرض با موفقیت ذخیره شد.');
-    };
-
-    const handleResetDefaultDates = () => {
-        localStorage.removeItem('sayan_default_date_from');
-        localStorage.removeItem('sayan_default_date_to');
-        
-        const today = new Date();
-        const jToday = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
-        const gStart = jalaali.toGregorian(jToday.jy, 1, 1);
-        const startStr = `${gStart.gy}-${String(gStart.gm).padStart(2, '0')}-${String(gStart.gd).padStart(2, '0')}`;
-        const endStr = today.toISOString().split('T')[0];
-        
-        setDateFrom(startStr);
-        setDateTo(endStr);
-        toast.success('تنظیمات بازه زمانی به حالت اولیه کارخانه بازنشانی شد.');
-    };
 
     const formatMoney = (val: number) => new Intl.NumberFormat('fa-IR').format(Math.round(Math.abs(val)));
     
@@ -290,7 +155,7 @@ export default function AccountingReports() {
         setIsLoading(true);
         try {
             let sql = '';
-            // Always use ACT_TBL_009 to properly filter out guarantees
+            // If date filter is defined, query transactional tables with Sanad headers
             if (dateFrom && dateTo) {
                 sql = `
                     SELECT 
@@ -299,77 +164,31 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE t9.Field_015 LIKE '%11:%' 
+                    WHERE t9.Field_015 LIKE '%11:%' AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
                       AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
-                      AND t9.Field_011 NOT LIKE N'%تضمین%'
-                      AND t9.Field_011 NOT LIKE N'%تضامین%'
-                      AND t9.Field_011 NOT LIKE N'%ضمانت%'
-                      AND t9.Field_011 NOT LIKE N'%انتظامی%'
-                      AND t9.Field_011 NOT LIKE N'%وثیقه%'
-                      AND t9.Field_011 NOT LIKE N'%تعهدات%'
-                      AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
                     GROUP BY t9.Field_015
                 `;
             } else {
+                // aggregate speeds
                 sql = `
                     SELECT 
-                        t9.Field_015 as TafsiliRaw,
-                        SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
-                        SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
-                    FROM ACT_TBL_009 t9
-                    WHERE t9.Field_015 LIKE '%11:%'
-                      AND t9.Field_011 NOT LIKE N'%تضمین%'
-                      AND t9.Field_011 NOT LIKE N'%تضامین%'
-                      AND t9.Field_011 NOT LIKE N'%ضمانت%'
-                      AND t9.Field_011 NOT LIKE N'%انتظامی%'
-                      AND t9.Field_011 NOT LIKE N'%وثیقه%'
-                      AND t9.Field_011 NOT LIKE N'%تعهدات%'
-                      AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
-                    GROUP BY t9.Field_015
+                        t24.Field_010 as TafsiliRaw,
+                        SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_024 t24
+                    WHERE t24.Field_010 LIKE '11:%' AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                    GROUP BY t24.Field_010
                 `;
             }
             
             const rawData = await runSayanQuery(sql);
             
-            // Ensure we have tafsilis loaded to map correctly
-            let currentTafsilis = tafsilis;
-            if (currentTafsilis.length === 0) {
-                try {
-                    const sqlTaf = `
-                        SELECT DISTINCT 
-                            Field_003 as Code, 
-                            Field_006 as Name, 
-                            Field_005 as TafsiliCode 
-                        FROM ACT_TBL_007 
-                        WHERE Field_004 = '11' 
-                        ORDER BY Field_006 ASC
-                    `;
-                    currentTafsilis = await runSayanQuery(sqlTaf);
-                    setTafsilis(currentTafsilis);
-                } catch (e) {
-                    console.error('Error fetching inline tafsilis inside fetchTraz:', e);
-                }
-            }
-
             // Map Sayan codes to names from ACT_TBL_007
             const mapped = rawData.map((row: any) => {
-                let code = '';
-                if (row.TafsiliRaw) {
-                    const rawStr = row.TafsiliRaw.toString();
-                    const match = rawStr.match(/11:([a-zA-Z0-9_-]+)/);
-                    if (match) {
-                        code = match[1];
-                    }
-                }
-                
-                const tafsili = currentTafsilis.find(t => 
-                    t.Code === code || 
-                    t.TafsiliCode === code || 
-                    (t.Code && t.Code.replace(/^0+/, '') === code.replace(/^0+/, '')) ||
-                    (t.TafsiliCode && t.TafsiliCode.replace(/^0+/, '') === code.replace(/^0+/, ''))
-                );
-                
+                const match = row.TafsiliRaw.match(/11:(\d+)/);
+                const code = match ? match[1] : '';
+                const tafsili = tafsilis.find(t => t.Code === code || t.TafsiliCode === code);
                 const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
                 const bed = parseFloat(row.TotalBed || 0);
                 const bes = parseFloat(row.TotalBes || 0);
@@ -395,22 +214,14 @@ export default function AccountingReports() {
 
             // Categories split logic
             if (trazCategory === 'customers') {
-                if (!(item.name.includes('مشتری') || item.name.includes('خریدار'))) return false;
+                return item.name.includes('مشتری') || item.name.includes('خریدار');
             } else if (trazCategory === 'suppliers') {
-                if (!(item.name.includes('تامین') || item.name.includes('فروشنده') || item.name.includes('شرکت'))) return false;
+                return item.name.includes('تامین') || item.name.includes('فروشنده') || item.name.includes('شرکت');
             } else if (trazCategory === 'personnel') {
-                if (!(item.name.includes('پرسنل') || item.name.includes('همکار') || item.name.includes('آقای') || item.name.includes('خانم'))) return false;
+                return item.name.includes('پرسنل') || item.name.includes('همکار') || item.name.includes('آقای') || item.name.includes('خانم');
             } else if (trazCategory === 'shareholders') {
-                if (!(item.name.includes('سهام') || item.name.includes('هیئت'))) return false;
+                return item.name.includes('سهام') || item.name.includes('هیئت');
             }
-
-            // Split debtors & creditors logic
-            if (trazFilterMode === 'debtors') {
-                return item.balance > 0;
-            } else if (trazFilterMode === 'creditors') {
-                return item.balance < 0;
-            }
-
             return true;
         });
 
@@ -431,9 +242,7 @@ export default function AccountingReports() {
             .filter(t => type === 'bed' ? t.balance > 0 : t.balance < 0)
             .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
 
-        const title = type === 'bed' ? 'گزارش مانده بدهکاران (ترتیب از بیشترین بدهی)' : 'گزارش مانده بستانکاران (ترتیب از بیشترین طلب)';
-        const totalSum = sortedList.reduce((sum, r) => sum + Math.abs(r.balance), 0);
-
+        const title = type === 'bed' ? 'گزارش مانده بدهکاران (صعودی به نزولی)' : 'گزارش مانده بستانکاران (صعودی به نزولی)';
         const docHtml = `
             <html dir="rtl" lang="fa">
             <head>
@@ -483,7 +292,7 @@ export default function AccountingReports() {
                         `).join('')}
                         <tr class="total">
                             <td colspan="3" style="text-align: left;">جمع کل مانده‌ها:</td>
-                            <td style="text-align: left;">${formatMoney(totalSum)}</td>
+                            <td style="text-align: left;">${formatMoney(sortedList.reduce((sum, r) => sum + r.balance, 0))}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -494,7 +303,16 @@ export default function AccountingReports() {
             </html>
         `;
 
-        printHtml(docHtml);
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(docHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
     };
 
     // ==========================================
@@ -507,13 +325,6 @@ export default function AccountingReports() {
         }
         setIsLoading(true);
         try {
-            // Build filter that checks both leading-zero and stripped numeric variations
-            let tafsiliFilter = `t9.Field_015 LIKE '%11:${selectedTafsili}%'`;
-            const numericCode = parseInt(selectedTafsili, 10);
-            if (!isNaN(numericCode) && String(numericCode) !== selectedTafsili) {
-                tafsiliFilter = `(t9.Field_015 LIKE '%11:${selectedTafsili}%' OR t9.Field_015 LIKE '%11:${numericCode}%')`;
-            }
-
             const sql = `
                 SELECT 
                     t9.Field_004 as SanadNo,
@@ -523,16 +334,9 @@ export default function AccountingReports() {
                     t8.Field_008 as Date
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                WHERE ${tafsiliFilter}
+                WHERE t9.Field_015 LIKE '%11:${selectedTafsili}%' AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
-                  AND t9.Field_011 NOT LIKE N'%تضمین%'
-                  AND t9.Field_011 NOT LIKE N'%تضامین%'
-                  AND t9.Field_011 NOT LIKE N'%ضمانت%'
-                  AND t9.Field_011 NOT LIKE N'%انتظامی%'
-                  AND t9.Field_011 NOT LIKE N'%وثیقه%'
-                  AND t9.Field_011 NOT LIKE N'%تعهدات%'
-                  AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
@@ -557,8 +361,11 @@ export default function AccountingReports() {
         }
     };
 
+    const filteredStatementData = statementData.filter(row => !statementSearch || (row.Description || '').includes(statementSearch) || String(row.SanadNo).includes(statementSearch));
+
     const handlePrintStatement = () => {
-        if (statementData.length === 0) return;
+        if (filteredStatementData.length === 0) return;
+
         const tafsiliInfo = tafsilis.find(t => t.Code === selectedTafsili);
         const name = tafsiliInfo ? tafsiliInfo.Name : selectedTafsili;
         
@@ -596,7 +403,7 @@ export default function AccountingReports() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${statementData.map((row, idx) => `
+                        ${filteredStatementData.map((row, idx) => `
                             <tr>
                                 <td>${idx + 1}</td>
                                 <td>${formatDateToJalali(row.Date)}</td>
@@ -609,16 +416,26 @@ export default function AccountingReports() {
                         `).join('')}
                         <tr class="total">
                             <td colspan="4" style="text-align: left;">جمع کل:</td>
-                            <td>${formatMoney(statementData.reduce((sum, r) => sum + r.bed, 0))}</td>
-                            <td>${formatMoney(statementData.reduce((sum, r) => sum + r.bes, 0))}</td>
-                            <td>${formatMoney(statementData[statementData.length - 1]?.balance || 0)}</td>
+                            <td>${formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}</td>
+                            <td>${formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}</td>
+                            <td>${formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}</td>
                         </tr>
                     </tbody>
                 </table>
             </body>
             </html>
         `;
-        printHtml(docHtml);
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(docHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
     };
 
     // ==========================================
@@ -1002,14 +819,18 @@ export default function AccountingReports() {
                         <Calendar className="w-4 h-4 text-blue-500" />
                         <span>بازه زمانی گزارش:</span>
                     </div>
-                    <ShamsiDatePicker 
+                    <input 
+                        type="date" 
                         value={dateFrom}
-                        onChange={setDateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <span className="text-xs text-slate-400">تا</span>
-                    <ShamsiDatePicker 
+                    <input 
+                        type="date" 
                         value={dateTo}
-                        onChange={setDateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button 
                         onClick={() => {
@@ -1021,20 +842,6 @@ export default function AccountingReports() {
                         className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1 font-semibold flex items-center gap-1 transition-colors"
                     >
                         {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'بروزرسانی'}
-                    </button>
-                    <button 
-                        onClick={handleSaveAsDefaultDates}
-                        className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded text-[10px] px-2 py-1.5 font-bold transition-colors"
-                        title="ذخیره این بازه به عنوان پیش‌فرض همیشگی"
-                    >
-                        ذخیره پیش‌فرض
-                    </button>
-                    <button 
-                        onClick={handleResetDefaultDates}
-                        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded text-[10px] px-2 py-1.5 font-bold transition-colors"
-                        title="پاک کردن پیش‌فرض ذخیره شده"
-                    >
-                        ریست پیش‌فرض
                     </button>
                 </div>
             </div>
@@ -1141,30 +948,6 @@ export default function AccountingReports() {
                             </div>
                         </div>
 
-                        {/* Split Debtors / Creditors Filter Toggle */}
-                        <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
-                            <button
-                                onClick={() => setTrazFilterMode('all')}
-                                className={`text-xs px-4 py-2 font-bold rounded-lg transition-all ${trazFilterMode === 'all' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 bg-slate-50 border border-slate-200'}`}
-                            >
-                                همه حساب‌ها ({trazData.length})
-                            </button>
-                            <button
-                                onClick={() => setTrazFilterMode('debtors')}
-                                className={`text-xs px-4 py-2 font-bold rounded-lg transition-all flex items-center gap-1.5 ${trazFilterMode === 'debtors' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200'}`}
-                            >
-                                <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                                فقط بدهکاران ({trazData.filter(t => t.balance > 0).length})
-                            </button>
-                            <button
-                                onClick={() => setTrazFilterMode('creditors')}
-                                className={`text-xs px-4 py-2 font-bold rounded-lg transition-all flex items-center gap-1.5 ${trazFilterMode === 'creditors' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'}`}
-                            >
-                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                فقط بستانکاران ({trazData.filter(t => t.balance < 0).length})
-                            </button>
-                        </div>
-
                         {/* Traz KPIs */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-rose-50/50 rounded-xl border border-rose-100/80 p-4">
@@ -1254,16 +1037,25 @@ export default function AccountingReports() {
                         <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-xl">
                             <div className="flex-1 w-full relative">
                                 <label className="block text-xs font-bold mb-1.5 text-slate-700">انتخاب شخص تفصیلی (ACT_TBL_007)</label>
-                                <select 
-                                    className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
-                                    value={selectedTafsili}
-                                    onChange={(e) => setSelectedTafsili(e.target.value)}
-                                >
-                                    <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
-                                    {tafsilis.map(t => (
-                                        <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
-                                    ))}
-                                </select>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="جستجوی شخص..." 
+                                        value={tafsiliSearch} 
+                                        onChange={e => setTafsiliSearch(e.target.value)} 
+                                        className="w-1/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
+                                    />
+                                    <select 
+                                        className="w-2/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
+                                        value={selectedTafsili}
+                                        onChange={(e) => setSelectedTafsili(e.target.value)}
+                                    >
+                                        <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
+                                        {tafsilis.filter(t => !tafsiliSearch || t.Name?.includes(tafsiliSearch) || t.Code?.includes(tafsiliSearch)).map(t => (
+                                            <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             <div className="flex gap-2 w-full md:w-auto">
                                 <button 
@@ -1280,118 +1072,80 @@ export default function AccountingReports() {
                                     className="flex-1 md:flex-none px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
                                 >
                                     <Printer className="w-3.5 h-3.5 text-slate-500" />
-                                    چاپ
+                                    چاپ / PDF
                                 </button>
                             </div>
                         </div>
 
+                        {statementData.length > 0 && (
+                            <div className="flex justify-end mb-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="جستجو در شرح تراکنش..." 
+                                    value={statementSearch} 
+                                    onChange={e => setStatementSearch(e.target.value)} 
+                                    className="w-full md:w-1/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
+                                />
+                            </div>
+                        )}
+
                         {statementData.length > 0 ? (
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
-                                    <div className="relative flex-1">
-                                        <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="جستجو در شرح، سند، تاریخ، بدهکار یا بستانکار..."
-                                            value={searchStatementText}
-                                            onChange={e => setSearchStatementText(e.target.value)}
-                                            className="w-full bg-white border border-slate-200 rounded-lg py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs font-bold"
-                                        />
-                                    </div>
-                                    {searchStatementText && (
-                                        <button 
-                                            onClick={() => setSearchStatementText('')}
-                                            className="text-xs text-rose-500 hover:text-rose-600 font-bold px-2 py-1"
-                                        >
-                                            پاک کردن فیلتر
-                                        </button>
-                                    )}
-                                    <div className="text-xs text-slate-500 font-bold sm:mr-auto">
-                                        تعداد اقلام: <span className="text-blue-600 font-mono">{
-                                            statementData.filter(row => {
-                                                const text = searchStatementText.trim().toLowerCase();
-                                                if (!text) return true;
-                                                const desc = String(row.Description || '').toLowerCase();
-                                                const date = String(row.Date || '').toLowerCase();
-                                                const sanadNo = String(row.SanadNo || '').toLowerCase();
-                                                const bed = String(row.bed || '').toLowerCase();
-                                                const bes = String(row.bes || '').toLowerCase();
-                                                return desc.includes(text) || date.includes(text) || sanadNo.includes(text) || bed.includes(text) || bes.includes(text);
-                                            }).length
-                                        }</span> از <span className="text-slate-600 font-mono">{statementData.length}</span>
-                                    </div>
-                                </div>
-
-                                {(() => {
-                                    const filteredStatementData = statementData.filter(row => {
-                                        const text = searchStatementText.trim().toLowerCase();
-                                        if (!text) return true;
-                                        const desc = String(row.Description || '').toLowerCase();
-                                        const date = String(row.Date || '').toLowerCase();
-                                        const sanadNo = String(row.SanadNo || '').toLowerCase();
-                                        const bed = String(row.bed || '').toLowerCase();
-                                        const bes = String(row.bes || '').toLowerCase();
-                                        return desc.includes(text) || date.includes(text) || sanadNo.includes(text) || bed.includes(text) || bes.includes(text);
-                                    });
-
-                                    return (
-                                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
-                                            <table className="w-full text-right text-xs">
-                                                <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
-                                                    <tr>
-                                                        <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
-                                                        <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
-                                                        <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
-                                                        <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
-                                                        <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
-                                                        <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
-                                                        <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {filteredStatementData.map((row, idx) => (
-                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
-                                                            <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
-                                                            <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
-                                                            <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
-                                                            <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                                {formatMoney(row.balance)}
-                                                            </td>
-                                                            <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                                                    row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
-                                                                }`}>
-                                                                    {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                    
-                                                    {/* Summary Sticky Foot */}
-                                                    <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
-                                                        <td colSpan={3} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
-                                                        <td className="p-4 text-left text-rose-700 font-mono text-sm">
-                                                            {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
-                                                        </td>
-                                                        <td className="p-4 text-left text-emerald-700 font-mono text-sm">
-                                                            {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}
-                                                        </td>
-                                                        <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
-                                                            filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
+                                    <table className="w-full text-right text-xs">
+                                        <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
+                                            <tr>
+                                                <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
+                                                <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
+                                                <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {filteredStatementData.map((row, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                    <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
+                                                    <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
+                                                    <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
+                                                    <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
+                                                    <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                        {formatMoney(row.balance)}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                                            row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
                                                         }`}>
-                                                            {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}
-                                                            <span className="text-[10px] font-bold mr-1">
-                                                                ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                })()}
+                                                            {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            
+                                            {/* Summary Sticky Foot */}
+                                            <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
+                                                <td colSpan={3} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
+                                                <td className="p-4 text-left text-rose-700 font-mono text-sm">
+                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
+                                                </td>
+                                                <td className="p-4 text-left text-emerald-700 font-mono text-sm">
+                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}
+                                                </td>
+                                                <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
+                                                    filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                                                }`}>
+                                                    {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}
+                                                    <span className="text-[10px] font-bold mr-1">
+                                                        ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         ) : (
                             <div className="text-center py-16 text-slate-400 font-medium border-2 border-dashed border-slate-200 rounded-xl">
@@ -1439,14 +1193,18 @@ export default function AccountingReports() {
                                         بازه دوم مقایسه ( Period B )
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <ShamsiDatePicker 
+                                        <input 
+                                            type="date" 
                                             value={salesDateFromB}
-                                            onChange={setSalesDateFromB}
+                                            onChange={(e) => setSalesDateFromB(e.target.value)}
+                                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none bg-white focus:ring-1 focus:ring-blue-500 w-full"
                                         />
                                         <span className="text-xs text-slate-400">تا</span>
-                                        <ShamsiDatePicker 
+                                        <input 
+                                            type="date" 
                                             value={salesDateToB}
-                                            onChange={setSalesDateToB}
+                                            onChange={(e) => setSalesDateToB(e.target.value)}
+                                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none bg-white focus:ring-1 focus:ring-blue-500 w-full"
                                         />
                                     </div>
                                 </div>
