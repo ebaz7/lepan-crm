@@ -29,8 +29,6 @@ import {
     LineChart,
     Line
 } from 'recharts';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 
 // ==========================================
 // SHAMSI (FA/PERSIAN) DATE PICKER WRAPPER
@@ -155,20 +153,17 @@ export default function AccountingReports() {
 
     // --- TAB 2: STATEMENT STATE ---
     const [tafsilis, setTafsilis] = useState<any[]>([]);
-    const [tafsiliSearch, setTafsiliSearch] = useState('');
     const [selectedTafsili, setSelectedTafsili] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
-    const [salesSearch, setSalesSearch] = useState('');
     const [compareMode, setCompareMode] = useState(false);
     // Period B for sales comparison
     const [salesDateFromB, setSalesDateFromB] = useState('');
     const [salesDateToB, setSalesDateToB] = useState('');
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
-    const [salesInterval, setSalesInterval] = useState<'detailed' | 'daily' | 'monthly' | 'quarterly' | 'yearly'>('detailed');
 
     // --- TAB 4: PRODUCTION STATE ---
     const [productionData, setProductionData] = useState<any[]>([]);
@@ -278,13 +273,6 @@ export default function AccountingReports() {
                     Field_005 as TafsiliCode 
                 FROM ACT_TBL_007 
                 WHERE Field_004 = '11' 
-                  AND Field_006 IS NOT NULL 
-                  AND LTRIM(RTRIM(Field_006)) <> ''
-                  AND Field_006 NOT LIKE N'%قرارداد%'
-                  AND Field_006 NOT LIKE N'%بانک %'
-                  AND Field_006 NOT LIKE N'%تسهیلات%'
-                  AND Field_006 NOT LIKE N'%وام %'
-                  AND Field_006 NOT LIKE N'%سود %'
                 ORDER BY Field_006 ASC
             `;
             const data = await runSayanQuery(sql);
@@ -310,9 +298,9 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE (t9.Field_015 LIKE '11:%' OR t9.Field_015 LIKE '%*11:%' OR t9.Field_015 LIKE '%|11:%' OR t9.Field_015 LIKE '% 11:%')
+                    WHERE t9.Field_015 LIKE '%11:%' 
+                      AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
-                      AND t9.Field_005 <> '9'
                     GROUP BY t9.Field_015
                 `;
             } else {
@@ -323,8 +311,7 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
-                    WHERE (t24.Field_010 LIKE '11:%' OR t24.Field_010 LIKE '%*11:%' OR t24.Field_010 LIKE '%|11:%' OR t24.Field_010 LIKE '% 11:%')
-                      AND t24.Field_003 <> '9'
+                    WHERE t24.Field_010 LIKE '11:%'
                     GROUP BY t24.Field_010
                 `;
             }
@@ -342,13 +329,6 @@ export default function AccountingReports() {
                             Field_005 as TafsiliCode 
                         FROM ACT_TBL_007 
                         WHERE Field_004 = '11' 
-                          AND Field_006 IS NOT NULL 
-                          AND LTRIM(RTRIM(Field_006)) <> ''
-                          AND Field_006 NOT LIKE N'%قرارداد%'
-                          AND Field_006 NOT LIKE N'%بانک %'
-                          AND Field_006 NOT LIKE N'%تسهیلات%'
-                          AND Field_006 NOT LIKE N'%وام %'
-                          AND Field_006 NOT LIKE N'%سود %'
                         ORDER BY Field_006 ASC
                     `;
                     currentTafsilis = await runSayanQuery(sqlTaf);
@@ -358,20 +338,16 @@ export default function AccountingReports() {
                 }
             }
 
-            // Map and group Sayan codes to names from ACT_TBL_007 to ensure algebraic sum per person head
-            const groupedTraz: { [key: string]: { code: string; name: string; bed: number; bes: number } } = {};
-            
-            rawData.forEach((row: any) => {
+            // Map Sayan codes to names from ACT_TBL_007
+            const mapped = rawData.map((row: any) => {
                 let code = '';
                 if (row.TafsiliRaw) {
                     const rawStr = row.TafsiliRaw.toString();
-                    // strictly match 11: followed by code, ensuring it doesn't match 211:
-                    const match = rawStr.match(/(?:^|[\*\|\s])11:([a-zA-Z0-9_-]+)/);
+                    const match = rawStr.match(/11:([a-zA-Z0-9_-]+)/);
                     if (match) {
                         code = match[1];
                     }
                 }
-                if (!code) return;
                 
                 const tafsili = currentTafsilis.find(t => 
                     t.Code === code || 
@@ -380,34 +356,11 @@ export default function AccountingReports() {
                     (t.TafsiliCode && t.TafsiliCode.replace(/^0+/, '') === code.replace(/^0+/, ''))
                 );
                 
-                const finalCode = tafsili ? (tafsili.Code || tafsili.TafsiliCode || code) : code;
-                const name = tafsili ? tafsili.Name : '';
-                
-                // Filter out unrecognized persons or those clearly misclassified as persons (e.g., contracts, banks)
-                if (!name || name.trim() === '') return;
-                if (name.includes('قرارداد') || name.includes('بانک ') || name.includes('تسهیلات') || name.includes('وام ') || name.includes('سود ')) return;
-                
+                const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
                 const bed = parseFloat(row.TotalBed || 0);
                 const bes = parseFloat(row.TotalBes || 0);
-                
-                if (!groupedTraz[finalCode]) {
-                    groupedTraz[finalCode] = {
-                        code: finalCode,
-                        name: name,
-                        bed: 0,
-                        bes: 0
-                    };
-                }
-                groupedTraz[finalCode].bed += bed;
-                groupedTraz[finalCode].bes += bes;
-            });
-            
-            const mapped = Object.values(groupedTraz).map((item: any) => {
-                const balance = item.bed - item.bes;
-                return {
-                    ...item,
-                    balance
-                };
+                const balance = bed - bes;
+                return { code, name, bed, bes, balance };
             }).filter((r: any) => r.code && r.balance !== 0);
 
             setTrazData(mapped);
@@ -540,36 +493,13 @@ export default function AccountingReports() {
         }
         setIsLoading(true);
         try {
-            // Build filter that checks both leading-zero and stripped numeric variations, strictly for '11:'
-            let codeVal = selectedTafsili;
-            let tafsiliFilter = `(t9.Field_015 LIKE '11:${codeVal}%' OR t9.Field_015 LIKE '%*11:${codeVal}%' OR t9.Field_015 LIKE '%|11:${codeVal}%' OR t9.Field_015 LIKE '% 11:${codeVal}%')`;
-            
+            // Build filter that checks both leading-zero and stripped numeric variations
+            let tafsiliFilter = `t9.Field_015 LIKE '%11:${selectedTafsili}%'`;
             const numericCode = parseInt(selectedTafsili, 10);
             if (!isNaN(numericCode) && String(numericCode) !== selectedTafsili) {
-                let numCodeVal = String(numericCode);
-                tafsiliFilter = `(${tafsiliFilter} OR t9.Field_015 LIKE '11:${numCodeVal}%' OR t9.Field_015 LIKE '%*11:${numCodeVal}%' OR t9.Field_015 LIKE '%|11:${numCodeVal}%' OR t9.Field_015 LIKE '% 11:${numCodeVal}%')`;
+                tafsiliFilter = `(t9.Field_015 LIKE '%11:${selectedTafsili}%' OR t9.Field_015 LIKE '%11:${numericCode}%')`;
             }
 
-            // 1. Calculate Initial Balance (مانده از قبل)
-            const sqlInitial = `
-                DECLARE @YearId NVARCHAR(10) = (SELECT TOP 1 Field_004 FROM ACT_TBL_008 WHERE Field_008 <= '${dateFrom}T23:59:59.000Z' ORDER BY Field_008 DESC);
-                SELECT 
-                    SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
-                    SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
-                FROM ACT_TBL_009 t9
-                LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                WHERE ${tafsiliFilter}
-                  AND t8.Field_004 = @YearId
-                  AND t9.Field_005 <> '9'
-                  AND t8.Field_009 <> 2
-                  AND (t8.Field_008 < '${dateFrom}T00:00:00.000Z' OR t8.Field_009 = 1)
-            `;
-            const initialData = await runSayanQuery(sqlInitial);
-            const initialBed = parseFloat(initialData[0]?.TotalBed || 0);
-            const initialBes = parseFloat(initialData[0]?.TotalBes || 0);
-            const initialBalance = initialBed - initialBes;
-
-            // 2. Fetch Period Transactions
             const sql = `
                 SELECT 
                     t9.Field_004 as SanadNo,
@@ -580,16 +510,13 @@ export default function AccountingReports() {
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
                 WHERE ${tafsiliFilter}
-                  AND t9.Field_005 <> '9'
-                  AND t8.Field_009 <> 1
-                  AND t8.Field_009 <> 2
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
             
-            let balanceAccumulator = initialBalance;
+            let balanceAccumulator = 0;
             const processed = data.map((row: any) => {
                 const bed = parseFloat(row.Bed || 0);
                 const bes = parseFloat(row.Bes || 0);
@@ -601,93 +528,12 @@ export default function AccountingReports() {
                     balance: balanceAccumulator
                 };
             });
-            
-            if (initialBalance !== 0 || processed.length > 0) {
-                 processed.unshift({
-                     Date: `${dateFrom}T00:00:00.000Z`,
-                     SanadNo: '-',
-                     Description: 'مانده از قبل',
-                     bed: initialBalance > 0 ? initialBalance : 0,
-                     bes: initialBalance < 0 ? Math.abs(initialBalance) : 0,
-                     balance: initialBalance
-                 });
-            }
-
             setStatementData(processed);
         } catch (err: any) {
             toast.error(`خطا در واکشی صورتحساب: ${err.message}`);
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const getGroupedSales = (interval: 'detailed' | 'daily' | 'monthly' | 'quarterly' | 'yearly') => {
-        if (interval === 'detailed') {
-            return salesData.map((row: any) => {
-                const isReturn = String(row.DocType) === '13';
-                const amt = parseFloat(row.Amount || 0);
-                const qty = parseFloat(row.Quantity || 0);
-                return {
-                    ...row,
-                    isReturn,
-                    netAmt: isReturn ? -amt : amt,
-                    netQty: isReturn ? -qty : qty,
-                };
-            });
-        }
-
-        const groups: { [key: string]: { key: string; salesAmt: number; returnAmt: number; netAmt: number; salesQty: number; returnQty: number; netQty: number; count: number } } = {};
-
-        salesData.forEach((row: any) => {
-            const isReturn = String(row.DocType) === '13';
-            const amt = parseFloat(row.Amount || 0);
-            const qty = parseFloat(row.Quantity || 0);
-            
-            const dateObj = new Date(row.Date);
-            const jDate = jalaali.toJalaali(dateObj.getFullYear(), dateObj.getMonth() + 1, dateObj.getDate());
-            
-            let groupKey = '';
-            if (interval === 'daily') {
-                groupKey = `${jDate.jy}/${String(jDate.jm).padStart(2, '0')}/${String(jDate.jd).padStart(2, '0')}`;
-            } else if (interval === 'monthly') {
-                const monthNames = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-                groupKey = `${monthNames[jDate.jm - 1]} ${jDate.jy}`;
-            } else if (interval === 'quarterly') {
-                const quarter = Math.ceil(jDate.jm / 3);
-                const quarterNames = ['بهار', 'تابستان', 'پاییز', 'زمستان'];
-                groupKey = `${quarterNames[quarter - 1]} ${jDate.jy}`;
-            } else if (interval === 'yearly') {
-                groupKey = `سال ${jDate.jy}`;
-            }
-
-            if (!groups[groupKey]) {
-                groups[groupKey] = {
-                    key: groupKey,
-                    salesAmt: 0,
-                    returnAmt: 0,
-                    netAmt: 0,
-                    salesQty: 0,
-                    returnQty: 0,
-                    netQty: 0,
-                    count: 0
-                };
-            }
-
-            if (isReturn) {
-                groups[groupKey].returnAmt += amt;
-                groups[groupKey].returnQty += qty;
-                groups[groupKey].netAmt -= amt;
-                groups[groupKey].netQty -= qty;
-            } else {
-                groups[groupKey].salesAmt += amt;
-                groups[groupKey].salesQty += qty;
-                groups[groupKey].netAmt += amt;
-                groups[groupKey].netQty += qty;
-            }
-            groups[groupKey].count += 1;
-        });
-
-        return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
     };
 
     const handlePrintStatement = () => {
@@ -737,400 +583,20 @@ export default function AccountingReports() {
                                 <td>${row.Description || ''}</td>
                                 <td>${row.bed > 0 ? formatMoney(row.bed) : '۰'}</td>
                                 <td>${row.bes > 0 ? formatMoney(row.bes) : '۰'}</td>
-                                <td>${formatMoney(Math.abs(row.balance))} (${row.balance > 0 ? 'بدهکار' : row.balance < 0 ? 'بستانکار' : 'بی‌حساب'})</td>
+                                <td>${formatMoney(row.balance)} (${row.balance > 0 ? 'بدهکار' : row.balance < 0 ? 'بستانکار' : 'بی‌حساب'})</td>
                             </tr>
                         `).join('')}
                         <tr class="total">
                             <td colspan="4" style="text-align: left;">جمع کل:</td>
                             <td>${formatMoney(statementData.reduce((sum, r) => sum + r.bed, 0))}</td>
                             <td>${formatMoney(statementData.reduce((sum, r) => sum + r.bes, 0))}</td>
-                            <td>${formatMoney(Math.abs(statementData[statementData.length - 1]?.balance || 0))} (${(statementData[statementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : (statementData[statementData.length - 1]?.balance || 0) < 0 ? 'بستانکار' : 'بی‌حساب'})</td>
+                            <td>${formatMoney(statementData[statementData.length - 1]?.balance || 0)}</td>
                         </tr>
                     </tbody>
                 </table>
             </body>
             </html>
         `;
-        printHtml(docHtml);
-    };
-
-    const handleExportExcelStatement = () => {
-        if (statementData.length === 0) {
-            toast.error('داده‌ای برای خروجی وجود ندارد');
-            return;
-        }
-        const tafsiliInfo = tafsilis.find(t => t.Code === selectedTafsili);
-        const name = tafsiliInfo ? tafsiliInfo.Name : selectedTafsili;
-
-        const headers = [
-            'ردیف',
-            'تاریخ',
-            'شماره سند',
-            'شرح تراکنش',
-            'بدهکار (ریال)',
-            'بستانکار (ریال)',
-            'مانده (ریال)',
-            'تشخیص'
-        ];
-
-        const rows = statementData.map((row, idx) => [
-            idx + 1,
-            formatDateToJalali(row.Date),
-            row.SanadNo,
-            row.Description || '',
-            row.bed,
-            row.bes,
-            Math.abs(row.balance),
-            row.balance > 0 ? 'بدهکار' : row.balance < 0 ? 'بستانکار' : 'بی‌حساب'
-        ]);
-
-        const totalRow = [
-            'جمع کل',
-            '',
-            '',
-            '',
-            statementData.reduce((sum, r) => sum + r.bed, 0),
-            statementData.reduce((sum, r) => sum + r.bes, 0),
-            Math.abs(statementData[statementData.length - 1]?.balance || 0),
-            (statementData[statementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : (statementData[statementData.length - 1]?.balance || 0) < 0 ? 'بستانکار' : 'بی‌حساب'
-        ];
-
-        const dataArray = [
-            [`صورتحساب ریز تراکنش‌های مالی - ${name}`],
-            [`کد تفصیلی: ${selectedTafsili}`],
-            [`بازه گزارش: از ${formatDateToJalali(dateFrom)} تا ${formatDateToJalali(dateTo)}`],
-            [],
-            headers,
-            ...rows,
-            [],
-            totalRow
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(dataArray);
-        ws['!cols'] = [
-            { wch: 6 },
-            { wch: 12 },
-            { wch: 12 },
-            { wch: 45 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 12 }
-        ];
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'صورتحساب ریز');
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        saveAs(blob, `صورتحساب_${name.replace(/\s+/g, '_')}_${selectedTafsili}.xlsx`);
-    };
-
-    const handleExportExcelTraz = () => {
-        if (trazData.length === 0) {
-            toast.error('داده‌ای برای خروجی وجود ندارد');
-            return;
-        }
-
-        const headers = [
-            'ردیف',
-            'کد تفصیلی',
-            'نام و نام خانوادگی شخص',
-            'مجموع بدهکار (ریال)',
-            'مجموع بستانکار (ریال)',
-            'مانده حساب (ریال)',
-            'تشخیص'
-        ];
-
-        const rows = trazData.map((row, idx) => [
-            idx + 1,
-            row.code,
-            row.name,
-            row.bed,
-            row.bes,
-            Math.abs(row.balance),
-            row.balance > 0 ? 'بدهکار' : 'بستانکار'
-        ]);
-
-        const dataArray = [
-            ['گزارش تراز آزمایشی اشخاص (سرفصل بدهکاران و بستانکاران)'],
-            [`بازه گزارش: از ${formatDateToJalali(dateFrom) || 'ابتدا'} تا ${formatDateToJalali(dateTo) || 'امروز'}`],
-            [],
-            headers,
-            ...rows,
-            [],
-            [
-                'مجموع دوره',
-                '',
-                '',
-                trazData.reduce((sum, r) => sum + r.bed, 0),
-                trazData.reduce((sum, r) => sum + r.bes, 0),
-                Math.abs(trazData.reduce((sum, r) => sum + r.balance, 0)),
-                trazData.reduce((sum, r) => sum + r.balance, 0) > 0 ? 'بدهکار' : 'بستانکار'
-            ]
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(dataArray);
-        ws['!cols'] = [
-            { wch: 6 },
-            { wch: 12 },
-            { wch: 30 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 12 }
-        ];
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'تراز آزمایشی اشخاص');
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        saveAs(blob, `تراز_آزمایشی_اشخاص.xlsx`);
-    };
-
-    const handleExportExcelSales = () => {
-        const currentData = getGroupedSales(salesInterval);
-        if (currentData.length === 0) {
-            toast.error('داده‌ای برای خروجی وجود ندارد');
-            return;
-        }
-
-        let headers: string[] = [];
-        let rows: any[] = [];
-        let totalRow: any[] = [];
-        let title = '';
-
-        if (salesInterval === 'detailed') {
-            title = 'گزارش ریز فاکتورهای فروش و مرجوعی';
-            headers = [
-                'ردیف',
-                'تاریخ فاکتور',
-                'شماره سند',
-                'گروه کالا',
-                'شخص/مشتری',
-                'شرح کالای فاکتور',
-                'نوع سند',
-                'وزن خالص (کیلوگرم)',
-                'مجموع مبلغ (ریال)'
-            ];
-            rows = currentData.map((row: any, idx: number) => [
-                idx + 1,
-                formatDateToJalali(row.Date),
-                row.DocId,
-                row.GroupName || 'سایر گروه‌ها',
-                row.PersonName || '-',
-                row.ItemName || '',
-                row.isReturn ? 'مرجوعی' : 'فروش',
-                row.netQty,
-                row.netAmt
-            ]);
-            totalRow = [
-                'مجموع کل دوره',
-                '',
-                '',
-                '',
-                '',
-                '',
-                currentData.reduce((sum: number, r: any) => sum + r.netQty, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.netAmt, 0)
-            ];
-        } else {
-            const intervalLabel = 
-                salesInterval === 'daily' ? 'روزانه' : 
-                salesInterval === 'monthly' ? 'ماهانه' : 
-                salesInterval === 'quarterly' ? 'فصلی' : 'سالانه';
-            
-            title = `گزارش تجمعی ${intervalLabel} فروش و مرجوعی (فروش خالص)`;
-            headers = [
-                'ردیف',
-                salesInterval === 'daily' ? 'تاریخ روز' : 
-                salesInterval === 'monthly' ? 'ماه' : 
-                salesInterval === 'quarterly' ? 'فصل' : 'سال',
-                'تعداد تراکنش‌ها',
-                'مجموع فروش (ریال)',
-                'مجموع مرجوعی (ریال)',
-                'فروش خالص (ریال)',
-                'وزن فروش (kg)',
-                'وزن مرجوعی (kg)',
-                'وزن خالص (kg)'
-            ];
-            rows = currentData.map((row: any, idx: number) => [
-                idx + 1,
-                row.key,
-                row.count,
-                row.salesAmt,
-                row.returnAmt,
-                row.netAmt,
-                row.salesQty,
-                row.returnQty,
-                row.netQty
-            ]);
-            totalRow = [
-                'مجموع کل دوره',
-                '',
-                currentData.reduce((sum: number, r: any) => sum + r.count, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.salesAmt, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.returnAmt, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.netAmt, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.salesQty, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.returnQty, 0),
-                currentData.reduce((sum: number, r: any) => sum + r.netQty, 0)
-            ];
-        }
-
-        const dataArray = [
-            [title],
-            [`بازه زمانی: از ${formatDateToJalali(dateFrom)} تا ${formatDateToJalali(dateTo)}`],
-            [],
-            headers,
-            ...rows,
-            [],
-            totalRow
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(dataArray);
-        ws['!cols'] = [
-            { wch: 6 },
-            { wch: 15 },
-            { wch: 15 },
-            { wch: 20 },
-            { wch: 20 },
-            { wch: 20 },
-            { wch: 15 },
-            { wch: 15 },
-            { wch: 15 }
-        ];
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'گزارش فروش خالص');
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        saveAs(blob, `گزارش_فروش_${salesInterval}.xlsx`);
-    };
-
-    const handlePrintSales = () => {
-        const currentData = getGroupedSales(salesInterval);
-        if (currentData.length === 0) return;
-        
-        const intervalLabel = 
-            salesInterval === 'detailed' ? 'ریز فاکتورهای فروش و مرجوعی' : 
-            salesInterval === 'daily' ? 'فروش روزانه' : 
-            salesInterval === 'monthly' ? 'فروش ماهانه' : 
-            salesInterval === 'quarterly' ? 'فروش فصلی' : 'فروش سالانه';
-
-        let tableHeaderHtml = '';
-        let tableRowsHtml = '';
-        let footerHtml = '';
-
-        if (salesInterval === 'detailed') {
-            tableHeaderHtml = `
-                <tr>
-                    <th>ردیف</th>
-                    <th>تاریخ فاکتور</th>
-                    <th>شماره سند</th>
-                    <th>گروه کالا</th>
-                    <th>شخص/مشتری</th>
-                    <th>شرح کالا</th>
-                    <th>نوع سند</th>
-                    <th>وزن خالص (kg)</th>
-                    <th>مجموع مبلغ (ریال)</th>
-                </tr>
-            `;
-            tableRowsHtml = currentData.map((row: any, idx: number) => `
-                <tr style="${row.isReturn ? 'background-color: #fef2f2;' : ''}">
-                    <td>${idx + 1}</td>
-                    <td>${formatDateToJalali(row.Date)}</td>
-                    <td>${row.DocId}</td>
-                    <td>${row.GroupName || 'سایر گروه‌ها'}</td>
-                    <td>${row.PersonName || '-'}</td>
-                    <td>${row.ItemName || ''}</td>
-                    <td><span style="color: ${row.isReturn ? '#dc2626' : '#16a34a'}; font-weight: bold;">${row.isReturn ? 'مرجوعی' : 'فروش'}</span></td>
-                    <td>${row.netQty.toFixed(1)}</td>
-                    <td>${formatMoney(row.netAmt)}</td>
-                </tr>
-            `).join('');
-
-            footerHtml = `
-                <tr class="total">
-                    <td colspan="6">مجموع کل دوره:</td>
-                    <td>${currentData.reduce((sum: number, r: any) => sum + r.netQty, 0).toFixed(1)}</td>
-                    <td>${formatMoney(currentData.reduce((sum: number, r: any) => sum + r.netAmt, 0))}</td>
-                </tr>
-            `;
-        } else {
-            tableHeaderHtml = `
-                <tr>
-                    <th>ردیف</th>
-                    <th>بازه زمانی</th>
-                    <th>تعداد تراکنش‌ها</th>
-                    <th>مبلغ فروش (ریال)</th>
-                    <th>مبلغ مرجوعی (ریال)</th>
-                    <th>فروش خالص (ریال)</th>
-                    <th>وزن فروش (kg)</th>
-                    <th>وزن مرجوعی (kg)</th>
-                    <th>وزن خالص (kg)</th>
-                </tr>
-            `;
-            tableRowsHtml = currentData.map((row: any, idx: number) => `
-                <tr>
-                    <td>${idx + 1}</td>
-                    <td><strong>${row.key}</strong></td>
-                    <td>${row.count}</td>
-                    <td style="color: #16a34a;">${formatMoney(row.salesAmt)}</td>
-                    <td style="color: #dc2626;">${formatMoney(row.returnAmt)}</td>
-                    <td><strong>${formatMoney(row.netAmt)}</strong></td>
-                    <td>${row.salesQty.toFixed(1)}</td>
-                    <td>${row.returnQty.toFixed(1)}</td>
-                    <td><strong>${row.netQty.toFixed(1)}</strong></td>
-                </tr>
-            `).join('');
-
-            footerHtml = `
-                <tr class="total">
-                    <td colspan="2">مجموع کل دوره:</td>
-                    <td>${currentData.reduce((sum: number, r: any) => sum + r.count, 0)}</td>
-                    <td>${formatMoney(currentData.reduce((sum: number, r: any) => sum + r.salesAmt, 0))}</td>
-                    <td>${formatMoney(currentData.reduce((sum: number, r: any) => sum + r.returnAmt, 0))}</td>
-                    <td>${formatMoney(currentData.reduce((sum: number, r: any) => sum + r.netAmt, 0))}</td>
-                    <td>${currentData.reduce((sum: number, r: any) => sum + r.salesQty, 0).toFixed(1)}</td>
-                    <td>${currentData.reduce((sum: number, r: any) => sum + r.returnQty, 0).toFixed(1)}</td>
-                    <td>${currentData.reduce((sum: number, r: any) => sum + r.netQty, 0).toFixed(1)}</td>
-                </tr>
-            `;
-        }
-
-        const docHtml = `
-            <html dir="rtl" lang="fa">
-            <head>
-                <meta charset="utf-8">
-                <title>${intervalLabel} - کارخانه</title>
-                <style>
-                    body { font-family: 'Tahoma', sans-serif; padding: 25px; background: #fff; }
-                    .header { border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 20px; }
-                    .header h1 { font-size: 18px; margin: 0; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: right; font-size: 11px; }
-                    th { background-color: #f1f5f9; }
-                    .total { font-weight: bold; background: #f8fafc; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>گزارش فروش و مرجوعی (${intervalLabel})</h1>
-                    <p>بازه گزارش: از ${formatDateToJalali(dateFrom)} تا ${formatDateToJalali(dateTo)}</p>
-                </div>
-                <table>
-                    <thead>
-                        ${tableHeaderHtml}
-                    </thead>
-                    <tbody>
-                        ${tableRowsHtml}
-                        ${footerHtml}
-                    </tbody>
-                </table>
-            </body>
-            </html>
-        `;
-
         printHtml(docHtml);
     };
 
@@ -1146,21 +612,18 @@ export default function AccountingReports() {
                     t10.Field_001 as DocId,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
-                    t10.Field_009 as DocType,
                     t11.Field_005 as ItemCode,
                     t22.Field_004 as ItemName,
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
-                    t11.Field_013 as Amount,
-                    t02.Field_003 as GroupName,
-                    t07.Field_006 as PersonName
+                    t11.Field_037 as Amount,
+                    t02.Field_003 as GroupName
                 FROM STR_TBL_010 t10
                 INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_003 AND t07.Field_004 = '11'
-                WHERE t10.Field_009 IN ('12', '13')
+                WHERE t10.Field_009 IN ('3', '12')
                   AND t10.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                   AND t10.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t10.Field_008 DESC
@@ -1176,21 +639,18 @@ export default function AccountingReports() {
                         t10.Field_001 as DocId,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
-                        t10.Field_009 as DocType,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
                         t11.Field_031 as ItemNotes,
-                        t11.Field_013 as Amount,
-                        t02.Field_003 as GroupName,
-                        t07.Field_006 as PersonName
+                        t11.Field_037 as Amount,
+                        t02.Field_003 as GroupName
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                     LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                    LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_003 AND t07.Field_004 = '11'
-                    WHERE t10.Field_009 IN ('12', '13')
+                    WHERE t10.Field_009 IN ('3', '12')
                       AND t10.Field_008 >= '${salesDateFromB}T00:00:00.000Z' 
                       AND t10.Field_008 <= '${salesDateToB}T23:59:59.000Z'
                     ORDER BY t10.Field_008 DESC
@@ -1205,7 +665,7 @@ export default function AccountingReports() {
         }
     };
 
-    // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly) with returns subtracted
+    // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly)
     const getSalesOverviewStats = () => {
         const stats = {
             todayAmt: 0,
@@ -1218,34 +678,29 @@ export default function AccountingReports() {
             yearQty: 0
         };
 
-        const referenceDate = dateTo ? new Date(dateTo) : new Date();
-        const jNow = jalaali.toJalaali(referenceDate.getFullYear(), referenceDate.getMonth() + 1, referenceDate.getDate());
+        const now = new Date();
+        const jNow = jalaali.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
         salesData.forEach(row => {
             const date = new Date(row.Date);
             const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '13';
-            
-            const netAmt = isReturn ? -amt : amt;
-            const netQty = isReturn ? -qty : qty;
-            
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
 
             // Yearly (Current Persian Year)
             if (jRow.jy === jNow.jy) {
-                stats.yearAmt += netAmt;
-                stats.yearQty += netQty;
+                stats.yearAmt += amt;
+                stats.yearQty += qty;
 
                 // Monthly (Current Persian Month)
                 if (jRow.jm === jNow.jm) {
-                    stats.monthAmt += netAmt;
-                    stats.monthQty += netQty;
+                    stats.monthAmt += amt;
+                    stats.monthQty += qty;
 
                     // Daily (Current Persian Day)
                     if (jRow.jd === jNow.jd) {
-                        stats.todayAmt += netAmt;
-                        stats.todayQty += netQty;
+                        stats.todayAmt += amt;
+                        stats.todayQty += qty;
                     }
                 }
 
@@ -1253,8 +708,8 @@ export default function AccountingReports() {
                 const rowQuarter = Math.ceil(jRow.jm / 3);
                 const nowQuarter = Math.ceil(jNow.jm / 3);
                 if (rowQuarter === nowQuarter) {
-                    stats.quarterAmt += netAmt;
-                    stats.quarterQty += netQty;
+                    stats.quarterAmt += amt;
+                    stats.quarterQty += qty;
                 }
             }
         });
@@ -1262,7 +717,7 @@ export default function AccountingReports() {
         return stats;
     };
 
-    // Prepare chart comparison data grouped by Product Group (subtract returns)
+    // Prepare chart comparison data grouped by Product Group
     const getComparisonChartData = () => {
         const groups: { [key: string]: { name: string; amountA: number; weightA: number; amountB: number; weightB: number; } } = {};
 
@@ -1271,12 +726,8 @@ export default function AccountingReports() {
             if (!groups[grp]) {
                 groups[grp] = { name: grp, amountA: 0, weightA: 0, amountB: 0, weightB: 0 };
             }
-            const amt = parseFloat(row.Amount || 0);
-            const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '13';
-            
-            groups[grp].amountA += isReturn ? -amt : amt;
-            groups[grp].weightA += isReturn ? -qty : qty;
+            groups[grp].amountA += parseFloat(row.Amount || 0);
+            groups[grp].weightA += parseFloat(row.Quantity || 0);
         });
 
         compareSalesDataB.forEach(row => {
@@ -1284,12 +735,8 @@ export default function AccountingReports() {
             if (!groups[grp]) {
                 groups[grp] = { name: grp, amountA: 0, weightA: 0, amountB: 0, weightB: 0 };
             }
-            const amt = parseFloat(row.Amount || 0);
-            const qty = parseFloat(row.Quantity || 0);
-            const isReturn = String(row.DocType) === '13';
-            
-            groups[grp].amountB += isReturn ? -amt : amt;
-            groups[grp].weightB += isReturn ? -qty : qty;
+            groups[grp].amountB += parseFloat(row.Amount || 0);
+            groups[grp].weightB += parseFloat(row.Quantity || 0);
         });
 
         return Object.values(groups);
@@ -1723,7 +1170,7 @@ export default function AccountingReports() {
                         </div>
 
                         {/* Traz Data Table */}
-                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[500px] overflow-y-auto overflow-x-auto">
+                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[500px] overflow-y-auto">
                             <table className="w-full text-right text-xs">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>
@@ -1786,26 +1233,16 @@ export default function AccountingReports() {
                         <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-xl">
                             <div className="flex-1 w-full relative">
                                 <label className="block text-xs font-bold mb-1.5 text-slate-700">انتخاب شخص تفصیلی (ACT_TBL_007)</label>
-                                <div className="space-y-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="جستجوی نام یا کد شخص..." 
-                                        className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        value={tafsiliSearch}
-                                        onChange={(e) => setTafsiliSearch(e.target.value)}
-                                    />
-                                    <select 
-                                        className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
-                                        value={selectedTafsili}
-                                        onChange={(e) => setSelectedTafsili(e.target.value)}
-                                        size={tafsiliSearch ? 5 : 1}
-                                    >
-                                        <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
-                                        {tafsilis.filter(t => !tafsiliSearch || (t.Name && t.Name.includes(tafsiliSearch)) || (t.Code && t.Code.includes(tafsiliSearch))).map(t => (
-                                            <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <select 
+                                    className="w-full border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
+                                    value={selectedTafsili}
+                                    onChange={(e) => setSelectedTafsili(e.target.value)}
+                                >
+                                    <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
+                                    {tafsilis.map(t => (
+                                        <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex gap-2 w-full md:w-auto">
                                 <button 
@@ -1829,7 +1266,7 @@ export default function AccountingReports() {
 
                         {statementData.length > 0 ? (
                             <div className="space-y-4">
-                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
+                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
                                     <table className="w-full text-right text-xs">
                                         <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                             <tr>
@@ -2016,72 +1453,13 @@ export default function AccountingReports() {
                             </div>
                         )}
 
-                        {/* Detailed Sales comparison tables & Interval selector */}
+                        {/* Detailed Sales comparison tables */}
                         <div className="space-y-4">
-                            {!compareMode && (
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                    <div className="flex flex-wrap gap-1">
-                                        <button
-                                            onClick={() => setSalesInterval('detailed')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${salesInterval === 'detailed' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
-                                        >
-                                            ریز فاکتورها
-                                        </button>
-                                        <button
-                                            onClick={() => setSalesInterval('daily')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${salesInterval === 'daily' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
-                                        >
-                                            تجمعی روزانه
-                                        </button>
-                                        <button
-                                            onClick={() => setSalesInterval('monthly')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${salesInterval === 'monthly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
-                                        >
-                                            تجمعی ماهانه
-                                        </button>
-                                        <button
-                                            onClick={() => setSalesInterval('quarterly')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${salesInterval === 'quarterly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
-                                        >
-                                            تجمعی فصلی
-                                        </button>
-                                        <button
-                                            onClick={() => setSalesInterval('yearly')}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${salesInterval === 'yearly' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'}`}
-                                        >
-                                            تجمعی سالانه
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <input 
-                                            type="text" 
-                                            placeholder="جستجوی شخص..." 
-                                            className="border border-slate-300 rounded-lg py-1.5 px-3 text-xs w-48 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            value={salesSearch}
-                                            onChange={(e) => setSalesSearch(e.target.value)}
-                                        />
-                                        <button
-                                            onClick={handlePrintSales}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 text-xs font-bold transition-colors"
-                                        >
-                                            <Printer className="w-3.5 h-3.5" /> خروجی PDF / چاپ
-                                        </button>
-                                        <button
-                                            onClick={handleExportExcelSales}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg border border-emerald-200 text-xs font-bold transition-colors"
-                                        >
-                                            <Download className="w-3.5 h-3.5" /> اکسل (Excel)
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
                             <h3 className="text-sm font-bold text-slate-800">
-                                {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : salesInterval === 'detailed' ? 'جدول ریز فاکتورهای فروش و مرجوعی' : `گزارش تجمعی ${salesInterval === 'daily' ? 'روزانه' : salesInterval === 'monthly' ? 'ماهانه' : salesInterval === 'quarterly' ? 'فصلی' : 'سالانه'} فروش خالص`}
+                                {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : 'جدول ریز تراکنش‌های فاکتور فروش'}
                             </h3>
                             
-                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto overflow-x-auto">
+                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         {compareMode ? (
@@ -2094,27 +1472,14 @@ export default function AccountingReports() {
                                                 <th className="p-3.5 font-bold text-slate-700 text-left">مبلغ دوره B (ریال)</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-center">تغییر مبلغ (%)</th>
                                             </tr>
-                                        ) : salesInterval === 'detailed' ? (
+                                        ) : (
                                             <tr>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">تاریخ فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">شماره سند</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-44">گروه کالا</th>
-                                                <th className="p-3.5 font-bold text-slate-700 w-32">شخص/مشتری</th>
                                                 <th className="p-3.5 font-bold text-slate-700">شرح کالای فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-center w-24">نوع سند</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-left w-32">وزن خالص (کیلوگرم)</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-left w-36">مجموع مبلغ (ریال)</th>
-                                            </tr>
-                                        ) : (
-                                            <tr>
-                                                <th className="p-3.5 font-bold text-slate-700">بازه زمانی</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-center w-28">تعداد تراکنش‌ها</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-40">مجموع فروش (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-40">مجموع مرجوعی (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-44">فروش خالص (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-32">وزن فروش (kg)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-32">وزن مرجوعی (kg)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-36">وزن خالص (kg)</th>
                                             </tr>
                                         )}
                                     </thead>
@@ -2149,55 +1514,23 @@ export default function AccountingReports() {
                                                     );
                                                 })
                                             )
-                                        ) : salesInterval === 'detailed' ? (
+                                        ) : (
                                             salesData.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
+                                                    <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
                                                 </tr>
                                             ) : (
-                                            salesData.filter(row => !salesSearch || (row.Notes && row.Notes.includes(salesSearch))).map((row, idx) => {
-                                                    const isReturn = String(row.DocType) === '13';
-                                                    return (
-                                                        <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${isReturn ? 'bg-rose-50/20' : ''}`}>
-                                                            <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
-                                                            <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
-                                                            <td className="p-3 font-bold text-slate-800">{row.PersonName || '-'}</td>
-                                                            <td className="p-3 font-semibold text-slate-900">
-                                                                {row.ItemName || 'کالای فروخته شده'}
-                                                                {(row.ItemNotes || row.Notes) && <span className="block text-[10px] text-slate-400 font-normal">{row.Notes || row.ItemNotes}</span>}
-                                                            </td>
-                                                            <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isReturn ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                                                                    {isReturn ? 'مرجوعی' : 'فروش'}
-                                                                </span>
-                                                            </td>
-                                                            <td className={`p-3 text-left font-mono font-medium ${isReturn ? 'text-rose-600' : 'text-slate-700'}`}>
-                                                                {isReturn ? '-' : ''}{parseFloat(row.Quantity || 0).toFixed(1)}
-                                                            </td>
-                                                            <td className={`p-3 text-left font-mono font-extrabold ${isReturn ? 'text-rose-600' : 'text-blue-700'}`}>
-                                                                {isReturn ? '-' : ''}{formatMoney(parseFloat(row.Amount || 0))}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )
-                                        ) : (
-                                            getGroupedSales(salesInterval).length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
-                                                </tr>
-                                            ) : (
-                                                getGroupedSales(salesInterval).map((group: any, idx: number) => (
+                                                salesData.map((row, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="p-3 font-bold text-slate-900">{group.key}</td>
-                                                        <td className="p-3 text-center font-mono font-semibold text-slate-600">{group.count}</td>
-                                                        <td className="p-3 text-left font-mono text-emerald-600 font-semibold">{formatMoney(group.salesAmt)}</td>
-                                                        <td className="p-3 text-left font-mono text-rose-600 font-semibold">{formatMoney(group.returnAmt)}</td>
-                                                        <td className="p-3 text-left font-mono text-blue-700 font-extrabold">{formatMoney(group.netAmt)}</td>
-                                                        <td className="p-3 text-left font-mono text-slate-600">{group.salesQty.toFixed(1)}</td>
-                                                        <td className="p-3 text-left font-mono text-rose-500">{group.returnQty.toFixed(1)}</td>
-                                                        <td className="p-3 text-left font-mono text-slate-900 font-bold">{group.netQty.toFixed(1)}</td>
+                                                        <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                        <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
+                                                        <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
+                                                        <td className="p-3 font-semibold text-slate-900">
+                                                            {row.ItemName || 'کالای فروخته شده'}
+                                                            {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
+                                                        </td>
+                                                        <td className="p-3 text-left font-mono font-medium text-slate-700">{parseFloat(row.Quantity || 0).toFixed(1)}</td>
+                                                        <td className="p-3 text-left font-mono font-extrabold text-blue-700">{formatMoney(parseFloat(row.Amount || 0))}</td>
                                                     </tr>
                                                 ))
                                             )
@@ -2272,7 +1605,7 @@ export default function AccountingReports() {
 
                         {/* Grouped Lists */}
                         <div className="space-y-4">
-                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
+                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         <tr>
@@ -2396,7 +1729,7 @@ export default function AccountingReports() {
                         </div>
 
                         {/* Cheques table */}
-                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto overflow-x-auto">
+                        <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
                             <table className="w-full text-right text-xs">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>

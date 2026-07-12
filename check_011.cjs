@@ -1,12 +1,7 @@
-const axios = require('axios');
-async function run() {
-    try {
-        const res = await axios.post('http://80.210.31.176:5000/api/external/v1/query', {
-            query: `SELECT TOP 5 Field_001, Field_003, Field_004, Field_005, Field_006, Field_007, Field_008, Field_009 FROM STR_TBL_011`
-        }, { headers: { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' }});
-        console.log("STR_TBL_011 sample:", res.data.data);
-    } catch(e) {
-        console.error(e.response ? e.response.data : e.message);
-    }
-}
-run();
+const fs = require('fs');
+const schema = JSON.parse(fs.readFileSync('schema_output2.json', 'utf8'));
+
+console.log("STR_TBL_011 headers:");
+console.log(schema['STR_TBL_011'][0].slice(0, 15).join(' | '));
+console.log("STR_TBL_011 row 1:");
+console.log(schema['STR_TBL_011'][1].slice(0, 15).join(' | '));

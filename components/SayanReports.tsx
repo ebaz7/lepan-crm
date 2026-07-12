@@ -23,16 +23,6 @@ const toIsoDateString = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-const normalizePersian = (str: string) => {
-    if (!str) return '';
-    return str
-        .replace(/ي/g, 'ی')
-        .replace(/ك/g, 'ک')
-        .replace(/\u064a/g, '\u06cc')
-        .replace(/\u0643/g, '\u06a9')
-        .trim();
-};
-
 const ShamsiDatePicker = ({ date, onChange, label }: { date: any, onChange: (d: any) => void, label: string }) => {
     return (
         <div className="flex flex-col gap-1">
@@ -159,31 +149,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
     try {
       if (reportType === 'SALES' || reportType === 'SALES_BY_GROUP' || reportType === 'SALES_COMPARISON') {
-        let dateSql = '';
-        if (startDate) {
-            const startIsoStr = toIsoDateString(jalaliToGregorian(startDate.year, startDate.month, startDate.day));
-            dateSql += ` AND CONVERT(VARCHAR(10), Field_008, 120) >= '${startIsoStr}'`;
-        }
-        if (endDate) {
-            const endIsoStr = toIsoDateString(jalaliToGregorian(endDate.year, endDate.month, endDate.day));
-            dateSql += ` AND CONVERT(VARCHAR(10), Field_008, 120) <= '${endIsoStr}'`;
-        }
-
-        // Add comparison date ranges for SALES_COMPARISON
-        if (reportType === 'SALES_COMPARISON') {
-            let compSql = '';
-            if (compareStartDate && compareEndDate) {
-                const cStartIso = toIsoDateString(jalaliToGregorian(compareStartDate.year, compareStartDate.month, compareStartDate.day));
-                const cEndIso = toIsoDateString(jalaliToGregorian(compareEndDate.year, compareEndDate.month, compareEndDate.day));
-                compSql = ` OR (CONVERT(VARCHAR(10), Field_008, 120) >= '${cStartIso}' AND CONVERT(VARCHAR(10), Field_008, 120) <= '${cEndIso}')`;
-            }
-            if (dateSql && compSql) {
-                dateSql = ` AND ((${dateSql.substring(4)})${compSql})`;
-            }
-        }
-
         // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
-        sqlQuery = `SELECT * FROM STR_TBL_010 WHERE 1=1 ${dateSql} ORDER BY Field_008 DESC`;
+        sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
@@ -191,7 +158,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         let docTypes: Record<string, string> = {};
         let docPrefixes: Record<string, string> = {};
         try {
-            const types = await attemptQuery("SELECT TOP 20000 Field_001, Field_003, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
+            const types = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM STR_TBL_006", 'STR_TBL_006');
             types.forEach((t: any) => {
                 const id = String(t.Field_001 || '').trim();
                 if (id) {
@@ -204,7 +171,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch persons
         let tafsiliMap: Record<string, string> = {};
         try {
-            const tafsili = await attemptQuery("SELECT TOP 50000 Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
+            const tafsili = await attemptQuery("SELECT Field_003, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007');
             tafsili.forEach((t: any) => {
                 const name = String(t.Field_006 || '').trim();
                 if (name) {
@@ -216,18 +183,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
         // Fetch warehouse document details (STR_TBL_011)
         let detailsList: any[] = [];
-        const docIds = finalData.map((r: any) => r.Field_001).filter(Boolean);
-        if (docIds.length > 0) {
-            for (let i = 0; i < docIds.length; i += 200) {
-                try {
-                    const chunk = docIds.slice(i, i + 200).map(id => `'${id}'`).join(',');
-                    const chunkData = await attemptQuery(`SELECT * FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
-                    if (Array.isArray(chunkData)) {
-                        detailsList = detailsList.concat(chunkData);
-                    }
-                } catch(e) { console.error("STR_TBL_011 chunk fetch failed", e); }
-            }
-        }
+        try {
+            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011", 'STR_TBL_011');
+        } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
 
         
         // --- SMART PRODUCT MAP BUILDER ---
@@ -235,7 +193,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         const fetchProductTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
             try {
                 const cols = [...new Set([...codeCols, ...nameCols])];
-                const list = await attemptQuery(`SELECT TOP 20000 ${cols.join(', ')} FROM ${tableName}`, tableName);
+                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
                 list.forEach((p: any) => {
                     let name = '';
                     for (const col of nameCols) {
@@ -272,7 +230,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         const fetchGroupTable = async (tableName: string, codeCols: string[], nameCols: string[]) => {
             try {
                 const cols = [...new Set([...codeCols, ...nameCols])];
-                const list = await attemptQuery(`SELECT TOP 10000 ${cols.join(', ')} FROM ${tableName}`, tableName);
+                const list = await attemptQuery(`SELECT ${cols.join(', ')} FROM ${tableName}`, tableName);
                 list.forEach((g: any) => {
                     let name = '';
                     for (const col of nameCols) {
@@ -303,7 +261,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch IND_TBL_002 (Product Groups Hierarchy Names)
         let productGroupNames: Record<string, string> = {};
         try {
-            const indGroups = await attemptQuery("SELECT TOP 20000 Field_003, Field_008 FROM IND_TBL_002", 'IND_TBL_002');
+            const indGroups = await attemptQuery("SELECT Field_003, Field_008 FROM IND_TBL_002", 'IND_TBL_002');
             indGroups.forEach((g: any) => {
                 const name = String(g.Field_003 || '').trim();
                 const code = String(g.Field_008 || '').trim();
@@ -316,7 +274,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch IND_TBL_021 (Product Code to Group Code Links)
         let productCodeToGroupCode: Record<string, string> = {};
         try {
-            const indLinks = await attemptQuery("SELECT TOP 50000 Field_003, Field_004 FROM IND_TBL_021", 'IND_TBL_021');
+            const indLinks = await attemptQuery("SELECT Field_003, Field_004 FROM IND_TBL_021", 'IND_TBL_021');
             indLinks.forEach((l: any) => {
                 const groupCode = String(l.Field_003 || '').trim();
                 const productCode = String(l.Field_004 || '').trim();
@@ -329,7 +287,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch stores (Warehouses) from STR_TBL_015
         const storeMap: Record<string, string> = {};
         try {
-            const storesList = await attemptQuery("SELECT TOP 1000 Field_001, Field_004 FROM STR_TBL_015", 'STR_TBL_015');
+            const storesList = await attemptQuery("SELECT Field_001, Field_004 FROM STR_TBL_015", 'STR_TBL_015');
             storesList.forEach((s: any) => {
                 if (s.Field_001 && s.Field_004) storeMap[String(s.Field_001).trim()] = String(s.Field_004).trim();
             });
@@ -381,6 +339,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             
             if (typeName.includes('برگشت') || typeName.includes('مرجوع') || typeName.includes('برگشتی')) {
                  isReturn = true;
+            } else if (prefixCode.startsWith('1')) {
+                 isReturn = true;
+            } else if (prefixCode.startsWith('2')) {
+                 isReturn = false;
             } else {
                  isReturn = false; // Default to sales
             }
@@ -598,8 +560,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         });
         
         setData(processed.reverse());
-      }
-      else if (reportType === 'CUSTOMER_STATEMENT') {
+      } 
+      else if (reportType === 'CUSTOMER_STATEMENT' || reportType === 'DEBTORS_CREDITORS') {
+          
+        // 1. Fetch exactly the same Accounts (Tafsili) mapping used in Invoices
+        // First find the group IDs for Persons / Current Liabilities
         const moeinGroups = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM ACT_TBL_004", 'ACT_TBL_004').catch(() => []);
         const validPersonGroupIds = new Set<string>();
         moeinGroups.forEach((g: any) => {
@@ -609,6 +574,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                   if (g.Field_003) validPersonGroupIds.add(String(g.Field_003).trim());
              }
         });
+        // Default fallbacks if none found
         if (validPersonGroupIds.size === 0) {
              validPersonGroupIds.add('11');
         }
@@ -636,282 +602,144 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             }
         });
 
-        const invoices = await attemptQuery("SELECT Field_010, Field_011 FROM STR_TBL_010", 'STR_TBL_010').catch(() => []);
-        const customerCodesSet = new Set<string>();
-               if (!selectedCustomer) {
-            sqlQuery = `
-                SELECT 
-                    t2.Field_015 as [Codes],
-                    t2.Field_018 as [Details],
-                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
-                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
-                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
-                    SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
-                FROM ACT_TBL_009 t2
-                LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
-                WHERE 1=1
-                GROUP BY t2.Field_015, t2.Field_018
-            `;
-            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-            
-            const grouped: Record<string, any> = {};
-            
-            customerCodesSet.forEach(code => {
-                const name = accountMap[code] || `شخص ${code}`;
-                grouped[name] = { AccountName: name, Code: code, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0 };
-            });
-
-            finalData.forEach((row: any) => {
-                const codesStr = String(row.Codes || row.Details || '');
-                let customerCode = null;
-                const parts = codesStr.split(/[^0-9a-zA-Z]+/);
-                for (const p of parts) {
-                    const trimmed = p.trim();
-                    if (customerCodesSet.has(trimmed)) {
-                        customerCode = trimmed;
-                        break;
-                    }
-                }
-                
-                if (!customerCode) return;
-                
-                const customerName = accountMap[customerCode] || `شخص ${customerCode}`;
-                
-                if (!grouped[customerName]) {
-                     grouped[customerName] = { AccountName: customerName, Code: customerCode, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0 };
-                }
-                
-                grouped[customerName].OpeningDebit += parseFloat(row.OpeningDebit || 0) || 0;
-                grouped[customerName].OpeningCredit += parseFloat(row.OpeningCredit || 0) || 0;
-                grouped[customerName].PeriodDebit += parseFloat(row.PeriodDebit || 0) || 0;
-                grouped[customerName].PeriodCredit += parseFloat(row.PeriodCredit || 0) || 0;
-            });
-
-            const customersList = Object.values(grouped).map((cust: any) => {
-                const opening = cust.OpeningDebit - cust.OpeningCredit;
-                const netDebit = cust.PeriodDebit + (opening > 0 ? opening : 0);
-                const netCredit = cust.PeriodCredit + (opening < 0 ? Math.abs(opening) : 0);
-                return {
-                    AccountName: cust.AccountName,
-                    Code: cust.Code,
-                    Debit: netDebit,
-                    Credit: netCredit
-                };
-            }).filter((cust: any) => cust.Debit > 0 || cust.Credit > 0);
-
-            setCustomers(customersList);
-            setData([]);
-        } else {
-            // Robust targetCode lookup
-            let targetCode: string | null = null;
-            const custObj = customers.find(c => c.AccountName === selectedCustomer);
-            if (custObj && custObj.Code) {
-                targetCode = custObj.Code;
-            } else {
-                for (const key in accountMap) {
-                    if (accountMap[key] === selectedCustomer) {
-                        targetCode = key;
-                        break;
-                    }
-                }
-            }
-            
-            let targetCodes: string[] = [];
-            const normSel = normalizePersian(selectedCustomer);
-            for (const key in accountMap) {
-                if (normalizePersian(accountMap[key]).includes(normSel)) {
-                    targetCodes.push(key);
-                }
-            }
-
-            let customerFilterSql = '';
-            if (targetCodes.length > 0) {
-                const conditions = targetCodes.map(tc => `t2.Field_015 LIKE '%${tc}%' OR t2.Field_018 LIKE '%${tc}%'`);
-                customerFilterSql = `AND (${conditions.join(' OR ')})`;
-            } else if (targetCode) {
-                customerFilterSql = `AND (t2.Field_015 LIKE '%${targetCode}%' OR t2.Field_018 LIKE '%${targetCode}%')`;
-            } else {
-                // Normalize selectedCustomer to handle both Arabic and Persian keyboard inputs
-                const normCust = selectedCustomer.replace(/ی/g, 'ي').replace(/ک/g, 'ك');
-                const normCust2 = selectedCustomer.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
-                customerFilterSql = `AND (t2.Field_011 LIKE N'%${selectedCustomer}%' OR t2.Field_011 LIKE N'%${normCust}%' OR t2.Field_011 LIKE N'%${normCust2}%' OR t2.Field_018 LIKE N'%${selectedCustomer}%')`;
-            }
-
-            sqlQuery = `SELECT 
-                t1.Field_008 as [Date], 
-                t2.Field_011 as [Description], 
-                t2.Field_009 as [Debit], 
-                t2.Field_010 as [Credit], 
-                t2.Field_015 as [Codes], 
-                t2.Field_013 as [SanadNumber], 
-                t2.Field_018 as [Details], 
-                t2.Field_005, t2.Field_006, t2.Field_007 
-            FROM ACT_TBL_009 t2 
-            LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004 
-            WHERE 1=1 ${customerFilterSql}
-            ORDER BY t1.Field_008 ASC`;
-            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-            
-            let openingBalance = 0;
-            const periodRows: any[] = [];
-            
-            finalData.forEach((row: any) => {
-                // We trust the SQL query (customerFilterSql) which already filtered by targetCode
-                // So all rows returned belong to the customer.
-
-                const d = parseFloat(row.Debit || row.Field_009 || 0) || 0;
-                const c = parseFloat(row.Credit || row.Field_010 || 0) || 0;
-                const date = row.Date;
-                
-                if (date) {
-                    const dStr = String(date).substring(0, 10);
-                    if (startIso && dStr < startIso) {
-                         openingBalance += (d - c);
-                    } else if ((!startIso || dStr >= startIso) && (!endIso || dStr <= endIso)) {
-                         periodRows.push({
-                            Date: date,
-                            Description: row.Description || row.Field_011,
-                            SanadNumber: row.SanadNumber || row.Field_013,
-                            Debit: d,
-                            Credit: c,
-                            Balance: d - c
-                         });
-                    }
-                } else {
-                    periodRows.push({
-                        Date: date,
-                        Description: row.Description || row.Field_011,
-                        SanadNumber: row.SanadNumber || row.Field_013,
-                        Debit: d,
-                        Credit: c,
-                        Balance: d - c
-                     });
-                }
-            });
-            
-            let run = openingBalance;
-            const finalCust = periodRows.map((r: any) => {
-                run += r.Balance;
-                return { ...r, Balance: run };
-            });
-            
-            if (openingBalance !== 0 || finalCust.length === 0) {
-                 finalCust.unshift({
-                     Date: '',
-                     Description: 'مانده از قبل',
-                     SanadNumber: '-',
-                     Debit: openingBalance > 0 ? openingBalance : 0,
-                     Credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
-                     Balance: openingBalance,
-                     isOpening: true
-                 });
-            }
-            
-            setCustomerDetails(finalCust);
-        }
-      }
-      else if (reportType === 'DEBTORS_CREDITORS') {
-        const moeinGroups = await attemptQuery("SELECT Field_001, Field_003, Field_004 FROM ACT_TBL_004", 'ACT_TBL_004').catch(() => []);
-        const validPersonGroupIds = new Set<string>();
-        moeinGroups.forEach((g: any) => {
-             const gName = String(g.Field_004 || g.Field_003 || '').trim();
-             if (gName.includes('اشخاص') || gName.includes('بدهی') || gName.includes('مشتری') || gName.includes('حسابهای دریافتنی')) {
-                  if (g.Field_001) validPersonGroupIds.add(String(g.Field_001).trim());
-                  if (g.Field_003) validPersonGroupIds.add(String(g.Field_003).trim());
-             }
-        });
-        if (validPersonGroupIds.size === 0) {
-             validPersonGroupIds.add('11');
-        }
-
-        const accountsData = await attemptQuery("SELECT Field_003, Field_004, Field_005, Field_006 FROM ACT_TBL_007", 'ACT_TBL_007').catch(() => []);
-        const accountMap: Record<string, string> = {};
-        const personAccountsSet = new Set<string>();
-        
-        accountsData.forEach((a: any) => {
-            const name = String(a.Field_006 || '').trim();
-            const moeinGroup = String(a.Field_004 || '').trim();
-            if (name) {
-                if (a.Field_003) {
-                    accountMap[String(a.Field_003).trim()] = name;
-                    if (validPersonGroupIds.has(moeinGroup)) {
-                         personAccountsSet.add(String(a.Field_003).trim());
-                    }
-                }
-                if (a.Field_005) {
-                    accountMap[String(a.Field_005).trim()] = name;
-                    if (validPersonGroupIds.has(moeinGroup)) {
-                         personAccountsSet.add(String(a.Field_005).trim());
-                    }
-                }
-            }
-        });
-
+        // 2. Fetch exactly the same Account IDs used in Invoices (these are the proven customers)
         const invoices = await attemptQuery("SELECT Field_010, Field_011 FROM STR_TBL_010", 'STR_TBL_010').catch(() => []);
         const customerCodesSet = new Set<string>();
         invoices.forEach((r: any) => {
            if (r.Field_010) customerCodesSet.add(String(r.Field_010).trim());
            if (r.Field_011) customerCodesSet.add(String(r.Field_011).trim());
         });
+        
+        // ADD all Persons from the accounting groups to the customer set
         personAccountsSet.forEach(code => customerCodesSet.add(code));
 
-        sqlQuery = `
-            SELECT 
-                t2.Field_015 as [Codes],
-                t2.Field_018 as [Details],
-                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningDebit],
-                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) < '${startIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [OpeningCredit],
-                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_009 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodDebit],
-                SUM(CASE WHEN CONVERT(VARCHAR(10), t1.Field_008, 120) >= '${startIso}' AND CONVERT(VARCHAR(10), t1.Field_008, 120) <= '${endIso}' THEN CAST(t2.Field_010 AS DECIMAL(18,2)) ELSE 0 END) as [PeriodCredit]
-            FROM ACT_TBL_009 t2
-            LEFT JOIN ACT_TBL_008 t1 ON t2.Field_004 = t1.Field_005 AND t2.Field_003 = t1.Field_004
-            WHERE 1=1
-            GROUP BY t2.Field_015, t2.Field_018
-        `;
-        const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
-        
-        const grouped: Record<string, any> = {};
-        finalData.forEach((row: any) => {
-            const codesStr = String(row.Codes || row.Details || '');
-            let customerCode = null;
-            const parts = codesStr.split(/[:\-]/);
-            for (const p of parts) {
-                const trimmed = p.trim();
-                if (customerCodesSet.has(trimmed)) {
-                    customerCode = trimmed;
-                    break;
+        if (reportType === 'CUSTOMER_STATEMENT') {
+            if (!selectedCustomer) {
+                // Fetch transaction details to update balances
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+                
+                const grouped: Record<string, any> = {};
+                
+                // First ensure all known customers are in the list (so they can be selected even if no recent transactions)
+                customerCodesSet.forEach(code => {
+                    const name = accountMap[code] || `شخص ${code}`;
+                    grouped[name] = { AccountName: name, Code: code, Debit: 0, Credit: 0 };
+                });
+
+                finalData.forEach((row: any) => {
+                    const date = row.Date || row.Field_013;
+                    if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
+                    
+                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    
+                    let customerCode = null;
+                    const parts = codesStr.split(/[:\-]/);
+                    for (const p of parts) {
+                        if (customerCodesSet.has(p)) {
+                            customerCode = p;
+                            break;
+                        }
+                    }
+                    
+                    if (!customerCode) return; // Not a customer transaction
+                    
+                    const customerName = accountMap[customerCode] || `شخص ${customerCode}`;
+                    
+                    if (!grouped[customerName]) {
+                        grouped[customerName] = { AccountName: customerName, Code: customerCode, Debit: 0, Credit: 0 };
+                    }
+                    
+                    const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                    const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                    grouped[customerName].Debit += v1;
+                    grouped[customerName].Credit += v2;
+                });
+                setCustomers(Object.values(grouped));
+                setData([]);
+            } else {
+                // Customer is selected
+                const custObj = customers.find(c => c.AccountName === selectedCustomer);
+                const targetCode = custObj ? custObj.Code : null;
+
+                sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_010 as [Description], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_018 as [Details], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+                const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+                
+                const processed = finalData.map((row: any) => {
+                    const codesStr = String(row.Codes || row.Field_014 || '');
+                    
+                    let matches = false;
+                    if (targetCode) {
+                        const parts = codesStr.split(/[:\-]/);
+                        if (parts.includes(targetCode)) matches = true;
+                    } else {
+                        const desc = String(row.Description || row.Field_010 || '');
+                        if (desc.includes(selectedCustomer)) matches = true;
+                    }
+
+                    if (!matches) return null;
+
+                    const d = parseFloat(row.Debit || row.Field_008 || 0);
+                    const c = parseFloat(row.Credit || row.Field_009 || 0);
+                    
+                    return {
+                        Date: row.Date || row.Field_013,
+                        Description: row.Description || row.Field_010,
+                        Debit: d,
+                        Credit: c,
+                        Balance: d - c
+                    };
+                }).filter(Boolean).filter((r: any) => isDateInRange(r.Date));
+                
+                // Calculate running balance
+                let run = 0;
+                const finalCust = processed.reverse().map((r: any) => {
+                    run += r.Balance;
+                    return { ...r, Balance: run };
+                });
+                setCustomerDetails(finalCust.reverse());
+            }
+        } 
+        else if (reportType === 'DEBTORS_CREDITORS') {
+            sqlQuery = `SELECT TOP 5000 Field_013 as [Date], Field_008 as [Debit], Field_009 as [Credit], Field_014 as [Codes], Field_005, Field_006, Field_007 FROM ACT_TBL_009 ORDER BY Field_013 DESC`;
+            const finalData = await attemptQuery(sqlQuery, 'ACT_TBL_009');
+            
+            const grouped: Record<string, any> = {};
+            finalData.forEach((row: any) => {
+                const date = row.Date || row.Field_013;
+                if (date && !isDateInRange(date) && date > endShamsiStr1 && date > endIso) return;
+
+                const codesStr = String(row.Codes || row.Field_014 || '');
+                let customerCode = null;
+                const parts = codesStr.split(/[:\-]/);
+                for (const p of parts) {
+                    if (customerCodesSet.has(p)) {
+                        customerCode = p;
+                        break;
+                    }
                 }
-            }
-            if (!customerCode) return;
+                if (!customerCode) return;
+
+                const name = accountMap[customerCode] || `شخص ${customerCode}`;
+                
+                if (!grouped[name]) grouped[name] = { AccountName: name, Debit: 0, Credit: 0 };
+                const v1 = parseFloat(row.Debit || row.Field_008 || 0) || 0;
+                const v2 = parseFloat(row.Credit || row.Field_009 || 0) || 0;
+                grouped[name].Debit += v1;
+                grouped[name].Credit += v2;
+            });
             
-            const name = accountMap[customerCode] || `شخص ${customerCode}`;
+            const processed = Object.values(grouped).map((row: any) => {
+                const net = row.Debit - row.Credit;
+                return {
+                    ...row,
+                    NetBalance: Math.abs(net),
+                    Type: net > 0 ? 'بدهکار' : (net < 0 ? 'بستانکار' : 'تسویه')
+                };
+            }).filter(r => r.NetBalance > 0).sort((a, b) => b.NetBalance - a.NetBalance);
             
-            if (!grouped[name]) {
-                grouped[name] = { AccountName: name, OpeningDebit: 0, OpeningCredit: 0, PeriodDebit: 0, PeriodCredit: 0, Code: customerCode };
-            }
-            
-            grouped[name].OpeningDebit += parseFloat(row.OpeningDebit || 0) || 0;
-            grouped[name].OpeningCredit += parseFloat(row.OpeningCredit || 0) || 0;
-            grouped[name].PeriodDebit += parseFloat(row.PeriodDebit || 0) || 0;
-            grouped[name].PeriodCredit += parseFloat(row.PeriodCredit || 0) || 0;
-        });
-        
-        const processed = Object.values(grouped).map((row: any) => {
-            const openingBalance = row.OpeningDebit - row.OpeningCredit;
-            const periodNet = row.PeriodDebit - row.PeriodCredit;
-            const net = openingBalance + periodNet;
-            return {
-                ...row,
-                Debit: row.PeriodDebit,
-                Credit: row.PeriodCredit,
-                OpeningBalance: openingBalance,
-                NetBalance: Math.abs(net),
-                Type: net > 0 ? 'بدهکار' : net < 0 ? 'بستانکار' : 'تسویه',
-                RawBalance: net
-            };
-        }).filter((row: any) => row.NetBalance > 0 || row.Debit > 0 || row.Credit > 0).sort((a, b) => b.NetBalance - a.NetBalance);
-        
-        setData(processed);
+            setData(processed);
+        }
       }
     } catch (err: any) {
       setError(err.message || 'خطا در ارتباط با سرور سایان');
@@ -1888,8 +1716,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   const renderCustomerStatement = () => {
       if (selectedCustomer) {
-          
-          
+          let runningBalance = 0;
+          let printRunningBalance = 0;
           
           const printStatement = () => {
               let html = `
@@ -1921,7 +1749,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                           ${customerDetails.map((row, idx) => {
                               const deb = parseFloat(row.Debit) || 0;
                               const cred = parseFloat(row.Credit) || 0;
-                              const bal = parseFloat(row.Balance) || 0;
+                              printRunningBalance += (deb - cred);
                               return `
                               <tr>
                                   <td>${idx + 1}</td>
@@ -1929,7 +1757,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                   <td>${row.Description || '-'}</td>
                                   <td dir="ltr" style="text-align: left;">${deb > 0 ? deb.toLocaleString() : '-'}</td>
                                   <td dir="ltr" style="text-align: left;">${cred > 0 ? cred.toLocaleString() : '-'}</td>
-                                  <td dir="ltr" style="text-align: left; font-weight: bold;">${Math.abs(bal).toLocaleString()} ${bal > 0 ? '(بد)' : bal < 0 ? '(بس)' : ''}</td>
+                                  <td dir="ltr" style="text-align: left; font-weight: bold;">${printRunningBalance.toLocaleString()} ${printRunningBalance > 0 ? '(بد)' : printRunningBalance < 0 ? '(بس)' : ''}</td>
                               </tr>
                               `;
                           }).join('')}
@@ -1982,13 +1810,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             {customerDetails.map((row, idx) => {
                                 const deb = parseFloat(row.Debit) || 0;
                                 const cred = parseFloat(row.Credit) || 0;
+                                runningBalance += (deb - cred);
                                 return (
-                                    <tr key={idx} className={`hover:bg-slate-50 transition-colors ${row.isOpening ? 'bg-slate-100 font-bold' : ''}`}>
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate((row.Date || '').substring(0, 10))}</td>
                                         <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800">{row.Description || '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-emerald-600" dir="ltr">{deb > 0 ? deb.toLocaleString() : '-'}</td>
                                         <td className="px-6 py-3 whitespace-nowrap text-rose-600" dir="ltr">{cred > 0 ? cred.toLocaleString() : '-'}</td>
-                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{Math.abs(row.Balance).toLocaleString()} {row.Balance > 0 ? '(بد)' : row.Balance < 0 ? '(بس)' : ''}</td>
+                                        <td className="px-6 py-3 whitespace-nowrap font-bold text-indigo-700" dir="ltr">{runningBalance.toLocaleString()} {runningBalance > 0 ? '(بد)' : runningBalance < 0 ? '(بس)' : ''}</td>
                                     </tr>
                                 );
                             })}
@@ -2071,11 +1900,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <tr>
                           <th>ردیف</th>
                           <th>نام مشتری / حساب</th>
-                          <th>مانده قبلی</th>
-                          <th>گردش بدهکار</th>
-                          <th>گردش بستانکار</th>
-                          <th>مانده نهایی (ریال)</th>
-                          <th>تشخیص</th>
+                          <th>مبلغ مانده (ریال)</th>
                       </tr>
                   </thead>
                   <tbody>
@@ -2083,11 +1908,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <tr>
                           <td>${idx + 1}</td>
                           <td>${row.AccountName}</td>
-                          <td dir="ltr" style="text-align: left;">${row.OpeningBalance.toLocaleString()}</td>
-                          <td dir="ltr" style="text-align: left;">${row.Debit.toLocaleString()}</td>
-                          <td dir="ltr" style="text-align: left;">${row.Credit.toLocaleString()}</td>
                           <td dir="ltr" style="text-align: left;">${row.NetBalance.toLocaleString()}</td>
-                          <td>${row.Type}</td>
                       </tr>
                       `).join('')}
                       <tr class="total">
@@ -2146,11 +1967,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                         <tr>
                             <th className="px-6 py-4 whitespace-nowrap">نام مشتری / حساب</th>
-                            <th className="px-6 py-4 whitespace-nowrap">مانده قبلی</th>
-                            <th className="px-6 py-4 whitespace-nowrap">بدهکار (طی دوره)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">بستانکار (طی دوره)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">مانده نهایی (ریال)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">تشخیص</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مبلغ مانده (ریال)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">وضعیت</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">

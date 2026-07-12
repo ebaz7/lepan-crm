@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement, MeetingMinutes, MeetingStatus } from '../types';
+import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText, Users } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
-import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests, getMeetings } from '../services/storageService';
+import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
 import { getRandomQuote } from '../utils/quotes';
 import { Note, PurchaseRequest, PurchaseRequestStatus } from '../types';
@@ -78,28 +78,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
     }
   }, [currentUser]);
 
-    const [onlineQuote, setOnlineQuote] = useState({ text: 'در حال دریافت زمزمه روز...', poet: '' });
-    
-    useEffect(() => {
-        const fetchQuote = async () => {
-            try {
-                const r = await fetch('https://c.ganjoor.net/beyt-json.php');
-                const data = await r.json();
-                if (data && data.m1 && data.m2) {
-                    setOnlineQuote({
-                        text: `${data.m1}\n${data.m2}`,
-                        poet: data.poet || 'شاعر نامشخص'
-                    });
-                    return;
-                }
-            } catch (e) {
-                // fall back below
-            }
-            const q = await getRandomQuote();
-            setOnlineQuote({ text: q.text, poet: q.author || '' });
-        };
-        fetchQuote();
-    }, []);
+  const dailyQuote = useMemo(() => getRandomQuote(), []);
     const shamsiDate = useMemo(() => {
         try {
             const now = new Date();
@@ -180,20 +159,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
         setAnnouncements(prev => prev.map(a => a.id === ann.id ? updatedAnn : a));
     };
 
-    const handleMarkAsRead = async (ann: any) => {
-        const readBy = ann.readBy || [];
-        if (!readBy.includes(currentUser.username)) {
-            const updatedAnn = { ...ann, readBy: [...readBy, currentUser.username] };
-            const mod = await import('../services/storageService');
-            await mod.updateSystemAnnouncement(updatedAnn);
-            setAnnouncements(prev => prev.map(a => a.id === ann.id ? updatedAnn : a));
-        }
-    };
-
     const visibleAnnouncements = useMemo(() => {
         return announcements.filter(a => {
-            const readBy = (a as any).readBy || [];
-            if (readBy.includes(currentUser.username)) return false; // Hide if read
             if (!a.targetUsers || a.targetUsers.length === 0) return true; // all
             return a.targetUsers.includes(currentUser.username);
         });
@@ -312,19 +279,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
       }).length;
   }
 
-  // 6. Meetings Pending Count
-  const [meetings, setMeetings] = useState<MeetingMinutes[]>([]);
-  useEffect(() => {
-      getMeetings().then(data => setMeetings(data || [])).catch(console.error);
-  }, []);
-  
-  const pendingMeetingCount = meetings.filter(m => 
-      m.status === MeetingStatus.PENDING_APPROVAL && 
-      m.attendees.some(a => a.username === currentUser.username || a.fullName === currentUser.fullName) && 
-      !m.approvals?.[currentUser.username]?.approved
-  ).length;
-
-  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || pendingSecretariatCount > 0 || pendingMeetingCount > 0;
+  const showActionSection = pendingPaymentCount > 0 || pendingExitCount > 0 || pendingBijakCount > 0 || pendingPurchaseCount > 0 || pendingSecretariatCount > 0;
 
   // ... (Existing Charts logic) ...
   const completedOrders = orders.filter(o => o.status === OrderStatus.APPROVED_CEO || o.status === OrderStatus.REVOKED);
@@ -394,9 +349,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             <div className="flex-1 glass-panel rounded-2xl px-6 py-4 border border-rose-50 shadow-sm flex items-center justify-center relative overflow-hidden group min-h-[80px]">
                 <div className="absolute right-0 top-0 h-full w-1 bg-rose-200"></div>
                 <div className="relative z-10 flex flex-col items-center">
-                    <div className="text-[10px] font-bold text-rose-300 mb-1 flex items-center gap-1"><PenTool size={10}/> زمزمه روز (آنلاین)</div>
-                    <p className="text-gray-700 dark:text-gray-300 font-bold text-sm text-center italic leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{onlineQuote.text}</p>
-                    {onlineQuote.poet && <div className="text-[10px] text-gray-400 mt-2 font-bold">— {onlineQuote.poet}</div>}
+                    <div className="text-[10px] font-bold text-rose-300 mb-1 flex items-center gap-1"><PenTool size={10}/> زمزمه روز</div>
+                    <p className="text-gray-700 dark:text-gray-300 font-bold text-sm text-center italic leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{dailyQuote.text}</p>
                 </div>
             </div>
         </div>
@@ -430,17 +384,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             {visibleAnnouncements.map((ann, i) => (
                                 <div key={ann.id || i} className="glass-panel p-4 rounded-xl shadow-sm border border-blue-50 flex items-start gap-3 relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 h-full w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
-                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm" 
-                                         title="تیک خوانده شد"
-                                         onClick={(e) => { 
-                                             e.stopPropagation(); 
-                                             if (ann.type === 'task') handleToggleAnnouncementCompletion(ann); 
-                                             else handleMarkAsRead(ann); 
-                                         }}>
+                                    <div className="bg-blue-100/50 p-2 rounded-full text-blue-600 mt-1 cursor-pointer hover:bg-blue-200 transition-colors shadow-sm" onClick={() => handleToggleAnnouncementCompletion(ann)}>
                                         {ann.type === 'task' ? (
                                             ann.isCompleted ? <CheckCircle size={16} className="text-green-600" /> : <div className="w-4 h-4 rounded-full border-2 border-orange-500 bg-orange-100/50"></div>
                                         ) : (
-                                            <CheckSquare size={16} className="text-blue-600" />
+                                            <BookOpen size={16} className="text-blue-600" />
                                         )}
                                     </div>
                                     <div className="flex-1">
@@ -449,7 +397,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                             <div className="flex items-center gap-2">
                                                 {ann.isCompleted && <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold">تکمیل شده</span>}
                                                 {ann.targetUsers && ann.targetUsers.length > 0 && <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px] text-blue-700 font-bold border border-blue-200">پیام اختصاصی</span>}
-                                                <button onClick={(e) => { e.stopPropagation(); handleMarkAsRead(ann); }} className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1"><CheckCircle size={12}/> خواندم</button>
                                                 {(permissions.canCreateAnnouncements || currentUser.role === UserRole.ADMIN) && (
                                                     <button onClick={async (e) => {
                                                         e.stopPropagation();
@@ -601,20 +548,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                 </div>
                                 <h3 className="text-xl font-black mb-1">کارتابل نامه‌ها</h3>
                                 <p className="text-amber-50 text-xs opacity-85">نامه‌های اداری منتظر امضا/اقدام</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {pendingMeetingCount > 0 && (
-                        <div onClick={() => window.dispatchEvent(new CustomEvent('CHANGE_TAB', { detail: 'meetings' }))} className="bg-gradient-to-br from-[#0284c7] to-[#0369a1] rounded-2xl p-6 text-white shadow-lg shadow-sky-500/10 cursor-pointer transform hover:scale-[1.03] hover:-translate-y-1 transition-all relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={100}/></div>
-                            <div className="relative z-10">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl"><CheckSquare size={24} className="text-white"/></div>
-                                    <span className="bg-sky-400 text-sky-900 text-[11px] font-black px-2.5 py-0.5 rounded-full animate-pulse">{pendingMeetingCount} مورد</span>
-                                </div>
-                                <h3 className="text-xl font-black mb-1">تایید صورتجلسه</h3>
-                                <p className="text-sky-50 text-xs opacity-85">صورتجلسات تولید در انتظار امضا</p>
                             </div>
                         </div>
                     )}

@@ -144,21 +144,10 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             return;
         }
 
-        // Auto-match users if they didn't use dropdown
-        const matchedAttendees = (meetingForm.attendees || []).map(a => {
-            if (!a.username && a.fullName) {
-                const matched = users.find(u => u.fullName.trim() === a.fullName.trim());
-                if (matched) return { ...a, username: matched.username };
-            }
-            return a;
-        });
-
-        const updatedForm = { ...meetingForm, attendees: matchedAttendees };
-
         const meetingData: MeetingMinutes = editingMeeting 
-            ? { ...editingMeeting, ...updatedForm as MeetingMinutes, updatedAt: Date.now() }
+            ? { ...editingMeeting, ...meetingForm as MeetingMinutes, updatedAt: Date.now() }
             : {
-                ...updatedForm as MeetingMinutes,
+                ...meetingForm as MeetingMinutes,
                 id: generateUUID(),
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
@@ -392,7 +381,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         }
         if (activeTab === 'kartable') {
             return matchesSearch && meeting.status === MeetingStatus.PENDING_APPROVAL && 
-                   meeting.attendees.some(a => a.username === currentUser.username || a.fullName === currentUser.fullName) &&
+                   meeting.attendees.some(a => a.username === currentUser.username) &&
                    (!meeting.approvals || !meeting.approvals[currentUser.username]?.approved);
         }
         if (activeTab === 'draft') return matchesSearch && meeting.status === MeetingStatus.DRAFT;
@@ -712,20 +701,15 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                     type="text"
                                                     placeholder="نام و نام خانوادگی (جستجو...)"
                                                     className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-xl text-xs font-bold outline-none"
-                                                    value={attendee.fullName || ''}
+                                                    value={attendee.fullName}
                                                     onChange={e => {
                                                         const newVal = e.target.value;
-                                                        setMeetingForm(prev => {
-                                                            const newAttendees = [...(prev.attendees || [])];
-                                                            newAttendees[idx] = { ...newAttendees[idx], fullName: newVal, username: undefined };
-                                                            const matchedUser = users.find(u => u.fullName === newVal);
-                                                            if (matchedUser) {
-                                                                newAttendees[idx].username = matchedUser.username;
-                                                            }
-                                                            return { ...prev, attendees: newAttendees };
-                                                        });
+                                                        const newAttendees = [...(meetingForm.attendees || [])];
+                                                        newAttendees[idx].fullName = newVal;
+                                                        setMeetingForm({...meetingForm, attendees: newAttendees});
                                                         
-                                                        if (newVal.length > 0) {
+                                                        // Show search results if typing
+                                                        if (newVal.length > 1) {
                                                             setActiveAttendeeIndex(idx);
                                                         }
                                                     }}
@@ -738,8 +722,7 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                             <button
                                                                 key={u.id}
                                                                 className="w-full p-2 text-right hover:bg-blue-50 dark:hover:bg-blue-900/20 text-[10px] font-bold border-b border-gray-50 dark:border-white/5 last:border-0 truncate"
-                                                                onMouseDown={(e) => {
-                                                                    e.preventDefault();
+                                                                onClick={() => {
                                                                     const newAttendees = [...(meetingForm.attendees || [])];
                                                                     const userRole = settings?.defaultMeetingAttendeesData?.find(d => d.username === u.username)?.role || u.role || 'عضو حاضر';
                                                                     

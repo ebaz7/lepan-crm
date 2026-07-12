@@ -1664,30 +1664,6 @@ app.get('/api/users', (req, res) => {
     res.json(getDb().users);
 });
 
-import { GoogleGenAI } from '@google/genai';
-app.get('/api/quote', async (req, res) => {
-    try {
-        if (process.env.GEMINI_API_KEY) {
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-            const prompt = `Please provide a random, inspiring, and beautiful Persian quote, poem, or proverb. 
-Format your response exactly as JSON with two keys: "text" (the quote text, you can use \\n for line breaks) and "author" (the author name).
-Do not include any markdown formatting like \`\`\`json, just pure JSON text. Keep it short and impactful.`;
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt
-            });
-            let txt = response.text || '{}';
-            txt = txt.replace(/```json/g, '').replace(/```/g, '').trim();
-            const q = JSON.parse(txt);
-            return res.json(q);
-        }
-        res.status(503).json({ error: 'Gemini not configured' });
-    } catch (e) {
-        console.error("Quote error:", e);
-        res.status(500).json({ error: 'Failed to fetch' });
-    }
-});
-
 // --- BOT SUBSCRIBERS API ---
 app.get('/api/bot-subscribers', (req, res) => {
     res.json(getDb().botSubscribers || []);
