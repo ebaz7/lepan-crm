@@ -194,7 +194,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Fetch warehouse document details (STR_TBL_011)
         let detailsList: any[] = [];
         try {
-            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011 ORDER BY Field_001 DESC", 'STR_TBL_011');
+            const docIds = finalData.map((r: any) => r.Field_001).filter(Boolean);
+            if (docIds.length > 0) {
+                for (let i = 0; i < docIds.length; i += 1000) {
+                    const chunk = docIds.slice(i, i + 1000).map(id => `'${id}'`).join(',');
+                    const chunkData = await attemptQuery(`SELECT * FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
+                    detailsList = detailsList.concat(chunkData);
+                }
+            }
         } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
 
         
@@ -683,6 +690,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     }
                 }
             }
+            
+            let targetCodes: string[] = [];
+            const normSel = normalizePersian(selectedCustomer);
+            for (const key in accountMap) {
+                if (normalizePersian(accountMap[key]).includes(normSel)) {
+                    targetCodes.push(key);
+                }
+            }
 
             let customerFilterSql = '';
             if (targetCode) {
@@ -713,19 +728,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const periodRows: any[] = [];
             
             finalData.forEach((row: any) => {
-                const codesStr = String(row.Codes || row.Field_015 || row.Details || '');
-                let matches = false;
-                if (targetCode) {
-                    const parts = codesStr.split(/[^0-9a-zA-Z]+/);
-                    if (parts.map(p => p.trim()).includes(targetCode)) matches = true;
-                } else {
-                    const desc = String(row.Description || row.Field_011 || '');
-                    const normDesc = normalizePersian(desc);
-                    const normSel = normalizePersian(selectedCustomer);
-                    if (normDesc.includes(normSel)) matches = true;
-                }
-
-                if (!matches) return;
+                // We trust the SQL query (customerFilterSql) which already filtered by targetCode
+                // So all rows returned belong to the customer.
 
                 const d = parseFloat(row.Debit || row.Field_009 || 0) || 0;
                 const c = parseFloat(row.Credit || row.Field_010 || 0) || 0;
@@ -2039,7 +2043,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <tr>
                           <th>ردیف</th>
                           <th>نام مشتری / حساب</th>
-                          <th>مبلغ مانده (ریال)</th>
+                          <th>مانده قبلی</th>
+                          <th>گردش بدهکار</th>
+                          <th>گردش بستانکار</th>
+                          <th>مانده نهایی (ریال)</th>
+                          <th>تشخیص</th>
                       </tr>
                   </thead>
                   <tbody>
@@ -2047,7 +2055,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <tr>
                           <td>${idx + 1}</td>
                           <td>${row.AccountName}</td>
+                          <td dir="ltr" style="text-align: left;">${row.OpeningBalance.toLocaleString()}</td>
+                          <td dir="ltr" style="text-align: left;">${row.Debit.toLocaleString()}</td>
+                          <td dir="ltr" style="text-align: left;">${row.Credit.toLocaleString()}</td>
                           <td dir="ltr" style="text-align: left;">${row.NetBalance.toLocaleString()}</td>
+                          <td>${row.Type}</td>
                       </tr>
                       `).join('')}
                       <tr class="total">
@@ -2106,8 +2118,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                         <tr>
                             <th className="px-6 py-4 whitespace-nowrap">نام مشتری / حساب</th>
-                            <th className="px-6 py-4 whitespace-nowrap">مبلغ مانده (ریال)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">وضعیت</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مانده قبلی</th>
+                            <th className="px-6 py-4 whitespace-nowrap">بدهکار (طی دوره)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">بستانکار (طی دوره)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">مانده نهایی (ریال)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">تشخیص</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">
