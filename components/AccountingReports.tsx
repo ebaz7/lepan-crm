@@ -290,7 +290,7 @@ export default function AccountingReports() {
         setIsLoading(true);
         try {
             let sql = '';
-            // If date filter is defined, query transactional tables with Sanad headers
+            // Always use ACT_TBL_009 to properly filter out guarantees
             if (dateFrom && dateTo) {
                 sql = `
                     SELECT 
@@ -302,18 +302,31 @@ export default function AccountingReports() {
                     WHERE t9.Field_015 LIKE '%11:%' 
                       AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
+                      AND t9.Field_011 NOT LIKE N'%تضمین%'
+                      AND t9.Field_011 NOT LIKE N'%تضامین%'
+                      AND t9.Field_011 NOT LIKE N'%ضمانت%'
+                      AND t9.Field_011 NOT LIKE N'%انتظامی%'
+                      AND t9.Field_011 NOT LIKE N'%وثیقه%'
+                      AND t9.Field_011 NOT LIKE N'%تعهدات%'
+                      AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
                     GROUP BY t9.Field_015
                 `;
             } else {
-                // aggregate speeds
                 sql = `
                     SELECT 
-                        t24.Field_010 as TafsiliRaw,
-                        SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
-                        SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
-                    FROM ACT_TBL_024 t24
-                    WHERE t24.Field_010 LIKE '11:%'
-                    GROUP BY t24.Field_010
+                        t9.Field_015 as TafsiliRaw,
+                        SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_009 t9
+                    WHERE t9.Field_015 LIKE '%11:%'
+                      AND t9.Field_011 NOT LIKE N'%تضمین%'
+                      AND t9.Field_011 NOT LIKE N'%تضامین%'
+                      AND t9.Field_011 NOT LIKE N'%ضمانت%'
+                      AND t9.Field_011 NOT LIKE N'%انتظامی%'
+                      AND t9.Field_011 NOT LIKE N'%وثیقه%'
+                      AND t9.Field_011 NOT LIKE N'%تعهدات%'
+                      AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
+                    GROUP BY t9.Field_015
                 `;
             }
             
@@ -513,6 +526,13 @@ export default function AccountingReports() {
                 WHERE ${tafsiliFilter}
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
+                  AND t9.Field_011 NOT LIKE N'%تضمین%'
+                  AND t9.Field_011 NOT LIKE N'%تضامین%'
+                  AND t9.Field_011 NOT LIKE N'%ضمانت%'
+                  AND t9.Field_011 NOT LIKE N'%انتظامی%'
+                  AND t9.Field_011 NOT LIKE N'%وثیقه%'
+                  AND t9.Field_011 NOT LIKE N'%تعهدات%'
+                  AND t9.Field_011 NOT LIKE N'%افتتاحیه%'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
