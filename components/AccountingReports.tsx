@@ -34,7 +34,7 @@ export default function AccountingReports() {
     const [activeTab, setActiveTab] = useState('traz');
     const [isLoading, setIsLoading] = useState(false);
     
-    // Default Date Range (Farvardin 1st of current Solar Year to Today)
+    // Default Date Range (Direct Shamsi format "YYYY/MM/DD")
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
 
@@ -73,22 +73,64 @@ export default function AccountingReports() {
     // ==========================================
     // DATE INITIALIZATION & CONVERSIONS
     // ==========================================
+    const jalaliToGregorianStr = (jalaliStr: string) => {
+        if (!jalaliStr) return '';
+        try {
+            // Convert Persian/Arabic digits to English digits
+            let clean = jalaliStr.trim()
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+            const parts = clean.split('/');
+            if (parts.length !== 3) return jalaliStr;
+            const jy = parseInt(parts[0], 10);
+            const jm = parseInt(parts[1], 10);
+            const jd = parseInt(parts[2], 10);
+            if (isNaN(jy) || isNaN(jm) || isNaN(jd)) return jalaliStr;
+            const g = jalaali.toGregorian(jy, jm, jd);
+            return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+        } catch {
+            return jalaliStr;
+        }
+    };
+
+    const parseTafsiliRaw = (raw: string) => {
+        if (!raw) return { moein: '', code: '' };
+        const parts = raw.split('-');
+        for (const part of parts) {
+            const match = part.match(/^(11\d*|31\d*):(\d+)/);
+            if (match) {
+                return {
+                    moein: match[1],
+                    code: match[2]
+                };
+            }
+        }
+        const match = raw.match(/(11\d*|31\d*):(\d+)/);
+        if (match) {
+            return {
+                moein: match[1],
+                code: match[2]
+            };
+        }
+        return { moein: '', code: '' };
+    };
+
     useEffect(() => {
-        // Initialize Date range: Farvardin 1st of current Persian year to today
+        // Initialize Date range directly in Shamsi
         const today = new Date();
         const jToday = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
         
-        // Farvardin 1st
-        const gStart = jalaali.toGregorian(jToday.jy, 1, 1);
-        const startStr = `${gStart.gy}-${String(gStart.gm).padStart(2, '0')}-${String(gStart.gd).padStart(2, '0')}`;
-        const endStr = today.toISOString().split('T')[0];
+        // Since active year is 1404, we default to 1404/01/01 as start date and today as end date
+        const activeYear = jToday.jy === 1405 ? 1404 : jToday.jy;
+        const initialFrom = `${activeYear}/01/01`;
+        const initialTo = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
         
-        setDateFrom(startStr);
-        setDateTo(endStr);
+        setDateFrom(initialFrom);
+        setDateTo(initialTo);
 
         // Previous year default for comparisons
-        const startPrev = `${gStart.gy - 1}-${String(gStart.gm).padStart(2, '0')}-${String(gStart.gd).padStart(2, '0')}`;
-        const endPrev = `${today.getFullYear() - 1}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const startPrev = `${activeYear - 1}/01/01`;
+        const endPrev = `${jToday.jy - 1}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
         setSalesDateFromB(startPrev);
         setSalesDateToB(endPrev);
 
@@ -99,6 +141,7 @@ export default function AccountingReports() {
     
     const formatDateToJalali = (dateStr: string) => {
         if (!dateStr) return '';
+        if (dateStr.includes('/')) return dateStr; // Already Shamsi!
         try {
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) return dateStr;
@@ -136,9 +179,10 @@ export default function AccountingReports() {
                 SELECT DISTINCT 
                     Field_003 as Code, 
                     Field_006 as Name, 
-                    Field_005 as TafsiliCode 
+                    Field_005 as TafsiliCode,
+                    Field_004 as MoeinGroup
                 FROM ACT_TBL_007 
-                WHERE Field_004 IN ('11', '31') 
+                WHERE Field_004 LIKE '11%' OR Field_004 LIKE '31%' OR Field_003 LIKE '11%' OR Field_003 LIKE '31%'
                 ORDER BY Field_006 ASC
             `;
             const data = await runSayanQuery(sql);
@@ -157,6 +201,8 @@ export default function AccountingReports() {
             let sql = '';
             // If date filter is defined, query transactional tables with Sanad headers
             if (dateFrom && dateTo) {
+                const gregFrom = jalaliToGregorianStr(dateFrom);
+                const gregTo = jalaliToGregorianStr(dateTo);
                 sql = `
                     SELECT 
                         t9.Field_015 as TafsiliRaw,
@@ -164,9 +210,9 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE (t9.Field_015 LIKE '%11:%' OR t9.Field_015 LIKE '%31:%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
-                      AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
-                      AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
+                    WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
+                      AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                      AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                     GROUP BY t9.Field_015
                 `;
             } else {
@@ -177,7 +223,7 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
-                    WHERE (t24.Field_010 LIKE '11:%' OR t24.Field_010 LIKE '31:%') AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                    WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
                     GROUP BY t24.Field_010
                 `;
             }
@@ -186,8 +232,8 @@ export default function AccountingReports() {
             
             // Map Sayan codes to names from ACT_TBL_007
             const mapped = rawData.map((row: any) => {
-                const match = row.TafsiliRaw.match(/(11|31):(\d+)/);
-                const code = match ? match[2] : '';
+                const parsed = parseTafsiliRaw(row.TafsiliRaw);
+                const code = parsed.code;
                 const tafsili = tafsilis.find(t => t.Code === code || t.TafsiliCode === code);
                 const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
                 const bed = parseFloat(row.TotalBed || 0);
@@ -325,6 +371,8 @@ export default function AccountingReports() {
         }
         setIsLoading(true);
         try {
+            const gregFrom = jalaliToGregorianStr(dateFrom);
+            const gregTo = jalaliToGregorianStr(dateTo);
             const sql = `
                 SELECT 
                     t9.Field_004 as SanadNo,
@@ -334,9 +382,14 @@ export default function AccountingReports() {
                     t8.Field_008 as Date
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                WHERE (t9.Field_015 LIKE '%11:${selectedTafsili}%' OR t9.Field_015 LIKE '%31:${selectedTafsili}%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
-                  AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
-                  AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
+                WHERE (
+                    t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
+                    t9.Field_014 LIKE '%:${selectedTafsili}%' OR
+                    t9.Field_015 LIKE '%:${selectedTafsili}' OR 
+                    t9.Field_014 LIKE '%:${selectedTafsili}'
+                ) AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
+                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
@@ -444,6 +497,9 @@ export default function AccountingReports() {
     const fetchSalesData = async () => {
         setIsLoading(true);
         try {
+            const gregFrom = jalaliToGregorianStr(dateFrom);
+            const gregTo = jalaliToGregorianStr(dateTo);
+            
             // Fetch Period A
             const sqlA = `
                 SELECT 
@@ -462,8 +518,8 @@ export default function AccountingReports() {
                 LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
                 WHERE t10.Field_009 IN ('3', '12')
-                  AND t10.Field_008 >= '${dateFrom}T00:00:00.000Z' 
-                  AND t10.Field_008 <= '${dateTo}T23:59:59.000Z'
+                  AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                  AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
@@ -472,6 +528,8 @@ export default function AccountingReports() {
 
             // Fetch Period B for comparison if active
             if (compareMode && salesDateFromB && salesDateToB) {
+                const gregFromB = jalaliToGregorianStr(salesDateFromB);
+                const gregToB = jalaliToGregorianStr(salesDateToB);
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
@@ -489,8 +547,8 @@ export default function AccountingReports() {
                     LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                     LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
                     WHERE t10.Field_009 IN ('3', '12')
-                      AND t10.Field_008 >= '${salesDateFromB}T00:00:00.000Z' 
-                      AND t10.Field_008 <= '${salesDateToB}T23:59:59.000Z'
+                      AND t10.Field_008 >= '${gregFromB}T00:00:00.000Z' 
+                      AND t10.Field_008 <= '${gregToB}T23:59:59.000Z'
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
@@ -586,6 +644,8 @@ export default function AccountingReports() {
     const fetchProduction = async () => {
         setIsLoading(true);
         try {
+            const gregFrom = jalaliToGregorianStr(dateFrom);
+            const gregTo = jalaliToGregorianStr(dateTo);
             const sql = `
                 SELECT 
                     t33.Field_001 as ProdId,
@@ -600,8 +660,8 @@ export default function AccountingReports() {
                 LEFT JOIN IND_TBL_022 t22 ON t33.Field_004 = t22.Field_005
                 LEFT JOIN IND_TBL_021 t33.Field_004 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                WHERE t33.Field_024 >= '${dateFrom}T00:00:00.000Z'
-                  AND t33.Field_024 <= '${dateTo}T23:59:59.000Z'
+                WHERE t33.Field_024 >= '${gregFrom}T00:00:00.000Z'
+                  AND t33.Field_024 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t33.Field_024 DESC
             `;
             
@@ -619,8 +679,8 @@ export default function AccountingReports() {
                         Field_008 as Details,
                         Field_024 as Date
                     FROM IND_TBL_033
-                    WHERE Field_024 >= '${dateFrom}T00:00:00.000Z'
-                      AND Field_024 <= '${dateTo}T23:59:59.000Z'
+                    WHERE Field_024 >= '${gregFrom}T00:00:00.000Z'
+                      AND Field_024 <= '${gregTo}T23:59:59.000Z'
                     ORDER BY Field_024 DESC
                 `);
             }
@@ -819,28 +879,24 @@ export default function AccountingReports() {
                         <Calendar className="w-4 h-4 text-blue-600" />
                         <span>بازه زمانی گزارش:</span>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
                         <input 
-                            type="date" 
+                            type="text" 
+                            placeholder="۱۴۰۴/۰۱/۰۱"
                             value={dateFrom}
                             onChange={(e) => setDateFrom(e.target.value)}
-                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800"
+                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
                         />
-                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-md font-mono select-none">
-                            {formatDateToJalali(dateFrom)}
-                        </span>
                     </div>
                     <span className="text-xs text-slate-400 font-bold">تا</span>
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
                         <input 
-                            type="date" 
+                            type="text" 
+                            placeholder="۱۴۰۴/۱۲/۲۹"
                             value={dateTo}
                             onChange={(e) => setDateTo(e.target.value)}
-                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800"
+                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
                         />
-                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-md font-mono select-none">
-                            {formatDateToJalali(dateTo)}
-                        </span>
                     </div>
                     <button 
                         onClick={() => {
@@ -1203,28 +1259,24 @@ export default function AccountingReports() {
                                         بازه دوم مقایسه ( Period B )
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2 py-1 w-full">
+                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1.5 w-full shadow-inner">
                                             <input 
-                                                type="date" 
+                                                type="text" 
+                                                placeholder="۱۴۰۳/۰۱/۰۱"
                                                 value={salesDateFromB}
                                                 onChange={(e) => setSalesDateFromB(e.target.value)}
-                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 w-full"
+                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
                                             />
-                                            <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md font-mono select-none whitespace-nowrap">
-                                                {formatDateToJalali(salesDateFromB)}
-                                            </span>
                                         </div>
                                         <span className="text-xs text-slate-400 font-bold">تا</span>
-                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2 py-1 w-full">
+                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1.5 w-full shadow-inner">
                                             <input 
-                                                type="date" 
+                                                type="text" 
+                                                placeholder="۱۴۰۳/۱۲/۲۹"
                                                 value={salesDateToB}
                                                 onChange={(e) => setSalesDateToB(e.target.value)}
-                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 w-full"
+                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
                                             />
-                                            <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md font-mono select-none whitespace-nowrap">
-                                                {formatDateToJalali(salesDateToB)}
-                                            </span>
                                         </div>
                                     </div>
                                 </div>
