@@ -1166,47 +1166,75 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                 </div>
                             </div>
 
-                            {/* Invoice Items Table */}
-                            <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                <table className="w-full text-right text-xs">
-                                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px]">
-                                        <tr>
-                                            <th className="p-3 text-center">ردیف</th>
-                                            <th className="p-3">نام و شرح کالا</th>
-                                            <th className="p-3 text-left">مقدار (kg)</th>
-                                            <th className="p-3 text-left">وزن ناخالص</th>
-                                            <th className="p-3 text-center">کارتن</th>
-                                            <th className="p-3 text-center">بوبین</th>
-                                            <th className="p-3 text-left">فی واحد (ریال)</th>
-                                            <th className="p-3 text-left">مبلغ کل (ریال)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y text-slate-600 font-mono">
-                                        {(selectedInvoice.Items || []).map((item: any, idx: number) => (
-                                            <tr key={idx} className="hover:bg-slate-50/30">
-                                                <td className="p-3 text-center font-sans text-slate-400">{idx + 1}</td>
-                                                <td className="p-3 font-sans font-bold text-slate-800 text-[11px] leading-relaxed">
-                                                    {item.name}
-                                                    <div className="text-[10px] text-slate-400 mt-1 font-mono">{item.code}</div>
-                                                </td>
-                                                <td className="p-3 text-left text-orange-500 font-bold">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
-                                                <td className="p-3 text-left text-slate-500">{item.grossWeight > 0 ? item.grossWeight.toLocaleString() : '-'}</td>
-                                                <td className="p-3 text-center font-bold text-slate-800">{item.cartonCount > 0 ? item.cartonCount : '-'}</td>
-                                                <td className="p-3 text-center text-slate-600">{item.bobbinCount > 0 ? item.bobbinCount : '-'}</td>
-                                                <td className="p-3 text-left text-slate-500">{item.fee > 0 ? Math.round(item.fee).toLocaleString() : '-'}</td>
-                                                <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? Math.round(item.totalPrice).toLocaleString() : '-'}</td>
-                                            </tr>
-                                        ))}
-                                        {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
+                            {/* Invoice Items Responsive View */}
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                                <div className="hidden md:block overflow-x-auto">
+                                    <table className="w-full text-right text-xs">
+                                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px]">
                                             <tr>
-                                                <td colSpan={8} className="p-6 text-center text-slate-400 font-sans">
-                                                    جزئیات اقلام کالا برای این فاکتور در دیتابیس لوکال یافت نشد. 
-                                                    <span className="block mt-1 text-[10px] text-indigo-500">مبلغ کل فاکتور به صورت سند تلفیقی در هدر ثبت شده است.</span>
-                                                </td>
+                                                <th className="p-3 text-center">ردیف</th>
+                                                <th className="p-3">نام و شرح کالا</th>
+                                                <th className="p-3 text-left">مقدار (kg)</th>
+                                                <th className="p-3 text-left">وزن ناخالص</th>
+                                                <th className="p-3 text-center">کارتن</th>
+                                                <th className="p-3 text-center">بوبین</th>
+                                                <th className="p-3 text-left">فی واحد (ریال)</th>
+                                                <th className="p-3 text-left">مبلغ کل (ریال)</th>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y text-slate-600 font-mono">
+                                            {(selectedInvoice.Items || []).map((item: any, idx: number) => (
+                                                <tr key={idx} className="hover:bg-slate-50/30">
+                                                    <td className="p-3 text-center font-sans text-slate-400">{idx + 1}</td>
+                                                    <td className="p-3 font-sans font-bold text-slate-800 text-[11px] leading-relaxed">
+                                                        {item.name}
+                                                        <div className="text-[10px] text-slate-400 mt-1 font-mono">{item.code}</div>
+                                                    </td>
+                                                    <td className="p-3 text-left text-orange-500 font-bold">{item.weight > 0 ? item.weight.toLocaleString() : '-'}</td>
+                                                    <td className="p-3 text-left text-slate-500">{item.grossWeight > 0 ? item.grossWeight.toLocaleString() : '-'}</td>
+                                                    <td className="p-3 text-center font-bold text-slate-800">{item.cartonCount > 0 ? item.cartonCount : '-'}</td>
+                                                    <td className="p-3 text-center text-slate-600">{item.bobbinCount > 0 ? item.bobbinCount : '-'}</td>
+                                                    <td className="p-3 text-left text-slate-500">{item.fee > 0 ? Math.round(item.fee).toLocaleString() : '-'}</td>
+                                                    <td className="p-3 text-left font-black text-slate-800">{item.totalPrice > 0 ? Math.round(item.totalPrice).toLocaleString() : '-'}</td>
+                                                </tr>
+                                            ))}
+                                            {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
+                                                <tr>
+                                                    <td colSpan={8} className="p-6 text-center text-slate-400 font-sans">
+                                                        جزئیات اقلام کالا برای این فاکتور در دیتابیس لوکال یافت نشد. 
+                                                        <span className="block mt-1 text-[10px] text-indigo-500">مبلغ کل فاکتور به صورت سند تلفیقی در هدر ثبت شده است.</span>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="md:hidden divide-y divide-slate-100">
+                                    {(selectedInvoice.Items || []).map((item: any, idx: number) => (
+                                        <div key={idx} className="p-4 space-y-2 text-xs">
+                                            <div className="flex justify-between items-start">
+                                                <span className="w-5 h-5 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold text-[10px]">{idx + 1}</span>
+                                                <span className="text-[10px] font-mono text-slate-400">{item.code}</span>
+                                            </div>
+                                            <h4 className="font-extrabold text-slate-800 leading-relaxed">{item.name}</h4>
+                                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 font-medium">
+                                                <div>مقدار: <span className="font-bold text-orange-500 font-mono">{item.weight > 0 ? `${item.weight.toLocaleString()} kg` : '-'}</span></div>
+                                                <div>وزن ناخالص: <span className="font-bold text-slate-700 font-mono">{item.grossWeight > 0 ? `${item.grossWeight.toLocaleString()} kg` : '-'}</span></div>
+                                                <div>کارتن: <span className="font-bold text-slate-700 font-mono">{item.cartonCount > 0 ? item.cartonCount : '-'}</span></div>
+                                                <div>بوبین: <span className="font-bold text-slate-700 font-mono">{item.bobbinCount > 0 ? item.bobbinCount : '-'}</span></div>
+                                            </div>
+                                            <div className="border-t border-dashed border-slate-100 pt-2 flex justify-between items-center text-[11px]">
+                                                <span className="text-slate-400">فی واحد: <span className="font-bold text-slate-700 font-mono">{item.fee > 0 ? `${Math.round(item.fee).toLocaleString()} ریال` : '-'}</span></span>
+                                                <span className="font-black text-indigo-600 font-mono">{item.totalPrice > 0 ? `${Math.round(item.totalPrice).toLocaleString()} ریال` : '-'}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!selectedInvoice.Items || selectedInvoice.Items.length === 0) && (
+                                        <div className="p-6 text-center text-slate-400 font-sans text-xs">
+                                            جزئیات اقلام کالا یافت نشد. مبلغ کل در هدر فاکتور درج شده است.
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Factor Summary Footer Sheet */}
@@ -1249,7 +1277,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 font-bold text-xs text-slate-700">
                             📊 عملکرد فروش به تفکیک گروه کالا
                         </div>
-                        <div className="overflow-x-auto">
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-right text-xs">
                                 <thead className="bg-slate-50 border-b text-slate-500 text-[10px]">
                                     <tr>
@@ -1277,6 +1305,22 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                        <div className="md:hidden divide-y divide-slate-100">
+                            {groupStats.map((grp, idx) => (
+                                <div key={idx} className="p-4 space-y-2 text-xs bg-white">
+                                    <h4 className="font-extrabold text-slate-800">{grp.groupName}</h4>
+                                    <div className="grid grid-cols-2 gap-y-1.5 text-[10px] text-slate-500 font-mono">
+                                        <div>وزن: <span className="font-bold text-orange-500">{grp.weight.toLocaleString()} kg</span></div>
+                                        <div>تعداد: <span className="font-bold text-slate-700">{grp.quantity.toLocaleString()}</span></div>
+                                        <div>مبلغ: <span className="font-bold text-indigo-600">{grp.totalPrice.toLocaleString()} ریال</span></div>
+                                        <div>میانگین فی: <span className="font-bold text-slate-600">{Math.round(grp.avgPrice).toLocaleString()}</span></div>
+                                    </div>
+                                </div>
+                            ))}
+                            {groupStats.length === 0 && (
+                                <div className="text-center py-8 text-slate-400 text-xs">اطلاعاتی یافت نشد</div>
+                            )}
                         </div>
                     </div>
 
@@ -1328,7 +1372,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             />
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-right text-xs">
                             <thead className="bg-slate-50 border-b text-slate-500 text-[10px]">
                                 <tr>
@@ -1358,6 +1402,23 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="md:hidden divide-y divide-slate-100 bg-white">
+                        {itemStats.filter(i => !searchInvoice || i.itemName.includes(searchInvoice)).map((item, idx) => (
+                            <div key={idx} className="p-4 space-y-2 text-xs">
+                                <h4 className="font-extrabold text-slate-800 leading-relaxed">{item.itemName}</h4>
+                                <div className="text-[10px] text-slate-400">گروه: {item.groupName}</div>
+                                <div className="grid grid-cols-2 gap-y-1.5 text-[10px] text-slate-500 font-mono">
+                                    <div>وزن: <span className="font-bold text-orange-500">{item.weight.toLocaleString()} kg</span></div>
+                                    <div>تعداد کارتن: <span className="font-bold text-slate-700">{item.quantity.toLocaleString()}</span></div>
+                                    <div>مبلغ کل: <span className="font-bold text-indigo-600">{item.totalPrice.toLocaleString()} ریال</span></div>
+                                    <div>میانگین فی: <span className="font-bold text-slate-600">{Math.round(item.avgPrice).toLocaleString()}</span></div>
+                                </div>
+                            </div>
+                        ))}
+                        {itemStats.length === 0 && (
+                            <div className="text-center py-8 text-slate-400 text-xs">داده‌ای یافت نشد</div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1478,7 +1539,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
-                  <div className="overflow-x-auto">
+                  <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-center text-xs">
                           <thead className="bg-slate-50 border-b text-slate-800 text-[11px] font-black">
                               <tr>
@@ -1532,6 +1593,63 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                               )}
                           </tbody>
                       </table>
+                  </div>
+                  <div className="md:hidden divide-y divide-slate-100">
+                      {itemsArray.map((item: any, idx: number) => {
+                          if (item.isSubtotal) {
+                              return (
+                                  <div key={idx} className="bg-indigo-50/30 p-4 font-black text-[11px] text-indigo-900 space-y-2">
+                                      <div className="font-sans text-xs">{item.groupName} (خلاصه)</div>
+                                      <div className="grid grid-cols-2 gap-y-1.5 font-mono text-[10px]">
+                                          <div>فروش وزن: {item.weight !== 0 ? item.weight.toLocaleString() : '-'}</div>
+                                          <div>فروش مبلغ: {item.amount !== 0 ? item.amount.toLocaleString() : '-'}</div>
+                                          <div>مرجوع وزن: {item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</div>
+                                          <div>مرجوع مبلغ: {item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</div>
+                                          <div className="col-span-2 border-t border-indigo-200/50 pt-1.5 mt-1 font-extrabold text-[11px] flex justify-between">
+                                              <span>خالص وزن: {item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</span>
+                                              <span>خالص مبلغ: {item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</span>
+                                          </div>
+                                      </div>
+                                  </div>
+                              );
+                          }
+                          return (
+                              <div key={idx} className="p-4 space-y-2 text-xs bg-white">
+                                  <div className="flex justify-between">
+                                      <span className="text-[10px] text-slate-400">{item.mainGroup}</span>
+                                      <span className="font-sans font-bold text-slate-800">{item.groupName}</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-y-1 text-[10px] text-slate-500 font-mono">
+                                      <div>فروش وزن: <span className="text-slate-800 font-bold">{item.weight !== 0 ? item.weight.toLocaleString() : '-'}</span></div>
+                                      <div>فروش مبلغ: <span className="text-emerald-600 font-bold">{item.amount !== 0 ? item.amount.toLocaleString() : '-'}</span></div>
+                                      <div>مرجوع وزن: <span className="text-rose-500 font-bold">{item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</span></div>
+                                      <div>مرجوع مبلغ: <span className="text-rose-600 font-bold">{item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</span></div>
+                                  </div>
+                                  <div className="border-t border-slate-100 pt-2 flex justify-between font-bold text-[11px]">
+                                      <span className="text-slate-600">خالص وزن: <span className="font-mono text-slate-800 font-black">{item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</span></span>
+                                      <span className="text-indigo-600">خالص مبلغ: <span className="font-mono font-black">{item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</span></span>
+                                  </div>
+                              </div>
+                          );
+                      })}
+                      {itemsArray.length > 0 && (
+                          <div className="bg-slate-50 p-4 font-black text-xs space-y-2 text-slate-800">
+                              <div>جمع کل گزارش</div>
+                              <div className="grid grid-cols-2 gap-y-1 font-mono text-[10px] opacity-90">
+                                  <div>فروش تعداد: {totalSalesW.toLocaleString()}</div>
+                                  <div>فروش مبلغ: {totalSalesA.toLocaleString()}</div>
+                                  <div>مرجوع تعداد: {totalRetW.toLocaleString()}</div>
+                                  <div>مرجوع مبلغ: {totalRetA.toLocaleString()}</div>
+                                  <div className="col-span-2 border-t border-slate-200 pt-1.5 mt-1 font-extrabold text-[11px] flex justify-between text-indigo-700">
+                                      <span>خالص تعداد: {totalNetW.toLocaleString()}</span>
+                                      <span>خالص مبلغ: {totalNetA.toLocaleString()}</span>
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                      {itemsArray.length === 0 && (
+                          <div className="text-center py-8 text-slate-400 text-xs">داده‌ای یافت نشد</div>
+                      )}
                   </div>
               </div>
           </div>
@@ -1795,7 +1913,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       </button>
                   </div>
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm text-right">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                             <tr>
@@ -1823,6 +1941,49 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             })}
                         </tbody>
                         </table>
+                    </div>
+                    {/* Beautiful timeline-inspired Card List for Mobile */}
+                    <div className="md:hidden divide-y divide-slate-100">
+                        {(() => {
+                            let tempBal = 0;
+                            const detailsWithBalance = [...customerDetails].reverse().map(row => {
+                                const deb = parseFloat(row.Debit) || 0;
+                                const cred = parseFloat(row.Credit) || 0;
+                                tempBal += (deb - cred);
+                                return { ...row, tempBal };
+                            }).reverse();
+
+                            return detailsWithBalance.map((row, idx) => {
+                                const deb = parseFloat(row.Debit) || 0;
+                                const cred = parseFloat(row.Credit) || 0;
+                                return (
+                                    <div key={idx} className="p-4 space-y-2 text-xs">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold font-mono" dir="ltr">
+                                                {formatDate((row.Date || '').substring(0, 10))}
+                                            </span>
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${row.tempBal > 0 ? 'bg-emerald-50 text-emerald-700' : row.tempBal < 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'}`}>
+                                                {row.tempBal > 0 ? 'بدهکار' : row.tempBal < 0 ? 'بستانکار' : 'تسویه'}
+                                            </span>
+                                        </div>
+                                        <p className="font-sans font-bold text-slate-800 leading-relaxed">{row.Description || '-'}</p>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 font-mono">
+                                            <div>بدهکار: <span className="font-bold text-emerald-600">{deb > 0 ? deb.toLocaleString() : '-'}</span></div>
+                                            <div>بستانکار: <span className="font-bold text-rose-600">{cred > 0 ? cred.toLocaleString() : '-'}</span></div>
+                                        </div>
+                                        <div className="bg-slate-50 p-2 rounded-lg flex justify-between items-center text-[11px] font-black mt-1">
+                                            <span className="text-slate-400">مانده حساب:</span>
+                                            <span className="font-mono text-indigo-700" dir="ltr">
+                                                {row.tempBal.toLocaleString()} {row.tempBal > 0 ? '(بد)' : row.tempBal < 0 ? '(بس)' : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                        {customerDetails.length === 0 && (
+                            <div className="text-center py-8 text-slate-400 text-xs font-sans">تراکنشی یافت نشد</div>
+                        )}
                     </div>
                 </div>
               </div>
@@ -1962,7 +2123,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm text-right">
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                         <tr>
@@ -1987,6 +2148,27 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         ))}
                     </tbody>
                     </table>
+                </div>
+                <div className="md:hidden divide-y divide-slate-100">
+                    {data.map((row, idx) => (
+                        <div key={idx} className="p-4 space-y-2 text-xs">
+                            <h4 className="font-sans font-bold text-slate-800">{row.AccountName}</h4>
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 font-sans text-[10px]">مانده حساب:</span>
+                                <span className={`font-mono font-bold ${row.Type === 'بدهکار' ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                                    {row.NetBalance.toLocaleString()} ریال
+                                </span>
+                            </div>
+                            <div>
+                                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${row.Type === 'بدهکار' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                    {row.Type}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                    {data.length === 0 && (
+                        <div className="text-center py-8 text-slate-400 text-xs font-sans">موردی یافت نشد</div>
+                    )}
                 </div>
             </div>
           </div>
@@ -2056,35 +2238,57 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto bg-slate-50/30 p-6">
+          <div className="flex-1 overflow-auto bg-slate-50/30 p-4 sm:p-6">
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <table className="w-full text-sm text-right">
-                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
-                        <tr>
-                            <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
-                            <th className="px-6 py-4 whitespace-nowrap">نوع سند</th>
-                            <th className="px-6 py-4 whitespace-nowrap">مبلغ (ریال)</th>
-                            <th className="px-6 py-4 whitespace-nowrap">شخص / توضیحات</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-mono text-xs">
-                        {data.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate(row.Date)}</td>
-                                <td className="px-6 py-3 whitespace-nowrap text-slate-800 font-bold">{row.Type}</td>
-                                <td className="px-6 py-3 whitespace-nowrap text-indigo-600 font-bold" dir="ltr">{Number(row.TotalSales || 0).toLocaleString()}</td>
-                                <td className="px-6 py-3 text-slate-500 max-w-[300px] truncate" title={String(row.Field_027 || row.Field_028 || row.PersonName || '')}>
-                                    {row.PersonName ? row.PersonName : (row.Field_010 ? row.Field_010 : '-')} 
-                                </td>
-                            </tr>
-                        ))}
-                        {data.length === 0 && (
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px]">
                             <tr>
-                                <td colSpan={4} className="text-center py-8 text-slate-400">هیچ سندی یافت نشد</td>
+                                <th className="px-6 py-4 whitespace-nowrap">تاریخ</th>
+                                <th className="px-6 py-4 whitespace-nowrap">نوع سند</th>
+                                <th className="px-6 py-4 whitespace-nowrap">مبلغ (ریال)</th>
+                                <th className="px-6 py-4 whitespace-nowrap">شخص / توضیحات</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono text-xs">
+                            {data.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-3 whitespace-nowrap text-slate-600" dir="ltr">{formatDate(row.Date)}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-slate-800 font-bold">{row.Type}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-indigo-600 font-bold" dir="ltr">{Number(row.TotalSales || 0).toLocaleString()}</td>
+                                    <td className="px-6 py-3 text-slate-500 max-w-[300px] truncate" title={String(row.Field_027 || row.Field_028 || row.PersonName || '')}>
+                                        {row.PersonName ? row.PersonName : (row.Field_010 ? row.Field_010 : '-')} 
+                                    </td>
+                                </tr>
+                            ))}
+                            {data.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="text-center py-8 text-slate-400">هیچ سندی یافت نشد</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="md:hidden divide-y divide-slate-100">
+                    {data.map((row, idx) => (
+                        <div key={idx} className="p-4 space-y-2 text-xs">
+                            <div className="flex justify-between items-center text-[10px] text-slate-400">
+                                <span className="font-mono" dir="ltr">{formatDate(row.Date)}</span>
+                                <span className="font-bold text-slate-700">{row.Type}</span>
+                            </div>
+                            <p className="font-bold text-slate-800 leading-relaxed truncate" title={String(row.Field_027 || row.Field_028 || row.PersonName || '')}>
+                                {row.PersonName ? row.PersonName : (row.Field_010 ? row.Field_010 : '-')} 
+                            </p>
+                            <div className="flex justify-between items-center border-t border-slate-50 pt-2 text-[11px] font-black mt-1">
+                                <span className="text-slate-400 font-normal">مبلغ:</span>
+                                <span className="font-mono text-indigo-600" dir="ltr">{Number(row.TotalSales || 0).toLocaleString()} ریال</span>
+                            </div>
+                        </div>
+                    ))}
+                    {data.length === 0 && (
+                        <div className="text-center py-8 text-slate-400 text-xs font-sans">هیچ سندی یافت نشد</div>
+                    )}
+                </div>
             </div>
           </div>
         </motion.div>

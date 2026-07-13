@@ -39,6 +39,8 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
     });
     
     const [searchTerm, setSearchTerm] = useState('');
+    const [guestInput, setGuestInput] = useState('');
+    const [newCommentText, setNewCommentText] = useState('');
 
     const canView = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canViewMeetings);
     const canCreate = currentUser.role === UserRole.ADMIN || (settings?.rolePermissions?.[currentUser.role]?.canCreateMeeting);
@@ -57,6 +59,12 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
         }
         return () => { window.dispatchEvent(new CustomEvent('UNREGISTER_BACK_ACTION')); };
     }, [showModal, viewMeeting]);
+
+    useEffect(() => {
+        if (showModal && meetingForm) {
+            setGuestInput((meetingForm.guestAttendees || []).join('، '));
+        }
+    }, [showModal, meetingForm.id]);
 
     const loadData = async () => {
         setLoading(true);
@@ -212,6 +220,160 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
             ...prev,
             items: (prev.items || []).filter((_, i) => i !== index)
         }));
+    };
+
+    const handleRenameAttachment = async (type: 'image' | 'pdf', index: number) => {
+        const currentName = type === 'image' 
+            ? meetingForm.imageAttachments?.[index]?.fileName 
+            : meetingForm.pdfAttachments?.[index]?.fileName;
+        
+        const newName = window.prompt('نام جدید فایل را وارد کنید:', currentName);
+        if (!newName || newName.trim() === '') return;
+
+        setMeetingForm(prev => {
+            const updated = { ...prev };
+            if (type === 'image' && updated.imageAttachments) {
+                const arr = [...updated.imageAttachments];
+                arr[index] = { ...arr[index], fileName: newName.trim() };
+                updated.imageAttachments = arr;
+            } else if (type === 'pdf' && updated.pdfAttachments) {
+                const arr = [...updated.pdfAttachments];
+                arr[index] = { ...arr[index], fileName: newName.trim() };
+                updated.pdfAttachments = arr;
+            }
+
+            if (editingMeeting) {
+                const finalMeeting = { ...editingMeeting, ...updated as MeetingMinutes, updatedAt: Date.now() };
+                updateMeeting(finalMeeting).then(() => loadData());
+            }
+            return updated;
+        });
+    };
+
+    const handleDeleteAttachment = async (type: 'image' | 'pdf', index: number) => {
+        if (!window.confirm('آیا از حذف این فایل پیوست اطمینان دارید؟')) return;
+
+        setMeetingForm(prev => {
+            const updated = { ...prev };
+            if (type === 'image' && updated.imageAttachments) {
+                updated.imageAttachments = updated.imageAttachments.filter((_, i) => i !== index);
+            } else if (type === 'pdf' && updated.pdfAttachments) {
+                updated.pdfAttachments = updated.pdfAttachments.filter((_, i) => i !== index);
+            }
+
+            if (editingMeeting) {
+                const finalMeeting = { ...editingMeeting, ...updated as MeetingMinutes, updatedAt: Date.now() };
+                updateMeeting(finalMeeting).then(() => loadData());
+            }
+            return updated;
+        });
+    };
+
+    const handleUploadFiles = async (type: 'image' | 'pdf', files: FileList) => {
+        const uploads = await Promise.all(Array.from(files).map(async f => {
+            const res = await uploadFileChunked(f, () => {});
+            return { fileName: f.name, url: res.url };
+        }));
+
+        setMeetingForm(prev => {
+            const updated = { ...prev };
+            if (type === 'image') {
+                updated.imageAttachments = [...(prev.imageAttachments || []), ...uploads];
+            } else {
+                updated.pdfAttachments = [...(prev.pdfAttachments || []), ...uploads];
+            }
+
+            if (editingMeeting) {
+                const finalMeeting = { ...editingMeeting, ...updated as MeetingMinutes, updatedAt: Date.now() };
+                updateMeeting(finalMeeting).then(() => loadData());
+            }
+            return updated;
+        });
+    };
+
+    const handleCeoFinalApprove = async (meeting: MeetingMinutes) => {
+        if (!window.confirm('آیا از تایید نهایی و بایگانی این صورتجلسه اطمینان دارید؟')) return;
+        try {
+            const updated = {
+                ...meeting,
+                status: MeetingStatus.APPROVED,
+                updatedAt: Date.now()
+            };
+            await updateMeeting(updated);
+            try {
+                await sendMeetingMinutes(updated.id);
+            } catch (err) {
+                console.warn('sendMeetingMinutes failed, continuing...', err);
+            }
+            
+            // Send system notification to all attendees
+            for (const attendee of updated.attendees) {
+                if (attendee.username) {
+                    await apiCall('/notifications/add', 'POST', {
+                        username: attendee.username,
+                        title: `تایید نهایی صورتجلسه ${updated.meetingNumber}`,
+                        body: `مدیرعامل صورتجلسه شماره ${updated.meetingNumber} را تایید نهایی و بایگانی کرد.`,
+                        url: 'meetings'
+                    });
+                    await sendMessage({
+                        id: generateUUID(),
+                        sender: 'system',
+                        senderUsername: 'system',
+                        role: 'system',
+                        message: `✅ تایید نهایی صورتجلسه ${updated.meetingNumber}\n\nباسلام، صورتجلسه شماره ${updated.meetingNumber} توسط مدیرعامل تایید نهایی و بایگانی گردید.\n\nجهت مشاهده به کارتابل صورتجلسات مراجعه فرمایید.`,
+                        recipient: attendee.username,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+            
+            setViewMeeting(updated);
+            loadData();
+            alert('صورتجلسه با موفقیت تایید نهایی و بایگانی شد.');
+        } catch (error) {
+            console.error("CEO Approval failed", error);
+            alert('خطا در تایید نهایی صورتجلسه');
+        }
+    };
+
+    const handleAddComment = async () => {
+        if (!newCommentText.trim() || !viewMeeting) return;
+        const comment = {
+            id: generateUUID(),
+            username: currentUser.username,
+            fullName: currentUser.fullName,
+            text: newCommentText.trim(),
+            timestamp: Date.now()
+        };
+
+        const updated = {
+            ...viewMeeting,
+            comments: [...(viewMeeting.comments || []), comment]
+        };
+
+        try {
+            await updateMeeting(updated);
+            setViewMeeting(updated);
+            setNewCommentText('');
+            loadData();
+        } catch (error) {
+            alert('خطا در ثبت نظر');
+        }
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        if (!window.confirm('آیا از حذف این نظر اطمینان دارید؟') || !viewMeeting) return;
+        const updated = {
+            ...viewMeeting,
+            comments: (viewMeeting.comments || []).filter(c => c.id !== commentId)
+        };
+        try {
+            await updateMeeting(updated);
+            setViewMeeting(updated);
+            loadData();
+        } catch (error) {
+            alert('خطا در حذف نظر');
+        }
     };
 
     const sendPvNotificationsOnApproval = async (m: MeetingMinutes) => {
@@ -812,15 +974,49 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 <div className="flex flex-col gap-2">
                                     <input
                                         type="text"
-                                        placeholder="نام مدعوین را بنویسید (با ویرگول جدا کنید)"
+                                        placeholder="نام مدعوین را بنویسید (با ویرگول یا اسپیس جدا کنید، در صورت مطابقت با کاربران، به لیست حاضرین اضافه می‌شوند)"
                                         className="w-full bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3 rounded-2xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-gray-800 transition-all focus:ring-2 ring-gray-200"
-                                        value={(meetingForm.guestAttendees || []).join('، ')}
+                                        value={guestInput}
                                         onChange={e => {
-                                            const vals = e.target.value.split(/[،,]/).map(v => v.trim()).filter(v => v !== '');
-                                            setMeetingForm({...meetingForm, guestAttendees: vals});
+                                            const val = e.target.value;
+                                            setGuestInput(val);
+                                            
+                                            // Parse the names
+                                            const names = val.split(/[،,]/).map(v => v.trim()).filter(v => v !== '');
+                                            
+                                            const remainingGuests: string[] = [];
+                                            let currentAttendees = [...(meetingForm.attendees || [])];
+                                            let updated = false;
+                                            
+                                            names.forEach(name => {
+                                                const matchedUser = users.find(u => u.fullName.trim() === name.trim());
+                                                if (matchedUser) {
+                                                    const exists = currentAttendees.some(a => a.username === matchedUser.username || a.fullName === matchedUser.fullName);
+                                                    if (!exists) {
+                                                        currentAttendees.push({
+                                                            username: matchedUser.username,
+                                                            fullName: matchedUser.fullName,
+                                                            role: matchedUser.role || 'عضو حاضر',
+                                                            isPresent: true
+                                                        });
+                                                        updated = true;
+                                                    }
+                                                } else {
+                                                    remainingGuests.push(name);
+                                                }
+                                            });
+                                            
+                                            setMeetingForm(prev => ({
+                                                ...prev,
+                                                guestAttendees: remainingGuests,
+                                                attendees: currentAttendees
+                                            }));
+                                        }}
+                                        onBlur={() => {
+                                            setGuestInput((meetingForm.guestAttendees || []).join('، '));
                                         }}
                                     />
-                                    <span className="text-[10px] text-gray-500 font-bold pr-2">این افراد در رای‌گیری شرکت نمی‌کنند و فقط نامشان در صورتجلسه درج می‌شود.</span>
+                                    <span className="text-[10px] text-gray-500 font-bold pr-2">در صورتی که نام تایپ شده با یکی از کاربران سیستم همخوانی داشته باشد، سیستم وی را به صورت خودکار به لیست حاضرین با حق امضا اضافه می‌کند.</span>
                                 </div>
                             </div>
 
@@ -905,38 +1101,59 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                             <div className="space-y-4">
                                 <label className="text-sm font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">پیوست‌ها</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="border-2 border-dashed border-gray-200 p-4 rounded-2xl">
-                                        <label className="text-xs font-bold text-gray-500 mb-2 block">تصاویر (عکس صورتجلسه و ...)</label>
-                                        <input type="file" multiple accept="image/*" onChange={async (e) => {
-                                            if (e.target.files) {
-                                                const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
-                                                    const res = await uploadFileChunked(f, () => {});
-                                                    return { fileName: f.name, url: res.url };
-                                                }));
-                                                setMeetingForm(prev => ({...prev, imageAttachments: [...(prev.imageAttachments || []), ...uploads]}));
+                                    <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 p-4 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50/50 transition-colors relative">
+                                        <label className="text-xs font-bold text-gray-500 mb-2 block cursor-pointer">تصاویر (عکس صورتجلسه و ...)</label>
+                                        <input type="file" multiple accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={async (e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                await handleUploadFiles('image', e.target.files);
                                             }
                                         }} />
+                                        <div className="text-[10px] text-gray-400 font-bold">برای انتخاب فایل تصویر کلیک کنید</div>
                                     </div>
-                                    <div className="border-2 border-dashed border-gray-200 p-4 rounded-2xl">
-                                        <label className="text-xs font-bold text-gray-500 mb-2 block">فایل‌های PDF</label>
-                                        <input type="file" multiple accept=".pdf" onChange={async (e) => {
-                                            if (e.target.files) {
-                                                const uploads = await Promise.all(Array.from(e.target.files).map(async f => {
-                                                    const res = await uploadFileChunked(f, () => {});
-                                                    return { fileName: f.name, url: res.url };
-                                                }));
-                                                setMeetingForm(prev => ({...prev, pdfAttachments: [...(prev.pdfAttachments || []), ...uploads]}));
+                                    <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 p-4 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50/50 transition-colors relative">
+                                        <label className="text-xs font-bold text-gray-500 mb-2 block cursor-pointer">فایل‌های PDF</label>
+                                        <input type="file" multiple accept=".pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={async (e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                await handleUploadFiles('pdf', e.target.files);
                                             }
                                         }} />
+                                        <div className="text-[10px] text-gray-400 font-bold">برای انتخاب فایل PDF کلیک کنید</div>
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {(meetingForm.imageAttachments || []).map((att, i) => (
-                                        <span key={i} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">{att.fileName}</span>
-                                    ))}
-                                    {(meetingForm.pdfAttachments || []).map((att, i) => (
-                                        <span key={i} className="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded-lg">{att.fileName}</span>
-                                    ))}
+                                
+                                {/* Interactive Attachment List */}
+                                <div className="space-y-2 mt-4">
+                                    {((meetingForm.imageAttachments || []).length > 0 || (meetingForm.pdfAttachments || []).length > 0) && (
+                                        <h4 className="text-xs font-black text-gray-500">فایل‌های پیوست شده:</h4>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {(meetingForm.imageAttachments || []).map((att, i) => (
+                                            <div key={`img-${i}`} className="flex items-center justify-between bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 p-2.5 rounded-xl">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                    <span className="text-[11px] font-bold text-blue-900 dark:text-blue-200 truncate" title={att.fileName}>{att.fileName}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0 mr-2">
+                                                    <button onClick={() => handleRenameAttachment('image', i)} className="text-[10px] font-black text-blue-600 hover:underline px-2 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">ویرایش نام</button>
+                                                    <button onClick={() => handleDeleteAttachment('image', i)} className="text-[10px] font-black text-rose-600 hover:underline px-2 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">حذف</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        
+                                        {(meetingForm.pdfAttachments || []).map((att, i) => (
+                                            <div key={`pdf-${i}`} className="flex items-center justify-between bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 p-2.5 rounded-xl">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                                    <span className="text-[11px] font-bold text-red-900 dark:text-red-200 truncate" title={att.fileName}>{att.fileName}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0 mr-2">
+                                                    <button onClick={() => handleRenameAttachment('pdf', i)} className="text-[10px] font-black text-blue-600 hover:underline px-2 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">ویرایش نام</button>
+                                                    <button onClick={() => handleDeleteAttachment('pdf', i)} className="text-[10px] font-black text-rose-600 hover:underline px-2 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">حذف</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1119,13 +1336,26 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                                                         [approvalKey]: { approved: true, date: Date.now() }
                                                                     }
                                                                 };
-                                                                // If all attendees have approved, set status to APPROVED
+                                                                // If all attendees have approved, set status to PENDING_CEO
                                                                 const attendeesToApprove = viewMeeting.attendees.filter(at => at.isPresent && (at.username || at.fullName)).length;
                                                                 const currentApprovalsCount = Object.keys(updated.approvals || {}).length;
                                                                 
                                                                 if (currentApprovalsCount >= attendeesToApprove) {
-                                                                    updated.status = MeetingStatus.APPROVED;
-                                                                    await sendMeetingMinutes(updated.id);
+                                                                    updated.status = MeetingStatus.PENDING_CEO;
+                                                                    // Notify CEO users
+                                                                    const ceoUsers = users.filter(u => u.role === UserRole.CEO || u.role === 'ceo');
+                                                                    for (const ceo of ceoUsers) {
+                                                                        try {
+                                                                            await apiCall('/notifications/add', 'POST', {
+                                                                                username: ceo.username,
+                                                                                title: `درخواست تایید نهایی صورتجلسه ${updated.meetingNumber}`,
+                                                                                body: `تمامی اعضا صورتجلسه شماره ${updated.meetingNumber} را امضاء کرده‌اند. این صورتجلسه هم‌اکنون منتظر تایید نهایی و بایگانی توسط شماست.`,
+                                                                                url: 'meetings'
+                                                                            });
+                                                                        } catch (err) {
+                                                                            console.warn('Failed to add CEO notification', err);
+                                                                        }
+                                                                    }
                                                                 } else {
                                                                     updated.status = MeetingStatus.PENDING_APPROVAL;
                                                                 }
@@ -1192,6 +1422,71 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Comments and Discussion Section */}
+                                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-white/5">
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                                        <MessageSquare size={20} className="text-blue-500" /> نظرات و گفتگو پیرامون صورتجلسه
+                                    </h3>
+                                    
+                                    {/* Comments List */}
+                                    <div className="space-y-3 mb-6 max-h-60 overflow-y-auto pr-2">
+                                        {(!viewMeeting.comments || viewMeeting.comments.length === 0) ? (
+                                            <div className="text-center py-6 text-gray-400 text-xs font-bold bg-gray-50/50 dark:bg-black/5 rounded-2xl border border-dashed border-gray-100 dark:border-white/5">
+                                                نظری برای این صورتجلسه ثبت نشده است. اولین نظر را شما بنویسید!
+                                            </div>
+                                        ) : (
+                                            viewMeeting.comments.map((c) => (
+                                                <div key={c.id} className="bg-gray-50 dark:bg-black/20 p-3.5 rounded-2xl border border-gray-100 dark:border-white/5 flex gap-3 relative group">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">
+                                                        {c.fullName.charAt(0)}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="font-black text-xs text-gray-800 dark:text-gray-200">{c.fullName}</span>
+                                                            <span className="text-[9px] text-gray-400 font-bold font-mono">
+                                                                {new Date(c.timestamp).toLocaleDateString('fa-IR')} | {new Date(c.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium break-words">{c.text}</p>
+                                                    </div>
+                                                    
+                                                    {/* Trash button for creator of comment or admin */}
+                                                    {(c.username === currentUser.username || currentUser.role === UserRole.ADMIN) && (
+                                                        <button 
+                                                            onClick={() => handleDeleteComment(c.id)}
+                                                            className="absolute top-2 left-2 p-1 text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-all opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* New Comment Form */}
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="دیدگاه یا پیام خود را بنویسید..."
+                                            className="flex-1 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 px-4 py-2.5 rounded-2xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-gray-800 transition-all focus:ring-2 ring-blue-100"
+                                            value={newCommentText}
+                                            onChange={e => setNewCommentText(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    handleAddComment();
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={handleAddComment}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-2xl text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
+                                        >
+                                            <Send size={14} /> ثبت نظر
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1200,6 +1495,11 @@ const MeetingModule: React.FC<Props> = ({ currentUser, initialYear }) => {
                                 {viewMeeting.status === MeetingStatus.DRAFT && (
                                     <button onClick={() => handleSendAnnouncement(viewMeeting)} className="flex-1 sm:flex-none px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">
                                         <Send size={18} /> ارسال اعلان برگزاری
+                                    </button>
+                                )}
+                                {viewMeeting.status === MeetingStatus.PENDING_CEO && (currentUser.role === UserRole.CEO || currentUser.role === 'ceo' || currentUser.role === UserRole.ADMIN) && (
+                                    <button onClick={() => handleCeoFinalApprove(viewMeeting)} className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-[10px] md:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
+                                        <CheckCircle size={18} /> تایید نهایی و بایگانی مدیرعامل
                                     </button>
                                 )}
                                 {viewMeeting.status === MeetingStatus.APPROVED && (

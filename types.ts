@@ -1019,6 +1019,7 @@ export interface TradeRecord {
 export enum MeetingStatus {
     DRAFT = 'پیش‌نویس',
     PENDING_APPROVAL = 'در انتظار تایید',
+    PENDING_CEO = 'در انتظار تایید مدیرعامل',
     APPROVED = 'تایید شده',
     REJECTED = 'رد شده'
 }
@@ -1037,6 +1038,14 @@ export interface MeetingItem {
     description: string;
     responsiblePerson: string;
     duration: string;
+}
+
+export interface MeetingComment {
+    id: string;
+    username: string;
+    fullName: string;
+    text: string;
+    timestamp: number;
 }
 
 export interface MeetingMinutes {
@@ -1058,6 +1067,7 @@ export interface MeetingMinutes {
     announcementSent?: boolean;
     minutesSent?: boolean;
     approvals?: Record<string, { approved: boolean, date: number, comment?: string }>;
+    comments?: MeetingComment[];
     imageAttachments?: { fileName: string, url: string }[];
     pdfAttachments?: { fileName: string, url: string }[];
 }
