@@ -31,9 +31,28 @@ import {
     LineChart,
     Line
 } from 'recharts';
+import { getRolePermissions } from '../services/authService';
+import { UserRole } from '../types';
 
-export default function AccountingReports() {
-    const [activeTab, setActiveTab] = useState('traz');
+export default function AccountingReports({ currentUser, settings }: { currentUser?: any, settings?: any }) {
+    // Determine Sayan permissions
+    const perms = currentUser ? getRolePermissions(currentUser.role, settings || null, currentUser) : {
+        canViewSayan: true, canViewSayanTraz: true, canViewSayanSales: true, canViewSayanProduction: true, canViewSayanCheques: true
+    };
+
+    const isTrazAllowed = currentUser?.role === UserRole.ADMIN || perms.canViewSayan === true || perms.canViewSayanTraz === true;
+    const isSalesAllowed = currentUser?.role === UserRole.ADMIN || perms.canViewSayan === true || perms.canViewSayanSales === true;
+    const isProductionAllowed = currentUser?.role === UserRole.ADMIN || perms.canViewSayan === true || perms.canViewSayanProduction === true;
+    const isChequesAllowed = currentUser?.role === UserRole.ADMIN || perms.canViewSayan === true || perms.canViewSayanCheques === true;
+
+    // Default to the first allowed tab
+    const [activeTab, setActiveTab] = useState(() => {
+        if (currentUser?.role === UserRole.ADMIN || perms.canViewSayan === true || perms.canViewSayanTraz === true) return 'traz';
+        if (perms.canViewSayanSales === true) return 'sales';
+        if (perms.canViewSayanProduction === true) return 'production';
+        if (perms.canViewSayanCheques === true) return 'cheques';
+        return 'traz';
+    });
     const [isLoading, setIsLoading] = useState(false);
     
     // Default Date Range (Direct Shamsi format "YYYY/MM/DD")
@@ -1021,16 +1040,16 @@ export default function AccountingReports() {
     const filteredCheques = getFilteredCheques();
 
     return (
-        <div className="p-4 md:p-8 rtl max-w-7xl mx-auto space-y-6 select-none">
+        <div className="p-2 sm:p-4 md:p-8 rtl max-w-7xl mx-auto space-y-4 sm:space-y-6 select-none">
             {/* Main Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-5 gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-200 pb-5 gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-900 font-sans tracking-tight">گزارشات هوشمند مالی و فروش سایان ERP</h1>
-                    <p className="text-sm text-slate-500 mt-1">اتصال بلادرنگ و پایش لحظه‌ای اسناد و داده‌های مالی کارخانه</p>
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 font-sans tracking-tight">گزارشات هوشمند مالی و فروش سایان ERP</h1>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">اتصال بلادرنگ و پایش لحظه‌ای اسناد و داده‌های مالی کارخانه</p>
                 </div>
                 
                 {/* Global Date Filter */}
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2.5 flex flex-wrap items-center gap-3">
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2 sm:p-2.5 flex flex-wrap items-center gap-2 sm:gap-3 justify-between sm:justify-start w-full lg:w-auto">
                     <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold">
                         <Calendar className="w-4 h-4 text-blue-600" />
                         <span>بازه زمانی گزارش:</span>
@@ -1070,34 +1089,42 @@ export default function AccountingReports() {
 
             {/* Premium Tab Bar */}
             <div className="flex space-x-reverse space-x-2 border-b border-slate-200 overflow-x-auto pb-1 bg-slate-50 p-1.5 rounded-lg">
-                <button 
-                    onClick={() => setActiveTab('traz')} 
-                    className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'traz' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                >
-                    <ArrowUpDown className="w-4 h-4" />
-                    تراز و مانده اشخاص
-                </button>
-                <button 
-                    onClick={() => setActiveTab('sales')} 
-                    className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                >
-                    <TrendingUp className="w-4 h-4" />
-                    فروش و تحلیل مقایسه‌ای
-                </button>
-                <button 
-                    onClick={() => setActiveTab('production')} 
-                    className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'production' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                >
-                    <Activity className="w-4 h-4" />
-                    تولید روزانه
-                </button>
-                <button 
-                    onClick={() => setActiveTab('cheques')} 
-                    className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'cheques' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                >
-                    <CheckSquare className="w-4 h-4" />
-                    لیست چک‌ها
-                </button>
+                {isTrazAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('traz')} 
+                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'traz' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <ArrowUpDown className="w-4 h-4" />
+                        تراز و مانده اشخاص
+                    </button>
+                )}
+                {isSalesAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('sales')} 
+                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <TrendingUp className="w-4 h-4" />
+                        فروش و تحلیل مقایسه‌ای
+                    </button>
+                )}
+                {isProductionAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('production')} 
+                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'production' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <Activity className="w-4 h-4" />
+                        تولید روزانه
+                    </button>
+                )}
+                {isChequesAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('cheques')} 
+                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'cheques' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <CheckSquare className="w-4 h-4" />
+                        لیست چک‌ها
+                    </button>
+                )}
             </div>
 
             {/* TAB CONTENT PANEL */}
@@ -1187,7 +1214,8 @@ export default function AccountingReports() {
 
                         {/* Traz Data Table */}
                         <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[500px] overflow-y-auto">
-                            <table className="w-full text-right text-xs">
+                            {/* Desktop View */}
+                            <table className="w-full text-right text-xs hidden md:table">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>
                                         <th className="p-3.5 font-bold text-slate-700 w-16 text-center">ردیف</th>
@@ -1250,6 +1278,69 @@ export default function AccountingReports() {
                                     )}
                                 </tbody>
                             </table>
+
+                            {/* Mobile View */}
+                            <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                                {filteredTraz.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-400 font-medium">
+                                        {isLoading ? (
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                                <span>در حال واکشی اطلاعات تراز سایان...</span>
+                                            </div>
+                                        ) : 'هیچ رکوردی یافت نشد'}
+                                    </div>
+                                ) : (
+                                    filteredTraz.map((row, idx) => (
+                                        <div key={idx} className="p-4 hover:bg-slate-50/50 transition-colors space-y-3">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div>
+                                                    <span className="text-[10px] text-slate-400 font-medium font-mono">#{idx + 1} | کد: {row.code}</span>
+                                                    <h3 className="text-sm font-black text-slate-900 mt-0.5">{row.name}</h3>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
+                                                    row.balance > 0 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                }`}>
+                                                    {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-[11px]">
+                                                <div>
+                                                    <div className="text-slate-400 font-medium">گردش بدهکار</div>
+                                                    <div className="font-mono font-bold text-slate-700 mt-0.5">{formatMoney(row.bed)}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-slate-400 font-medium">گردش بستانکار</div>
+                                                    <div className="font-mono font-bold text-slate-700 mt-0.5">{formatMoney(row.bes)}</div>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-slate-400 font-medium">مانده نهایی</div>
+                                                    <div className={`font-mono font-black mt-0.5 ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                        {formatMoney(row.balance)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex justify-end pt-1">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedTafsili(row.code);
+                                                        setModalTafsiliCode(row.code);
+                                                        setModalTafsiliName(row.name);
+                                                        setIsStatementModalOpen(true);
+                                                        fetchStatement(row.code);
+                                                    }}
+                                                    className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg border border-blue-200 text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-sm"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                    مشاهده صورتحساب ریز تفصیلی
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1533,7 +1624,8 @@ export default function AccountingReports() {
                             </h3>
                             
                             <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
-                                <table className="w-full text-right text-xs">
+                                {/* Desktop view */}
+                                <table className="w-full text-right text-xs hidden md:table">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         {compareMode ? (
                                             <tr>
@@ -1610,6 +1702,75 @@ export default function AccountingReports() {
                                         )}
                                     </tbody>
                                 </table>
+
+                                {/* Mobile view */}
+                                <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                                    {compareMode ? (
+                                        chartData.length === 0 ? (
+                                            <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</div>
+                                        ) : (
+                                            chartData.map((row, idx) => {
+                                                const weightDiff = row.weightB ? ((row.weightA - row.weightB) / row.weightB) * 100 : 0;
+                                                const amountDiff = row.amountB ? ((row.amountA - row.amountB) / row.amountB) * 100 : 0;
+                                                return (
+                                                    <div key={idx} className="p-4 space-y-3">
+                                                        <h4 className="text-sm font-black text-slate-900">{row.name}</h4>
+                                                        <div className="grid grid-cols-2 gap-3 text-xs">
+                                                            <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
+                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه وزن (kg)</span>
+                                                                <div className="flex justify-between items-center text-[10px]">
+                                                                    <span className="font-mono font-bold text-slate-700">{row.weightA.toFixed(1)} <span className="text-[8px] text-slate-400">A</span></span>
+                                                                    <span className="font-mono text-slate-400">/</span>
+                                                                    <span className="font-mono font-bold text-slate-700">{row.weightB.toFixed(1)} <span className="text-[8px] text-slate-400">B</span></span>
+                                                                </div>
+                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${weightDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                                    {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}% تغییر وزن
+                                                                </span>
+                                                            </div>
+                                                            <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
+                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه مبلغ (ریال)</span>
+                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed">
+                                                                    <div>A: {formatMoney(row.amountA)}</div>
+                                                                    <div>B: {formatMoney(row.amountB)}</div>
+                                                                </div>
+                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${amountDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                                    {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}% تغییر مبلغ
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )
+                                    ) : (
+                                        salesData.length === 0 ? (
+                                            <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</div>
+                                        ) : (
+                                            salesData.map((row, idx) => (
+                                                <div key={idx} className="p-4 space-y-2 text-xs">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.DocId} | {formatDateToJalali(row.Date)}</span>
+                                                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
+                                                    </div>
+                                                    <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
+                                                        {row.ItemName || 'کالای فروخته شده'}
+                                                        {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{row.ItemNotes}</span>}
+                                                    </h4>
+                                                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg font-mono">
+                                                        <div>
+                                                            <span className="text-[9px] text-slate-400 font-sans block">وزن خالص</span>
+                                                            <span className="font-bold text-slate-700 text-xs">{parseFloat(row.Quantity || 0).toFixed(1)} kg</span>
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <span className="text-[9px] text-slate-400 font-sans block">مبلغ کل</span>
+                                                            <span className="font-black text-blue-700 text-xs">{formatMoney(parseFloat(row.Amount || 0))} ریال</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1679,7 +1840,8 @@ export default function AccountingReports() {
                         {/* Grouped Lists */}
                         <div className="space-y-4">
                             <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
-                                <table className="w-full text-right text-xs">
+                                {/* Desktop view */}
+                                <table className="w-full text-right text-xs hidden md:table">
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         <tr>
                                             <th className="p-3.5 font-bold text-slate-700">عنوان طبقه‌بندی تولید</th>
@@ -1709,6 +1871,34 @@ export default function AccountingReports() {
                                         )}
                                     </tbody>
                                 </table>
+
+                                {/* Mobile view */}
+                                <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                                    {groupedProduction.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد</div>
+                                    ) : (
+                                        groupedProduction.map((row, idx) => (
+                                            <div key={idx} className="p-4 space-y-3 text-xs">
+                                                <div className="flex justify-between items-start">
+                                                    <h4 className="text-sm font-black text-slate-900 leading-relaxed">{row.key}</h4>
+                                                    {prodGrouping === 'item' && <span className="bg-slate-100 font-mono text-slate-600 text-[10px] px-2 py-0.5 rounded font-bold">{row.code}</span>}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 font-mono text-[11px]">
+                                                    <div className="bg-slate-50 p-2 rounded-lg">
+                                                        <span className="text-[9px] text-slate-400 font-sans block">تعداد آمار / بسته‌بندی</span>
+                                                        <div className="text-slate-800 font-bold mt-0.5">ثبت: {row.count} سند</div>
+                                                        <div className="text-slate-600 text-[10px] mt-0.5">{row.cartons} کارتن | {row.bobbins} بوبین</div>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-2 rounded-lg text-left">
+                                                        <span className="text-[9px] text-slate-400 font-sans block">وزن محصول (kg)</span>
+                                                        <div className="text-slate-500 text-[10px] mt-0.5">ناخالص: {row.gross.toFixed(1)}</div>
+                                                        <div className="text-blue-700 font-extrabold mt-0.5">خالص: {row.net.toFixed(1)}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1723,38 +1913,40 @@ export default function AccountingReports() {
                                 <p className="text-xs text-slate-500 mt-1">مشاهده و دسته‌بندی چک‌های صندوق، بانکی، واخواست‌شده و خرج‌شده کارخانه</p>
                             </div>
                             
-                            <div className="flex flex-wrap gap-2">
-                                <div className="flex space-x-reverse space-x-1 border border-slate-300 rounded-md p-1 bg-slate-50">
-                                    <button 
-                                        onClick={() => setChequeStatusFilter('all')}
-                                        className={`text-[10px] font-bold py-1 px-3 rounded ${chequeStatusFilter === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        همه
-                                    </button>
-                                    <button 
-                                        onClick={() => setChequeStatusFilter('in_hand')}
-                                        className={`text-[10px] font-bold py-1 px-3 rounded ${chequeStatusFilter === 'in_hand' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        در صندوق
-                                    </button>
-                                    <button 
-                                        onClick={() => setChequeStatusFilter('at_bank')}
-                                        className={`text-[10px] font-bold py-1 px-3 rounded ${chequeStatusFilter === 'at_bank' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        نزد بانک
-                                    </button>
-                                    <button 
-                                        onClick={() => setChequeStatusFilter('returned')}
-                                        className={`text-[10px] font-bold py-1 px-3 rounded ${chequeStatusFilter === 'returned' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        برگشتی
-                                    </button>
-                                    <button 
-                                        onClick={() => setChequeStatusFilter('spent')}
-                                        className={`text-[10px] font-bold py-1 px-3 rounded ${chequeStatusFilter === 'spent' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                                    >
-                                        وصول/خرج شده
-                                    </button>
+                            <div className="flex flex-wrap md:flex-nowrap gap-2 items-center w-full md:w-auto">
+                                <div className="overflow-x-auto whitespace-nowrap scrollbar-hide py-1 w-full md:w-auto">
+                                    <div className="flex space-x-reverse space-x-1 border border-slate-300 rounded-md p-1 bg-slate-50 inline-flex">
+                                        <button 
+                                            onClick={() => setChequeStatusFilter('all')}
+                                            className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            همه
+                                        </button>
+                                        <button 
+                                            onClick={() => setChequeStatusFilter('in_hand')}
+                                            className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'in_hand' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            در صندوق
+                                        </button>
+                                        <button 
+                                            onClick={() => setChequeStatusFilter('at_bank')}
+                                            className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'at_bank' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            نزد بانک
+                                        </button>
+                                        <button 
+                                            onClick={() => setChequeStatusFilter('returned')}
+                                            className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'returned' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            برگشتی
+                                        </button>
+                                        <button 
+                                            onClick={() => setChequeStatusFilter('spent')}
+                                            className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'spent' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                                        >
+                                            وصول/خرج شده
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div className="relative w-full md:w-56">
@@ -1762,7 +1954,7 @@ export default function AccountingReports() {
                                     <input 
                                         type="text"
                                         placeholder="جستجوی چک، بانک، صادرکننده..." 
-                                        className="w-full pl-3 pr-8 py-1.5 border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full pl-3 pr-8 py-1.5 border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
                                         value={chequeSearch}
                                         onChange={(e) => setChequeSearch(e.target.value)}
                                     />
@@ -1803,7 +1995,8 @@ export default function AccountingReports() {
 
                         {/* Cheques table */}
                         <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
-                            <table className="w-full text-right text-xs">
+                            {/* Desktop view */}
+                            <table className="w-full text-right text-xs hidden md:table">
                                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                     <tr>
                                         <th className="p-3.5 font-bold text-slate-700 w-16 text-center">ردیف</th>
@@ -1844,6 +2037,43 @@ export default function AccountingReports() {
                                     )}
                                 </tbody>
                             </table>
+
+                            {/* Mobile view */}
+                            <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                                {filteredCheques.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-400 font-medium">هیچ چکی یافت نشد. فیلترها را بررسی کنید.</div>
+                                ) : (
+                                    filteredCheques.map((row, idx) => (
+                                        <div key={idx} className="p-4 space-y-3 text-xs">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] text-slate-400 font-bold font-mono">#{idx + 1} | چک: {row.chequeNo}</span>
+                                                <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${
+                                                    row.statusGroup === 'spent' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                                    row.statusGroup === 'returned' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                                    row.statusGroup === 'at_bank' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                    'bg-slate-50 text-slate-700 border-slate-200'
+                                                }`}>
+                                                    {row.statusDesc}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div className="text-slate-500 font-bold">{row.bankName}</div>
+                                                <div className="text-[11px] text-slate-600 mt-0.5 font-semibold">صادرکننده: {row.drawerName}</div>
+                                            </div>
+                                            <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg font-mono">
+                                                <div>
+                                                    <span className="text-[9px] text-slate-400 font-sans block">سررسید</span>
+                                                    <span className="font-bold text-slate-700 text-xs">{formatDateToJalali(row.dueDate)}</span>
+                                                </div>
+                                                <div className="text-left">
+                                                    <span className="text-[9px] text-slate-400 font-sans block">مبلغ کل</span>
+                                                    <span className="font-black text-blue-700 text-xs">{formatMoney(row.amount)} ریال</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1922,7 +2152,8 @@ export default function AccountingReports() {
                                 </div>
                             ) : filteredStatementData.length > 0 ? (
                                 <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-                                    <table className="w-full text-right text-xs">
+                                    {/* Desktop View */}
+                                    <table className="w-full text-right text-xs hidden md:table">
                                         <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                                             <tr>
                                                 <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
@@ -1985,6 +2216,70 @@ export default function AccountingReports() {
                                             </tr>
                                         </tbody>
                                     </table>
+
+                                    {/* Mobile View */}
+                                    <div className="block md:hidden divide-y divide-slate-100 bg-white">
+                                        {filteredStatementData.map((row, idx) => (
+                                            <div key={idx} className="p-4 space-y-2.5 text-xs">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.SanadNo} | {formatDateToJalali(row.Date)}</span>
+                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold ${
+                                                        row.balance > 0 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                    }`}>
+                                                        {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
+                                                    </span>
+                                                </div>
+                                                
+                                                {row.MoeinGroup && row.MoeinParent && row.MoeinCode && (
+                                                    <div className="inline-block bg-slate-50 text-slate-700 px-2 py-1 rounded text-[10px] font-bold border border-slate-100">
+                                                        معین: {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
+                                                    </div>
+                                                )}
+
+                                                <div className="text-slate-800 font-medium leading-relaxed bg-slate-50/50 p-2.5 rounded-xl border border-dashed border-slate-150">
+                                                    {row.Description || 'ثبت حسابداری'}
+                                                </div>
+
+                                                <div className="grid grid-cols-3 gap-2 text-center font-mono text-[11px] bg-slate-50 p-2 rounded-lg">
+                                                    <div>
+                                                        <span className="text-[9px] text-slate-400 font-sans block">بدهکار</span>
+                                                        <span className="font-bold text-rose-600">{row.bed > 0 ? formatMoney(row.bed) : '-'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] text-slate-400 font-sans block">بستانکار</span>
+                                                        <span className="font-bold text-emerald-600">{row.bes > 0 ? formatMoney(row.bes) : '-'}</span>
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <span className="text-[9px] text-slate-400 font-sans block">مانده</span>
+                                                        <span className={`font-black ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatMoney(row.balance)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {/* Mobile Sticky / Persistent summary */}
+                                        <div className="p-4 bg-slate-50 border-t-2 border-slate-200 text-xs font-black space-y-2">
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-600">جمع گردش بدهکار دوره:</span>
+                                                <span className="text-rose-700 font-mono font-bold text-sm">{formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))} ریال</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-600">جمع گردش بستانکار دوره:</span>
+                                                <span className="text-emerald-700 font-mono font-bold text-sm">{formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))} ریال</span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-slate-200/60 pt-1 mt-1 text-sm">
+                                                <span className="text-slate-700">مانده نهایی دوره:</span>
+                                                <span className={`font-mono text-base ${
+                                                    filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                                                }`}>
+                                                    {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)} ریال
+                                                    <span className="text-[10px] font-bold mr-1">
+                                                        ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center py-24 text-slate-400 font-medium border-2 border-dashed border-slate-200 bg-white rounded-2xl shadow-sm">
@@ -1994,13 +2289,14 @@ export default function AccountingReports() {
 
                             {/* Guarantee Cheques Section */}
                             {!isLoading && guaranteeCheques.length > 0 && (
-                                <div className="mt-6 space-y-3 bg-amber-50/40 p-5 rounded-2xl border border-amber-200/60 shadow-sm animate-fadeIn">
+                                <div className="mt-6 space-y-3 bg-amber-50/40 p-3 sm:p-5 rounded-2xl border border-amber-200/60 shadow-sm animate-fadeIn">
                                     <div className="flex items-center gap-2 text-amber-900">
                                         <CheckSquare className="w-5 h-5 text-amber-600" />
                                         <h3 className="text-sm font-bold">چک‌های تضمینی و تعهدات مرتبط</h3>
                                     </div>
                                     <div className="rounded-xl border border-amber-200 overflow-hidden bg-white max-h-[300px] overflow-y-auto shadow-inner">
-                                        <table className="w-full text-right text-xs">
+                                        {/* Desktop View */}
+                                        <table className="w-full text-right text-xs hidden md:table">
                                             <thead className="bg-amber-50/80 sticky top-0 border-b border-amber-200 z-10">
                                                 <tr>
                                                     <th className="p-3 font-bold text-amber-800 w-24">تاریخ سند</th>
@@ -2028,6 +2324,27 @@ export default function AccountingReports() {
                                                 ))}
                                             </tbody>
                                         </table>
+
+                                        {/* Mobile View */}
+                                        <div className="block md:hidden divide-y divide-amber-100/60 bg-white">
+                                            {guaranteeCheques.map((row, idx) => (
+                                                <div key={idx} className="p-4 space-y-2 text-xs">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.SanadNo} | {formatDateToJalali(row.Date)}</span>
+                                                        <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-bold">
+                                                            {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-slate-800 font-medium leading-relaxed bg-amber-50/20 p-2.5 rounded-lg border border-dashed border-amber-200">
+                                                        {row.Description}
+                                                    </div>
+                                                    <div className="flex justify-between items-center font-mono">
+                                                        <span className="text-[9px] text-slate-400 font-sans">مبلغ تضمین</span>
+                                                        <span className="font-extrabold text-amber-700 text-sm">{formatMoney(row.bed > 0 ? row.bed : row.bes)} ریال</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}

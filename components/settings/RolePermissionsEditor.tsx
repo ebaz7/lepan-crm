@@ -115,6 +115,19 @@ const PERMISSION_GROUPS = [
         ] 
     },
     { 
+        id: 'sayan', 
+        title: 'گزارشات هوشمند سایان ERP', 
+        icon: FileText, 
+        color: 'blue', 
+        items: [
+            { id: 'canViewSayan', label: 'دسترسی کلی به گزارشات سایان' },
+            { id: 'canViewSayanTraz', label: 'مشاهده بخش تراز و مانده اشخاص سایان' },
+            { id: 'canViewSayanSales', label: 'مشاهده بخش فروش و تحلیل مقایسه‌ای سایان' },
+            { id: 'canViewSayanProduction', label: 'مشاهده بخش تولید روزانه سایان' },
+            { id: 'canViewSayanCheques', label: 'مشاهده بخش لیست چک‌های سایان' }
+        ] 
+    },
+    { 
         id: 'general', 
         title: 'عمومی و مدیریتی', 
         icon: Lock, 

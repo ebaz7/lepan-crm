@@ -56,7 +56,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
                 canManageWarehouse: true, canViewWarehouseReports: true, canApproveBijak: true,
                 canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
                 canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true,
-                canViewCustomerBalances: true, canImportCustomerBalances: true
+                canViewCustomerBalances: true, canImportCustomerBalances: true,
+                canViewSayan: true, canViewSayanTraz: true, canViewSayanSales: true, canViewSayanProduction: true, canViewSayanCheques: true
             };
         }
 
@@ -87,6 +88,7 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
             canViewSecurity: true, canCreateSecurityLog: true, canApproveSecuritySupervisor: true, canManagePurchase: true,
             canViewNotifications: true, canCreateNotifications: true, canCreateAnnouncements: true,
             canViewCustomerBalances: true, canImportCustomerBalances: true,
+            canViewSayan: true, canViewSayanTraz: true, canViewSayanSales: true, canViewSayanProduction: true, canViewSayanCheques: true,
             // Purchase-specific permissions hardwired for administrator:
             canView: true, canCreate: true, canApproveTechnical: true, canApproveFactory: true, canApproveCEO: true,
             canManageProformas: true, canSelectProforma: true, canRegisterEntry: true, canCheckQC: true,
@@ -106,7 +108,8 @@ export const getRolePermissions = (userRole: string, settings: SystemSettings | 
         canManageWarehouse: false, canViewWarehouseReports: false, canApproveBijak: false,
         canViewSecurity: false, canCreateSecurityLog: false, canApproveSecuritySupervisor: false,
         canViewNotifications: false, canCreateNotifications: false, canCreateAnnouncements: false,
-        canViewCustomerBalances: false, canImportCustomerBalances: false
+        canViewCustomerBalances: false, canImportCustomerBalances: false,
+        canViewSayan: false, canViewSayanTraz: false, canViewSayanSales: false, canViewSayanProduction: false, canViewSayanCheques: false
     };
 
     // Apply System Defaults (Hardcoded Logic)

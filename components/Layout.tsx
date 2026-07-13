@@ -307,7 +307,12 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
   const canSeeMeetings = currentUser.role === UserRole.ADMIN || perms.canViewMeetings === true;
   const canSeePurchase = currentUser.role === UserRole.ADMIN || (perms.canView === true);
   const canSeeCcti = currentUser.role === UserRole.ADMIN || perms.canAccessCcti === true;
-  const canSeeSayan = currentUser.role === UserRole.ADMIN || perms.canViewSayan === true;
+  const canSeeSayan = currentUser.role === UserRole.ADMIN || 
+    perms.canViewSayan === true || 
+    perms.canViewSayanTraz === true || 
+    perms.canViewSayanSales === true || 
+    perms.canViewSayanProduction === true || 
+    perms.canViewSayanCheques === true;
   const canSeeNotifications = true;
 
   const navItems = [

@@ -158,6 +158,10 @@ export interface RolePermissions {
   canViewCustomerBalances?: boolean;
   canImportCustomerBalances?: boolean;
   canViewSayan?: boolean;
+  canViewSayanTraz?: boolean;
+  canViewSayanSales?: boolean;
+  canViewSayanProduction?: boolean;
+  canViewSayanCheques?: boolean;
   canAccessSecretariat?: boolean;
   canManageSecretariatSettings?: boolean;
   [key: string]: boolean | undefined;
