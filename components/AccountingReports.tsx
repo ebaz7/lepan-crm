@@ -138,7 +138,7 @@ export default function AccountingReports() {
                     Field_006 as Name, 
                     Field_005 as TafsiliCode 
                 FROM ACT_TBL_007 
-                WHERE Field_004 = '11' 
+                WHERE Field_004 IN ('11', '31') 
                 ORDER BY Field_006 ASC
             `;
             const data = await runSayanQuery(sql);
@@ -164,7 +164,7 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE t9.Field_015 LIKE '%11:%' AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
+                    WHERE (t9.Field_015 LIKE '%11:%' OR t9.Field_015 LIKE '%31:%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
                       AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
                     GROUP BY t9.Field_015
@@ -177,7 +177,7 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
-                    WHERE t24.Field_010 LIKE '11:%' AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                    WHERE (t24.Field_010 LIKE '11:%' OR t24.Field_010 LIKE '31:%') AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
                     GROUP BY t24.Field_010
                 `;
             }
@@ -186,8 +186,8 @@ export default function AccountingReports() {
             
             // Map Sayan codes to names from ACT_TBL_007
             const mapped = rawData.map((row: any) => {
-                const match = row.TafsiliRaw.match(/11:(\d+)/);
-                const code = match ? match[1] : '';
+                const match = row.TafsiliRaw.match(/(11|31):(\d+)/);
+                const code = match ? match[2] : '';
                 const tafsili = tafsilis.find(t => t.Code === code || t.TafsiliCode === code);
                 const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
                 const bed = parseFloat(row.TotalBed || 0);
@@ -334,7 +334,7 @@ export default function AccountingReports() {
                     t8.Field_008 as Date
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                WHERE t9.Field_015 LIKE '%11:${selectedTafsili}%' AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
+                WHERE (t9.Field_015 LIKE '%11:${selectedTafsili}%' OR t9.Field_015 LIKE '%31:${selectedTafsili}%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
                   AND t8.Field_008 >= '${dateFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${dateTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
@@ -814,24 +814,34 @@ export default function AccountingReports() {
                 </div>
                 
                 {/* Global Date Filter */}
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2 flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1 text-xs text-slate-600 font-medium">
-                        <Calendar className="w-4 h-4 text-blue-500" />
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2.5 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold">
+                        <Calendar className="w-4 h-4 text-blue-600" />
                         <span>بازه زمانی گزارش:</span>
                     </div>
-                    <input 
-                        type="date" 
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <span className="text-xs text-slate-400">تا</span>
-                    <input 
-                        type="date" 
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                        <input 
+                            type="date" 
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800"
+                        />
+                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-md font-mono select-none">
+                            {formatDateToJalali(dateFrom)}
+                        </span>
+                    </div>
+                    <span className="text-xs text-slate-400 font-bold">تا</span>
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                        <input 
+                            type="date" 
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800"
+                        />
+                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-md font-mono select-none">
+                            {formatDateToJalali(dateTo)}
+                        </span>
+                    </div>
                     <button 
                         onClick={() => {
                             if (activeTab === 'traz') fetchTraz();
@@ -839,7 +849,7 @@ export default function AccountingReports() {
                             if (activeTab === 'production') fetchProduction();
                             if (activeTab === 'cheques') fetchCheques();
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1 font-semibold flex items-center gap-1 transition-colors"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                     >
                         {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'بروزرسانی'}
                     </button>
@@ -1193,19 +1203,29 @@ export default function AccountingReports() {
                                         بازه دوم مقایسه ( Period B )
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <input 
-                                            type="date" 
-                                            value={salesDateFromB}
-                                            onChange={(e) => setSalesDateFromB(e.target.value)}
-                                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none bg-white focus:ring-1 focus:ring-blue-500 w-full"
-                                        />
-                                        <span className="text-xs text-slate-400">تا</span>
-                                        <input 
-                                            type="date" 
-                                            value={salesDateToB}
-                                            onChange={(e) => setSalesDateToB(e.target.value)}
-                                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none bg-white focus:ring-1 focus:ring-blue-500 w-full"
-                                        />
+                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2 py-1 w-full">
+                                            <input 
+                                                type="date" 
+                                                value={salesDateFromB}
+                                                onChange={(e) => setSalesDateFromB(e.target.value)}
+                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 w-full"
+                                            />
+                                            <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md font-mono select-none whitespace-nowrap">
+                                                {formatDateToJalali(salesDateFromB)}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-slate-400 font-bold">تا</span>
+                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2 py-1 w-full">
+                                            <input 
+                                                type="date" 
+                                                value={salesDateToB}
+                                                onChange={(e) => setSalesDateToB(e.target.value)}
+                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 w-full"
+                                            />
+                                            <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md font-mono select-none whitespace-nowrap">
+                                                {formatDateToJalali(salesDateToB)}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
