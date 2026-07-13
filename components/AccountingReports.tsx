@@ -52,6 +52,7 @@ export default function AccountingReports() {
     const [tafsiliSearch, setTafsiliSearch] = useState('');
     const [statementSearch, setStatementSearch] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
+    const [guaranteeCheques, setGuaranteeCheques] = useState<any[]>([]);
 
     // --- STATEMENT MODAL STATE ---
     const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -215,10 +216,12 @@ export default function AccountingReports() {
                         t9.Field_015 as TafsiliRaw,
                         SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
-                    FROM ACT_TBL_009 t9
+                                        FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                     WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
-                      AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
+                      AND t9.Field_015 NOT LIKE '%-12%'
+                      AND t9.Field_015 NOT LIKE '%-13%'
+                      AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117') 
                       AND t9.Field_005 <> '9'
                       AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
@@ -233,7 +236,9 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
                     WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
-                      AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                      AND t24.Field_010 NOT LIKE '%-12%'
+                      AND t24.Field_010 NOT LIKE '%-13%'
+                      AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
                       AND t24.Field_003 <> '9'
                     GROUP BY t24.Field_010
                 `;
@@ -241,17 +246,35 @@ export default function AccountingReports() {
             
             const rawData = await runSayanQuery(sql);
             
-            // Map Sayan codes to names from ACT_TBL_007
-            const mapped = rawData.map((row: any) => {
+            // Map Sayan codes to names and group them by unique customer code to prevent any duplicates
+            const groupedMap = new Map<string, any>();
+            rawData.forEach((row: any) => {
                 const parsed = parseTafsiliRaw(row.TafsiliRaw);
                 const code = parsed.code;
+                if (!code) return;
+                
                 const tafsili = tafsilis.find(t => t.Code === code || t.TafsiliCode === code);
                 const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
                 const bed = parseFloat(row.TotalBed || 0);
                 const bes = parseFloat(row.TotalBes || 0);
-                const balance = bed - bes;
-                return { code, name, bed, bes, balance };
-            }).filter((r: any) => r.code && r.balance !== 0);
+                
+                if (groupedMap.has(code)) {
+                    const existing = groupedMap.get(code);
+                    existing.bed += bed;
+                    existing.bes += bes;
+                    existing.balance = existing.bed - existing.bes;
+                } else {
+                    groupedMap.set(code, {
+                        code,
+                        name,
+                        bed,
+                        bes,
+                        balance: bed - bes
+                    });
+                }
+            });
+            
+            const mapped = Array.from(groupedMap.values()).filter((r: any) => r.balance !== 0);
 
             setTrazData(mapped);
         } catch (err: any) {
@@ -429,7 +452,10 @@ export default function AccountingReports() {
                 LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                 LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
                 WHERE ${tafsiliFilter} 
-                  AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
+                  AND (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%')
+                  AND t9.Field_015 NOT LIKE '%-12%'
+                  AND t9.Field_015 NOT LIKE '%-13%'
+                  AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117')
                   AND t9.Field_005 <> '9'
                   AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
@@ -450,6 +476,59 @@ export default function AccountingReports() {
                 };
             });
             setStatementData(processed);
+
+            // Fetch guarantee and post-dated cheques associated with this person
+            let chequeFilter = `(
+                t9.Field_015 LIKE '%:${codeToUse}%' OR 
+                t9.Field_014 LIKE '%:${codeToUse}%' OR
+                t9.Field_015 LIKE '%:${codeToUse}' OR 
+                t9.Field_014 LIKE '%:${codeToUse}'
+            ) AND (t9.Field_015 LIKE '%-12%' OR t9.Field_015 LIKE '%-13%' OR t9.Field_005 = '9' OR t9.Field_007 IN ('102', '103'))`;
+
+            if (shortTafsiliCode) {
+                const code31 = '31' + shortTafsiliCode;
+                chequeFilter = `(
+                    t9.Field_015 LIKE '%:${codeToUse}%' OR 
+                    t9.Field_014 LIKE '%:${codeToUse}%' OR
+                    t9.Field_015 LIKE '%:${codeToUse}' OR 
+                    t9.Field_014 LIKE '%:${codeToUse}' OR
+                    t9.Field_015 LIKE '%:${shortTafsiliCode}%' OR 
+                    t9.Field_014 LIKE '%:${shortTafsiliCode}%' OR
+                    t9.Field_015 LIKE '%:${shortTafsiliCode}' OR 
+                    t9.Field_014 LIKE '%:${shortTafsiliCode}' OR
+                    t9.Field_015 LIKE '%:${code31}%' OR 
+                    t9.Field_014 LIKE '%:${code31}%' OR
+                    t9.Field_015 LIKE '%:${code31}' OR 
+                    t9.Field_014 LIKE '%:${code31}'
+                ) AND (t9.Field_015 LIKE '%-12%' OR t9.Field_015 LIKE '%-13%' OR t9.Field_005 = '9' OR t9.Field_007 IN ('102', '103'))`;
+            }
+
+            const chequeSql = `
+                SELECT 
+                    t9.Field_004 as SanadNo,
+                    t9.Field_009 as Bed,
+                    t9.Field_010 as Bes,
+                    t9.Field_011 as Description,
+                    t8.Field_008 as Date,
+                    t9.Field_005 as MoeinGroup,
+                    t9.Field_006 as MoeinParent,
+                    t9.Field_007 as MoeinCode,
+                    m3.Field_006 as MoeinName
+                FROM ACT_TBL_009 t9
+                LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
+                LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
+                WHERE ${chequeFilter}
+                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
+            `;
+            const rawChequeData = await runSayanQuery(chequeSql);
+            const processedCheques = rawChequeData.map((row: any) => ({
+                ...row,
+                bed: parseFloat(row.Bed || 0),
+                bes: parseFloat(row.Bes || 0)
+            }));
+            setGuaranteeCheques(processedCheques);
         } catch (err: any) {
             toast.error(`خطا در واکشی صورتحساب: ${err.message}`);
         } finally {
@@ -465,6 +544,37 @@ export default function AccountingReports() {
         const tafsiliInfo = tafsilis.find(t => t.Code === selectedTafsili);
         const name = tafsiliInfo ? tafsiliInfo.Name : selectedTafsili;
         
+        const hasCheques = guaranteeCheques.length > 0;
+        const chequesSectionHtml = hasCheques ? `
+            <div style="margin-top: 40px; border-top: 2px dashed #cbd5e1; padding-top: 20px;">
+                <h2 style="font-size: 13px; margin-bottom: 12px; color: #1e293b; font-family: 'Tahoma', sans-serif;">لیست چک‌های تضمینی و تعهدات مرتبط</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="background-color: #fef3c7; color: #92400e;">ردیف</th>
+                            <th style="background-color: #fef3c7; color: #92400e;">تاریخ</th>
+                            <th style="background-color: #fef3c7; color: #92400e;">شماره سند</th>
+                            <th style="background-color: #fef3c7; color: #92400e;">سرفصل معین</th>
+                            <th style="background-color: #fef3c7; color: #92400e;">شرح آرتیکل</th>
+                            <th style="background-color: #fef3c7; color: #92400e;">مبلغ تضمین (ریال)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${guaranteeCheques.map((row, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>${formatDateToJalali(row.Date)}</td>
+                                <td>${row.SanadNo}</td>
+                                <td>${row.MoeinGroup && row.MoeinParent && row.MoeinCode ? `${row.MoeinGroup}${row.MoeinParent}${row.MoeinCode} - ${row.MoeinName || 'سایر'}` : '-'}</td>
+                                <td>${row.Description || ''}</td>
+                                <td>${formatMoney(row.bed > 0 ? row.bed : row.bes)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '';
+
         const docHtml = `
             <html dir="rtl" lang="fa">
             <head>
@@ -520,6 +630,7 @@ export default function AccountingReports() {
                         </tr>
                     </tbody>
                 </table>
+                ${chequesSectionHtml}
             </body>
             </html>
         `;
@@ -1760,6 +1871,7 @@ export default function AccountingReports() {
                                 onClick={() => {
                                     setIsStatementModalOpen(false);
                                     setStatementData([]);
+                                    setGuaranteeCheques([]);
                                     setStatementSearch('');
                                 }}
                                 className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
@@ -1879,6 +1991,46 @@ export default function AccountingReports() {
                                     هیچ تراکنشی در بازه زمانی تعیین‌شده یافت نشد.
                                 </div>
                             )}
+
+                            {/* Guarantee Cheques Section */}
+                            {!isLoading && guaranteeCheques.length > 0 && (
+                                <div className="mt-6 space-y-3 bg-amber-50/40 p-5 rounded-2xl border border-amber-200/60 shadow-sm animate-fadeIn">
+                                    <div className="flex items-center gap-2 text-amber-900">
+                                        <CheckSquare className="w-5 h-5 text-amber-600" />
+                                        <h3 className="text-sm font-bold">چک‌های تضمینی و تعهدات مرتبط</h3>
+                                    </div>
+                                    <div className="rounded-xl border border-amber-200 overflow-hidden bg-white max-h-[300px] overflow-y-auto shadow-inner">
+                                        <table className="w-full text-right text-xs">
+                                            <thead className="bg-amber-50/80 sticky top-0 border-b border-amber-200 z-10">
+                                                <tr>
+                                                    <th className="p-3 font-bold text-amber-800 w-24">تاریخ سند</th>
+                                                    <th className="p-3 font-bold text-amber-800 w-24">شماره سند</th>
+                                                    <th className="p-3 font-bold text-amber-800 w-40">سرفصل معین</th>
+                                                    <th className="p-3 font-bold text-amber-800">شرح آرتیکل</th>
+                                                    <th className="p-3 font-bold text-amber-800 text-left w-36">مبلغ تضمین (ریال)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-amber-100/60">
+                                                {guaranteeCheques.map((row, idx) => (
+                                                    <tr key={idx} className="hover:bg-amber-50/30 transition-colors">
+                                                        <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                        <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
+                                                        <td className="p-3 text-slate-600 font-medium whitespace-nowrap">
+                                                            <span className="bg-amber-100/70 text-amber-800 px-2.5 py-0.5 rounded text-[10px] font-bold">
+                                                                {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description}</td>
+                                                        <td className="p-3 text-left text-amber-700 font-mono font-bold">
+                                                            {formatMoney(row.bed > 0 ? row.bed : row.bes)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Modal Footer */}
@@ -1887,6 +2039,7 @@ export default function AccountingReports() {
                                 onClick={() => {
                                     setIsStatementModalOpen(false);
                                     setStatementData([]);
+                                    setGuaranteeCheques([]);
                                     setStatementSearch('');
                                 }}
                                 className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
