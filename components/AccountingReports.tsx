@@ -1040,7 +1040,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const filteredCheques = getFilteredCheques();
 
     return (
-        <div className="p-2 sm:p-4 md:p-8 rtl max-w-7xl mx-auto space-y-4 sm:space-y-6 select-none">
+        <div className="p-0 sm:p-4 md:p-8 rtl max-w-7xl mx-auto space-y-4 sm:space-y-6 select-none">
             {/* Main Header */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-200 pb-5 gap-4">
                 <div>
@@ -1088,41 +1088,41 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             </div>
 
             {/* Premium Tab Bar */}
-            <div className="flex space-x-reverse space-x-2 border-b border-slate-200 overflow-x-auto pb-1 bg-slate-50 p-1.5 rounded-lg">
+            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:space-x-reverse sm:space-x-2 border-b border-slate-200 bg-slate-50 p-1.5 rounded-lg">
                 {isTrazAllowed && (
                     <button 
                         onClick={() => setActiveTab('traz')} 
-                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'traz' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'traz' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
-                        <ArrowUpDown className="w-4 h-4" />
-                        تراز و مانده اشخاص
+                        <ArrowUpDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">تراز و مانده اشخاص</span>
                     </button>
                 )}
                 {isSalesAllowed && (
                     <button 
                         onClick={() => setActiveTab('sales')} 
-                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
-                        <TrendingUp className="w-4 h-4" />
-                        فروش و تحلیل مقایسه‌ای
+                        <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">فروش و تحلیل مقایسه‌ای</span>
                     </button>
                 )}
                 {isProductionAllowed && (
                     <button 
                         onClick={() => setActiveTab('production')} 
-                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'production' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'production' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
-                        <Activity className="w-4 h-4" />
-                        تولید روزانه
+                        <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">تولید روزانه</span>
                     </button>
                 )}
                 {isChequesAllowed && (
                     <button 
                         onClick={() => setActiveTab('cheques')} 
-                        className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'cheques' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'cheques' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
-                        <CheckSquare className="w-4 h-4" />
-                        لیست چک‌ها
+                        <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">لیست چک‌ها</span>
                     </button>
                 )}
             </div>
@@ -1132,7 +1132,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 
                 {/* 1. TRAZ TAB */}
                 {activeTab === 'traz' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-800">مانده بدهکاران و بستانکاران</h2>
@@ -1347,7 +1347,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                 {/* 2. STATEMENT TAB DISABLED */}
                 {false && activeTab === 'statement' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="border-b border-slate-100 pb-4">
                             <h2 className="text-xl font-bold text-slate-800">ریز صورتحساب و دفاترحساب اشخاص</h2>
                             <p className="text-xs text-slate-500 mt-1">مشاهده ریز گردش مالی و جزئیات اسناد حسابداری هر تفصیلی</p>
@@ -1486,7 +1486,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                 {/* 3. SALES & COMPARISONS TAB */}
                 {activeTab === 'sales' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-800">تحلیل پیشرفته فروش سایان</h2>
@@ -1778,7 +1778,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                 {/* 4. PRODUCTION TAB */}
                 {activeTab === 'production' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-800">گزارش تولیدات روزانه کارخانه</h2>
@@ -1906,16 +1906,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                 {/* 5. CHEQUES TAB */}
                 {activeTab === 'cheques' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-800">سامانه مدیریت چک‌ها و اسناد دریافتنی</h2>
                                 <p className="text-xs text-slate-500 mt-1">مشاهده و دسته‌بندی چک‌های صندوق، بانکی، واخواست‌شده و خرج‌شده کارخانه</p>
                             </div>
                             
-                            <div className="flex flex-wrap md:flex-nowrap gap-2 items-center w-full md:w-auto">
-                                <div className="overflow-x-auto whitespace-nowrap scrollbar-hide py-1 w-full md:w-auto">
-                                    <div className="flex space-x-reverse space-x-1 border border-slate-300 rounded-md p-1 bg-slate-50 inline-flex">
+                            <div className="flex flex-col sm:flex-row gap-2 items-center w-full md:w-auto">
+                                <div className="w-full md:w-auto">
+                                    <div className="flex flex-wrap gap-1 border border-slate-300 rounded-md p-1 bg-slate-50 w-full justify-start">
                                         <button 
                                             onClick={() => setChequeStatusFilter('all')}
                                             className={`text-[10px] font-bold py-1 px-3 rounded cursor-pointer ${chequeStatusFilter === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
