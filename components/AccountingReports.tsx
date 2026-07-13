@@ -210,7 +210,9 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
                     LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                    WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
+                    WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
+                      AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
+                      AND t9.Field_005 <> '9'
                       AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
                       AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                     GROUP BY t9.Field_015
@@ -223,7 +225,9 @@ export default function AccountingReports() {
                         SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
                         SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_024 t24
-                    WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                    WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                      AND t24.Field_005 NOT IN ('103', '107', '109', '114', '116', '117')
+                      AND t24.Field_003 <> '9'
                     GROUP BY t24.Field_010
                 `;
             }
@@ -373,21 +377,52 @@ export default function AccountingReports() {
         try {
             const gregFrom = jalaliToGregorianStr(dateFrom);
             const gregTo = jalaliToGregorianStr(dateTo);
+            
+            const selectedInfo = tafsilis.find(t => t.Code === selectedTafsili);
+            const shortTafsiliCode = selectedInfo ? selectedInfo.TafsiliCode : '';
+            
+            let tafsiliFilter = `(
+                t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
+                t9.Field_014 LIKE '%:${selectedTafsili}%' OR
+                t9.Field_015 LIKE '%:${selectedTafsili}' OR 
+                t9.Field_014 LIKE '%:${selectedTafsili}'
+            )`;
+            
+            if (shortTafsiliCode) {
+                const code31 = '31' + shortTafsiliCode;
+                tafsiliFilter = `(
+                    t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
+                    t9.Field_014 LIKE '%:${selectedTafsili}%' OR
+                    t9.Field_015 LIKE '%:${selectedTafsili}' OR 
+                    t9.Field_014 LIKE '%:${selectedTafsili}' OR
+                    t9.Field_015 LIKE '%:${shortTafsiliCode}%' OR 
+                    t9.Field_014 LIKE '%:${shortTafsiliCode}%' OR
+                    t9.Field_015 LIKE '%:${shortTafsiliCode}' OR 
+                    t9.Field_014 LIKE '%:${shortTafsiliCode}' OR
+                    t9.Field_015 LIKE '%:${code31}%' OR 
+                    t9.Field_014 LIKE '%:${code31}%' OR
+                    t9.Field_015 LIKE '%:${code31}' OR 
+                    t9.Field_014 LIKE '%:${code31}'
+                )`;
+            }
+
             const sql = `
                 SELECT 
                     t9.Field_004 as SanadNo,
                     t9.Field_009 as Bed,
                     t9.Field_010 as Bes,
                     t9.Field_011 as Description,
-                    t8.Field_008 as Date
+                    t8.Field_008 as Date,
+                    t9.Field_005 as MoeinGroup,
+                    t9.Field_006 as MoeinParent,
+                    t9.Field_007 as MoeinCode,
+                    m3.Field_006 as MoeinName
                 FROM ACT_TBL_009 t9
                 LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
-                WHERE (
-                    t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
-                    t9.Field_014 LIKE '%:${selectedTafsili}%' OR
-                    t9.Field_015 LIKE '%:${selectedTafsili}' OR 
-                    t9.Field_014 LIKE '%:${selectedTafsili}'
-                ) AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
+                LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
+                WHERE ${tafsiliFilter} 
+                  AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
+                  AND t9.Field_005 <> '9'
                   AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
                   AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
@@ -449,6 +484,7 @@ export default function AccountingReports() {
                             <th>ردیف</th>
                             <th>تاریخ</th>
                             <th>شماره سند</th>
+                            <th>سرفصل معین</th>
                             <th>شرح تراکنش</th>
                             <th>بدهکار (ریال)</th>
                             <th>بستانکار (ریال)</th>
@@ -461,6 +497,7 @@ export default function AccountingReports() {
                                 <td>${idx + 1}</td>
                                 <td>${formatDateToJalali(row.Date)}</td>
                                 <td>${row.SanadNo}</td>
+                                <td>${row.MoeinGroup && row.MoeinParent && row.MoeinCode ? `${row.MoeinGroup}${row.MoeinParent}${row.MoeinCode} - ${row.MoeinName || 'سایر'}` : '-'}</td>
                                 <td>${row.Description || ''}</td>
                                 <td>${row.bed > 0 ? formatMoney(row.bed) : '۰'}</td>
                                 <td>${row.bes > 0 ? formatMoney(row.bes) : '۰'}</td>
@@ -468,7 +505,7 @@ export default function AccountingReports() {
                             </tr>
                         `).join('')}
                         <tr class="total">
-                            <td colspan="4" style="text-align: left;">جمع کل:</td>
+                            <td colspan="5" style="text-align: left;">جمع کل:</td>
                             <td>${formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}</td>
                             <td>${formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}</td>
                             <td>${formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}</td>
@@ -1163,6 +1200,7 @@ export default function AccountingReports() {
                                             <tr>
                                                 <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
                                                 <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
+                                                <th className="p-3 font-bold text-slate-700 w-40">سرفصل معین</th>
                                                 <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
                                                 <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
                                                 <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
@@ -1175,6 +1213,15 @@ export default function AccountingReports() {
                                                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
                                                     <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
+                                                    <td className="p-3 text-slate-600 font-medium whitespace-nowrap">
+                                                        {row.MoeinGroup && row.MoeinParent && row.MoeinCode ? (
+                                                            <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-[10px] font-extrabold">
+                                                                {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
+                                                            </span>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </td>
                                                     <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
                                                     <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
                                                     <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
@@ -1193,7 +1240,7 @@ export default function AccountingReports() {
                                             
                                             {/* Summary Sticky Foot */}
                                             <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
-                                                <td colSpan={3} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
+                                                <td colSpan={4} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
                                                 <td className="p-4 text-left text-rose-700 font-mono text-sm">
                                                     {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
                                                 </td>
