@@ -14,7 +14,9 @@ import {
     FileText, 
     ArrowUpDown, 
     Download,
-    Percent
+    Percent,
+    X,
+    RefreshCw
 } from 'lucide-react';
 import * as jalaali from 'jalaali-js';
 import { 
@@ -50,6 +52,11 @@ export default function AccountingReports() {
     const [tafsiliSearch, setTafsiliSearch] = useState('');
     const [statementSearch, setStatementSearch] = useState('');
     const [statementData, setStatementData] = useState<any[]>([]);
+
+    // --- STATEMENT MODAL STATE ---
+    const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+    const [modalTafsiliCode, setModalTafsiliCode] = useState('');
+    const [modalTafsiliName, setModalTafsiliName] = useState('');
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
@@ -209,7 +216,7 @@ export default function AccountingReports() {
                         SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
                         SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
                     FROM ACT_TBL_009 t9
-                    LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
+                    LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                     WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
                       AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117') 
                       AND t9.Field_005 <> '9'
@@ -368,8 +375,9 @@ export default function AccountingReports() {
     // ==========================================
     // TAB 2: DETAILED STATEMENT (صورتحساب ریز تراکنش‌ها)
     // ==========================================
-    const fetchStatement = async () => {
-        if (!selectedTafsili) {
+    const fetchStatement = async (tafsiliCodeOverride?: string) => {
+        const codeToUse = tafsiliCodeOverride || selectedTafsili;
+        if (!codeToUse) {
             toast.error('لطفاً ابتدا شخص مورد نظر را انتخاب کنید');
             return;
         }
@@ -378,23 +386,23 @@ export default function AccountingReports() {
             const gregFrom = jalaliToGregorianStr(dateFrom);
             const gregTo = jalaliToGregorianStr(dateTo);
             
-            const selectedInfo = tafsilis.find(t => t.Code === selectedTafsili);
+            const selectedInfo = tafsilis.find(t => t.Code === codeToUse);
             const shortTafsiliCode = selectedInfo ? selectedInfo.TafsiliCode : '';
             
             let tafsiliFilter = `(
-                t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
-                t9.Field_014 LIKE '%:${selectedTafsili}%' OR
-                t9.Field_015 LIKE '%:${selectedTafsili}' OR 
-                t9.Field_014 LIKE '%:${selectedTafsili}'
+                t9.Field_015 LIKE '%:${codeToUse}%' OR 
+                t9.Field_014 LIKE '%:${codeToUse}%' OR
+                t9.Field_015 LIKE '%:${codeToUse}' OR 
+                t9.Field_014 LIKE '%:${codeToUse}'
             )`;
             
             if (shortTafsiliCode) {
                 const code31 = '31' + shortTafsiliCode;
                 tafsiliFilter = `(
-                    t9.Field_015 LIKE '%:${selectedTafsili}%' OR 
-                    t9.Field_014 LIKE '%:${selectedTafsili}%' OR
-                    t9.Field_015 LIKE '%:${selectedTafsili}' OR 
-                    t9.Field_014 LIKE '%:${selectedTafsili}' OR
+                    t9.Field_015 LIKE '%:${codeToUse}%' OR 
+                    t9.Field_014 LIKE '%:${codeToUse}%' OR
+                    t9.Field_015 LIKE '%:${codeToUse}' OR 
+                    t9.Field_014 LIKE '%:${codeToUse}' OR
                     t9.Field_015 LIKE '%:${shortTafsiliCode}%' OR 
                     t9.Field_014 LIKE '%:${shortTafsiliCode}%' OR
                     t9.Field_015 LIKE '%:${shortTafsiliCode}' OR 
@@ -418,7 +426,7 @@ export default function AccountingReports() {
                     t9.Field_007 as MoeinCode,
                     m3.Field_006 as MoeinName
                 FROM ACT_TBL_009 t9
-                LEFT JOIN ACT_TBL_008 t8 ON t9.Field_004 = t8.Field_006 AND t9.Field_003 = t8.Field_004
+                LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                 LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
                 WHERE ${tafsiliFilter} 
                   AND t9.Field_007 NOT IN ('103', '107', '109', '114', '116', '117')
@@ -959,16 +967,6 @@ export default function AccountingReports() {
                     تراز و مانده اشخاص
                 </button>
                 <button 
-                    onClick={() => {
-                        setActiveTab('statement');
-                        if (tafsilis.length === 0) fetchTafsilis();
-                    }} 
-                    className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'statement' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                >
-                    <FileText className="w-4 h-4" />
-                    صورتحساب تراکنش‌ها
-                </button>
-                <button 
                     onClick={() => setActiveTab('sales')} 
                     className={`flex items-center gap-2 py-2.5 px-5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                 >
@@ -1088,12 +1086,13 @@ export default function AccountingReports() {
                                         <th className="p-3.5 font-bold text-slate-700 text-left">مجموع بستانکار (ریال)</th>
                                         <th className="p-3.5 font-bold text-slate-700 text-left">مانده حساب (ریال)</th>
                                         <th className="p-3.5 font-bold text-slate-700 w-28 text-center">تشخیص</th>
+                                        <th className="p-3.5 font-bold text-slate-700 w-32 text-center">عملیات</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {filteredTraz.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="text-center py-12 text-slate-400 font-medium">
+                                            <td colSpan={8} className="text-center py-12 text-slate-400 font-medium">
                                                 {isLoading ? (
                                                     <div className="flex items-center justify-center gap-2">
                                                         <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
@@ -1120,6 +1119,21 @@ export default function AccountingReports() {
                                                         {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
                                                     </span>
                                                 </td>
+                                                <td className="p-3 text-center">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedTafsili(row.code);
+                                                            setModalTafsiliCode(row.code);
+                                                            setModalTafsiliName(row.name);
+                                                            setIsStatementModalOpen(true);
+                                                            fetchStatement(row.code);
+                                                        }}
+                                                        className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-md border border-blue-200 text-[10px] flex items-center gap-1 mx-auto transition-colors cursor-pointer shadow-sm"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                        صورتحساب ریز
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))
                                     )}
@@ -1129,8 +1143,8 @@ export default function AccountingReports() {
                     </div>
                 )}
 
-                {/* 2. STATEMENT TAB */}
-                {activeTab === 'statement' && (
+                {/* 2. STATEMENT TAB DISABLED */}
+                {false && activeTab === 'statement' && (
                     <div className="p-6 space-y-6">
                         <div className="border-b border-slate-100 pb-4">
                             <h2 className="text-xl font-bold text-slate-800">ریز صورتحساب و دفاترحساب اشخاص</h2>
@@ -1162,7 +1176,7 @@ export default function AccountingReports() {
                             </div>
                             <div className="flex gap-2 w-full md:w-auto">
                                 <button 
-                                    onClick={fetchStatement} 
+                                    onClick={() => fetchStatement()} 
                                     disabled={isLoading || !selectedTafsili} 
                                     className="flex-1 md:flex-none px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
                                 >
@@ -1723,6 +1737,166 @@ export default function AccountingReports() {
                     </div>
                 )}
             </div>
+
+            {/* Premium Statement Modal */}
+            {isStatementModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in rtl">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                            <div>
+                                <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-blue-600" />
+                                    ریز صورتحساب و دفاترحساب اشخاص
+                                </h3>
+                                <div className="text-xs text-slate-500 mt-1 font-bold">
+                                    نام شخص: <span className="text-slate-900 text-sm font-black">{modalTafsiliName}</span> (کد تفصیلی: <span className="text-slate-900 font-mono font-bold">{modalTafsiliCode}</span>)
+                                </div>
+                                <div className="text-[10px] text-blue-600 mt-0.5 font-bold">
+                                    بازه زمانی: {dateFrom || '---'} تا {dateTo || '---'}
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setIsStatementModalOpen(false);
+                                    setStatementData([]);
+                                    setStatementSearch('');
+                                }}
+                                className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Modal Toolbar */}
+                        <div className="p-4 bg-slate-100/50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <div className="relative w-full sm:w-80">
+                                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                                <input 
+                                    type="text" 
+                                    placeholder="جستجو در شرح تراکنش یا شماره سند..." 
+                                    value={statementSearch} 
+                                    onChange={e => setStatementSearch(e.target.value)} 
+                                    className="w-full pl-3 pr-9 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
+                                />
+                            </div>
+
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button 
+                                    onClick={() => fetchStatement(modalTafsiliCode)} 
+                                    disabled={isLoading}
+                                    className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+                                >
+                                    {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                    بروزرسانی داده‌ها
+                                </button>
+                                <button 
+                                    onClick={handlePrintStatement}
+                                    disabled={isLoading || filteredStatementData.length === 0}
+                                    className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+                                >
+                                    <Printer className="w-3.5 h-3.5 text-slate-500" />
+                                    چاپ / PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Body (Table of Transactions) */}
+                        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500 font-bold text-sm">
+                                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                                    <span>در حال دریافت و تحلیل ریز گردش حساب سایان...</span>
+                                </div>
+                            ) : filteredStatementData.length > 0 ? (
+                                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                                    <table className="w-full text-right text-xs">
+                                        <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                                            <tr>
+                                                <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
+                                                <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
+                                                <th className="p-3 font-bold text-slate-700 w-40">سرفصل معین</th>
+                                                <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
+                                                <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {filteredStatementData.map((row, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
+                                                    <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                    <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
+                                                    <td className="p-3 text-slate-600 font-medium whitespace-nowrap">
+                                                        {row.MoeinGroup && row.MoeinParent && row.MoeinCode ? (
+                                                            <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-[10px] font-extrabold">
+                                                                {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
+                                                            </span>
+                                                        ) : (
+                                                            '-'
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
+                                                    <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
+                                                    <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
+                                                    <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                        {formatMoney(row.balance)}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                                            row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                                                        }`}>
+                                                            {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+
+                                            {/* Summary Sticky Foot */}
+                                            <tr className="bg-slate-50 font-extrabold border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] sticky bottom-0 z-10">
+                                                <td colSpan={4} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
+                                                <td className="p-4 text-left text-rose-700 font-mono text-sm">
+                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
+                                                </td>
+                                                <td className="p-4 text-left text-emerald-700 font-mono text-sm">
+                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}
+                                                </td>
+                                                <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
+                                                    filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                                                }`}>
+                                                    {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}
+                                                    <span className="text-[10px] font-bold mr-1">
+                                                        ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-center py-24 text-slate-400 font-medium border-2 border-dashed border-slate-200 bg-white rounded-2xl shadow-sm">
+                                    هیچ تراکنشی در بازه زمانی تعیین‌شده یافت نشد.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50">
+                            <button 
+                                onClick={() => {
+                                    setIsStatementModalOpen(false);
+                                    setStatementData([]);
+                                    setStatementSearch('');
+                                }}
+                                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                                بستن پنجره
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
