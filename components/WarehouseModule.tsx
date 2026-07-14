@@ -1314,13 +1314,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {/* REPORTS TAB (KARDEX) */}
                 {activeTab === 'reports' && (
                     <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
-                        <WarehouseKardexReport 
-                            items={items} 
-                            transactions={safeTransactions} 
-                            allTransactions={allTransactions}
-                            companies={companyList} 
-                            financialYear={financialYear}
-                        />
+                        <WarehouseKardexReport items={items} transactions={safeTransactions} companies={companyList} />
                     </div>
                 )}
 

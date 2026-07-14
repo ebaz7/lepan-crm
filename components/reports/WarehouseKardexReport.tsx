@@ -8,12 +8,10 @@ import { generatePdf } from '../../utils/pdfGenerator';
 interface Props {
     items: WarehouseItem[];
     transactions: WarehouseTransaction[];
-    allTransactions?: WarehouseTransaction[];
     companies: string[];
-    financialYear?: string;
 }
 
-const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransactions, companies, financialYear }) => {
+const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies }) => {
     // Filters
     const [selectedCompany, setSelectedCompany] = useState<string>('');
     const [selectedItem, setSelectedItem] = useState<string>('');
@@ -52,72 +50,10 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Calculation Logic (Same as before + Opening Balance from previous fiscal years)
+    // Calculation Logic (Same as before)
     const kardexRows = useMemo(() => {
         if (!selectedCompany || !selectedItem) return [];
 
-        let openingBalance = 0;
-        const txSource = allTransactions || transactions;
-
-        // 1. Calculate balance from all transactions before the selected financial year
-        if (financialYear && financialYear !== 'all') {
-            txSource.forEach(tx => {
-                if (tx.company !== selectedCompany) return;
-                if (tx.status === 'REJECTED') return;
-                const hasItem = tx.items.some(i => i.itemId === selectedItem);
-                if (!hasItem) return;
-
-                try {
-                    const txDate = new Date(tx.date);
-                    if (!isNaN(txDate.getTime())) {
-                        const shamsiDate = txDate.toLocaleDateString('fa-IR-u-nu-latn');
-                        const shamsiYear = parseInt(shamsiDate.split('/')[0]);
-                        const targetYear = parseInt(financialYear);
-                        if (shamsiYear < targetYear) {
-                            const txItem = tx.items.find(i => i.itemId === selectedItem);
-                            if (txItem) {
-                                const qty = txItem.quantity;
-                                if (tx.type === 'IN') {
-                                    openingBalance += qty;
-                                } else if (tx.type === 'OUT') {
-                                    openingBalance -= qty;
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error parsing date for opening balance", e);
-                }
-            });
-        }
-
-        // 2. Add current financial year transactions before dateRange.from
-        if (dateRange.from) {
-            const fromDate = parsePersianDate(dateRange.from);
-            if (fromDate) {
-                transactions.forEach(tx => {
-                    if (tx.company !== selectedCompany) return;
-                    if (tx.status === 'REJECTED') return;
-                    const hasItem = tx.items.some(i => i.itemId === selectedItem);
-                    if (!hasItem) return;
-
-                    const txDate = new Date(tx.date);
-                    if (txDate < fromDate) {
-                        const txItem = tx.items.find(i => i.itemId === selectedItem);
-                        if (txItem) {
-                            const qty = txItem.quantity;
-                            if (tx.type === 'IN') {
-                                openingBalance += qty;
-                            } else if (tx.type === 'OUT') {
-                                openingBalance -= qty;
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        // 3. Filter transactions for the selected date range within current financial year
         let filteredTxs = transactions.filter(tx => {
             if (tx.company !== selectedCompany) return false;
             if (tx.status === 'REJECTED') return false; 
@@ -144,19 +80,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
 
         filteredTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        let runningBalance = openingBalance;
-        const rows: {
-            id: string;
-            date: string;
-            number: string | number;
-            type: 'IN' | 'OUT' | 'OPENING';
-            description: string;
-            in: number;
-            out: number;
-            balance: number;
-            weight: number;
-            unitPrice: number;
-        }[] = filteredTxs.map(tx => {
+        let runningBalance = 0;
+        const rows = filteredTxs.map(tx => {
             const txItem = tx.items.find(i => i.itemId === selectedItem);
             const qty = txItem ? txItem.quantity : 0;
             const weight = txItem ? txItem.weight : 0;
@@ -183,26 +108,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
             };
         });
 
-        // Prepend opening balance row if there is a start date filter or a specific financial year selected
-        if (dateRange.from || (financialYear && financialYear !== 'all')) {
-            rows.unshift({
-                id: 'opening-balance',
-                date: '',
-                number: '-',
-                type: 'OPENING',
-                description: dateRange.from 
-                    ? 'انتقال از دوره قبل (مانده قبلی)' 
-                    : 'مانده انتقالی از سال مالی قبل (افتتاحیه)',
-                in: 0,
-                out: 0,
-                balance: openingBalance,
-                weight: 0,
-                unitPrice: 0
-            });
-        }
-
         return rows;
-    }, [transactions, allTransactions, financialYear, selectedCompany, selectedItem, dateRange, txType]);
+    }, [transactions, selectedCompany, selectedItem, dateRange, txType]);
 
     const activeItemName = items.find(i => i.id === selectedItem)?.name || '-';
     const elementId = 'kardex-print-area';
@@ -287,38 +194,19 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
                     {kardexRows.length === 0 ? (
                         <tr><td colSpan={9} className="p-4 text-gray-400 border border-gray-300">گردشی برای این کالا یافت نشد.</td></tr>
                     ) : (
-                        kardexRows.map((row, idx) => {
-                            if (row.type === 'OPENING') {
-                                return (
-                                    <tr key={row.id} className="bg-blue-50/50 text-blue-900 font-bold">
-                                        <td className="border border-gray-300 p-1">{idx + 1}</td>
-                                        <td className="border border-gray-300 p-1 font-mono text-[9px]">-</td>
-                                        <td className="border border-gray-300 p-1 text-center">
-                                            <span className="text-blue-700 font-black">مانده قبلی</span>
-                                        </td>
-                                        <td className="border border-gray-300 p-1 font-mono">-</td>
-                                        <td className="border border-gray-300 p-1 text-right pr-2 text-[9px] font-sans">{row.description}</td>
-                                        <td className="border border-gray-300 p-1 font-mono font-bold text-gray-400">-</td>
-                                        <td className="border border-gray-300 p-1 font-mono font-bold text-gray-400">-</td>
-                                        <td className="border border-gray-300 p-1 balance bg-blue-100/50 text-blue-800 text-base font-bold">{row.balance}</td>
-                                        <td className="border border-gray-300 p-1 font-mono text-gray-400">-</td>
-                                    </tr>
-                                );
-                            }
-                            return (
-                                <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
-                                    <td className="border border-gray-300 p-1">{idx + 1}</td>
-                                    <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
-                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
-                                    <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
-                                    <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
-                                    <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
-                                    <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-base">{row.out > 0 ? row.out : '-'}</td>
-                                    <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-base font-bold">{row.balance}</td>
-                                    <td className="border border-gray-300 p-1 font-mono text-amber-800 font-bold">{row.unitPrice ? formatNumberString(row.unitPrice) : '-'}</td>
-                                </tr>
-                            );
-                        })
+                        kardexRows.map((row, idx) => (
+                            <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
+                                <td className="border border-gray-300 p-1">{idx + 1}</td>
+                                <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
+                                <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
+                                <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
+                                <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
+                                <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
+                                <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-base">{row.out > 0 ? row.out : '-'}</td>
+                                <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-base font-bold">{row.balance}</td>
+                                <td className="border border-gray-300 p-1 font-mono text-amber-800 font-bold">{row.unitPrice ? formatNumberString(row.unitPrice) : '-'}</td>
+                            </tr>
+                        ))
                     )}
                 </tbody>
                 <tfoot>

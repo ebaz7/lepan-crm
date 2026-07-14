@@ -110,10 +110,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [availableStores, setAvailableStores] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
-  // Debtors and Creditors filter states
-  const [dcFilter, setDcFilter] = useState<'ALL' | 'DEBTORS' | 'CREDITORS'>('ALL');
-  const [dcSearch, setDcSearch] = useState('');
-
   const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
     setError(null);
@@ -2041,16 +2037,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       const totalDebtors = debtors.reduce((sum, d) => sum + d.NetBalance, 0);
       const totalCreditors = creditors.reduce((sum, d) => sum + d.NetBalance, 0);
 
-      // Filter and search logic for rendering
-      const filteredData = data.filter(row => {
-          if (dcSearch && !row.AccountName.toLowerCase().includes(dcSearch.toLowerCase())) {
-              return false;
-          }
-          if (dcFilter === 'DEBTORS') return row.Type === 'بدهکار';
-          if (dcFilter === 'CREDITORS') return row.Type === 'بستانکار';
-          return true;
-      });
-
       const printList = (listType: 'بدهکار' | 'بستانکار') => {
           const list = listType === 'بدهکار' ? debtors : creditors;
           const total = listType === 'بدهکار' ? totalDebtors : totalCreditors;
@@ -2111,64 +2097,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
       return (
           <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-2">
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1">
-                      <div className="relative w-full sm:w-72">
-                          <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
-                          <input
-                              type="text"
-                              placeholder="جستجوی نام شخص..."
-                              value={dcSearch}
-                              onChange={(e) => setDcSearch(e.target.value)}
-                              className="w-full text-xs text-right pr-9 pl-3 py-2 border border-slate-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          />
-                      </div>
-                      
-                      <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
-                          <button
-                              onClick={() => setDcFilter('ALL')}
-                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                                  dcFilter === 'ALL'
-                                      ? 'bg-white text-slate-800 shadow-xs'
-                                      : 'text-slate-500 hover:text-slate-850'
-                              }`}
-                          >
-                              همه ({data.length})
-                          </button>
-                          <button
-                              onClick={() => setDcFilter('DEBTORS')}
-                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                                  dcFilter === 'DEBTORS'
-                                      ? 'bg-emerald-600 text-white shadow-xs'
-                                      : 'text-emerald-650 hover:bg-slate-50'
-                              }`}
-                          >
-                              بدهکاران ({debtors.length})
-                          </button>
-                          <button
-                              onClick={() => setDcFilter('CREDITORS')}
-                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                                  dcFilter === 'CREDITORS'
-                                      ? 'bg-rose-600 text-white shadow-xs'
-                                      : 'text-rose-650 hover:bg-slate-50'
-                              }`}
-                          >
-                              بستانکاران ({creditors.length})
-                          </button>
-                      </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2.5 shrink-0">
-                      <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-100 transition-colors">
-                          <Printer size={14} /> چاپ بدهکاران
-                      </button>
-                      <button onClick={() => printList('بستانکار')} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-rose-100 transition-colors">
-                          <Printer size={14} /> چاپ بستانکاران
-                      </button>
-                  </div>
+              <div className="flex justify-end gap-3 mb-4">
+                  <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
+                      <Printer size={16} /> چاپ بدهکاران
+                  </button>
+                  <button onClick={() => printList('بستانکار')} className="bg-rose-50 text-rose-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-rose-100 transition-colors">
+                      <Printer size={16} /> چاپ بستانکاران
+                  </button>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                       <div>
@@ -2197,7 +2133,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">
-                        {filteredData.map((row, idx) => (
+                        {data.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800 font-medium">{row.AccountName}</td>
                                 <td className={`px-6 py-3 whitespace-nowrap font-bold ${row.Type === 'بدهکار' ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
@@ -2214,7 +2150,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     </table>
                 </div>
                 <div className="md:hidden divide-y divide-slate-100">
-                    {filteredData.map((row, idx) => (
+                    {data.map((row, idx) => (
                         <div key={idx} className="p-4 space-y-2 text-xs">
                             <h4 className="font-sans font-bold text-slate-800">{row.AccountName}</h4>
                             <div className="flex justify-between items-center">
@@ -2230,11 +2166,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             </div>
                         </div>
                     ))}
-                    {filteredData.length === 0 && (
+                    {data.length === 0 && (
                         <div className="text-center py-8 text-slate-400 text-xs font-sans">موردی یافت نشد</div>
                     )}
                 </div>
-              </div>
+            </div>
           </div>
       );
   };
