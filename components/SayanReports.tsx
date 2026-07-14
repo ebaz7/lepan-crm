@@ -157,7 +157,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         // Map transactionCategory to ERP Document Type Codes (Field_009)
         let typeCodes: string[] = [];
         if (transactionCategory === 'SALES') {
-            typeCodes = ['12', '23'];
+            typeCodes = ['3', '12', '23'];
         } else if (transactionCategory === 'SALES_RETURN') {
             typeCodes = ['13', '24'];
         } else if (transactionCategory === 'PURCHASE') {
@@ -227,10 +227,14 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                 }
             });
 
-            const idsClause = Array.from(numbers).join(',');
-            try {
-                detailsList = await attemptQuery(`SELECT * FROM STR_TBL_011 WHERE Field_004 IN (${idsClause})`, 'STR_TBL_011');
-            } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
+            const idsArray = Array.from(numbers);
+            for (let i = 0; i < idsArray.length; i += 500) {
+                const chunk = idsArray.slice(i, i + 500).join(',');
+                try {
+                    const chunkData = await attemptQuery(`SELECT Field_001, Field_004, Field_005, Field_006, Field_012, Field_013, Field_014, Field_015, Field_016, Field_024, Field_025, Field_027, Field_031, Field_035, Field_036, Field_037, Field_038 FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
+                    detailsList = detailsList.concat(chunkData);
+                } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
+            }
         }
 
         
@@ -604,7 +608,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         }).filter((r: any) => {
             if (!r) return false;
             const docTypeId = String(r.Field_004 || '').trim();
-            const matchesTypeSelection = selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
+            const matchesTypeSelection = selectedSalesTypes.length === 0 || selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
             if (!matchesTypeSelection) return false;
 
             if (reportType === 'SALES_COMPARISON') {

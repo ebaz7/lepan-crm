@@ -9,9 +9,10 @@ interface Props {
     items: WarehouseItem[];
     transactions: WarehouseTransaction[];
     companies: string[];
+    financialYear?: string;
 }
 
-const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies }) => {
+const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies, financialYear }) => {
     // Filters
     const [selectedCompany, setSelectedCompany] = useState<string>('');
     const [selectedItem, setSelectedItem] = useState<string>('');
@@ -54,31 +55,68 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
     const kardexRows = useMemo(() => {
         if (!selectedCompany || !selectedItem) return [];
 
-        // 1. Calculate Opening Balance (مانده قبلی) from transactions before dateRange.from
-        let openingBalance = 0;
-        if (dateRange.from) {
-            const fromDate = parsePersianDate(dateRange.from);
-            if (fromDate) {
-                transactions.forEach(tx => {
-                    if (tx.company !== selectedCompany) return;
-                    if (tx.status === 'REJECTED') return;
-                    const hasItem = tx.items.some(i => i.itemId === selectedItem);
-                    if (!hasItem) return;
+        // Determine effective date range based on filters or financial year
+        let effectiveFromDate: Date | null = null;
+        let effectiveToDate: Date | null = null;
+        
+        let financialStartDate: Date | null = null;
+        let financialEndDate: Date | null = null;
 
-                    const txDate = new Date(tx.date);
-                    if (txDate < fromDate) {
-                        const txItem = tx.items.find(i => i.itemId === selectedItem);
-                        if (txItem) {
-                            const qty = txItem.quantity;
-                            if (tx.type === 'IN') {
-                                openingBalance += qty;
-                            } else if (tx.type === 'OUT') {
-                                openingBalance -= qty;
-                            }
+        if (financialYear && financialYear !== 'all') {
+            financialStartDate = parsePersianDate(`${financialYear}/01/01`);
+            financialEndDate = parsePersianDate(`${parseInt(financialYear) + 1}/01/01`);
+            if (financialEndDate) financialEndDate.setMilliseconds(-1);
+        }
+
+        if (dateRange.from) {
+            const userFrom = parsePersianDate(dateRange.from);
+            if (userFrom) {
+                if (financialStartDate && userFrom < financialStartDate) {
+                    effectiveFromDate = financialStartDate;
+                } else {
+                    effectiveFromDate = userFrom;
+                }
+            }
+        } else if (financialStartDate) {
+            effectiveFromDate = financialStartDate;
+        }
+
+        if (dateRange.to) {
+            const userTo = parsePersianDate(dateRange.to);
+            if (userTo) {
+                userTo.setHours(23, 59, 59);
+                if (financialEndDate && userTo > financialEndDate) {
+                    effectiveToDate = financialEndDate;
+                } else {
+                    effectiveToDate = userTo;
+                }
+            }
+        } else if (financialEndDate) {
+            effectiveToDate = financialEndDate;
+        }
+
+        // 1. Calculate Opening Balance (مانده قبلی) from transactions before effectiveFromDate
+        let openingBalance = 0;
+        if (effectiveFromDate) {
+            transactions.forEach(tx => {
+                if (tx.company !== selectedCompany) return;
+                if (tx.status === 'REJECTED') return;
+                const hasItem = tx.items.some(i => i.itemId === selectedItem);
+                if (!hasItem) return;
+
+                const txDate = new Date(tx.date);
+                if (txDate < effectiveFromDate!) {
+                    const txItem = tx.items.find(i => i.itemId === selectedItem);
+                    if (txItem) {
+                        const qty = txItem.quantity;
+                        if (tx.type === 'IN') {
+                            openingBalance += qty;
+                        } else if (tx.type === 'OUT') {
+                            openingBalance -= qty;
                         }
                     }
-                });
-            }
+                }
+            });
         }
 
         // 2. Filter transactions for the selected date range
@@ -90,19 +128,10 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             const hasItem = tx.items.some(i => i.itemId === selectedItem);
             if (!hasItem) return false;
 
-            if (dateRange.from) {
-                const txDate = new Date(tx.date);
-                const fromDate = parsePersianDate(dateRange.from);
-                if (fromDate && txDate < fromDate) return false;
-            }
-            if (dateRange.to) {
-                const txDate = new Date(tx.date);
-                const toDate = parsePersianDate(dateRange.to);
-                if (toDate) {
-                    toDate.setHours(23, 59, 59);
-                    if (txDate > toDate) return false;
-                }
-            }
+            const txDate = new Date(tx.date);
+            if (effectiveFromDate && txDate < effectiveFromDate) return false;
+            if (effectiveToDate && txDate > effectiveToDate) return false;
+            
             return true;
         });
 
@@ -136,14 +165,14 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             };
         });
 
-        // Prepend opening balance row if there is a start date filter
-        if (dateRange.from) {
+        // Prepend opening balance row if there is an effective start date
+        if (effectiveFromDate) {
             rows.unshift({
                 id: 'opening-balance',
                 date: '',
                 number: '-',
                 type: 'OPENING' as 'IN' | 'OUT' | 'OPENING',
-                description: 'انتقال از دوره قبل (مانده قبلی)',
+                description: 'سند افتتاحیه (مانده قبلی)',
                 in: 0,
                 out: 0,
                 balance: openingBalance,
