@@ -274,13 +274,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 
                 const tafsili = tafsilis.find(t => t.Code === code || t.TafsiliCode === code);
                 const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
-                let bed = parseFloat(row.TotalBed || 0);
-                let bes = parseFloat(row.TotalBes || 0);
-                
-                // Surgical reconciliation for Matin Baft (code 112127) to adjust for 100B in error credit documents
-                if (code === '112127') {
-                    bes -= 100000000000;
-                }
+                const bed = parseFloat(row.TotalBed || 0);
+                const bes = parseFloat(row.TotalBes || 0);
                 
                 if (groupedMap.has(code)) {
                     const existing = groupedMap.get(code);
@@ -488,29 +483,17 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const data = await runSayanQuery(sql);
             
             let balanceAccumulator = 0;
-            const processed = data
-                .filter((row: any) => {
-                    // Exclude the 100B in error credit documents for Matin Baft (code 112127)
-                    if (codeToUse === '112127') {
-                        const sanadNo = String(row.SanadNo || '').trim();
-                        const bes = parseFloat(row.Bes || 0);
-                        if (sanadNo === '1215' && bes === 75000000000) return false;
-                        if (sanadNo === '1814' && bes === 8000000000) return false;
-                        if (sanadNo === '2211' && bes === 17000000000) return false;
-                    }
-                    return true;
-                })
-                .map((row: any) => {
-                    const bed = parseFloat(row.Bed || 0);
-                    const bes = parseFloat(row.Bes || 0);
-                    balanceAccumulator += (bed - bes);
-                    return {
-                        ...row,
-                        bed,
-                        bes,
-                        balance: balanceAccumulator
-                    };
-                });
+            const processed = data.map((row: any) => {
+                const bed = parseFloat(row.Bed || 0);
+                const bes = parseFloat(row.Bes || 0);
+                balanceAccumulator += (bed - bes);
+                return {
+                    ...row,
+                    bed,
+                    bes,
+                    balance: balanceAccumulator
+                };
+            });
             setStatementData(processed);
 
             // Fetch guarantee and post-dated cheques associated with this person

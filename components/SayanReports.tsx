@@ -75,6 +75,7 @@ interface SayanReportsProps {
 
 const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('SALES');
+  const [transactionCategory, setTransactionCategory] = useState<'SALES' | 'SALES_RETURN' | 'PURCHASE' | 'PURCHASE_RETURN'>('SALES');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [selectedSalesTypes, setSelectedSalesTypes] = useState<string[]>([]);
   const [availableStores, setAvailableStores] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
+
+  // Debtors and Creditors filter states
+  const [dcFilter, setDcFilter] = useState<'ALL' | 'DEBTORS' | 'CREDITORS'>('ALL');
+  const [dcSearch, setDcSearch] = useState('');
 
   const fetchReportData = async (reportType: ReportType) => {
     setLoading(true);
@@ -149,8 +154,30 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
     try {
       if (reportType === 'SALES' || reportType === 'SALES_BY_GROUP' || reportType === 'SALES_COMPARISON') {
-        // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
-        sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
+        // Map transactionCategory to ERP Document Type Codes (Field_009)
+        let typeCodes: string[] = [];
+        if (transactionCategory === 'SALES') {
+            typeCodes = ['12', '23'];
+        } else if (transactionCategory === 'SALES_RETURN') {
+            typeCodes = ['13', '24'];
+        } else if (transactionCategory === 'PURCHASE') {
+            typeCodes = ['14', '16', '29', '27'];
+        } else if (transactionCategory === 'PURCHASE_RETURN') {
+            typeCodes = ['15', '18'];
+        }
+
+        // Query STR_TBL_010 using strict date filter and matching type codes
+        sqlQuery = `
+            SELECT 
+                Field_001, Field_008, Field_004, Field_005, Field_009, Field_010, Field_011, Field_019, Field_027, Field_029, Field_037, Field_038, Field_007 
+            FROM STR_TBL_010 
+            WHERE Field_009 IN (${typeCodes.map(c => `'${c}'`).join(',')})
+              AND (
+                (Field_008 >= '${startIso}T00:00:00.000Z' AND Field_008 <= '${endIso}T23:59:59.000Z')
+                ${reportType === 'SALES_COMPARISON' ? `OR (Field_008 >= '${compStartIso}T00:00:00.000Z' AND Field_008 <= '${compEndIso}T23:59:59.000Z')` : ''}
+              )
+            ORDER BY Field_008 DESC
+        `;
         
         const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
@@ -181,11 +208,30 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
         } catch(e) { console.error("Tafsili fetch failed", e); }
 
-        // Fetch warehouse document details (STR_TBL_011)
+        // Fetch warehouse document details (STR_TBL_011) matching fetched headers ONLY (zero timeouts!)
         let detailsList: any[] = [];
-        try {
-            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011", 'STR_TBL_011');
-        } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
+        if (Array.isArray(finalData) && finalData.length > 0) {
+            const numbers = new Set<string>();
+            finalData.forEach((h: any) => {
+                const numStr = String(h.Field_007 || '').trim();
+                if (numStr) {
+                    numbers.add(`'${numStr}'`);
+                    const parsed = parseInt(numStr);
+                    if (!isNaN(parsed)) {
+                        numbers.add(`'${parsed}'`);
+                    }
+                }
+                const idStr = String(h.Field_001 || '').trim();
+                if (idStr) {
+                    numbers.add(`'${idStr}'`);
+                }
+            });
+
+            const idsClause = Array.from(numbers).join(',');
+            try {
+                detailsList = await attemptQuery(`SELECT * FROM STR_TBL_011 WHERE Field_004 IN (${idsClause})`, 'STR_TBL_011');
+            } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
+        }
 
         
         // --- SMART PRODUCT MAP BUILDER ---
@@ -331,7 +377,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
-            const invoiceItemsRaw = (detailsList || []).filter((d: any) => String(d.Field_004).trim() === String(row.Field_001).trim());
+            const invoiceItemsRaw = (detailsList || []).filter((d: any) => {
+                const detailDocId = String(d.Field_004).trim();
+                const headerDocId = String(row.Field_001).trim();
+                const headerDocNum = String(row.Field_007 || '').trim();
+                
+                if (detailDocId === headerDocId) return true;
+                if (headerDocNum && parseInt(detailDocId) === parseInt(headerDocNum)) return true;
+                return false;
+            });
             
             // Check transaction type (Field_003: 1=Receipt, 2=Issue)
             // Sales are Issues (حواله) which is 2. Returns are Receipts (رسید) which is 1.
@@ -756,7 +810,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, startDateStr, endDateStr, compStartDateStr, compEndDateStr, selectedCustomer, selectedSalesTypesStr]);
+  }, [activeReport, startDateStr, endDateStr, compStartDateStr, compEndDateStr, selectedCustomer, selectedSalesTypesStr, transactionCategory]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
@@ -768,6 +822,84 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   };
 
   const renderSalesDashboard = () => {
+      const getCategoryLabels = () => {
+          switch (transactionCategory) {
+              case 'SALES':
+                  return {
+                      title: 'فروش',
+                      grossTitle: 'جمع ناخالص فروش',
+                      returnTitle: 'جمع مرجوعی / برگشتی فروش',
+                      netTitle: 'فروش خالص (کسر مرجوعی)',
+                      weightTitle: 'وزن کل فروخته شده',
+                      invoiceTab: '🧾 لیست فاکتورهای فروش و مرجوعی',
+                      groupTab: '📦 فروش به تفکیک گروه کالا',
+                      itemTab: '🧵 فروش به تفکیک نام کالا',
+                      chartTitle: '📊 نمودار مقایسه‌ای فروش خالص و مرجوعی',
+                      grossChartLegend: 'فروش ناخالص',
+                      returnChartLegend: 'مرجوعی',
+                      dailyNetLegend: 'فروش خالص',
+                      factorSheetTitle: ' صورتحساب فروش کالا و خدمات',
+                      personHeader: 'نام خریدار / تحویل‌گیرنده',
+                      amountHeader: 'مبلغ کل فروش (ریال)',
+                  };
+              case 'SALES_RETURN':
+                  return {
+                      title: 'مرجوعی فروش',
+                      grossTitle: 'جمع مرجوعی فروش',
+                      returnTitle: 'جمع فاکتورها (خطا)',
+                      netTitle: 'کل برگشتی فروش',
+                      weightTitle: 'وزن کل مرجوعی فروش',
+                      invoiceTab: '🧾 لیست اسناد مرجوعی فروش',
+                      groupTab: '📦 مرجوعی به تفکیک گروه کالا',
+                      itemTab: '🧵 مرجوعی به تفکیک نام کالا',
+                      chartTitle: '📊 نمودار عملکرد مرجوعی فروش',
+                      grossChartLegend: 'مرجوعی فروش',
+                      returnChartLegend: 'سایر موارد',
+                      dailyNetLegend: 'مرجوعی خالص',
+                      factorSheetTitle: ' برگشت از فروش کالا و خدمات',
+                      personHeader: 'نام خریدار / مرجوع‌کننده',
+                      amountHeader: 'مبلغ کل مرجوعی (ریال)',
+                  };
+              case 'PURCHASE':
+                  return {
+                      title: 'خرید',
+                      grossTitle: 'جمع ناخالص خرید',
+                      returnTitle: 'جمع مرجوعی خرید',
+                      netTitle: 'خرید خالص (کسر مرجوعی)',
+                      weightTitle: 'وزن کل خریداری شده',
+                      invoiceTab: '🧾 لیست فاکتورهای خرید و مرجوعی',
+                      groupTab: '📦 خرید به تفکیک گروه کالا',
+                      itemTab: '🧵 خرید به تفکیک نام کالا',
+                      chartTitle: '📊 نمودار مقایسه‌ای خرید خالص و مرجوعی',
+                      grossChartLegend: 'خرید ناخالص',
+                      returnChartLegend: 'مرجوعی خرید',
+                      dailyNetLegend: 'خرید خالص',
+                      factorSheetTitle: ' صورتحساب خرید کالا و خدمات',
+                      personHeader: 'نام فروشنده / تامین‌کننده',
+                      amountHeader: 'مبلغ کل خرید (ریال)',
+                  };
+              case 'PURCHASE_RETURN':
+                  return {
+                      title: 'مرجوعی خرید',
+                      grossTitle: 'جمع مرجوعی خرید',
+                      returnTitle: 'جمع فاکتورها (خطا)',
+                      netTitle: 'کل برگشتی خرید',
+                      weightTitle: 'وزن کل مرجوعی خرید',
+                      invoiceTab: '🧾 لیست اسناد مرجوعی خرید',
+                      groupTab: '📦 مرجوعی خرید به تفکیک گروه کالا',
+                      itemTab: '🧵 مرجوعی خرید به تفکیک نام کالا',
+                      chartTitle: '📊 نمودار عملکرد مرجوعی خرید',
+                      grossChartLegend: 'مرجوعی خرید',
+                      returnChartLegend: 'سایر موارد',
+                      dailyNetLegend: 'مرجوعی خالص',
+                      factorSheetTitle: ' برگشت از خرید کالا و خدمات',
+                      personHeader: 'نام فروشنده / تامین‌کننده',
+                      amountHeader: 'مبلغ کل برگشتی (ریال)',
+                  };
+          }
+      };
+      const labels = getCategoryLabels();
+
       // 1. Process daily sales vs returns
       const dailyChartData = Object.entries(data.reduce((aggs: any, row) => {
           const d = String(row.Date || '');
@@ -899,19 +1031,19 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     onClick={() => { setSalesTab('INVOICES'); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'INVOICES' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    🧾 لیست فاکتورهای فروش و مرجوعی
+                    {labels.invoiceTab}
                 </button>
                 <button 
                     onClick={() => { setSalesTab('GROUPS'); setSelectedInvoice(null); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'GROUPS' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    📦 فروش به تفکیک گروه کالا
+                    {labels.groupTab}
                 </button>
                 <button 
                     onClick={() => { setSalesTab('ITEMS'); setSelectedInvoice(null); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'ITEMS' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    🧵 فروش به تفکیک نام کالا
+                    {labels.itemTab}
                 </button>
             </div>
 
@@ -921,25 +1053,25 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     {/* KPI CARDS - Responsive Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">جمع ناخالص فروش</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.grossTitle}</div>
                             <div className="text-lg font-extrabold text-emerald-600 font-mono" dir="ltr">
                                 {totalSales.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">جمع مرجوعی / برگشتی</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.returnTitle}</div>
                             <div className="text-lg font-extrabold text-rose-600 font-mono" dir="ltr">
                                 {totalReturns.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-indigo-100 bg-indigo-50/20">
-                            <div className="text-indigo-500 text-[10px] font-black mb-1">فروش خالص (کسر مرجوعی)</div>
+                            <div className="text-indigo-500 text-[10px] font-black mb-1">{labels.netTitle}</div>
                             <div className="text-lg font-black text-indigo-600 font-mono" dir="ltr">
                                 {netSales.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">وزن کل فروخته شده</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.weightTitle}</div>
                             <div className="text-lg font-extrabold text-orange-500 font-mono" dir="ltr">
                                 {totalWeight.toLocaleString()} <span className="text-[9px] font-sans">kg</span>
                             </div>
@@ -957,7 +1089,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         {/* Interactive Bar Chart */}
                         <div className="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-80 flex flex-col">
                             <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">
-                                <span>📊 نمودار مقایسه‌ای فروش خالص و مرجوعی</span>
+                                <span>{labels.chartTitle}</span>
                             </h3>
                             <div className="flex-1 min-h-0">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -970,8 +1102,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', textAlign: 'right', direction: 'rtl' }}
                                             labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
                                         />
-                                        <Bar dataKey="sales" name="فروش ناخالص" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                                        <Bar dataKey="returns" name="مرجوعی" fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                                        <Bar dataKey="sales" name={labels.grossChartLegend} fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                                        <Bar dataKey="returns" name={labels.returnChartLegend} fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={20} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -981,15 +1113,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden max-h-80">
                             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 font-bold text-xs text-slate-700 flex justify-between items-center">
                                 <span>📅 ریز عملکرد روزانه</span>
-                                <span className="text-[9px] text-slate-400">فروش خالص و مرجوعی</span>
+                                <span className="text-[9px] text-slate-400">{labels.dailyNetLegend} و {labels.returnChartLegend}</span>
                             </div>
                             <div className="overflow-y-auto flex-1">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 border-b text-slate-400 text-[10px]">
                                         <tr>
                                             <th className="p-3">تاریخ</th>
-                                            <th className="p-3 text-left">فروش خالص</th>
-                                            <th className="p-3 text-left text-rose-500">مرجوعی</th>
+                                            <th className="p-3 text-left">{labels.dailyNetLegend}</th>
+                                            <th className="p-3 text-left text-rose-500">{labels.returnChartLegend}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y font-mono text-slate-600">
@@ -1019,7 +1151,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                     <Search className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
                                     <input 
                                         type="text"
-                                        placeholder="جستجوی نام مشتری، شماره فاکتور یا مبلغ..."
+                                        placeholder="جستجوی نام شخص، شماره سند یا مبلغ..."
                                         value={searchInvoice}
                                         onChange={e => setSearchInvoice(e.target.value)}
                                         className="w-full pr-10 pl-4 py-2 text-xs bg-slate-50 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"
@@ -1040,13 +1172,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                         onClick={() => setInvoiceTypeFilter('SALES')}
                                         className={`flex-1 md:flex-none px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${invoiceTypeFilter === 'SALES' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        فقط فروش ({data.filter(inv => !inv.IsReturn).length})
+                                        فقط {labels.title} ({data.filter(inv => !inv.IsReturn).length})
                                     </button>
                                     <button 
                                         onClick={() => setInvoiceTypeFilter('RETURNS')}
                                         className={`flex-1 md:flex-none px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${invoiceTypeFilter === 'RETURNS' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        مرجوعی ({data.filter(inv => inv.IsReturn).length})
+                                        فقط {labels.returnChartLegend} ({data.filter(inv => inv.IsReturn).length})
                                     </button>
                                 </div>
                             </div>
@@ -1060,10 +1192,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                             <tr>
                                                 <th className="p-4">شماره سند</th>
                                                 <th className="p-4">تاریخ</th>
-                                                <th className="p-4">نام خریدار / تحویل‌گیرنده</th>
+                                                <th className="p-4">{labels.personHeader}</th>
                                                 <th className="p-4">نوع سند</th>
                                                 <th className="p-4 text-left">وزن کل (kg)</th>
-                                                <th className="p-4 text-left">مبلغ کل (ریال)</th>
+                                                <th className="p-4 text-left">{labels.amountHeader}</th>
                                                 <th className="p-4 text-center">اقدام</th>
                                             </tr>
                                         </thead>
@@ -1130,9 +1262,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-6 print:pb-4 gap-4">
                                 <div className="space-y-1">
                                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                                        <span>{selectedInvoice.IsReturn ? '🔴 برگشت از فروش کالا و خدمات' : '🟢 صورتحساب فروش کالا و خدمات'}</span>
+                                        <span>{selectedInvoice.IsReturn ? '🔴 ' + labels.factorSheetTitle : '🟢 ' + labels.factorSheetTitle}</span>
                                     </h2>
-                                    <p className="text-sm font-bold text-slate-600 mt-2">فروشنده: شرکت لپان بافت</p>
+                                    <p className="text-sm font-bold text-slate-600 mt-2">
+                                        {transactionCategory.startsWith('PURCHASE') ? `فروشنده: ${selectedInvoice.PersonName || 'تامین‌کننده متفرقه'}` : 'فروشنده: شرکت لپان بافت'}
+                                    </p>
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto no-print">
                                     <button 
@@ -1153,8 +1287,12 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             {/* Factor Meta Info Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 print:gap-4 bg-slate-50/50 print:bg-transparent p-4 print:p-0 rounded-xl border print:border-none text-xs">
                                 <div className="space-y-1 print:col-span-2 print:border-b print:pb-2">
-                                    <span className="text-slate-400 print:text-slate-600 font-bold block">خریدار:</span>
-                                    <span className="text-slate-800 font-extrabold text-sm">{selectedInvoice.PersonName || 'خریدار متفرقه'}</span>
+                                    <span className="text-slate-400 print:text-slate-600 font-bold block">
+                                        {transactionCategory.startsWith('PURCHASE') ? 'خریدار:' : 'خریدار:'}
+                                    </span>
+                                    <span className="text-slate-800 font-extrabold text-sm">
+                                        {transactionCategory.startsWith('PURCHASE') ? 'شرکت لپان بافت' : (selectedInvoice.PersonName || 'خریدار متفرقه')}
+                                    </span>
                                 </div>
                                 <div className="space-y-1 print:border-b print:pb-2">
                                     <span className="text-slate-400 print:text-slate-600 font-bold block">شماره فاکتور:</span>
@@ -2037,6 +2175,16 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       const totalDebtors = debtors.reduce((sum, d) => sum + d.NetBalance, 0);
       const totalCreditors = creditors.reduce((sum, d) => sum + d.NetBalance, 0);
 
+      // Filter and search logic for rendering
+      const filteredData = data.filter(row => {
+          if (dcSearch && !row.AccountName.toLowerCase().includes(dcSearch.toLowerCase())) {
+              return false;
+          }
+          if (dcFilter === 'DEBTORS') return row.Type === 'بدهکار';
+          if (dcFilter === 'CREDITORS') return row.Type === 'بستانکار';
+          return true;
+      });
+
       const printList = (listType: 'بدهکار' | 'بستانکار') => {
           const list = listType === 'بدهکار' ? debtors : creditors;
           const total = listType === 'بدهکار' ? totalDebtors : totalCreditors;
@@ -2097,14 +2245,64 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
       return (
           <div className="space-y-6">
-              <div className="flex justify-end gap-3 mb-4">
-                  <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-100 transition-colors">
-                      <Printer size={16} /> چاپ بدهکاران
-                  </button>
-                  <button onClick={() => printList('بستانکار')} className="bg-rose-50 text-rose-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-rose-100 transition-colors">
-                      <Printer size={16} /> چاپ بستانکاران
-                  </button>
+              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-2">
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1">
+                      <div className="relative w-full sm:w-72">
+                          <Search className="w-4 h-4 absolute right-3 top-3 text-slate-400" />
+                          <input
+                              type="text"
+                              placeholder="جستجوی نام شخص..."
+                              value={dcSearch}
+                              onChange={(e) => setDcSearch(e.target.value)}
+                              className="w-full text-xs text-right pr-9 pl-3 py-2 border border-slate-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                      </div>
+                      
+                      <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
+                          <button
+                              onClick={() => setDcFilter('ALL')}
+                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                                  dcFilter === 'ALL'
+                                      ? 'bg-white text-slate-800 shadow-xs'
+                                      : 'text-slate-500 hover:text-slate-850'
+                              }`}
+                          >
+                              همه ({data.length})
+                          </button>
+                          <button
+                              onClick={() => setDcFilter('DEBTORS')}
+                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                                  dcFilter === 'DEBTORS'
+                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      : 'text-emerald-650 hover:bg-slate-50'
+                              }`}
+                          >
+                              بدهکاران ({debtors.length})
+                          </button>
+                          <button
+                              onClick={() => setDcFilter('CREDITORS')}
+                              className={`flex-1 sm:flex-none text-[11px] font-black px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                                  dcFilter === 'CREDITORS'
+                                      ? 'bg-rose-600 text-white shadow-xs'
+                                      : 'text-rose-650 hover:bg-slate-50'
+                              }`}
+                          >
+                              بستانکاران ({creditors.length})
+                          </button>
+                      </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2.5 shrink-0">
+                      <button onClick={() => printList('بدهکار')} className="bg-emerald-50 text-emerald-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-100 transition-colors">
+                          <Printer size={14} /> چاپ بدهکاران
+                      </button>
+                      <button onClick={() => printList('بستانکار')} className="bg-rose-50 text-rose-600 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-rose-100 transition-colors">
+                          <Printer size={14} /> چاپ بستانکاران
+                      </button>
+                  </div>
               </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
                       <div>
@@ -2133,7 +2331,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono text-xs">
-                        {data.map((row, idx) => (
+                        {filteredData.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-3 whitespace-nowrap font-sans text-slate-800 font-medium">{row.AccountName}</td>
                                 <td className={`px-6 py-3 whitespace-nowrap font-bold ${row.Type === 'بدهکار' ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
@@ -2150,7 +2348,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     </table>
                 </div>
                 <div className="md:hidden divide-y divide-slate-100">
-                    {data.map((row, idx) => (
+                    {filteredData.map((row, idx) => (
                         <div key={idx} className="p-4 space-y-2 text-xs">
                             <h4 className="font-sans font-bold text-slate-800">{row.AccountName}</h4>
                             <div className="flex justify-between items-center">
@@ -2166,11 +2364,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             </div>
                         </div>
                     ))}
-                    {data.length === 0 && (
+                    {filteredData.length === 0 && (
                         <div className="text-center py-8 text-slate-400 text-xs font-sans">موردی یافت نشد</div>
                     )}
                 </div>
-            </div>
+              </div>
           </div>
       );
   };
@@ -2447,6 +2645,37 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         {/* Content Area */}
         <div className="flex-1 p-4 sm:p-8 overflow-y-auto no-scrollbar">
           {renderDetailsModal()}
+          
+          {/* Segmented Category Switcher */}
+          {(activeReport === 'SALES' || activeReport === 'SALES_BY_GROUP' || activeReport === 'SALES_COMPARISON') && (
+            <div className="mb-6 bg-slate-100 p-1.5 rounded-2xl flex gap-1 shadow-inner border border-slate-200">
+                <button
+                    onClick={() => setTransactionCategory('SALES')}
+                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'SALES' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
+                >
+                    🟢 فروش کالا
+                </button>
+                <button
+                    onClick={() => setTransactionCategory('SALES_RETURN')}
+                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'SALES_RETURN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
+                >
+                    🔴 برگشتی فروش
+                </button>
+                <button
+                    onClick={() => setTransactionCategory('PURCHASE')}
+                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'PURCHASE' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
+                >
+                    📦 خرید کالا
+                </button>
+                <button
+                    onClick={() => setTransactionCategory('PURCHASE_RETURN')}
+                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'PURCHASE_RETURN' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
+                >
+                    ⚠️ برگشتی خرید
+                </button>
+            </div>
+          )}
+
           {error && (
             <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-start gap-3">
               <Database size={20} className="mt-0.5 text-rose-500" />

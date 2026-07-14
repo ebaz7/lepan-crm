@@ -54,6 +54,34 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
     const kardexRows = useMemo(() => {
         if (!selectedCompany || !selectedItem) return [];
 
+        // 1. Calculate Opening Balance (مانده قبلی) from transactions before dateRange.from
+        let openingBalance = 0;
+        if (dateRange.from) {
+            const fromDate = parsePersianDate(dateRange.from);
+            if (fromDate) {
+                transactions.forEach(tx => {
+                    if (tx.company !== selectedCompany) return;
+                    if (tx.status === 'REJECTED') return;
+                    const hasItem = tx.items.some(i => i.itemId === selectedItem);
+                    if (!hasItem) return;
+
+                    const txDate = new Date(tx.date);
+                    if (txDate < fromDate) {
+                        const txItem = tx.items.find(i => i.itemId === selectedItem);
+                        if (txItem) {
+                            const qty = txItem.quantity;
+                            if (tx.type === 'IN') {
+                                openingBalance += qty;
+                            } else if (tx.type === 'OUT') {
+                                openingBalance -= qty;
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 2. Filter transactions for the selected date range
         let filteredTxs = transactions.filter(tx => {
             if (tx.company !== selectedCompany) return false;
             if (tx.status === 'REJECTED') return false; 
@@ -80,7 +108,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
 
         filteredTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        let runningBalance = 0;
+        let runningBalance = openingBalance;
         const rows = filteredTxs.map(tx => {
             const txItem = tx.items.find(i => i.itemId === selectedItem);
             const qty = txItem ? txItem.quantity : 0;
@@ -96,7 +124,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 id: tx.id,
                 date: tx.date,
                 number: tx.number || tx.proformaNumber || '-',
-                type: tx.type,
+                type: tx.type as 'IN' | 'OUT' | 'OPENING',
                 description: tx.type === 'IN' 
                     ? `پروفرما: ${tx.proformaNumber}` 
                     : `گیرنده: ${tx.recipientName || '-'} | مقصد: ${tx.destination || '-'}`,
@@ -107,6 +135,22 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 unitPrice: unitPrice
             };
         });
+
+        // Prepend opening balance row if there is a start date filter
+        if (dateRange.from) {
+            rows.unshift({
+                id: 'opening-balance',
+                date: '',
+                number: '-',
+                type: 'OPENING' as 'IN' | 'OUT' | 'OPENING',
+                description: 'انتقال از دوره قبل (مانده قبلی)',
+                in: 0,
+                out: 0,
+                balance: openingBalance,
+                weight: 0,
+                unitPrice: 0
+            });
+        }
 
         return rows;
     }, [transactions, selectedCompany, selectedItem, dateRange, txType]);
@@ -194,19 +238,38 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                     {kardexRows.length === 0 ? (
                         <tr><td colSpan={9} className="p-4 text-gray-400 border border-gray-300">گردشی برای این کالا یافت نشد.</td></tr>
                     ) : (
-                        kardexRows.map((row, idx) => (
-                            <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
-                                <td className="border border-gray-300 p-1">{idx + 1}</td>
-                                <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
-                                <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
-                                <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
-                                <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
-                                <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
-                                <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-base">{row.out > 0 ? row.out : '-'}</td>
-                                <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-base font-bold">{row.balance}</td>
-                                <td className="border border-gray-300 p-1 font-mono text-amber-800 font-bold">{row.unitPrice ? formatNumberString(row.unitPrice) : '-'}</td>
-                            </tr>
-                        ))
+                        kardexRows.map((row, idx) => {
+                            if (row.type === 'OPENING') {
+                                return (
+                                    <tr key={row.id} className="bg-blue-50/50 text-blue-900 font-bold">
+                                        <td className="border border-gray-300 p-1">{idx + 1}</td>
+                                        <td className="border border-gray-300 p-1 font-mono text-[9px]">-</td>
+                                        <td className="border border-gray-300 p-1 text-center">
+                                            <span className="text-blue-700 font-black">مانده قبلی</span>
+                                        </td>
+                                        <td className="border border-gray-300 p-1 font-mono">-</td>
+                                        <td className="border border-gray-300 p-1 text-right pr-2 text-[9px] font-sans">{row.description}</td>
+                                        <td className="border border-gray-300 p-1 font-mono font-bold text-gray-400">-</td>
+                                        <td className="border border-gray-300 p-1 font-mono font-bold text-gray-400">-</td>
+                                        <td className="border border-gray-300 p-1 balance bg-blue-100/50 text-blue-800 text-base font-bold">{row.balance}</td>
+                                        <td className="border border-gray-300 p-1 font-mono text-gray-400">-</td>
+                                    </tr>
+                                );
+                            }
+                            return (
+                                <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
+                                    <td className="border border-gray-300 p-1">{idx + 1}</td>
+                                    <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
+                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
+                                    <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
+                                    <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
+                                    <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
+                                    <td className="border border-gray-300 p-1 font-mono font-bold text-red-700 text-base">{row.out > 0 ? row.out : '-'}</td>
+                                    <td className="border border-gray-300 p-1 balance bg-gray-100 text-blue-800 text-base font-bold">{row.balance}</td>
+                                    <td className="border border-gray-300 p-1 font-mono text-amber-800 font-bold">{row.unitPrice ? formatNumberString(row.unitPrice) : '-'}</td>
+                                </tr>
+                            );
+                        })
                     )}
                 </tbody>
                 <tfoot>
