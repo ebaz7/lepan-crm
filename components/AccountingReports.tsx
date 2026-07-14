@@ -179,6 +179,36 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         }
     };
 
+    // Helper to extract net weight from row details
+    const parseNetWeight = (row: any) => {
+        const notes = row.ItemNotes || '';
+        const match = notes.match(/وزن خالص\s*[:：\-]?\s*([\d.]+)/);
+        if (match) return parseFloat(match[1]);
+        
+        const seriesMatch = notes.match(/سری ساخت\s*[:：\-]?\s*[A-Za-z0-9-]+\-([\d.]+)/);
+        if (seriesMatch) return parseFloat(seriesMatch[1]);
+
+        return parseFloat(row.Quantity || 0);
+    };
+
+    // Helper to extract gross weight from row details
+    const parseGrossWeight = (row: any) => {
+        const notes = row.ItemNotes || '';
+        const match = notes.match(/وزن ناخالص\s*[:：\-]?\s*([\d.]+)/);
+        return match ? parseFloat(match[1]) : 0;
+    };
+
+    // Helper to parse or calculate fee / unit price from row details
+    const parseFee = (row: any, netWeight: number) => {
+        const notes = (row.ItemNotes || '') + ' ' + (row.Notes || '');
+        const match = notes.match(/(?:فی|قیمت واحد|نرخ|قیمت)\s*[:：\-]?\s*([\d,.]+)/);
+        if (match) {
+            return parseFloat(match[1].replace(/,/g, ''));
+        }
+        const amt = parseFloat(row.Amount || 0);
+        return netWeight > 0 ? (amt / netWeight) : 0;
+    };
+
     // ==========================================
     // BACKEND DATABASE COMMUNICATORS (Sayan Proxy)
     // ==========================================
@@ -1632,9 +1662,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             <tr>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">تاریخ فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">شماره سند</th>
-                                                <th className="p-3.5 font-bold text-slate-700 w-44">گروه کالا</th>
+                                                <th className="p-3.5 font-bold text-slate-700 w-36">گروه کالا</th>
                                                 <th className="p-3.5 font-bold text-slate-700">شرح کالای فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-32">وزن خالص (کیلوگرم)</th>
+                                                <th className="p-3.5 font-bold text-slate-700 text-left w-24">وزن خالص (ک‌گ)</th>
+                                                <th className="p-3.5 font-bold text-slate-700 text-left w-24">وزن ناخالص (ک‌گ)</th>
+                                                <th className="p-3.5 font-bold text-slate-700 text-left w-32">فی واحد (ریال)</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-left w-36">مجموع مبلغ (ریال)</th>
                                             </tr>
                                         )}
@@ -1673,22 +1705,29 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         ) : (
                                             salesData.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
+                                                    <td colSpan={8} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
                                                 </tr>
                                             ) : (
-                                                salesData.map((row, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                        <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
-                                                        <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
-                                                        <td className="p-3 font-semibold text-slate-900">
-                                                            {row.ItemName || 'کالای فروخته شده'}
-                                                            {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
-                                                        </td>
-                                                        <td className="p-3 text-left font-mono font-medium text-slate-700">{parseFloat(row.Quantity || 0).toFixed(1)}</td>
-                                                        <td className="p-3 text-left font-mono font-extrabold text-blue-700">{formatMoney(parseFloat(row.Amount || 0))}</td>
-                                                    </tr>
-                                                ))
+                                                salesData.map((row, idx) => {
+                                                    const netW = parseNetWeight(row);
+                                                    const grossW = parseGrossWeight(row);
+                                                    const fee = parseFee(row, netW);
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
+                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
+                                                            <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
+                                                            <td className="p-3 font-semibold text-slate-900">
+                                                                {row.ItemName || 'کالای فروخته شده'}
+                                                                {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
+                                                            </td>
+                                                            <td className="p-3 text-left font-mono font-medium text-slate-700">{netW.toFixed(2)}</td>
+                                                            <td className="p-3 text-left font-mono font-medium text-slate-500">{grossW > 0 ? grossW.toFixed(2) : '-'}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-emerald-700">{fee > 0 ? formatMoney(fee) : '-'}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-blue-700">{formatMoney(parseFloat(row.Amount || 0))}</td>
+                                                        </tr>
+                                                    );
+                                                })
                                             )
                                         )}
                                     </tbody>
@@ -1737,28 +1776,41 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         salesData.length === 0 ? (
                                             <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</div>
                                         ) : (
-                                            salesData.map((row, idx) => (
-                                                <div key={idx} className="p-4 space-y-2 text-xs">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.DocId} | {formatDateToJalali(row.Date)}</span>
-                                                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
-                                                    </div>
-                                                    <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
-                                                        {row.ItemName || 'کالای فروخته شده'}
-                                                        {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{row.ItemNotes}</span>}
-                                                    </h4>
-                                                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg font-mono">
-                                                        <div>
-                                                            <span className="text-[9px] text-slate-400 font-sans block">وزن خالص</span>
-                                                            <span className="font-bold text-slate-700 text-xs">{parseFloat(row.Quantity || 0).toFixed(1)} kg</span>
+                                            salesData.map((row, idx) => {
+                                                const netW = parseNetWeight(row);
+                                                const grossW = parseGrossWeight(row);
+                                                const fee = parseFee(row, netW);
+                                                return (
+                                                    <div key={idx} className="p-4 space-y-2 text-xs">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.DocId} | {formatDateToJalali(row.Date)}</span>
+                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
                                                         </div>
-                                                        <div className="text-left">
-                                                            <span className="text-[9px] text-slate-400 font-sans block">مبلغ کل</span>
-                                                            <span className="font-black text-blue-700 text-xs">{formatMoney(parseFloat(row.Amount || 0))} ریال</span>
+                                                        <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
+                                                            {row.ItemName || 'کالای فروخته شده'}
+                                                            {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{row.ItemNotes}</span>}
+                                                        </h4>
+                                                        <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg font-mono">
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-400 font-sans block">وزن خالص</span>
+                                                                <span className="font-bold text-slate-700 text-xs">{netW.toFixed(2)} kg</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-400 font-sans block">وزن ناخالص</span>
+                                                                <span className="font-bold text-slate-600 text-xs">{grossW > 0 ? `${grossW.toFixed(2)} kg` : '-'}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-400 font-sans block">فی واحد</span>
+                                                                <span className="font-bold text-emerald-700 text-xs">{fee > 0 ? formatMoney(fee) : '-'} ریال</span>
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <span className="text-[9px] text-slate-400 font-sans block">مبلغ کل</span>
+                                                                <span className="font-black text-blue-700 text-xs">{formatMoney(parseFloat(row.Amount || 0))} ریال</span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )
                                     )}
                                 </div>

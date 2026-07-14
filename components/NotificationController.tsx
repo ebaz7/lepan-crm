@@ -123,15 +123,19 @@ const NotificationController: React.FC<Props> = ({ currentUser, onNotificationCl
                     }
                 }
             }
-        } catch (error) {
-            console.error('Notification Setup Error:', error);
-            if (error.name === 'InvalidStateError' || error.message.includes('subscription')) {
+        } catch (error: any) {
+            if (error?.message?.includes('permission') || error?.name === 'NotAllowedError') {
+                console.warn('Notification permission was denied or not granted yet:', error);
+            } else {
+                console.warn('Notification Setup Warning:', error);
+            }
+            if (error?.name === 'InvalidStateError' || (error?.message && error.message.includes('subscription'))) {
                  try {
                      const reg = await navigator.serviceWorker.getRegistration();
                      const sub = await reg?.pushManager.getSubscription();
                      await sub?.unsubscribe();
                  } catch(e) {}
-            }
+             }
         }
     };
 

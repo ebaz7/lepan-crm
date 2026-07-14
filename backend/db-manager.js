@@ -15,7 +15,10 @@ export const getDb = () => {
     if (MEMORY_DB_CACHE) return MEMORY_DB_CACHE;
     try {
         const defaultDb = { 
-            settings: {}, 
+            settings: {
+                sayanApiUrl: "",
+                sayanApiKey: ""
+            }, 
             users: [
                 { id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin', roles: ['admin'], canManageTrade: true }
             ],
@@ -45,6 +48,15 @@ export const getDb = () => {
                 const data = JSON.parse(fileContent);
                 MEMORY_DB_CACHE = { ...defaultDb, ...data };
                 
+                // Populate default Sayan credentials if missing
+                if (!MEMORY_DB_CACHE.settings) MEMORY_DB_CACHE.settings = {};
+                if (!MEMORY_DB_CACHE.settings.sayanApiUrl) {
+                    MEMORY_DB_CACHE.settings.sayanApiUrl = "";
+                }
+                if (!MEMORY_DB_CACHE.settings.sayanApiKey) {
+                    MEMORY_DB_CACHE.settings.sayanApiKey = "";
+                }
+
                 // Ensure arrays exist
                 const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords', 'notes', 'customerBalances', 'customerChatCodes'];
                 arrays.forEach(arr => {
