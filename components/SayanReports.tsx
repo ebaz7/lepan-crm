@@ -213,6 +213,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         if (Array.isArray(finalData) && finalData.length > 0) {
             const numbers = new Set<string>();
             finalData.forEach((h: any) => {
+                // Sayan links STR_TBL_011.Field_004 to STR_TBL_010.Field_005 (Doc Num)
+                const docNumStr = String(h.Field_005 || '').trim();
+                if (docNumStr) {
+                    numbers.add(`'${docNumStr}'`);
+                    const parsed = parseInt(docNumStr);
+                    if (!isNaN(parsed)) {
+                        numbers.add(`'${parsed}'`);
+                    }
+                }
                 const numStr = String(h.Field_007 || '').trim();
                 if (numStr) {
                     numbers.add(`'${numStr}'`);
@@ -231,7 +240,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             for (let i = 0; i < idsArray.length; i += 500) {
                 const chunk = idsArray.slice(i, i + 500).join(',');
                 try {
-                    const chunkData = await attemptQuery(`SELECT Field_001, Field_004, Field_005, Field_006, Field_012, Field_013, Field_014, Field_015, Field_016, Field_024, Field_025, Field_027, Field_031, Field_035, Field_036, Field_037, Field_038 FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
+                    const chunkData = await attemptQuery(`SELECT Field_001, Field_003, Field_004, Field_005, Field_006, Field_012, Field_013, Field_014, Field_015, Field_016, Field_024, Field_025, Field_027, Field_031, Field_035, Field_036, Field_037, Field_038 FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
                     detailsList = detailsList.concat(chunkData);
                 } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
             }
@@ -382,12 +391,24 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
             const invoiceItemsRaw = (detailsList || []).filter((d: any) => {
+                // Correct composite key for STR_TBL_010 -> STR_TBL_011 link
+                const hBranch = String(row.Field_004).trim();
+                const hType = String(row.Field_009).trim();
+                const hDocNum = String(row.Field_005).trim();
+                
+                const dBranch = String(d.Field_003).trim();
+                const dType = String(d.Field_036).trim();
+                const dDocNum = String(d.Field_004).trim();
+                
+                if (hBranch === dBranch && hType === dType && hDocNum === dDocNum && hDocNum !== '') {
+                    return true;
+                }
+
+                // Fallback to ID match in case it's a simple doc
                 const detailDocId = String(d.Field_004).trim();
                 const headerDocId = String(row.Field_001).trim();
-                const headerDocNum = String(row.Field_007 || '').trim();
-                
                 if (detailDocId === headerDocId) return true;
-                if (headerDocNum && parseInt(detailDocId) === parseInt(headerDocNum)) return true;
+                
                 return false;
             });
             
