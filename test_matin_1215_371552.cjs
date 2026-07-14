@@ -4,11 +4,11 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT Field_001, Field_011, Field_015, Field_009, Field_010 FROM ACT_TBL_009 WHERE Field_001 IN ('371552', '371553')`;
     const res1 = await axios.post(url, { query: q1 }, { headers });
     console.log(res1.data.data);
   } catch(e) {
-    console.error("Error:", e.response?.data || e.message);
+    console.error("Error:", e.message);
   }
 }
 run();

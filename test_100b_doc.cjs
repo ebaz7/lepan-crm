@@ -4,7 +4,10 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT *
+      FROM ACT_TBL_008 
+      WHERE (Field_004 = '3' AND Field_005 = '6155') OR (Field_004 = '4' AND Field_005 = '1215')
+      `;
     const res1 = await axios.post(url, { query: q1 }, { headers });
     console.log(res1.data.data);
   } catch(e) {

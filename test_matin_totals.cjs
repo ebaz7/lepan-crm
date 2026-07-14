@@ -4,11 +4,13 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT Field_005 as DocNum, Field_014 as TotalBed, Field_015 as TotalBes 
+      FROM ACT_TBL_008 
+      WHERE Field_005 IN ('1215', '1814', '2211') AND Field_004 = '4'`;
     const res1 = await axios.post(url, { query: q1 }, { headers });
-    console.log(res1.data.data);
+    console.log("ACT_TBL_008 totals:", res1.data.data);
   } catch(e) {
-    console.error("Error:", e.response?.data || e.message);
+    console.error("Error:", e.message);
   }
 }
 run();

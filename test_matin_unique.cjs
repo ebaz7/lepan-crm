@@ -4,9 +4,9 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT Field_004, Field_005, COUNT(*) as cnt FROM ACT_TBL_008 GROUP BY Field_004, Field_005 HAVING COUNT(*) > 1`;
     const res1 = await axios.post(url, { query: q1 }, { headers });
-    console.log(res1.data.data);
+    console.log("Duplicates:", res1.data.data.length);
   } catch(e) {
     console.error("Error:", e.response?.data || e.message);
   }

@@ -4,9 +4,14 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT 
+      t8.Field_006 as State,
+      COUNT(*) as cnt
+      FROM ACT_TBL_008 t8
+      GROUP BY t8.Field_006
+      `;
     const res1 = await axios.post(url, { query: q1 }, { headers });
-    console.log(res1.data.data);
+    console.log(res1.data.data.slice(0, 10));
   } catch(e) {
     console.error("Error:", e.response?.data || e.message);
   }

@@ -4,9 +4,9 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = `SELECT Field_015 as [Codes], SUM(CAST(Field_009 AS DECIMAL(18,0))) as [Debit], SUM(CAST(Field_010 AS DECIMAL(18,0))) as [Credit] FROM ACT_TBL_009 GROUP BY Field_015`;
     const res1 = await axios.post(url, { query: q1 }, { headers });
-    console.log(res1.data.data);
+    console.log(res1.data.data.length);
   } catch(e) {
     console.error("Error:", e.response?.data || e.message);
   }

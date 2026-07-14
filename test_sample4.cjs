@@ -4,7 +4,7 @@ async function run() {
   const headers = { 'Authorization': 'Bearer s_gate_live_vgr182bwtpoa' };
   
   try {
-    const q1 = "SELECT COUNT(*) as count FROM ACT_TBL_009";
+    const q1 = "SELECT * FROM ACT_TBL_007 WHERE Field_003='112127' OR Field_005='112127' OR Field_006 LIKE N'%متین بافت%'";
     const res1 = await axios.post(url, { query: q1 }, { headers });
     console.log(res1.data.data);
   } catch(e) {
