@@ -350,6 +350,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 return item.name.includes('پرسنل') || item.name.includes('همکار') || item.name.includes('آقای') || item.name.includes('خانم');
             } else if (trazCategory === 'shareholders') {
                 return item.name.includes('سهام') || item.name.includes('هیئت');
+            } else if (trazCategory === 'debtors') {
+                return item.balance > 0;
+            } else if (trazCategory === 'creditors') {
+                return item.balance < 0;
             }
             return true;
         });
@@ -705,6 +709,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const gregFrom = jalaliToGregorianStr(dateFrom);
             const gregTo = jalaliToGregorianStr(dateTo);
             
+            const dateFilter = gregFrom && gregTo 
+                ? `AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'` 
+                : '';
+
             // Fetch Period A
             const sqlA = `
                 SELECT 
@@ -722,9 +730,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                WHERE t10.Field_009 IN ('3', '12')
-                  AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' 
-                  AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'
+                WHERE t10.Field_009 IN ('3', '12', '23')
+                  ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
@@ -735,6 +742,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             if (compareMode && salesDateFromB && salesDateToB) {
                 const gregFromB = jalaliToGregorianStr(salesDateFromB);
                 const gregToB = jalaliToGregorianStr(salesDateToB);
+                
+                const dateFilterB = gregFromB && gregToB 
+                    ? `AND t10.Field_008 >= '${gregFromB}T00:00:00.000Z' AND t10.Field_008 <= '${gregToB}T23:59:59.000Z'` 
+                    : '';
+
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
@@ -751,9 +763,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                     LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                    WHERE t10.Field_009 IN ('3', '12')
-                      AND t10.Field_008 >= '${gregFromB}T00:00:00.000Z' 
-                      AND t10.Field_008 <= '${gregToB}T23:59:59.000Z'
+                    WHERE t10.Field_009 IN ('3', '12', '23')
+                      ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
@@ -851,6 +862,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         try {
             const gregFrom = jalaliToGregorianStr(dateFrom);
             const gregTo = jalaliToGregorianStr(dateTo);
+            
+            const dateFilter = gregFrom && gregTo 
+                ? `WHERE t33.Field_024 >= '${gregFrom}T00:00:00.000Z' AND t33.Field_024 <= '${gregTo}T23:59:59.000Z'` 
+                : '';
+
             const sql = `
                 SELECT 
                     t33.Field_001 as ProdId,
@@ -863,10 +879,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t02.Field_003 as GroupName
                 FROM IND_TBL_033 t33
                 LEFT JOIN IND_TBL_022 t22 ON t33.Field_004 = t22.Field_005
-                LEFT JOIN IND_TBL_021 t33.Field_004 = t21.Field_004
+                LEFT JOIN IND_TBL_021 t21 ON t33.Field_004 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
-                WHERE t33.Field_024 >= '${gregFrom}T00:00:00.000Z'
-                  AND t33.Field_024 <= '${gregTo}T23:59:59.000Z'
+                ${dateFilter}
                 ORDER BY t33.Field_024 DESC
             `;
             
@@ -1171,6 +1186,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <option value="suppliers">تامین کنندگان</option>
                                     <option value="personnel">پرسنل و همکاران</option>
                                     <option value="shareholders">سهام داران</option>
+                                    <option value="debtors">بدهکاران (فقط بدهکار)</option>
+                                    <option value="creditors">بستانکاران (فقط بستانکار)</option>
                                 </select>
 
                                 <button 
