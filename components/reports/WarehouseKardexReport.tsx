@@ -8,11 +8,12 @@ import { generatePdf } from '../../utils/pdfGenerator';
 interface Props {
     items: WarehouseItem[];
     transactions: WarehouseTransaction[];
+    allTransactions?: WarehouseTransaction[];
     companies: string[];
     financialYear?: string;
 }
 
-const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies, financialYear }) => {
+const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransactions, companies, financialYear }) => {
     // Filters
     const [selectedCompany, setSelectedCompany] = useState<string>('');
     const [selectedItem, setSelectedItem] = useState<string>('');
@@ -51,94 +52,111 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Calculation Logic (Same as before)
+    // Calculation Logic (Same as before + Opening Balance from previous fiscal years)
     const kardexRows = useMemo(() => {
         if (!selectedCompany || !selectedItem) return [];
 
-        // Determine effective date range based on filters or financial year
-        let effectiveFromDate: Date | null = null;
-        let effectiveToDate: Date | null = null;
-        
-        let financialStartDate: Date | null = null;
-        let financialEndDate: Date | null = null;
-
-        if (financialYear && financialYear !== 'all') {
-            financialStartDate = parsePersianDate(`${financialYear}/01/01`);
-            financialEndDate = parsePersianDate(`${parseInt(financialYear) + 1}/01/01`);
-            if (financialEndDate) financialEndDate.setMilliseconds(-1);
-        }
-
-        if (dateRange.from) {
-            const userFrom = parsePersianDate(dateRange.from);
-            if (userFrom) {
-                if (financialStartDate && userFrom < financialStartDate) {
-                    effectiveFromDate = financialStartDate;
-                } else {
-                    effectiveFromDate = userFrom;
-                }
-            }
-        } else if (financialStartDate) {
-            effectiveFromDate = financialStartDate;
-        }
-
-        if (dateRange.to) {
-            const userTo = parsePersianDate(dateRange.to);
-            if (userTo) {
-                userTo.setHours(23, 59, 59);
-                if (financialEndDate && userTo > financialEndDate) {
-                    effectiveToDate = financialEndDate;
-                } else {
-                    effectiveToDate = userTo;
-                }
-            }
-        } else if (financialEndDate) {
-            effectiveToDate = financialEndDate;
-        }
-
-        // 1. Calculate Opening Balance (مانده قبلی) from transactions before effectiveFromDate
         let openingBalance = 0;
-        if (effectiveFromDate) {
-            transactions.forEach(tx => {
+        const txSource = allTransactions || transactions;
+
+        // 1. Calculate balance from all transactions before the selected financial year
+        if (financialYear && financialYear !== 'all') {
+            txSource.forEach(tx => {
                 if (tx.company !== selectedCompany) return;
                 if (tx.status === 'REJECTED') return;
                 const hasItem = tx.items.some(i => i.itemId === selectedItem);
                 if (!hasItem) return;
 
-                const txDate = new Date(tx.date);
-                if (txDate < effectiveFromDate!) {
-                    const txItem = tx.items.find(i => i.itemId === selectedItem);
-                    if (txItem) {
-                        const qty = txItem.quantity;
-                        if (tx.type === 'IN') {
-                            openingBalance += qty;
-                        } else if (tx.type === 'OUT') {
-                            openingBalance -= qty;
+                try {
+                    const txDate = new Date(tx.date);
+                    if (!isNaN(txDate.getTime())) {
+                        const shamsiDate = txDate.toLocaleDateString('fa-IR-u-nu-latn');
+                        const shamsiYear = parseInt(shamsiDate.split('/')[0]);
+                        const targetYear = parseInt(financialYear);
+                        if (shamsiYear < targetYear) {
+                            const txItem = tx.items.find(i => i.itemId === selectedItem);
+                            if (txItem) {
+                                const qty = txItem.quantity;
+                                if (tx.type === 'IN') {
+                                    openingBalance += qty;
+                                } else if (tx.type === 'OUT') {
+                                    openingBalance -= qty;
+                                }
+                            }
                         }
                     }
+                } catch (e) {
+                    console.error("Error parsing date for opening balance", e);
                 }
             });
         }
 
-        // 2. Filter transactions for the selected date range
+        // 2. Add current financial year transactions before dateRange.from
+        if (dateRange.from) {
+            const fromDate = parsePersianDate(dateRange.from);
+            if (fromDate) {
+                transactions.forEach(tx => {
+                    if (tx.company !== selectedCompany) return;
+                    if (tx.status === 'REJECTED') return;
+                    const hasItem = tx.items.some(i => i.itemId === selectedItem);
+                    if (!hasItem) return;
+
+                    const txDate = new Date(tx.date);
+                    if (txDate < fromDate) {
+                        const txItem = tx.items.find(i => i.itemId === selectedItem);
+                        if (txItem) {
+                            const qty = txItem.quantity;
+                            if (tx.type === 'IN') {
+                                openingBalance += qty;
+                            } else if (tx.type === 'OUT') {
+                                openingBalance -= qty;
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 3. Filter transactions for the selected date range within current financial year
         let filteredTxs = transactions.filter(tx => {
             if (tx.company !== selectedCompany) return false;
-            if (tx.status === 'REJECTED') return false;
+            if (tx.status === 'REJECTED') return false; 
             if (txType !== 'ALL' && tx.type !== txType) return false;
             
             const hasItem = tx.items.some(i => i.itemId === selectedItem);
             if (!hasItem) return false;
 
-            const txDate = new Date(tx.date);
-            if (effectiveFromDate && txDate < effectiveFromDate) return false;
-            if (effectiveToDate && txDate > effectiveToDate) return false;
-            
+            if (dateRange.from) {
+                const txDate = new Date(tx.date);
+                const fromDate = parsePersianDate(dateRange.from);
+                if (fromDate && txDate < fromDate) return false;
+            }
+            if (dateRange.to) {
+                const txDate = new Date(tx.date);
+                const toDate = parsePersianDate(dateRange.to);
+                if (toDate) {
+                    toDate.setHours(23, 59, 59);
+                    if (txDate > toDate) return false;
+                }
+            }
             return true;
         });
 
         filteredTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         let runningBalance = openingBalance;
-        const rows = filteredTxs.map(tx => {
+        const rows: {
+            id: string;
+            date: string;
+            number: string | number;
+            type: 'IN' | 'OUT' | 'OPENING';
+            description: string;
+            in: number;
+            out: number;
+            balance: number;
+            weight: number;
+            unitPrice: number;
+        }[] = filteredTxs.map(tx => {
             const txItem = tx.items.find(i => i.itemId === selectedItem);
             const qty = txItem ? txItem.quantity : 0;
             const weight = txItem ? txItem.weight : 0;
@@ -153,10 +171,10 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 id: tx.id,
                 date: tx.date,
                 number: tx.number || tx.proformaNumber || '-',
-                type: tx.type as 'IN' | 'OUT' | 'OPENING',
+                type: tx.type,
                 description: tx.type === 'IN' 
-                    ? `رسید ورود ${tx.proformaNumber ? `(پروفرما: ${tx.proformaNumber})` : ''} ${tx.driverName ? `| راننده: ${tx.driverName}` : ''} ${tx.plateNumber ? `| پلاک: ${tx.plateNumber}` : ''} ${tx.description ? `| ${tx.description}` : ''}`
-                    : `بیجک خروج - گیرنده: ${tx.recipientName || '-'} ${tx.driverName ? `| راننده: ${tx.driverName}` : ''} ${tx.plateNumber ? `| پلاک: ${tx.plateNumber}` : ''} ${tx.destination ? `| مقصد: ${tx.destination}` : ''} ${tx.description ? `| ${tx.description}` : ''}`,
+                    ? `پروفرما: ${tx.proformaNumber}` 
+                    : `گیرنده: ${tx.recipientName || '-'} | مقصد: ${tx.destination || '-'}`,
                 in: inQty,
                 out: outQty,
                 balance: runningBalance,
@@ -165,14 +183,16 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             };
         });
 
-        // Prepend opening balance row if there is an effective start date
-        if (effectiveFromDate) {
+        // Prepend opening balance row if there is a start date filter or a specific financial year selected
+        if (dateRange.from || (financialYear && financialYear !== 'all')) {
             rows.unshift({
                 id: 'opening-balance',
                 date: '',
                 number: '-',
-                type: 'OPENING' as 'IN' | 'OUT' | 'OPENING',
-                description: 'سند افتتاحیه (مانده قبلی)',
+                type: 'OPENING',
+                description: dateRange.from 
+                    ? 'انتقال از دوره قبل (مانده قبلی)' 
+                    : 'مانده انتقالی از سال مالی قبل (افتتاحیه)',
                 in: 0,
                 out: 0,
                 balance: openingBalance,
@@ -182,7 +202,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
         }
 
         return rows;
-    }, [transactions, selectedCompany, selectedItem, dateRange, txType]);
+    }, [transactions, allTransactions, financialYear, selectedCompany, selectedItem, dateRange, txType]);
 
     const activeItemName = items.find(i => i.id === selectedItem)?.name || '-';
     const elementId = 'kardex-print-area';
@@ -289,7 +309,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                                 <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
                                     <td className="border border-gray-300 p-1">{idx + 1}</td>
                                     <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
-                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> رسید (ورود)</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> بیجک (خروج)</span>}</td>
+                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
                                     <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
                                     <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
                                     <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>

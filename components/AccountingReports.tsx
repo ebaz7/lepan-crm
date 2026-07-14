@@ -63,7 +63,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [trazData, setTrazData] = useState<any[]>([]);
     const [trazSearch, setTrazSearch] = useState('');
     const [trazCategory, setTrazCategory] = useState('all'); // all, customers, suppliers, personnel, shareholders
-    const [trazDcFilter, setTrazDcFilter] = useState<'all' | 'bed' | 'bes'>('all');
     const [trazSortOrder, setTrazSortOrder] = useState<'desc' | 'asc'>('desc');
 
     // --- TAB 2: STATEMENT STATE ---
@@ -311,9 +310,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                   item.code.includes(trazSearch);
             
             if (!matchesSearch) return false;
-
-            if (trazDcFilter === 'bed' && item.balance <= 0) return false;
-            if (trazDcFilter === 'bes' && item.balance >= 0) return false;
 
             // Categories split logic
             if (trazCategory === 'customers') {
@@ -1144,16 +1140,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             </div>
                             
                             <div className="flex flex-wrap gap-2">
-                                <select 
-                                    className="border border-slate-300 rounded-md py-1.5 px-3 text-xs bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    value={trazDcFilter}
-                                    onChange={(e) => setTrazDcFilter(e.target.value as 'all' | 'bed' | 'bes')}
-                                >
-                                    <option value="all">همه</option>
-                                    <option value="bed">بدهکاران (مانده +)</option>
-                                    <option value="bes">بستانکاران (مانده -)</option>
-                                </select>
-
                                 <select 
                                     className="border border-slate-300 rounded-md py-1.5 px-3 text-xs bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     value={trazCategory}

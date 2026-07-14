@@ -75,7 +75,6 @@ interface SayanReportsProps {
 
 const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('SALES');
-  const [transactionCategory, setTransactionCategory] = useState<'SALES' | 'SALES_RETURN' | 'PURCHASE' | 'PURCHASE_RETURN'>('SALES');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,30 +153,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
     try {
       if (reportType === 'SALES' || reportType === 'SALES_BY_GROUP' || reportType === 'SALES_COMPARISON') {
-        // Map transactionCategory to ERP Document Type Codes (Field_009)
-        let typeCodes: string[] = [];
-        if (transactionCategory === 'SALES') {
-            typeCodes = ['3', '12', '23'];
-        } else if (transactionCategory === 'SALES_RETURN') {
-            typeCodes = ['13', '24'];
-        } else if (transactionCategory === 'PURCHASE') {
-            typeCodes = ['14', '16', '29', '27'];
-        } else if (transactionCategory === 'PURCHASE_RETURN') {
-            typeCodes = ['15', '18'];
-        }
-
-        // Query STR_TBL_010 using strict date filter and matching type codes
-        sqlQuery = `
-            SELECT 
-                Field_001, Field_008, Field_004, Field_005, Field_009, Field_010, Field_011, Field_019, Field_027, Field_029, Field_037, Field_038, Field_007 
-            FROM STR_TBL_010 
-            WHERE Field_009 IN (${typeCodes.map(c => `'${c}'`).join(',')})
-              AND (
-                (Field_008 >= '${startIso}T00:00:00.000Z' AND Field_008 <= '${endIso}T23:59:59.000Z')
-                ${reportType === 'SALES_COMPARISON' ? `OR (Field_008 >= '${compStartIso}T00:00:00.000Z' AND Field_008 <= '${compEndIso}T23:59:59.000Z')` : ''}
-              )
-            ORDER BY Field_008 DESC
-        `;
+        // Query STR_TBL_010 (Warehouse/Store Documents Header) which contains Sales Invoices
+        sqlQuery = `SELECT TOP 5000 * FROM STR_TBL_010 ORDER BY Field_008 DESC`;
         
         const finalData = await attemptQuery(sqlQuery, 'STR_TBL_010');
         
@@ -208,34 +185,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             });
         } catch(e) { console.error("Tafsili fetch failed", e); }
 
-        // Fetch warehouse document details (STR_TBL_011) matching fetched headers ONLY (zero timeouts!)
+        // Fetch warehouse document details (STR_TBL_011)
         let detailsList: any[] = [];
-        if (Array.isArray(finalData) && finalData.length > 0) {
-            const numbers = new Set<string>();
-            finalData.forEach((h: any) => {
-                const numStr = String(h.Field_007 || '').trim();
-                if (numStr) {
-                    numbers.add(`'${numStr}'`);
-                    const parsed = parseInt(numStr);
-                    if (!isNaN(parsed)) {
-                        numbers.add(`'${parsed}'`);
-                    }
-                }
-                const idStr = String(h.Field_001 || '').trim();
-                if (idStr) {
-                    numbers.add(`'${idStr}'`);
-                }
-            });
-
-            const idsArray = Array.from(numbers);
-            for (let i = 0; i < idsArray.length; i += 500) {
-                const chunk = idsArray.slice(i, i + 500).join(',');
-                try {
-                    const chunkData = await attemptQuery(`SELECT Field_001, Field_004, Field_005, Field_006, Field_012, Field_013, Field_014, Field_015, Field_016, Field_024, Field_025, Field_027, Field_031, Field_035, Field_036, Field_037, Field_038 FROM STR_TBL_011 WHERE Field_004 IN (${chunk})`, 'STR_TBL_011');
-                    detailsList = detailsList.concat(chunkData);
-                } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
-            }
-        }
+        try {
+            detailsList = await attemptQuery("SELECT TOP 5000 * FROM STR_TBL_011", 'STR_TBL_011');
+        } catch(e) { console.error("STR_TBL_011 details fetch failed", e); }
 
         
         // --- SMART PRODUCT MAP BUILDER ---
@@ -381,15 +335,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
             const typeId = String(row.Field_004 || '').trim();
             const typeName = typeId ? (docTypes[typeId] || `نوع ${typeId}`) : 'نامشخص';
             const prefixCode = typeId ? (docPrefixes[typeId] || '') : '';
-            const invoiceItemsRaw = (detailsList || []).filter((d: any) => {
-                const detailDocId = String(d.Field_004).trim();
-                const headerDocId = String(row.Field_001).trim();
-                const headerDocNum = String(row.Field_007 || '').trim();
-                
-                if (detailDocId === headerDocId) return true;
-                if (headerDocNum && parseInt(detailDocId) === parseInt(headerDocNum)) return true;
-                return false;
-            });
+            const invoiceItemsRaw = (detailsList || []).filter((d: any) => String(d.Field_004).trim() === String(row.Field_001).trim());
             
             // Check transaction type (Field_003: 1=Receipt, 2=Issue)
             // Sales are Issues (حواله) which is 2. Returns are Receipts (رسید) which is 1.
@@ -608,7 +554,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         }).filter((r: any) => {
             if (!r) return false;
             const docTypeId = String(r.Field_004 || '').trim();
-            const matchesTypeSelection = selectedSalesTypes.length === 0 || selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
+            const matchesTypeSelection = selectedSalesTypes.includes(r.Type) || selectedSalesTypes.includes(docTypeId);
             if (!matchesTypeSelection) return false;
 
             if (reportType === 'SALES_COMPARISON') {
@@ -814,7 +760,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
 
   useEffect(() => {
     fetchReportData(activeReport);
-  }, [activeReport, startDateStr, endDateStr, compStartDateStr, compEndDateStr, selectedCustomer, selectedSalesTypesStr, transactionCategory]);
+  }, [activeReport, startDateStr, endDateStr, compStartDateStr, compEndDateStr, selectedCustomer, selectedSalesTypesStr]);
 
   const exportData = () => {
     const exportTarget = activeReport === 'CUSTOMER_STATEMENT' ? (selectedCustomer ? customerDetails : customers) : data;
@@ -826,84 +772,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
   };
 
   const renderSalesDashboard = () => {
-      const getCategoryLabels = () => {
-          switch (transactionCategory) {
-              case 'SALES':
-                  return {
-                      title: 'فروش',
-                      grossTitle: 'جمع ناخالص فروش',
-                      returnTitle: 'جمع مرجوعی / برگشتی فروش',
-                      netTitle: 'فروش خالص (کسر مرجوعی)',
-                      weightTitle: 'وزن کل فروخته شده',
-                      invoiceTab: '🧾 لیست فاکتورهای فروش و مرجوعی',
-                      groupTab: '📦 فروش به تفکیک گروه کالا',
-                      itemTab: '🧵 فروش به تفکیک نام کالا',
-                      chartTitle: '📊 نمودار مقایسه‌ای فروش خالص و مرجوعی',
-                      grossChartLegend: 'فروش ناخالص',
-                      returnChartLegend: 'مرجوعی',
-                      dailyNetLegend: 'فروش خالص',
-                      factorSheetTitle: ' صورتحساب فروش کالا و خدمات',
-                      personHeader: 'نام خریدار / تحویل‌گیرنده',
-                      amountHeader: 'مبلغ کل فروش (ریال)',
-                  };
-              case 'SALES_RETURN':
-                  return {
-                      title: 'مرجوعی فروش',
-                      grossTitle: 'جمع مرجوعی فروش',
-                      returnTitle: 'جمع فاکتورها (خطا)',
-                      netTitle: 'کل برگشتی فروش',
-                      weightTitle: 'وزن کل مرجوعی فروش',
-                      invoiceTab: '🧾 لیست اسناد مرجوعی فروش',
-                      groupTab: '📦 مرجوعی به تفکیک گروه کالا',
-                      itemTab: '🧵 مرجوعی به تفکیک نام کالا',
-                      chartTitle: '📊 نمودار عملکرد مرجوعی فروش',
-                      grossChartLegend: 'مرجوعی فروش',
-                      returnChartLegend: 'سایر موارد',
-                      dailyNetLegend: 'مرجوعی خالص',
-                      factorSheetTitle: ' برگشت از فروش کالا و خدمات',
-                      personHeader: 'نام خریدار / مرجوع‌کننده',
-                      amountHeader: 'مبلغ کل مرجوعی (ریال)',
-                  };
-              case 'PURCHASE':
-                  return {
-                      title: 'خرید',
-                      grossTitle: 'جمع ناخالص خرید',
-                      returnTitle: 'جمع مرجوعی خرید',
-                      netTitle: 'خرید خالص (کسر مرجوعی)',
-                      weightTitle: 'وزن کل خریداری شده',
-                      invoiceTab: '🧾 لیست فاکتورهای خرید و مرجوعی',
-                      groupTab: '📦 خرید به تفکیک گروه کالا',
-                      itemTab: '🧵 خرید به تفکیک نام کالا',
-                      chartTitle: '📊 نمودار مقایسه‌ای خرید خالص و مرجوعی',
-                      grossChartLegend: 'خرید ناخالص',
-                      returnChartLegend: 'مرجوعی خرید',
-                      dailyNetLegend: 'خرید خالص',
-                      factorSheetTitle: ' صورتحساب خرید کالا و خدمات',
-                      personHeader: 'نام فروشنده / تامین‌کننده',
-                      amountHeader: 'مبلغ کل خرید (ریال)',
-                  };
-              case 'PURCHASE_RETURN':
-                  return {
-                      title: 'مرجوعی خرید',
-                      grossTitle: 'جمع مرجوعی خرید',
-                      returnTitle: 'جمع فاکتورها (خطا)',
-                      netTitle: 'کل برگشتی خرید',
-                      weightTitle: 'وزن کل مرجوعی خرید',
-                      invoiceTab: '🧾 لیست اسناد مرجوعی خرید',
-                      groupTab: '📦 مرجوعی خرید به تفکیک گروه کالا',
-                      itemTab: '🧵 مرجوعی خرید به تفکیک نام کالا',
-                      chartTitle: '📊 نمودار عملکرد مرجوعی خرید',
-                      grossChartLegend: 'مرجوعی خرید',
-                      returnChartLegend: 'سایر موارد',
-                      dailyNetLegend: 'مرجوعی خالص',
-                      factorSheetTitle: ' برگشت از خرید کالا و خدمات',
-                      personHeader: 'نام فروشنده / تامین‌کننده',
-                      amountHeader: 'مبلغ کل برگشتی (ریال)',
-                  };
-          }
-      };
-      const labels = getCategoryLabels();
-
       // 1. Process daily sales vs returns
       const dailyChartData = Object.entries(data.reduce((aggs: any, row) => {
           const d = String(row.Date || '');
@@ -1035,19 +903,19 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     onClick={() => { setSalesTab('INVOICES'); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'INVOICES' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    {labels.invoiceTab}
+                    🧾 لیست فاکتورهای فروش و مرجوعی
                 </button>
                 <button 
                     onClick={() => { setSalesTab('GROUPS'); setSelectedInvoice(null); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'GROUPS' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    {labels.groupTab}
+                    📦 فروش به تفکیک گروه کالا
                 </button>
                 <button 
                     onClick={() => { setSalesTab('ITEMS'); setSelectedInvoice(null); }}
                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${salesTab === 'ITEMS' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    {labels.itemTab}
+                    🧵 فروش به تفکیک نام کالا
                 </button>
             </div>
 
@@ -1057,25 +925,25 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                     {/* KPI CARDS - Responsive Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.grossTitle}</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">جمع ناخالص فروش</div>
                             <div className="text-lg font-extrabold text-emerald-600 font-mono" dir="ltr">
                                 {totalSales.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.returnTitle}</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">جمع مرجوعی / برگشتی</div>
                             <div className="text-lg font-extrabold text-rose-600 font-mono" dir="ltr">
                                 {totalReturns.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-indigo-100 bg-indigo-50/20">
-                            <div className="text-indigo-500 text-[10px] font-black mb-1">{labels.netTitle}</div>
+                            <div className="text-indigo-500 text-[10px] font-black mb-1">فروش خالص (کسر مرجوعی)</div>
                             <div className="text-lg font-black text-indigo-600 font-mono" dir="ltr">
                                 {netSales.toLocaleString()} <span className="text-[9px] font-sans">ریال</span>
                             </div>
                         </div>
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="text-slate-400 text-[10px] font-black mb-1">{labels.weightTitle}</div>
+                            <div className="text-slate-400 text-[10px] font-black mb-1">وزن کل فروخته شده</div>
                             <div className="text-lg font-extrabold text-orange-500 font-mono" dir="ltr">
                                 {totalWeight.toLocaleString()} <span className="text-[9px] font-sans">kg</span>
                             </div>
@@ -1093,7 +961,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         {/* Interactive Bar Chart */}
                         <div className="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-80 flex flex-col">
                             <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">
-                                <span>{labels.chartTitle}</span>
+                                <span>📊 نمودار مقایسه‌ای فروش خالص و مرجوعی</span>
                             </h3>
                             <div className="flex-1 min-h-0">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -1106,8 +974,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', textAlign: 'right', direction: 'rtl' }}
                                             labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
                                         />
-                                        <Bar dataKey="sales" name={labels.grossChartLegend} fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                                        <Bar dataKey="returns" name={labels.returnChartLegend} fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                                        <Bar dataKey="sales" name="فروش ناخالص" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                                        <Bar dataKey="returns" name="مرجوعی" fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={20} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -1117,15 +985,15 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden max-h-80">
                             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 font-bold text-xs text-slate-700 flex justify-between items-center">
                                 <span>📅 ریز عملکرد روزانه</span>
-                                <span className="text-[9px] text-slate-400">{labels.dailyNetLegend} و {labels.returnChartLegend}</span>
+                                <span className="text-[9px] text-slate-400">فروش خالص و مرجوعی</span>
                             </div>
                             <div className="overflow-y-auto flex-1">
                                 <table className="w-full text-right text-xs">
                                     <thead className="bg-slate-50 border-b text-slate-400 text-[10px]">
                                         <tr>
                                             <th className="p-3">تاریخ</th>
-                                            <th className="p-3 text-left">{labels.dailyNetLegend}</th>
-                                            <th className="p-3 text-left text-rose-500">{labels.returnChartLegend}</th>
+                                            <th className="p-3 text-left">فروش خالص</th>
+                                            <th className="p-3 text-left text-rose-500">مرجوعی</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y font-mono text-slate-600">
@@ -1155,7 +1023,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                     <Search className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
                                     <input 
                                         type="text"
-                                        placeholder="جستجوی نام شخص، شماره سند یا مبلغ..."
+                                        placeholder="جستجوی نام مشتری، شماره فاکتور یا مبلغ..."
                                         value={searchInvoice}
                                         onChange={e => setSearchInvoice(e.target.value)}
                                         className="w-full pr-10 pl-4 py-2 text-xs bg-slate-50 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 font-medium"
@@ -1176,13 +1044,13 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                         onClick={() => setInvoiceTypeFilter('SALES')}
                                         className={`flex-1 md:flex-none px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${invoiceTypeFilter === 'SALES' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        فقط {labels.title} ({data.filter(inv => !inv.IsReturn).length})
+                                        فقط فروش ({data.filter(inv => !inv.IsReturn).length})
                                     </button>
                                     <button 
                                         onClick={() => setInvoiceTypeFilter('RETURNS')}
                                         className={`flex-1 md:flex-none px-4 py-1.5 text-[11px] font-bold rounded-md transition-all ${invoiceTypeFilter === 'RETURNS' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        فقط {labels.returnChartLegend} ({data.filter(inv => inv.IsReturn).length})
+                                        مرجوعی ({data.filter(inv => inv.IsReturn).length})
                                     </button>
                                 </div>
                             </div>
@@ -1196,10 +1064,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                             <tr>
                                                 <th className="p-4">شماره سند</th>
                                                 <th className="p-4">تاریخ</th>
-                                                <th className="p-4">{labels.personHeader}</th>
+                                                <th className="p-4">نام خریدار / تحویل‌گیرنده</th>
                                                 <th className="p-4">نوع سند</th>
                                                 <th className="p-4 text-left">وزن کل (kg)</th>
-                                                <th className="p-4 text-left">{labels.amountHeader}</th>
+                                                <th className="p-4 text-left">مبلغ کل (ریال)</th>
                                                 <th className="p-4 text-center">اقدام</th>
                                             </tr>
                                         </thead>
@@ -1266,11 +1134,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-6 print:pb-4 gap-4">
                                 <div className="space-y-1">
                                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                                        <span>{selectedInvoice.IsReturn ? '🔴 ' + labels.factorSheetTitle : '🟢 ' + labels.factorSheetTitle}</span>
+                                        <span>{selectedInvoice.IsReturn ? '🔴 برگشت از فروش کالا و خدمات' : '🟢 صورتحساب فروش کالا و خدمات'}</span>
                                     </h2>
-                                    <p className="text-sm font-bold text-slate-600 mt-2">
-                                        {transactionCategory.startsWith('PURCHASE') ? `فروشنده: ${selectedInvoice.PersonName || 'تامین‌کننده متفرقه'}` : 'فروشنده: شرکت لپان بافت'}
-                                    </p>
+                                    <p className="text-sm font-bold text-slate-600 mt-2">فروشنده: شرکت لپان بافت</p>
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto no-print">
                                     <button 
@@ -1291,12 +1157,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                             {/* Factor Meta Info Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 print:gap-4 bg-slate-50/50 print:bg-transparent p-4 print:p-0 rounded-xl border print:border-none text-xs">
                                 <div className="space-y-1 print:col-span-2 print:border-b print:pb-2">
-                                    <span className="text-slate-400 print:text-slate-600 font-bold block">
-                                        {transactionCategory.startsWith('PURCHASE') ? 'خریدار:' : 'خریدار:'}
-                                    </span>
-                                    <span className="text-slate-800 font-extrabold text-sm">
-                                        {transactionCategory.startsWith('PURCHASE') ? 'شرکت لپان بافت' : (selectedInvoice.PersonName || 'خریدار متفرقه')}
-                                    </span>
+                                    <span className="text-slate-400 print:text-slate-600 font-bold block">خریدار:</span>
+                                    <span className="text-slate-800 font-extrabold text-sm">{selectedInvoice.PersonName || 'خریدار متفرقه'}</span>
                                 </div>
                                 <div className="space-y-1 print:border-b print:pb-2">
                                     <span className="text-slate-400 print:text-slate-600 font-bold block">شماره فاکتور:</span>
@@ -1568,46 +1430,24 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       );
   };
 
-  const [groupBy, setGroupBy] = useState<'TOTAL' | 'YEAR' | 'QUARTER' | 'MONTH' | 'DAY'>('TOTAL');
+  const [groupBy, setGroupBy] = useState<'DAY' | 'MONTH'>('DAY');
 
   const renderSalesByGroup = () => {
-      // Grouping Logic
-      const getPeriodKey = (dateStr: string, period: string) => {
-          if (period === 'TOTAL') return 'مجموع دوره';
-          if (!dateStr) return 'نامشخص';
-          let d = String(dateStr).substring(0, 10).replace(/-/g, '/');
-          if (d.includes('T')) d = d.split('T')[0];
-          const parts = d.split('/');
-          if (parts.length !== 3) return d;
-          
-          const year = parts[0];
-          const month = parseInt(parts[1], 10);
-          
-          if (period === 'YEAR') return year;
-          if (period === 'MONTH') return `${year}/${parts[1]}`;
-          if (period === 'QUARTER') {
-              const q = Math.ceil(month / 3);
-              return `${year} - فصل ${q}`;
-          }
-          return d; // DAY
-      };
-
-      const groupStats: Record<string, Record<string, Record<string, any>>> = {};
+      // Group by mainGroup (Store) and then by group (Product Group)
+      const groupStats: Record<string, Record<string, any>> = {};
       
       data.forEach(row => {
           if (!row.Items) return;
-          const periodKey = getPeriodKey(row.Date || row.Field_008, groupBy);
           
           row.Items.forEach((item: any) => {
               const mg = item.mainGroup || 'نامشخص';
               const grp = item.group || 'نامشخص';
               
-              if (!groupStats[periodKey]) groupStats[periodKey] = {};
-              if (!groupStats[periodKey][mg]) groupStats[periodKey][mg] = {};
-              
-              if (!groupStats[periodKey][mg][grp]) {
-                  groupStats[periodKey][mg][grp] = { 
-                      period: periodKey,
+              if (!groupStats[mg]) {
+                  groupStats[mg] = {};
+              }
+              if (!groupStats[mg][grp]) {
+                  groupStats[mg][grp] = { 
                       mainGroup: mg, 
                       groupName: grp, 
                       weight: 0, 
@@ -1621,11 +1461,11 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
               const a = item.totalPrice || 0;
               
               if (row.IsReturn) {
-                  groupStats[periodKey][mg][grp].returnsWeight += w;
-                  groupStats[periodKey][mg][grp].returnsAmount += a;
+                  groupStats[mg][grp].returnsWeight += w;
+                  groupStats[mg][grp].returnsAmount += a;
               } else {
-                  groupStats[periodKey][mg][grp].weight += w;
-                  groupStats[periodKey][mg][grp].amount += a;
+                  groupStats[mg][grp].weight += w;
+                  groupStats[mg][grp].amount += a;
               }
           });
       });
@@ -1633,106 +1473,52 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
       const itemsArray: any[] = [];
       let totalSalesW = 0, totalSalesA = 0, totalRetW = 0, totalRetA = 0, totalNetW = 0, totalNetA = 0;
 
-      Object.keys(groupStats).sort((a,b) => b.localeCompare(a)).forEach(period => {
-          let periodSalesW = 0, periodSalesA = 0, periodRetW = 0, periodRetA = 0, periodNetW = 0, periodNetA = 0;
-          const mainGroups = Object.keys(groupStats[period]).sort();
+      Object.keys(groupStats).sort().forEach(mg => {
+          const grps = Object.values(groupStats[mg]).sort((a: any, b: any) => b.amount - a.amount);
           
-          mainGroups.forEach((mg, mgIdx) => {
-              const grps = Object.values(groupStats[period][mg]).sort((a: any, b: any) => b.amount - a.amount);
-              
-              let mgSalesW = 0, mgSalesA = 0, mgRetW = 0, mgRetA = 0, mgNetW = 0, mgNetA = 0;
-              
-              grps.forEach((g: any, idx) => {
-                  const netW = g.weight - g.returnsWeight;
-                  const netA = g.amount - g.returnsAmount;
-                  
-                  mgSalesW += g.weight;
-                  mgSalesA += g.amount;
-                  mgRetW += g.returnsWeight;
-                  mgRetA += g.returnsAmount;
-                  mgNetW += netW;
-                  mgNetA += netA;
+          let mgSalesW = 0, mgSalesA = 0, mgRetW = 0, mgRetA = 0, mgNetW = 0, mgNetA = 0;
 
-                  itemsArray.push({
-                      ...g,
-                      netWeight: netW,
-                      netAmount: netA,
-                      isFirstOfPeriod: mgIdx === 0 && idx === 0,
-                      isFirstOfMain: idx === 0,
-                      mainRowSpan: grps.length + 1 // +1 for the main group subtotal
-                  });
-              });
+          grps.forEach((g: any, idx) => {
+              const netW = g.weight - g.returnsWeight;
+              const netA = g.amount - g.returnsAmount;
               
-              // Subtotal row for the Main Group
+              mgSalesW += g.weight;
+              mgSalesA += g.amount;
+              mgRetW += g.returnsWeight;
+              mgRetA += g.returnsAmount;
+              mgNetW += netW;
+              mgNetA += netA;
+
+              totalSalesW += g.weight;
+              totalSalesA += g.amount;
+              totalRetW += g.returnsWeight;
+              totalRetA += g.returnsAmount;
+              totalNetW += netW;
+              totalNetA += netA;
+
               itemsArray.push({
-                  isSubtotal: true,
-                  period: period,
-                  mainGroup: mg,
-                  groupName: `جمع ${mg}`,
-                  weight: mgSalesW,
-                  amount: mgSalesA,
-                  returnsWeight: mgRetW,
-                  returnsAmount: mgRetA,
-                  netWeight: mgNetW,
-                  netAmount: mgNetA,
-                  isFirstOfPeriod: false,
-                  isFirstOfMain: false
+                  ...g,
+                  netWeight: netW,
+                  netAmount: netA,
+                  isFirstOfMain: idx === 0,
+                  mainRowSpan: grps.length + 1 // +1 for the subtotal row
               });
-
-              periodSalesW += mgSalesW;
-              periodSalesA += mgSalesA;
-              periodRetW += mgRetW;
-              periodRetA += mgRetA;
-              periodNetW += mgNetW;
-              periodNetA += mgNetA;
           });
-
-          // Subtotal row for the Period (only if there are multiple periods or multiple main groups)
-          if (groupBy !== 'TOTAL' || mainGroups.length > 1) {
-              itemsArray.push({
-                  isPeriodTotal: true,
-                  period: period,
-                  mainGroup: `جمع ${period}`,
-                  groupName: '',
-                  weight: periodSalesW,
-                  amount: periodSalesA,
-                  returnsWeight: periodRetW,
-                  returnsAmount: periodRetA,
-                  netWeight: periodNetW,
-                  netAmount: periodNetA,
-                  isFirstOfPeriod: false,
-                  isFirstOfMain: false
-              });
-          }
-
-          totalSalesW += periodSalesW;
-          totalSalesA += periodSalesA;
-          totalRetW += periodRetW;
-          totalRetA += periodRetA;
-          totalNetW += periodNetW;
-          totalNetA += periodNetA;
+          
+          // Subtotal row for the Main Group
+          itemsArray.push({
+              isSubtotal: true,
+              mainGroup: mg,
+              groupName: `جمع ${mg}`,
+              weight: mgSalesW,
+              amount: mgSalesA,
+              returnsWeight: mgRetW,
+              returnsAmount: mgRetA,
+              netWeight: mgNetW,
+              netAmount: mgNetA,
+              isFirstOfMain: false
+          });
       });
-
-      // Calculate the period row spans after generating the array
-      let currentPeriod = '';
-      let periodStartIndex = -1;
-      let periodRowCount = 0;
-      
-      for (let i = 0; i < itemsArray.length; i++) {
-          if (itemsArray[i].isFirstOfPeriod) {
-              if (periodStartIndex !== -1) {
-                  itemsArray[periodStartIndex].periodRowSpan = periodRowCount;
-              }
-              currentPeriod = itemsArray[i].period;
-              periodStartIndex = i;
-              periodRowCount = 1;
-          } else {
-              periodRowCount++;
-          }
-      }
-      if (periodStartIndex !== -1) {
-          itemsArray[periodStartIndex].periodRowSpan = periodRowCount;
-      }
 
       const printReport = () => {
           const style = document.createElement('style');
@@ -1749,19 +1535,8 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <h2 className="text-xl font-black text-slate-800">گزارش وضعیت فروش و برگشت از فروش به تفکیک گروه بندی کالا</h2>
                       <p className="text-sm font-bold text-slate-500 mt-2">از تاریخ {formatDate(startDateStr)} الی {formatDate(endDateStr)}</p>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 no-print">
-                      <select
-                          className="border border-slate-200 bg-slate-50 text-slate-700 px-3 py-2 rounded-xl text-sm font-bold focus:outline-none focus:border-indigo-500"
-                          value={groupBy}
-                          onChange={(e) => setGroupBy(e.target.value as any)}
-                      >
-                          <option value="TOTAL">کل دوره (بدون تفکیک زمان)</option>
-                          <option value="YEAR">سالانه</option>
-                          <option value="QUARTER">سه ماهه (فصلی)</option>
-                          <option value="MONTH">ماهانه</option>
-                          <option value="DAY">روزانه</option>
-                      </select>
-                      <button onClick={printReport} className="flex justify-center items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
+                  <div className="flex items-center gap-3 no-print">
+                      <button onClick={printReport} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
                           <Printer size={16} /> چاپ گزارش
                       </button>
                   </div>
@@ -1772,7 +1547,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                       <table className="w-full text-center text-xs">
                           <thead className="bg-slate-50 border-b text-slate-800 text-[11px] font-black">
                               <tr>
-                                  {groupBy !== 'TOTAL' && <th className="p-3 border-l" rowSpan={2}>دوره زمانی</th>}
                                   <th className="p-3 border-l" rowSpan={2}>گروه اصلی</th>
                                   <th className="p-3 border-l" rowSpan={2}>گروه فرعی</th>
                                   <th className="p-2 border-l border-b" colSpan={2}>فروش</th>
@@ -1780,51 +1554,34 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                                   <th className="p-2 border-b" colSpan={2}>فروش خالص</th>
                               </tr>
                               <tr>
-                                  <th className="p-2 border-l">جمع مقدار/تعداد</th>
-                                  <th className="p-2 border-l">جمع مبلغ (ریال)</th>
-                                  <th className="p-2 border-l">جمع مقدار/تعداد</th>
-                                  <th className="p-2 border-l">جمع مبلغ (ریال)</th>
-                                  <th className="p-2 border-l">مقدار/تعداد</th>
-                                  <th className="p-2">مبلغ (ریال)</th>
+                                  <th className="p-2 border-l">جمع تعداد</th>
+                                  <th className="p-2 border-l">جمع مبلغ</th>
+                                  <th className="p-2 border-l">جمع تعداد</th>
+                                  <th className="p-2 border-l">جمع مبلغ</th>
+                                  <th className="p-2 border-l">تعداد</th>
+                                  <th className="p-2">مبلغ</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y text-slate-700 font-mono text-[11px]">
                               {itemsArray.map((item: any, idx: number) => (
-                                  <tr key={idx} className={item.isPeriodTotal ? "bg-indigo-100/50 border-t-2 border-indigo-200" : (item.isSubtotal ? "bg-indigo-50/50 border-t border-indigo-100" : "hover:bg-slate-50/50")}>
-                                      {groupBy !== 'TOTAL' && item.isFirstOfPeriod && (
-                                          <td className="p-3 border-l font-sans font-black bg-slate-50/50 align-top text-indigo-900" rowSpan={item.periodRowSpan}>
-                                              {item.period}
-                                          </td>
-                                      )}
-                                      
-                                      {item.isPeriodTotal ? (
-                                          <td colSpan={2} className="p-3 border-l font-sans font-black text-indigo-900 text-left bg-indigo-50/50">
+                                  <tr key={idx} className={item.isSubtotal ? "bg-indigo-50/50 border-t border-indigo-100" : "hover:bg-slate-50/50"}>
+                                      {item.isFirstOfMain && (
+                                          <td className="p-3 border-l font-sans font-black bg-slate-50/30 align-top" rowSpan={item.mainRowSpan}>
                                               {item.mainGroup}
                                           </td>
-                                      ) : (
-                                          <>
-                                              {item.isFirstOfMain && (
-                                                  <td className="p-3 border-l font-sans font-black bg-slate-50/30 align-top" rowSpan={item.mainRowSpan}>
-                                                      {item.mainGroup}
-                                                  </td>
-                                              )}
-                                              <td className={`p-3 border-l font-sans text-right ${item.isSubtotal ? 'font-black text-indigo-800 bg-slate-50/30' : 'font-bold text-slate-800'}`}>
-                                                  {item.groupName}
-                                              </td>
-                                          </>
                                       )}
-
-                                      <td className={`p-3 border-l ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-700 font-bold' : 'text-emerald-700'}`}>{item.weight !== 0 ? item.weight.toLocaleString() : '-'}</td>
-                                      <td className={`p-3 border-l font-bold ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-700' : 'text-emerald-700'}`}>{item.amount !== 0 ? item.amount.toLocaleString() : '-'}</td>
-                                      <td className={`p-3 border-l ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-700 font-bold' : 'text-rose-500'}`}>{item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
-                                      <td className={`p-3 border-l font-bold ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-700' : 'text-rose-500'}`}>{item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
-                                      <td className={`p-3 border-l ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-900 font-black' : 'text-slate-800'}`}>{item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</td>
-                                      <td className={`p-3 font-black ${item.isSubtotal || item.isPeriodTotal ? 'text-indigo-900' : 'text-slate-800'}`}>{item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-sans text-right ${item.isSubtotal ? 'font-black text-indigo-800' : 'font-bold text-slate-800'}`}>{item.groupName}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-700 font-bold' : 'text-emerald-700'}`}>{item.weight !== 0 ? item.weight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-bold ${item.isSubtotal ? 'text-indigo-700' : 'text-emerald-700'}`}>{item.amount !== 0 ? item.amount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-700 font-bold' : 'text-rose-500'}`}>{item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l font-bold ${item.isSubtotal ? 'text-indigo-700' : 'text-rose-500'}`}>{item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 border-l ${item.isSubtotal ? 'text-indigo-900 font-black' : 'text-slate-800'}`}>{item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</td>
+                                      <td className={`p-3 font-black ${item.isSubtotal ? 'text-indigo-900' : 'text-slate-800'}`}>{item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</td>
                                   </tr>
                               ))}
                               {itemsArray.length > 0 && (
                                   <tr className="bg-slate-100 font-black text-slate-800 border-t-2 border-slate-400">
-                                      <td className="p-4 border-l font-sans text-left" colSpan={groupBy !== 'TOTAL' ? 3 : 2}>جمع کل فروش دوره انتخابی</td>
+                                      <td className="p-4 border-l font-sans text-left" colSpan={2}>جمع کل</td>
                                       <td className="p-4 border-l text-emerald-700">{totalSalesW > 0 ? totalSalesW.toLocaleString() : '-'}</td>
                                       <td className="p-4 border-l text-emerald-700">{totalSalesA > 0 ? totalSalesA.toLocaleString() : '-'}</td>
                                       <td className="p-4 border-l text-rose-600">{totalRetW > 0 ? totalRetW.toLocaleString() : '-'}</td>
@@ -1835,7 +1592,7 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                               )}
                               {itemsArray.length === 0 && (
                                   <tr>
-                                      <td colSpan={groupBy !== 'TOTAL' ? 9 : 8} className="text-center py-12 text-slate-400 font-sans">داده‌ای یافت نشد</td>
+                                      <td colSpan={8} className="text-center py-12 text-slate-400 font-sans">داده‌ای یافت نشد</td>
                                   </tr>
                               )}
                           </tbody>
@@ -1843,27 +1600,10 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                   </div>
                   <div className="md:hidden divide-y divide-slate-100">
                       {itemsArray.map((item: any, idx: number) => {
-                          if (item.isPeriodTotal) {
-                              return (
-                                  <div key={idx} className="bg-indigo-100/50 p-4 font-black text-xs text-indigo-900 space-y-2 border-t-2 border-indigo-200">
-                                      <div className="font-sans text-sm mb-1">{item.mainGroup}</div>
-                                      <div className="grid grid-cols-2 gap-y-1.5 font-mono text-[10px]">
-                                          <div>فروش وزن: {item.weight !== 0 ? item.weight.toLocaleString() : '-'}</div>
-                                          <div>فروش مبلغ: {item.amount !== 0 ? item.amount.toLocaleString() : '-'}</div>
-                                          <div>مرجوع وزن: {item.returnsWeight !== 0 ? item.returnsWeight.toLocaleString() : '-'}</div>
-                                          <div>مرجوع مبلغ: {item.returnsAmount !== 0 ? item.returnsAmount.toLocaleString() : '-'}</div>
-                                          <div className="col-span-2 border-t border-indigo-200/50 pt-1.5 mt-1 font-extrabold text-[11px] flex justify-between">
-                                              <span>خالص وزن: {item.netWeight !== 0 ? item.netWeight.toLocaleString() : '-'}</span>
-                                              <span>خالص مبلغ: {item.netAmount !== 0 ? item.netAmount.toLocaleString() : '-'}</span>
-                                          </div>
-                                      </div>
-                                  </div>
-                              );
-                          }
                           if (item.isSubtotal) {
                               return (
                                   <div key={idx} className="bg-indigo-50/30 p-4 font-black text-[11px] text-indigo-900 space-y-2">
-                                      <div className="font-sans text-xs">{groupBy !== 'TOTAL' ? `${item.period} - ` : ''}{item.groupName} (خلاصه)</div>
+                                      <div className="font-sans text-xs">{item.groupName} (خلاصه)</div>
                                       <div className="grid grid-cols-2 gap-y-1.5 font-mono text-[10px]">
                                           <div>فروش وزن: {item.weight !== 0 ? item.weight.toLocaleString() : '-'}</div>
                                           <div>فروش مبلغ: {item.amount !== 0 ? item.amount.toLocaleString() : '-'}</div>
@@ -1879,12 +1619,9 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
                           }
                           return (
                               <div key={idx} className="p-4 space-y-2 text-xs bg-white">
-                                  <div className="flex justify-between items-start">
-                                      <div className="flex flex-col">
-                                          {groupBy !== 'TOTAL' && <span className="text-[10px] text-indigo-500 font-bold mb-1">{item.period}</span>}
-                                          <span className="text-[10px] text-slate-400">{item.mainGroup}</span>
-                                      </div>
-                                      <span className="font-sans font-bold text-slate-800 text-right">{item.groupName}</span>
+                                  <div className="flex justify-between">
+                                      <span className="text-[10px] text-slate-400">{item.mainGroup}</span>
+                                      <span className="font-sans font-bold text-slate-800">{item.groupName}</span>
                                   </div>
                                   <div className="grid grid-cols-2 gap-y-1 text-[10px] text-slate-500 font-mono">
                                       <div>فروش وزن: <span className="text-slate-800 font-bold">{item.weight !== 0 ? item.weight.toLocaleString() : '-'}</span></div>
@@ -2774,37 +2511,6 @@ const SayanReports: React.FC<SayanReportsProps> = ({ settings }) => {
         {/* Content Area */}
         <div className="flex-1 p-4 sm:p-8 overflow-y-auto no-scrollbar">
           {renderDetailsModal()}
-          
-          {/* Segmented Category Switcher */}
-          {(activeReport === 'SALES' || activeReport === 'SALES_BY_GROUP' || activeReport === 'SALES_COMPARISON') && (
-            <div className="mb-6 bg-slate-100 p-1.5 rounded-2xl flex gap-1 shadow-inner border border-slate-200">
-                <button
-                    onClick={() => setTransactionCategory('SALES')}
-                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'SALES' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
-                >
-                    🟢 فروش کالا
-                </button>
-                <button
-                    onClick={() => setTransactionCategory('SALES_RETURN')}
-                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'SALES_RETURN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
-                >
-                    🔴 برگشتی فروش
-                </button>
-                <button
-                    onClick={() => setTransactionCategory('PURCHASE')}
-                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'PURCHASE' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
-                >
-                    📦 خرید کالا
-                </button>
-                <button
-                    onClick={() => setTransactionCategory('PURCHASE_RETURN')}
-                    className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${transactionCategory === 'PURCHASE_RETURN' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:bg-white/50'}`}
-                >
-                    ⚠️ برگشتی خرید
-                </button>
-            </div>
-          )}
-
           {error && (
             <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-start gap-3">
               <Database size={20} className="mt-0.5 text-rose-500" />
