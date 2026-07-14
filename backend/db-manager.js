@@ -16,7 +16,9 @@ export const getDb = () => {
     try {
         const defaultDb = { 
             settings: {}, 
-            users: [],
+            users: [
+                { id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin', roles: ['admin'], canManageTrade: true }
+            ],
             orders: [], 
             exitPermits: [], 
             warehouseItems: [], 
@@ -48,6 +50,11 @@ export const getDb = () => {
                 arrays.forEach(arr => {
                     if (!Array.isArray(MEMORY_DB_CACHE[arr])) MEMORY_DB_CACHE[arr] = [];
                 });
+                
+                // Ensure at least one admin user exists to prevent lockout
+                if (MEMORY_DB_CACHE.users.length === 0) {
+                    MEMORY_DB_CACHE.users.push({ id: '1', username: 'admin', password: '123', fullName: 'مدیر سیستم', role: 'admin', roles: ['admin'], canManageTrade: true });
+                }
                 
                 return MEMORY_DB_CACHE;
             }
