@@ -61,8 +61,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             if (fromDate) {
                 transactions.forEach(tx => {
                     if (tx.company !== selectedCompany) return;
-                    if (tx.type === 'OUT' && tx.status !== 'APPROVED') return;
-                    if (tx.type === 'IN' && tx.status === 'REJECTED') return;
+                    if (tx.status === 'REJECTED') return;
                     const hasItem = tx.items.some(i => i.itemId === selectedItem);
                     if (!hasItem) return;
 
@@ -85,8 +84,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
         // 2. Filter transactions for the selected date range
         let filteredTxs = transactions.filter(tx => {
             if (tx.company !== selectedCompany) return false;
-            if (tx.type === 'OUT' && tx.status !== 'APPROVED') return false;
-            if (tx.type === 'IN' && tx.status === 'REJECTED') return false;
+            if (tx.status === 'REJECTED') return false;
             if (txType !== 'ALL' && tx.type !== txType) return false;
             
             const hasItem = tx.items.some(i => i.itemId === selectedItem);

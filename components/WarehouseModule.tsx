@@ -740,24 +740,24 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
             {/* Hidden Print Elements for Auto-Send */}
             {createdTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-created-${createdTxForAutoSend.id}-price`}><PrintBijak tx={createdTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-created-${createdTxForAutoSend.id}-price`}><PrintBijak tx={createdTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={allTransactions} /></div>
                 </div>
             )}
             {approvedTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
-                    <div id={`print-bijak-${approvedTxForAutoSend.id}-noprice`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-${approvedTxForAutoSend.id}-price`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={allTransactions} /></div>
+                    <div id={`print-bijak-${approvedTxForAutoSend.id}-noprice`}><PrintBijak tx={approvedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={allTransactions} /></div>
                 </div>
             )}
             {deletedTxForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-price`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
-                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-noprice`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-price`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={allTransactions} /></div>
+                    <div id={`print-bijak-del-${deletedTxForAutoSend.id}-noprice`}><PrintBijak tx={deletedTxForAutoSend} onClose={()=>{}} embed forceHidePrices={true} transactions={allTransactions} /></div>
                 </div>
             )}
             {editedBijakForAutoSend && (
                 <div className="hidden-print-export" style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '800px', zIndex: -1 }}>
-                    <div id={`print-bijak-edit-${editedBijakForAutoSend.id}`}><PrintBijak tx={editedBijakForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={safeTransactions} /></div>
+                    <div id={`print-bijak-edit-${editedBijakForAutoSend.id}`}><PrintBijak tx={editedBijakForAutoSend} onClose={()=>{}} embed forceHidePrices={false} transactions={allTransactions} /></div>
                 </div>
             )}
             
@@ -1314,14 +1314,14 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                 {/* REPORTS TAB (KARDEX) */}
                 {activeTab === 'reports' && (
                     <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
-                        <WarehouseKardexReport items={items} transactions={safeTransactions} companies={companyList} />
+                        <WarehouseKardexReport items={items} transactions={allTransactions} companies={companyList} />
                     </div>
                 )}
 
                 {/* DISPATCH REPORT TAB */}
                 {activeTab === 'dispatch_report' && (
                     <div className="glass-panel p-4 rounded-xl shadow-sm border h-full">
-                        <WarehouseDispatchReport transactions={safeTransactions} companies={companyList} />
+                        <WarehouseDispatchReport transactions={allTransactions} companies={companyList} />
                     </div>
                 )}
 
@@ -1422,7 +1422,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     tx={viewBijak} 
                     onClose={() => setViewBijak(null)} 
                     settings={settings}
-                    transactions={safeTransactions}
+                    transactions={allTransactions}
                     onApprove={canApprove && viewBijak.status === 'PENDING' ? () => handleApproveBijak(viewBijak) : undefined}
                     onReject={canApprove && viewBijak.status === 'PENDING' ? () => handleRejectBijak(viewBijak) : undefined} 
                 />
