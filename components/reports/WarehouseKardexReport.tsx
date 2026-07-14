@@ -61,7 +61,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
             if (fromDate) {
                 transactions.forEach(tx => {
                     if (tx.company !== selectedCompany) return;
-                    if (tx.status === 'REJECTED') return;
+                    if (tx.type === 'OUT' && tx.status !== 'APPROVED') return;
+                    if (tx.type === 'IN' && tx.status === 'REJECTED') return;
                     const hasItem = tx.items.some(i => i.itemId === selectedItem);
                     if (!hasItem) return;
 
@@ -84,7 +85,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
         // 2. Filter transactions for the selected date range
         let filteredTxs = transactions.filter(tx => {
             if (tx.company !== selectedCompany) return false;
-            if (tx.status === 'REJECTED') return false; 
+            if (tx.type === 'OUT' && tx.status !== 'APPROVED') return false;
+            if (tx.type === 'IN' && tx.status === 'REJECTED') return false;
             if (txType !== 'ALL' && tx.type !== txType) return false;
             
             const hasItem = tx.items.some(i => i.itemId === selectedItem);
@@ -126,8 +128,8 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                 number: tx.number || tx.proformaNumber || '-',
                 type: tx.type as 'IN' | 'OUT' | 'OPENING',
                 description: tx.type === 'IN' 
-                    ? `پروفرما: ${tx.proformaNumber}` 
-                    : `گیرنده: ${tx.recipientName || '-'} | مقصد: ${tx.destination || '-'}`,
+                    ? `رسید ورود ${tx.proformaNumber ? `(پروفرما: ${tx.proformaNumber})` : ''} ${tx.driverName ? `| راننده: ${tx.driverName}` : ''} ${tx.plateNumber ? `| پلاک: ${tx.plateNumber}` : ''} ${tx.description ? `| ${tx.description}` : ''}`
+                    : `بیجک خروج - گیرنده: ${tx.recipientName || '-'} ${tx.driverName ? `| راننده: ${tx.driverName}` : ''} ${tx.plateNumber ? `| پلاک: ${tx.plateNumber}` : ''} ${tx.destination ? `| مقصد: ${tx.destination}` : ''} ${tx.description ? `| ${tx.description}` : ''}`,
                 in: inQty,
                 out: outQty,
                 balance: runningBalance,
@@ -260,7 +262,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, companies
                                 <tr key={row.id} className={row.type === 'IN' ? 'bg-green-50' : 'bg-red-50'}>
                                     <td className="border border-gray-300 p-1">{idx + 1}</td>
                                     <td className="border border-gray-300 p-1 font-mono text-[9px]">{formatDate(row.date)}</td>
-                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> ورود</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> خروج</span>}</td>
+                                    <td className="border border-gray-300 p-1">{row.type === 'IN' ? <span className="text-green-700 font-bold flex items-center justify-center gap-1"><ArrowDownCircle size={10}/> رسید (ورود)</span> : <span className="text-red-700 font-bold flex items-center justify-center gap-1"><ArrowUpCircle size={10}/> بیجک (خروج)</span>}</td>
                                     <td className="border border-gray-300 p-1 font-mono font-bold">{row.number}</td>
                                     <td className="border border-gray-300 p-1 text-right pr-2 text-[9px]">{row.description}</td>
                                     <td className="border border-gray-300 p-1 font-mono font-bold text-green-700 text-base">{row.in > 0 ? row.in : '-'}</td>
