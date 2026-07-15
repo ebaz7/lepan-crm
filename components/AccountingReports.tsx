@@ -975,8 +975,17 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         onClick={() => setActiveTab('daily_sales')} 
                         className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'daily_sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                     >
-                        <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                        <span className="truncate">فروش روزانه و تحلیلی</span>
+                        <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 animate-pulse" />
+                        <span className="truncate">فروش روزانه کارخانه</span>
+                    </button>
+                )}
+                {isSalesAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('monthly_sales')} 
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'monthly_sales' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">گزارش فروش ماهانه</span>
                     </button>
                 )}
                 {isChequesAllowed && (
@@ -1352,9 +1361,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 {/* 3. DAILY SALES TAB */}
                 {activeTab === 'daily_sales' && (
                     <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
-                        <DailySalesReport dateFrom={dateFrom} dateTo={dateTo} />
+                        <DailySalesReport dateFrom={dateFrom} dateTo={dateTo} mode="daily" />
                     </div>
-                ) /* 3. SALES & COMPARISONS TAB was removed and merged into daily_sales */ }
+                )}
+
+                {/* 3.5 MONTHLY SALES TAB */}
+                {activeTab === 'monthly_sales' && (
+                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
+                        <DailySalesReport dateFrom={dateFrom} dateTo={dateTo} mode="monthly" />
+                    </div>
+                )}
 
                 {/* 4. PRODUCTION TAB */}
                 {activeTab === 'production' && (
