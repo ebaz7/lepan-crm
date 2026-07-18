@@ -265,9 +265,23 @@ const Settings: React.FC<SettingsProps> = ({
   const [cameraMirror, setCameraMirror] = useState<boolean>(() => localStorage.getItem("cameraMirror") === "true");
   const [cameraBeepOnSuccess, setCameraBeepOnSuccess] = useState<boolean>(() => localStorage.getItem("cameraBeepOnSuccess") !== "false");
   const [cameraAutoStart, setCameraAutoStart] = useState<boolean>(() => localStorage.getItem("cameraAutoStart") === "true");
+  const [cameraType, setCameraType] = useState<"usb" | "network">((localStorage.getItem("cameraType") as "usb" | "network") || "usb");
+  const [cameraNetworkUrl, setCameraNetworkUrl] = useState<string>(() => localStorage.getItem("cameraNetworkUrl") || "");
+  const [cameraNetworkType, setCameraNetworkType] = useState<"mjpeg" | "snapshot">((localStorage.getItem("cameraNetworkType") as "mjpeg" | "snapshot") || "mjpeg");
+  const [cameraSnapshotInterval, setCameraSnapshotInterval] = useState<number>(() => parseInt(localStorage.getItem("cameraSnapshotInterval") || "1000", 10));
+  const [snapshotTime, setSnapshotTime] = useState<number>(Date.now());
   const [testStream, setTestStream] = useState<MediaStream | null>(null);
   const [isTestingCamera, setIsTestingCamera] = useState(false);
   const testVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (isTestingCamera && cameraType === "network" && cameraNetworkType === "snapshot") {
+      const interval = setInterval(() => {
+        setSnapshotTime(Date.now());
+      }, cameraSnapshotInterval || 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isTestingCamera, cameraType, cameraNetworkType, cameraSnapshotInterval]);
 
   const requestCameraPermissionAndList = async () => {
     try {
@@ -294,6 +308,15 @@ const Settings: React.FC<SettingsProps> = ({
         testStream.getTracks().forEach(t => t.stop());
       }
       
+      if (cameraType === "network") {
+        if (!cameraNetworkUrl || !cameraNetworkUrl.startsWith("http")) {
+          alert("لطفاً آدرس صحیح جریان دوربین تحت شبکه (با شروع http) را وارد کنید.");
+          return;
+        }
+        setIsTestingCamera(true);
+        return;
+      }
+
       let width = 1280;
       let height = 720;
       if (cameraResolution === "1080p") {
@@ -789,6 +812,10 @@ const Settings: React.FC<SettingsProps> = ({
       localStorage.setItem("cameraMirror", String(cameraMirror));
       localStorage.setItem("cameraBeepOnSuccess", String(cameraBeepOnSuccess));
       localStorage.setItem("cameraAutoStart", String(cameraAutoStart));
+      localStorage.setItem("cameraType", cameraType);
+      localStorage.setItem("cameraNetworkUrl", cameraNetworkUrl);
+      localStorage.setItem("cameraNetworkType", cameraNetworkType);
+      localStorage.setItem("cameraSnapshotInterval", String(cameraSnapshotInterval));
 
       if (onUpdateSettings) onUpdateSettings(syncedSettings);
       setMessage("ذخیره شد ✅");
@@ -5178,38 +5205,123 @@ const Settings: React.FC<SettingsProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Right col: Settings parameters */}
                     <div className="space-y-6">
-                      {/* Default camera selection */}
-                      <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10">
+                      {/* Camera Connection Type */}
+                      <div className="p-4 bg-gradient-to-tr from-cyan-50 to-blue-50 dark:from-cyan-950/20 dark:to-blue-950/20 rounded-xl border border-cyan-200 dark:border-cyan-900/40">
                         <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-2">
-                          انتخاب دستگاه دوربین پیش‌فرض
+                          روش اتصال دوربین انتظامات
                         </label>
-                        {localCameras.length > 0 ? (
-                          <select
-                            value={defaultCameraId}
-                            onChange={(e) => setDefaultCameraId(e.target.value)}
-                            className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans focus:ring-2 focus:ring-cyan-500 outline-none"
+                        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-white/10 mb-3">
+                          <button
+                            type="button"
+                            onClick={() => setCameraType("usb")}
+                            className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${
+                              cameraType === "usb"
+                                ? "bg-cyan-600 text-white shadow"
+                                : "text-gray-600 dark:text-gray-400 hover:text-gray-800"
+                            }`}
                           >
-                            {localCameras.map((dev, i) => (
-                              <option key={dev.deviceId} value={dev.deviceId}>
-                                {dev.label || `دوربین شماره ${i + 1}`}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-semibold">
-                              مرورگر به اسامی دوربین‌ها دسترسی ندارد یا دوربینی یافت نشد. برای راه‌اندازی و شناسایی دوربین‌های متصل، روی دکمه زیر کلیک کنید.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={requestCameraPermissionAndList}
-                              className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40 rounded-lg text-xs font-black hover:bg-blue-100 transition-colors flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Camera size={14} /> اسکن و فعال‌سازی دوربین‌ها
-                            </button>
-                          </div>
-                        )}
+                            اتصال مستقیم (USB/وبکم)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCameraType("network")}
+                            className={`flex-1 py-1.5 rounded-md text-xs font-black transition-all ${
+                              cameraType === "network"
+                                ? "bg-cyan-600 text-white shadow"
+                                : "text-gray-600 dark:text-gray-400 hover:text-gray-800"
+                            }`}
+                          >
+                            دوربین تحت شبکه (IP Camera)
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-gray-500 leading-relaxed font-semibold">
+                          دوربین‌های مستقیم از طریق پورت USB متصل می‌شوند. دوربین‌های تحت شبکه از طریق آدرس IP داخل شبکه کارخانه متصل می‌گردند.
+                        </p>
                       </div>
+
+                      {cameraType === "usb" ? (
+                        /* Default camera selection */
+                        <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10">
+                          <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-2">
+                            انتخاب دستگاه دوربین پیش‌فرض
+                          </label>
+                          {localCameras.length > 0 ? (
+                            <select
+                              value={defaultCameraId}
+                              onChange={(e) => setDefaultCameraId(e.target.value)}
+                              className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans focus:ring-2 focus:ring-cyan-500 outline-none"
+                            >
+                              {localCameras.map((dev, i) => (
+                                <option key={dev.deviceId} value={dev.deviceId}>
+                                  {dev.label || `دوربین شماره ${i + 1}`}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-semibold">
+                                مرورگر به اسامی دوربین‌ها دسترسی ندارد یا دوربینی یافت نشد. برای راه‌اندازی و شناسایی دوربین‌های متصل، روی دکمه زیر کلیک کنید.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={requestCameraPermissionAndList}
+                                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40 rounded-lg text-xs font-black hover:bg-blue-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Camera size={14} /> اسکن و فعال‌سازی دوربین‌ها
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* Network camera configuration */
+                        <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10 space-y-4">
+                          <div>
+                            <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-1.5">
+                              آدرس جریان دوربین شبکه (MJPEG / Stream URL / Snapshots)
+                            </label>
+                            <input
+                              type="text"
+                              value={cameraNetworkUrl}
+                              onChange={(e) => setCameraNetworkUrl(e.target.value)}
+                              placeholder="مثال: http://192.168.1.100:8080/video"
+                              dir="ltr"
+                              className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-mono focus:ring-2 focus:ring-cyan-500 outline-none"
+                            />
+                            <p className="text-[9px] text-gray-400 mt-1">
+                              آدرس IP و پورت دوربین مداربسته یا گوشی موبایل شبیه‌ساز را وارد کنید.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-600 dark:text-gray-400 mb-1">
+                                نوع جریان شبکه
+                              </label>
+                              <select
+                                value={cameraNetworkType}
+                                onChange={(e) => setCameraNetworkType(e.target.value as "mjpeg" | "snapshot")}
+                                className="w-full text-xs border rounded-lg p-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans outline-none"
+                              >
+                                <option value="mjpeg">MJPEG (جریان ویدیویی متوالی)</option>
+                                <option value="snapshot">JPEG (عکس‌های متوالی)</option>
+                              </select>
+                            </div>
+                            {cameraNetworkType === "snapshot" && (
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-600 dark:text-gray-400 mb-1">
+                                  بازه به‌روزرسانی (میلی‌ثانیه)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={cameraSnapshotInterval}
+                                  onChange={(e) => setCameraSnapshotInterval(Math.max(100, parseInt(e.target.value, 10) || 1000))}
+                                  className="w-full text-xs border rounded-lg p-1.5 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-mono outline-none"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Resolution setting */}
                       <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10">
@@ -5294,13 +5406,25 @@ const Settings: React.FC<SettingsProps> = ({
                         
                         <div className="relative overflow-hidden rounded-xl border border-zinc-800 bg-black aspect-video max-w-sm mx-auto shadow-2xl flex items-center justify-center">
                           {isTestingCamera ? (
-                            <video
-                              ref={testVideoRef}
-                              autoPlay
-                              playsInline
-                              muted
-                              className={`w-full h-full object-cover ${cameraMirror ? 'transform -scale-x-100' : ''}`}
-                            />
+                            cameraType === "network" ? (
+                              <img
+                                src={cameraNetworkType === "snapshot" ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl}
+                                referrerPolicy="no-referrer"
+                                className={`w-full h-full object-contain ${cameraMirror ? 'transform -scale-x-100' : ''}`}
+                                alt="Network Stream"
+                                onError={(e) => {
+                                  console.error("Network stream error");
+                                }}
+                              />
+                            ) : (
+                              <video
+                                ref={testVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover ${cameraMirror ? 'transform -scale-x-100' : ''}`}
+                              />
+                            )
                           ) : (
                             <div className="text-center p-6 space-y-2">
                               <Camera className="mx-auto text-zinc-700" size={36} />

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, SecurityLog, PersonnelDelay, SecurityIncident, SecurityStatus, UserRole, DailySecurityMeta, SystemSettings } from '../types';
 import { getSecurityLogs, saveSecurityLog, updateSecurityLog, deleteSecurityLog, getPersonnelDelays, savePersonnelDelay, updatePersonnelDelay, deletePersonnelDelay, getSecurityIncidents, saveSecurityIncident, updateSecurityIncident, deleteSecurityIncident, getSettings, saveSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatDate, getShamsiDateFromIso } from '../constants';
-import { Shield, Plus, CheckCircle, XCircle, Clock, Truck, AlertTriangle, UserCheck, Calendar, Printer, Archive, FileSymlink, Edit, Trash2, Eye, FileText, CheckSquare, User as UserIcon, ListChecks, Activity, FileDown, Loader2, Pencil, ChevronDown, ChevronUp, FolderOpen, Folder, Save, X, Camera } from 'lucide-react';
+import { Shield, Plus, CheckCircle, XCircle, Clock, Truck, AlertTriangle, UserCheck, Calendar, Printer, Archive, FileSymlink, Edit, Trash2, Eye, FileText, CheckSquare, User as UserIcon, ListChecks, Activity, FileDown, Loader2, Pencil, ChevronDown, ChevronUp, FolderOpen, Folder, Save, X, Camera, Settings } from 'lucide-react';
 import { PrintSecurityDailyLog, PrintPersonnelDelay, PrintIncidentReport } from './security/SecurityPrints';
 import { getRolePermissions } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator';
@@ -73,6 +73,21 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [capturedImagePreview, setCapturedImagePreview] = useState<string | null>(null);
     const [viewAttachmentUrl, setViewAttachmentUrl] = useState<string | null>(null);
+    const [cameraType, setCameraType] = useState<"usb" | "network">(() => (localStorage.getItem('cameraType') as "usb" | "network") || 'usb');
+    const [cameraNetworkUrl, setCameraNetworkUrl] = useState<string>(() => localStorage.getItem('cameraNetworkUrl') || '');
+    const [cameraNetworkType, setCameraNetworkType] = useState<"mjpeg" | "snapshot">(() => (localStorage.getItem('cameraNetworkType') as "mjpeg" | "snapshot") || 'mjpeg');
+    const [cameraSnapshotInterval, setCameraSnapshotInterval] = useState<number>(() => parseInt(localStorage.getItem('cameraSnapshotInterval') || '1000', 10));
+    const [snapshotTime, setSnapshotTime] = useState<number>(Date.now());
+    const [showQuickCameraSettings, setShowQuickCameraSettings] = useState(false);
+
+    useEffect(() => {
+        if (isCameraActive && cameraType === "network" && cameraNetworkType === "snapshot") {
+            const interval = setInterval(() => {
+                setSnapshotTime(Date.now());
+            }, cameraSnapshotInterval || 1000);
+            return () => clearInterval(interval);
+        }
+    }, [isCameraActive, cameraType, cameraNetworkType, cameraSnapshotInterval]);
 
     const playBeep = () => {
         try {
@@ -95,6 +110,22 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const startCamera = async () => {
         try {
             setCapturedImagePreview(null);
+
+            // Fetch settings on demand to ensure we have the latest
+            const latestType = (localStorage.getItem('cameraType') as "usb" | "network") || 'usb';
+            const latestUrl = localStorage.getItem('cameraNetworkUrl') || '';
+            setCameraType(latestType);
+            setCameraNetworkUrl(latestUrl);
+
+            if (latestType === 'network') {
+                if (!latestUrl || !latestUrl.startsWith('http')) {
+                    alert("لطفاً آدرس صحیح جریان دوربین تحت شبکه را در بخش تنظیمات یا منوی سریع وارد کنید.");
+                    return;
+                }
+                setIsCameraActive(true);
+                return;
+            }
+
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
             setCameraDevices(videoDevices);
@@ -144,19 +175,46 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
         setIsCameraActive(false);
     };
 
-    const handleCaptureAndRecognize = async () => {
-        if (!videoRef.current) return;
-        setIsReadingPlate(true);
-        try {
+    const captureImage = async (): Promise<string> => {
+        if (cameraType === 'network') {
+            if (!cameraNetworkUrl) {
+                throw new Error("آدرس دوربین تحت شبکه مشخص نشده است. لطفاً آن را در بخش تنظیمات وارد کنید.");
+            }
+            // Fetch via our proxy to handle CORS
+            const response = await fetch('/api/security/proxy-snapshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: cameraNetworkUrl })
+            });
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'خطا در ارتباط با دوربین شبکه (خطای پروکسی)');
+            }
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'خطا در دریافت تصویر از دوربین شبکه');
+            }
+            return data.imageBase64;
+        } else {
+            if (!videoRef.current) {
+                throw new Error("سخت‌افزار دوربین در دسترس نیست یا فعال نشده است.");
+            }
             const video = videoRef.current;
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth || 1280;
             canvas.height = video.videoHeight || 720;
             const ctx = canvas.getContext('2d');
-            if (!ctx) return;
+            if (!ctx) throw new Error("امکان ایجاد کانتکست بوم برای عکس‌برداری وجود ندارد.");
             
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            return canvas.toDataURL('image/jpeg', 0.85);
+        }
+    };
+
+    const handleCaptureAndRecognize = async () => {
+        setIsReadingPlate(true);
+        try {
+            const base64Image = await captureImage();
             setCapturedImagePreview(base64Image);
             
             // Turn off camera stream to release hardware resources
@@ -194,18 +252,9 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     };
 
     const handleCaptureAndRecognizeLocal = async () => {
-        if (!videoRef.current) return;
         setIsReadingPlateLocal(true);
         try {
-            const video = videoRef.current;
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-            
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            const base64Image = await captureImage();
             setCapturedImagePreview(base64Image);
             
             // Turn off camera stream to release hardware resources
@@ -242,18 +291,9 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     };
 
     const handleCaptureOnly = async () => {
-        if (!videoRef.current) return;
         setIsSavingPhoto(true);
         try {
-            const video = videoRef.current;
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-            
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            const base64Image = await captureImage();
             setCapturedImagePreview(base64Image);
             
             // Turn off camera stream to release hardware resources
@@ -988,20 +1028,123 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                                     </span>
-                                                    دوربین جلو درب متصل است
+                                                    دوربین جلو درب فعال است ({cameraType === 'network' ? 'تحت شبکه' : 'USB'})
                                                 </span>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={stopCamera} 
-                                                    className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-[10px] font-bold px-2 py-0.5 rounded transition-all"
-                                                >
-                                                    غیرفعال کردن دوربین
-                                                </button>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setShowQuickCameraSettings(!showQuickCameraSettings)} 
+                                                        className="text-gray-500 hover:text-gray-700 text-xs p-1 rounded hover:bg-gray-100 transition-all"
+                                                        title="تنظیمات سریع دوربین"
+                                                    >
+                                                        <Settings size={13} className={showQuickCameraSettings ? "text-emerald-600 spin-once" : ""} />
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={stopCamera} 
+                                                        className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-[10px] font-bold px-2 py-0.5 rounded transition-all"
+                                                    >
+                                                        غیرفعال کردن دوربین
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {showQuickCameraSettings && (
+                                                <div className="bg-white p-3 rounded border border-gray-200 text-xs space-y-2.5 animate-fade-in shadow-sm">
+                                                    <div className="font-bold text-gray-700 pb-1 border-b flex justify-between items-center">
+                                                        <span>تنظیمات سریع دوربین انتظامات</span>
+                                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">بروزرسانی زنده</span>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] text-gray-500 mb-1 font-bold">نوع دوربین ورودی:</label>
+                                                        <div className="flex gap-4">
+                                                            <label className="flex items-center gap-1 cursor-pointer">
+                                                                <input 
+                                                                    type="radio" 
+                                                                    name="quickCameraType" 
+                                                                    value="usb" 
+                                                                    checked={cameraType === 'usb'} 
+                                                                    onChange={() => {
+                                                                        setCameraType('usb');
+                                                                        localStorage.setItem('cameraType', 'usb');
+                                                                        stopCamera();
+                                                                        setTimeout(() => startCamera(), 100);
+                                                                    }} 
+                                                                />
+                                                                <span>یو‌اس‌بی یا وب‌کم (USB)</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-1 cursor-pointer">
+                                                                <input 
+                                                                    type="radio" 
+                                                                    name="quickCameraType" 
+                                                                    value="network" 
+                                                                    checked={cameraType === 'network'} 
+                                                                    onChange={() => {
+                                                                        setCameraType('network');
+                                                                        localStorage.setItem('cameraType', 'network');
+                                                                        stopCamera();
+                                                                        setTimeout(() => startCamera(), 100);
+                                                                    }} 
+                                                                />
+                                                                <span>دوربین تحت شبکه (IP Camera)</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    {cameraType === 'network' && (
+                                                        <div className="space-y-2 bg-gray-50 p-2 rounded border border-gray-100">
+                                                            <div>
+                                                                <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">آدرس مستقیم جریان تصویر (HTTP MJPEG/Snapshot):</label>
+                                                                <input 
+                                                                    type="text" 
+                                                                    className="w-full text-xs p-1.5 border rounded font-mono" 
+                                                                    value={cameraNetworkUrl} 
+                                                                    onChange={e => {
+                                                                        setCameraNetworkUrl(e.target.value);
+                                                                        localStorage.setItem('cameraNetworkUrl', e.target.value);
+                                                                    }}
+                                                                    placeholder="http://192.168.1.50/mjpeg.cgi"
+                                                                />
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">نوع جریان تصویر:</label>
+                                                                    <select 
+                                                                        value={cameraNetworkType} 
+                                                                        onChange={e => {
+                                                                            const val = e.target.value as "mjpeg" | "snapshot";
+                                                                            setCameraNetworkType(val);
+                                                                            localStorage.setItem('cameraNetworkType', val);
+                                                                        }}
+                                                                        className="w-full text-[11px] p-1 border rounded bg-white"
+                                                                    >
+                                                                        <option value="mjpeg">جریان زنده MJPEG</option>
+                                                                        <option value="snapshot">تصاویر متوالی (Snapshot)</option>
+                                                                    </select>
+                                                                </div>
+                                                                {cameraNetworkType === 'snapshot' && (
+                                                                    <div>
+                                                                        <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">بازخوانی (ms):</label>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            className="w-full text-[11px] p-1 border rounded font-mono" 
+                                                                            value={cameraSnapshotInterval} 
+                                                                            onChange={e => {
+                                                                                const val = parseInt(e.target.value, 10) || 1000;
+                                                                                setCameraSnapshotInterval(val);
+                                                                                localStorage.setItem('cameraSnapshotInterval', val.toString());
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             
-                                            {cameraDevices.length > 1 && (
+                                            {cameraType === 'usb' && cameraDevices.length > 1 && (
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">انتخاب ورودی دوربین:</span>
+                                                    <span className="text-[10px] text-gray-500 whitespace-nowrap font-bold">انتخاب ورودی دوربین:</span>
                                                     <select 
                                                         value={selectedDeviceId} 
                                                         onChange={e => setSelectedDeviceId(e.target.value)}
@@ -1017,13 +1160,25 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                             )}
 
                                             <div className="relative overflow-hidden rounded border bg-black aspect-video max-w-sm mx-auto shadow-inner">
-                                                <video 
-                                                    ref={videoRef} 
-                                                    autoPlay 
-                                                    playsInline 
-                                                    muted 
-                                                    className={`w-full h-full object-cover ${localStorage.getItem('cameraMirror') === 'true' ? 'transform -scale-x-100' : ''}`} 
-                                                />
+                                                {cameraType === 'network' ? (
+                                                    <img 
+                                                        src={cameraNetworkType === 'snapshot' ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl}
+                                                        referrerPolicy="no-referrer"
+                                                        className={`w-full h-full object-contain ${localStorage.getItem('cameraMirror') === 'true' ? 'transform -scale-x-100' : ''}`} 
+                                                        alt="Network Camera Feed"
+                                                        onError={(e) => {
+                                                            console.error("Network feed loading error");
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <video 
+                                                        ref={videoRef} 
+                                                        autoPlay 
+                                                        playsInline 
+                                                        muted 
+                                                        className={`w-full h-full object-cover ${localStorage.getItem('cameraMirror') === 'true' ? 'transform -scale-x-100' : ''}`} 
+                                                    />
+                                                )}
                                                 <div className="absolute inset-x-0 bottom-0 bg-black/85 p-2 flex flex-col gap-2 justify-center items-center">
                                                     <div className="flex flex-col gap-2 w-full">
                                                         <div className="flex gap-2 w-full">

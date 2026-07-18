@@ -1748,6 +1748,31 @@ app.post('/api/bot/send-by-phone', async (req, res) => {
     }
 });
 
+// --- PROXY NETWORK CAMERA SNAPSHOT TO PREVENT CORS ---
+app.post('/api/security/proxy-snapshot', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ error: 'آدرس ارسال نشده است.' });
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`خطا در ارتباط با دوربین: ${response.statusText}`);
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+        const contentType = response.headers.get('content-type') || 'image/jpeg';
+        
+        res.json({ success: true, imageBase64: `data:${contentType};base64,${base64}` });
+    } catch (e) {
+        console.error("Proxy Snapshot Error:", e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // --- AUTOMATIC LICENSE PLATE RECOGNITION (ALPR) ---
 app.post('/api/security/ocr-plate', async (req, res) => {
     try {
