@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, SecurityLog, PersonnelDelay, SecurityIncident, SecurityStatus, UserRole, DailySecurityMeta, SystemSettings } from '../types';
 import { getSecurityLogs, saveSecurityLog, updateSecurityLog, deleteSecurityLog, getPersonnelDelays, savePersonnelDelay, updatePersonnelDelay, deletePersonnelDelay, getSecurityIncidents, saveSecurityIncident, updateSecurityIncident, deleteSecurityIncident, getSettings, saveSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatDate, getShamsiDateFromIso } from '../constants';
-import { Shield, Plus, CheckCircle, XCircle, Clock, Truck, AlertTriangle, UserCheck, Calendar, Printer, Archive, FileSymlink, Edit, Trash2, Eye, FileText, CheckSquare, User as UserIcon, ListChecks, Activity, FileDown, Loader2, Pencil, ChevronDown, ChevronUp, FolderOpen, Folder, Save, X } from 'lucide-react';
+import { Shield, Plus, CheckCircle, XCircle, Clock, Truck, AlertTriangle, UserCheck, Calendar, Printer, Archive, FileSymlink, Edit, Trash2, Eye, FileText, CheckSquare, User as UserIcon, ListChecks, Activity, FileDown, Loader2, Pencil, ChevronDown, ChevronUp, FolderOpen, Folder, Save, X, Camera } from 'lucide-react';
 import { PrintSecurityDailyLog, PrintPersonnelDelay, PrintIncidentReport } from './security/SecurityPrints';
 import { getRolePermissions } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator';
@@ -60,6 +60,206 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
     const currentShamsi = getCurrentShamsiDate();
     const [selectedDate, setSelectedDate] = useState({ year: financialYear ? parseInt(financialYear) : currentShamsi.year, month: currentShamsi.month, day: currentShamsi.day });
+
+    // --- WEBCAM & AI ALPR STATES ---
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+    const [isReadingPlate, setIsReadingPlate] = useState(false);
+    const [isReadingPlateLocal, setIsReadingPlateLocal] = useState(false);
+    const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const [capturedImagePreview, setCapturedImagePreview] = useState<string | null>(null);
+    const [viewAttachmentUrl, setViewAttachmentUrl] = useState<string | null>(null);
+
+    const startCamera = async () => {
+        try {
+            setCapturedImagePreview(null);
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            setCameraDevices(videoDevices);
+            
+            let deviceId = selectedDeviceId;
+            if (videoDevices.length > 0 && !deviceId) {
+                // Default to last device (usually back or USB camera)
+                deviceId = videoDevices[videoDevices.length - 1].deviceId;
+                setSelectedDeviceId(deviceId);
+            }
+
+            const constraints = {
+                video: deviceId 
+                    ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } 
+                    : { width: { ideal: 1280 }, height: { ideal: 720 } }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+            setIsCameraActive(true);
+        } catch (err) {
+            console.error("Camera access failed:", err);
+            alert("امکان دسترسی به دوربین وجود ندارد. لطفا دسترسی مرورگر به دوربین را تایید کرده و کابل اتصال دوربین را بررسی کنید.");
+        }
+    };
+
+    const stopCamera = () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsCameraActive(false);
+    };
+
+    const handleCaptureAndRecognize = async () => {
+        if (!videoRef.current) return;
+        setIsReadingPlate(true);
+        try {
+            const video = videoRef.current;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            setCapturedImagePreview(base64Image);
+            
+            // Turn off camera stream to release hardware resources
+            stopCamera();
+
+            const response = await fetch('/api/security/ocr-plate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageBase64: base64Image })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'خطا در پردازش هوشمند پلاک');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                setLogForm(prev => ({
+                    ...prev,
+                    plateNumber: data.plateNumber || prev.plateNumber || '',
+                    driverName: data.driverName || prev.driverName || '',
+                    attachment: data.attachment
+                }));
+            }
+        } catch (err: any) {
+            console.error("ALPR Error:", err);
+            alert("خطا در سیستم پلاک‌خوان هوشمند: " + err.message);
+        } finally {
+            setIsReadingPlate(false);
+        }
+    };
+
+    const handleCaptureAndRecognizeLocal = async () => {
+        if (!videoRef.current) return;
+        setIsReadingPlateLocal(true);
+        try {
+            const video = videoRef.current;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            setCapturedImagePreview(base64Image);
+            
+            // Turn off camera stream to release hardware resources
+            stopCamera();
+
+            const response = await fetch('/api/security/ocr-plate-local', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageBase64: base64Image })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'خطا در پردازش محلی پلاک');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                setLogForm(prev => ({
+                    ...prev,
+                    plateNumber: data.plateNumber || prev.plateNumber || '',
+                    attachment: data.attachment
+                }));
+            }
+        } catch (err: any) {
+            console.error("Local ALPR Error:", err);
+            alert("خطا در پلاک‌خوان محلی: " + err.message);
+        } finally {
+            setIsReadingPlateLocal(false);
+        }
+    };
+
+    const handleCaptureOnly = async () => {
+        if (!videoRef.current) return;
+        setIsSavingPhoto(true);
+        try {
+            const video = videoRef.current;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Image = canvas.toDataURL('image/jpeg', 0.85);
+            setCapturedImagePreview(base64Image);
+            
+            // Turn off camera stream to release hardware resources
+            stopCamera();
+
+            const response = await fetch('/api/security/save-only-photo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imageBase64: base64Image })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'خطا در ذخیره سازی تصویر');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                setLogForm(prev => ({
+                    ...prev,
+                    attachment: data.attachment
+                }));
+            }
+        } catch (err: any) {
+            console.error("Capture Photo Error:", err);
+            alert("خطا در ذخیره سازی تصویر دوربین: " + err.message);
+        } finally {
+            setIsSavingPhoto(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isCameraActive) {
+            stopCamera();
+            startCamera();
+        }
+    }, [selectedDeviceId]);
 
     useEffect(() => {
         if (financialYear) {
@@ -348,7 +548,8 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     permitProvider: logForm.permitProvider || '',
                     registrant: currentUser.fullName,
                     status: SecurityStatus.PENDING_FACTORY, 
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    attachment: logForm.attachment || ''
                 });
             }
         }
@@ -404,7 +605,15 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
         loadData();
     };
 
-    const resetForms = () => { setShowModal(false); setEditingId(null); setLogForm({}); setDelayForm({}); setPartialIncidentForm({}); };
+    const resetForms = () => { 
+        setShowModal(false); 
+        setEditingId(null); 
+        setLogForm({}); 
+        setDelayForm({}); 
+        setPartialIncidentForm({}); 
+        stopCamera();
+        setCapturedImagePreview(null);
+    };
 
     const handleEditItem = (item: any, type: 'log' | 'delay' | 'incident') => {
         setEditingId(item.id);
@@ -657,6 +866,43 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                 </div>
             )}
 
+            {/* View Image Attachment Lightbox Modal */}
+            {viewAttachmentUrl && (
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 transition-all">
+                    <div className="bg-white rounded-xl shadow-2xl p-4 max-w-2xl w-full relative">
+                        <button 
+                            onClick={() => setViewAttachmentUrl(null)}
+                            className="absolute -top-3 -left-3 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 shadow-lg transition-all"
+                        >
+                            <X size={18} />
+                        </button>
+                        <h4 className="font-bold text-sm text-gray-800 mb-3 text-right">تصویر ثبت شده خودرو در گیت ورودی</h4>
+                        <img 
+                            src={viewAttachmentUrl} 
+                            alt="License Plate Snapshot" 
+                            className="w-full h-auto max-h-[70vh] object-contain rounded-lg border shadow-inner"
+                        />
+                        <div className="mt-4 flex justify-center gap-2">
+                            <a 
+                                href={viewAttachmentUrl} 
+                                download="car_plate.jpg" 
+                                target="_blank"
+                                rel="noreferrer"
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all"
+                            >
+                                دریافت تصویر اصلی
+                            </a>
+                            <button 
+                                onClick={() => setViewAttachmentUrl(null)}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold px-4 py-2 rounded-lg transition-all"
+                            >
+                                بستن پنجره
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Input Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4">
@@ -676,6 +922,180 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                     <div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded p-2" value={logForm.driverName} onChange={e=>setLogForm({...logForm, driverName:e.target.value})}/></div>
                                     <div><label className="text-xs font-bold block mb-1">شماره تماس راننده</label><input className="w-full border rounded p-2 font-mono" dir="ltr" value={logForm.driverPhone} onChange={e=>setLogForm({...logForm, driverPhone:e.target.value})} placeholder="09..."/></div>
                                 </div>
+
+                                {/* --- AUTOMATIC LICENSE PLATE RECOGNITION (ALPR) COMPONENT --- */}
+                                <div className="border border-dashed border-gray-300 rounded-lg p-2 bg-gray-50/50">
+                                    {!isCameraActive ? (
+                                        <button 
+                                            type="button" 
+                                            onClick={startCamera} 
+                                            className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                                        >
+                                            <Camera size={14} />
+                                            <span>فعالسازی دوربین جلو درب (پلاک‌خوان هوشمند)</span>
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between bg-white p-1 rounded border">
+                                                <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1.5 pr-1">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                    </span>
+                                                    دوربین جلو درب متصل است
+                                                </span>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={stopCamera} 
+                                                    className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-[10px] font-bold px-2 py-0.5 rounded transition-all"
+                                                >
+                                                    غیرفعال کردن دوربین
+                                                </button>
+                                            </div>
+                                            
+                                            {cameraDevices.length > 1 && (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">انتخاب ورودی دوربین:</span>
+                                                    <select 
+                                                        value={selectedDeviceId} 
+                                                        onChange={e => setSelectedDeviceId(e.target.value)}
+                                                        className="w-full text-xs border rounded p-1 bg-white font-sans"
+                                                    >
+                                                        {cameraDevices.map((dev, i) => (
+                                                            <option key={dev.deviceId} value={dev.deviceId}>
+                                                                {dev.label || `دوربین شماره ${i + 1}`}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            <div className="relative overflow-hidden rounded border bg-black aspect-video max-w-sm mx-auto shadow-inner">
+                                                <video 
+                                                    ref={videoRef} 
+                                                    autoPlay 
+                                                    playsInline 
+                                                    muted 
+                                                    className="w-full h-full object-cover" 
+                                                />
+                                                <div className="absolute inset-x-0 bottom-0 bg-black/85 p-2 flex flex-col gap-2 justify-center items-center">
+                                                    <div className="flex flex-col gap-2 w-full">
+                                                        <div className="flex gap-2 w-full">
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleCaptureAndRecognizeLocal}
+                                                                disabled={isReadingPlate || isReadingPlateLocal || isSavingPhoto}
+                                                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white text-[10px] font-bold py-1.5 px-2 rounded shadow-md flex items-center justify-center gap-1 transition-all"
+                                                                title="شناسایی خودکار شماره پلاک با فرمت ایران بدون هوش مصنوعی"
+                                                            >
+                                                                {isReadingPlateLocal ? (
+                                                                    <>
+                                                                        <Loader2 size={10} className="animate-spin" />
+                                                                        <span>در حال خواندن پلاک...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Camera size={11} />
+                                                                        <span>فقط خواندن پلاک ایران (آفلاین)</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleCaptureAndRecognize}
+                                                                disabled={isReadingPlate || isReadingPlateLocal || isSavingPhoto}
+                                                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-500 text-white text-[10px] font-bold py-1.5 px-2 rounded shadow-md flex items-center justify-center gap-1 transition-all"
+                                                            >
+                                                                {isReadingPlate ? (
+                                                                    <>
+                                                                        <Loader2 size={10} className="animate-spin" />
+                                                                        <span>در حال استخراج (AI)...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Camera size={11} />
+                                                                        <span>خواندن پلاک + اطلاعات (AI)</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleCaptureOnly}
+                                                            disabled={isReadingPlate || isReadingPlateLocal || isSavingPhoto}
+                                                            className="w-full bg-slate-600 hover:bg-slate-700 disabled:bg-gray-500 text-white text-[10px] font-bold py-1.5 px-2 rounded shadow-md flex items-center justify-center gap-1 transition-all"
+                                                        >
+                                                            {isSavingPhoto ? (
+                                                                <>
+                                                                    <Loader2 size={10} className="animate-spin" />
+                                                                    <span>در حال ذخیره...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Camera size={11} />
+                                                                    <span>فقط ثبت عکس خودرو (ثبت دستی اطلاعات)</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isReadingPlate && (
+                                        <div className="border border-blue-200 bg-blue-50/80 rounded-lg p-2 text-center mt-2 animate-pulse">
+                                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-blue-800">
+                                                <Loader2 size={14} className="animate-spin text-blue-600" />
+                                                <span>تصویر پلاک خودرو توسط هوش مصنوعی جمینی در حال پردازش و استخراج خودکار است...</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isReadingPlateLocal && (
+                                        <div className="border border-indigo-200 bg-indigo-50/80 rounded-lg p-2 text-center mt-2 animate-pulse">
+                                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-indigo-800">
+                                                <Loader2 size={14} className="animate-spin text-indigo-600" />
+                                                <span>در حال اجرای موتور محلی OCR و انطباق پلاک ایران با الگوریتم‌های الگوشناسی...</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isSavingPhoto && (
+                                        <div className="border border-blue-200 bg-blue-50/80 rounded-lg p-2 text-center mt-2 animate-pulse">
+                                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-blue-800">
+                                                <Loader2 size={14} className="animate-spin text-blue-600" />
+                                                <span>در حال ذخیره سازی تصویر خام و ضمیمه کردن آن به رکورد ورود...</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {logForm.attachment && (
+                                        <div className="border border-green-200 bg-green-50/80 rounded-lg p-2 mt-2 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <img 
+                                                    src={logForm.attachment} 
+                                                    alt="Captured vehicle" 
+                                                    className="w-14 h-9 object-cover rounded border shadow-sm"
+                                                />
+                                                <div className="text-right">
+                                                    <p className="text-xs font-bold text-green-800">تصویر خودرو با موفقیت پیوست شد</p>
+                                                    <p className="text-[9px] text-gray-500">تصویر به عنوان سند ورود ذخیره و ثبت گردید.</p>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setLogForm(prev => ({ ...prev, attachment: undefined }))}
+                                                className="text-red-500 hover:text-red-700 text-xs font-bold bg-white border px-1.5 py-0.5 rounded shadow-sm"
+                                            >
+                                                حذف
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-3">
                                     <div><label className="text-xs font-bold block mb-1">شماره پلاک</label><input className="w-full border rounded p-2 dir-ltr" placeholder="12 A 345 67" value={logForm.plateNumber} onChange={e=>setLogForm({...logForm, plateNumber:e.target.value})}/></div>
                                     <div><label className="text-xs font-bold block mb-1">مجوز دهنده</label><input className="w-full border rounded p-2" value={logForm.permitProvider} onChange={e=>setLogForm({...logForm, permitProvider:e.target.value})}/></div>
@@ -754,6 +1174,16 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                                 <div className="font-bold">{log.driverName}</div>
                                                 <div className="text-[10px] text-gray-500 font-mono">{log.driverPhone}</div>
                                                 <div className="font-mono text-blue-700 bg-blue-50 px-1 rounded inline-block mt-1">{log.plateNumber}</div>
+                                                {log.attachment && (
+                                                    <button 
+                                                        onClick={() => setViewAttachmentUrl(log.attachment)} 
+                                                        className="block mt-1 mx-auto text-[10px] text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 px-1.5 py-0.5 rounded flex items-center justify-center gap-1 transition-all"
+                                                        title="مشاهده تصویر ثبت شده پلاک خودرو"
+                                                    >
+                                                        <Camera size={10} />
+                                                        <span>مشاهده عکس خودرو</span>
+                                                    </button>
+                                                )}
                                             </td>
                                             <td className="p-3"><div>{log.goodsName}</div><div className="text-gray-500">{log.quantity}</div></td>
                                             <td className="p-3"><div>{log.destination}</div><div className="text-gray-500">{log.receiver}</div></td>

@@ -588,6 +588,7 @@ export interface SecurityLog {
     approverSupervisor?: string;
     approverFactory?: string;
     approverCeo?: string;
+    attachment?: string;
 }
 
 export interface PersonnelDelay {
@@ -1291,5 +1292,38 @@ export interface SecretariatTemplate {
     content: string;     // متن خام قالب (HTML/Quill compatible)
     createdAt: number;
 }
+
+export interface ChequeItem {
+    id: string;
+    chequeNumber: string; // شماره چک
+    sayyadId: string;     // شناسه صیادی ۱۶ رقمی
+    bankName: string;     // نام بانک صادرکننده
+    dueDate: string;      // تاریخ سررسید (مثال: ۱۴۰۳/۰۵/۲۰)
+    amount: number;       // مبلغ چک به ریال
+    drawerName: string;   // صادرکننده چک / صاحب حساب
+}
+
+export interface ChequeReceipt {
+    id: string;
+    customerName: string;    // نام مشتری
+    registrationDate: string;// تاریخ ثبت رسید (شمسی)
+    totalAmount: number;     // جمع کل مبالغ چک‌ها به ریال
+    serialNumber: string;    // پشت نمره (شناسه پیگیری متوالی)
+    attachedFile?: {
+        name: string;
+        url: string;
+    };
+    cheques: ChequeItem[];
+    status?: 'draft' | 'pending_sales' | 'pending_ceo' | 'approved' | 'archived';
+    salesManagerApprovedBy?: string;
+    salesManagerApprovedAt?: number;
+    ceoApprovedBy?: string;
+    ceoApprovedAt?: number;
+    archivedBy?: string;
+    archivedAt?: number;
+    createdAt: number;
+    createdBy: string;
+}
+
 
 

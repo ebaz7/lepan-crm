@@ -25,6 +25,7 @@ import { CustomerBalanceModule } from './components/CustomerBalanceModule';
 import CctiConverter from './components/CctiConverter';
 import AccountingReports from './components/AccountingReports';
 import SecretariatModule from './components/SecretariatModule';
+import { ChequeReceiptModule } from './components/ChequeReceiptModule';
 import { getOrders, getSettings, getMessages, saveSettings, getSystemAnnouncements } from './services/storageService'; 
 import { getCurrentUser, getUsers, getRolePermissions, logout as authLogout } from './services/authService';
 import { PaymentOrder, User, OrderStatus, UserRole, AppNotification, SystemSettings, PaymentMethod, ChatMessage, SystemAnnouncement } from './types';
@@ -420,7 +421,7 @@ function App() {
     const path = window.location.pathname.replace(/^\/+/, '');
     const defaultTab = hash || path || 'dashboard';
 
-    if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'ccti', 'sayan'].includes(defaultTab)) {
+    if (['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'ccti', 'sayan', 'cheque-receipts'].includes(defaultTab)) {
         setActiveTabState(defaultTab); 
         safeReplaceState({ tab: defaultTab }, '', `#${defaultTab}`);
     } else { 
@@ -486,7 +487,7 @@ function App() {
                     });
                 }
 
-                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan'];
+                const validTabs = ['dashboard', 'create', 'manage', 'chat', 'trade', 'users', 'settings', 'create-exit', 'manage-exit', 'manage-invoices', 'warehouse', 'security', 'purchase', 'balances', 'meetings', 'knowledge', 'ccti', 'sayan', 'cheque-receipts'];
                 if (validTabs.includes(path) || path === '') {
                     setActiveTab(path || 'dashboard');
                     if (url.search) {
@@ -1233,6 +1234,7 @@ function App() {
                 {activeTab === 'meetings' && <div className="page-transition flex flex-col flex-1 min-h-0"><MeetingModule currentUser={currentUser} /></div>}
                 {activeTab === 'purchase' && <div className="page-transition flex flex-col flex-1 min-h-0"><PurchaseModule currentUser={currentUser} settings={settings || undefined} initialTab={purchaseInitialTab} /></div>}
                 {activeTab === 'secretariat' && currentUser && <div className="page-transition flex flex-col flex-1 min-h-0"><SecretariatModule currentUser={currentUser} /></div>}
+                {activeTab === 'cheque-receipts' && currentUser && <div className="page-transition flex flex-col flex-1 min-h-0"><ChequeReceiptModule currentUser={currentUser} /></div>}
                 
                 <div className={activeTab === 'chat' ? 'flex-1 flex flex-col w-full min-h-0 page-transition' : 'fixed inset-0 pointer-events-none opacity-0 invisible overflow-hidden h-0'}>
                     <ChatRoom 

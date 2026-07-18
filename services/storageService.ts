@@ -1,5 +1,5 @@
 
-import { MeetingMinutes, PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement } from '../types';
+import { MeetingMinutes, PaymentOrder, User, OrderStatus, SystemSettings, ChatMessage, ChatGroup, GroupTask, TradeRecord, ExitPermit, ExitPermitStatus, WarehouseItem, WarehouseTransaction, SecurityLog, PersonnelDelay, SecurityIncident, TaskGroup, SystemAnnouncement, ChequeReceipt, ChequeItem } from '../types';
 import { apiCall } from './apiService';
 
 // Safely return array
@@ -359,5 +359,37 @@ export const deleteSecretariatTemplate = async (id: string): Promise<Secretariat
 export const importDocx = async (fileData: string): Promise<{ success: boolean; html: string; warnings?: any }> => {
     return await apiCall<{ success: boolean; html: string; warnings?: any }>('/secretariat/import-docx', 'POST', { fileData });
 };
+
+// --- CHEQUE RECEIPTS ---
+export const getChequeReceipts = async (): Promise<ChequeReceipt[]> => {
+    const res = await apiCall<ChequeReceipt[]>('/cheque-receipts');
+    return safeArray(res);
+};
+
+export const saveChequeReceipt = async (receipt: ChequeReceipt): Promise<ChequeReceipt[]> => {
+    return await apiCall<ChequeReceipt[]>('/cheque-receipts', 'POST', receipt);
+};
+
+export const updateChequeReceipt = async (receipt: ChequeReceipt): Promise<ChequeReceipt[]> => {
+    return await apiCall<ChequeReceipt[]>(`/cheque-receipts/${receipt.id}`, 'PUT', receipt);
+};
+
+export const deleteChequeReceipt = async (id: string): Promise<ChequeReceipt[]> => {
+    return await apiCall<ChequeReceipt[]>(`/cheque-receipts/${id}`, 'DELETE');
+};
+
+export const getNextChequeReceiptNumber = async (): Promise<string> => {
+    try {
+        const response = await apiCall<{ nextNumber: string }>(`/next-cheque-receipt-number?t=${Date.now()}`);
+        return response.nextNumber;
+    } catch (e) {
+        return 'CR-' + Date.now();
+    }
+};
+
+export const parseChequesFromDocument = async (fileData: string, fileName: string): Promise<{ cheques: ChequeItem[] }> => {
+    return await apiCall<{ cheques: ChequeItem[] }>('/cheque-receipts/parse-cheques', 'POST', { fileData, fileName });
+};
+
 
 

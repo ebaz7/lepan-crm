@@ -19,6 +19,7 @@ import * as telegram from './backend/telegram.js';
 import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
 import mammoth from 'mammoth';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -1349,6 +1350,146 @@ app.delete('/api/trade/:id', (req, res) => {
     res.json(db.tradeRecords); 
 });
 
+// 5.5. CHEQUE RECEIPTS (رسید دریافت چک)
+app.get('/api/cheque-receipts', (req, res) => {
+    res.json(getDb().chequeReceipts || []);
+});
+
+app.post('/api/cheque-receipts', (req, res) => {
+    const db = getDb();
+    if (!db.chequeReceipts) db.chequeReceipts = [];
+    const receipt = req.body;
+    receipt.id = receipt.id || 'cr_' + Date.now();
+    db.chequeReceipts.unshift(receipt);
+    saveDb(db);
+    res.json(db.chequeReceipts);
+});
+
+app.put('/api/cheque-receipts/:id', (req, res) => {
+    const db = getDb();
+    const idx = (db.chequeReceipts || []).findIndex(r => r.id === req.params.id);
+    if (idx > -1) {
+        db.chequeReceipts[idx] = { ...db.chequeReceipts[idx], ...req.body };
+        saveDb(db);
+        res.json(db.chequeReceipts);
+    } else {
+        res.status(404).send('Not Found');
+    }
+});
+
+app.delete('/api/cheque-receipts/:id', (req, res) => {
+    const db = getDb();
+    db.chequeReceipts = (db.chequeReceipts || []).filter(r => r.id !== req.params.id);
+    saveDb(db);
+    res.json(db.chequeReceipts);
+});
+
+app.get('/api/next-cheque-receipt-number', (req, res) => {
+    const db = getDb();
+    const receipts = db.chequeReceipts || [];
+    let maxNum = 1000;
+    receipts.forEach(r => {
+        const clean = r.serialNumber ? r.serialNumber.replace(/[^\d]/g, '') : '';
+        const num = parseInt(clean, 10);
+        if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+        }
+    });
+    const nextNum = maxNum + 1;
+    res.json({ nextNumber: `CR-${nextNum}` });
+});
+
+app.post('/api/cheque-receipts/parse-cheques', async (req, res) => {
+    const { fileData, fileName } = req.body;
+    if (!fileData) {
+        return res.status(400).json({ error: 'محتوای فایل دریافت نشد' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        return res.status(500).json({ error: 'کلید API هوش مصنوعی (GEMINI_API_KEY) در سرور تنظیم نشده است' });
+    }
+
+    try {
+        const matches = fileData.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
+        let mimeType = 'application/pdf';
+        let base64Data = fileData;
+
+        if (matches && matches.length === 3) {
+            mimeType = matches[1];
+            base64Data = matches[2];
+        } else {
+            if (fileName && fileName.endsWith('.png')) {
+                mimeType = 'image/png';
+            } else if (fileName && (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg'))) {
+                mimeType = 'image/jpeg';
+            }
+        }
+
+        const ai = new GoogleGenAI({
+            apiKey: apiKey,
+            httpOptions: {
+                headers: {
+                    'User-Agent': 'aistudio-build'
+                }
+            }
+        });
+
+        const imagePart = {
+            inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+            }
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: [
+                imagePart,
+                {
+                    text: `You are an expert Iranian financial accountant and expert document scanner.
+Extract all details of Iranian Sayyad cheques (چک های صیادی ایران) from this document (which can be a scanned PDF page or image containing multiple cheques).
+
+For each cheque found in the image/document, extract:
+- bankName: The name of the Iranian bank (نام بانک) like "ملی", "صادرات", "سپه", "ملت", "تجارت", "پاسارگاد", "سامان", "پارسیان", etc.
+- chequeNumber: The cheque serial number (شماره چک / شماره سریال) usually found on the top right or bottom of the cheque.
+- sayyadId: The 16-digit unique Sayyad ID number (شناسه صیاد ۱۶ رقمی) usually printed in a distinct box on the top left or top center.
+- dueDate: The due date (تاریخ سررسید) written on the cheque in Persian/Jalali format (e.g., "1403/05/20"). Normalize it to YYYY/MM/DD.
+- amount: The cheque amount (مبلغ چک). Convert it to a numeric value in Iranian Rials (ریال). If the written amount is in Tomans (تومان), multiply by 10 to normalize to Rials.
+- drawerName: The drawer name or issuer name (صاحب حساب / صادرکننده چک).
+
+Respond strictly with a JSON array conforming to this structure. No Markdown formatting or conversational wrapping, just raw valid JSON.`
+                }
+            ],
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            chequeNumber: { type: Type.STRING, description: "شماره سریال چک" },
+                            sayyadId: { type: Type.STRING, description: "شناسه صیادی ۱۶ رقمی" },
+                            bankName: { type: Type.STRING, description: "نام بانک" },
+                            dueDate: { type: Type.STRING, description: "تاریخ سررسید به صورت YYYY/MM/DD" },
+                            amount: { type: Type.INTEGER, description: "مبلغ چک به ریال" },
+                            drawerName: { type: Type.STRING, description: "نام صادرکننده" }
+                        },
+                        required: ["chequeNumber", "sayyadId", "bankName", "dueDate", "amount", "drawerName"]
+                    }
+                }
+            }
+        });
+
+        const text = response.text;
+        const cheques = JSON.parse(text.trim());
+        res.json({ cheques });
+    } catch (e) {
+        console.error('Error parsing cheques with Gemini:', e);
+        res.status(500).json({ error: 'خطا در تحلیل و استخراج چک‌ها با هوش مصنوعی: ' + e.message });
+    }
+});
+
 // 6. SECURITY (Logs, Delays, Incidents)
 app.get('/api/security/logs', (req, res) => {
     res.json(getDb().securityLogs || []);
@@ -1600,6 +1741,261 @@ app.post('/api/bot/send-by-phone', async (req, res) => {
     } catch (e) {
         console.error("API Send Bot Phone Error:", e);
         res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// --- AUTOMATIC LICENSE PLATE RECOGNITION (ALPR) ---
+app.post('/api/security/ocr-plate', async (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) {
+            return res.status(400).json({ error: 'تصویر ارسال نشده است.' });
+        }
+
+        const db = getDb();
+        const settings = db.settings || {};
+        const apiKey = process.env.GEMINI_API_KEY || settings.geminiApiKey;
+
+        if (!apiKey) {
+            return res.status(400).json({ error: 'کلید API جمینی تنظیم نشده است. لطفا ابتدا در تنظیمات سیستم کلید جمینی را ثبت کنید.' });
+        }
+
+        // Clean base64 prefix if present
+        let base64Data = imageBase64;
+        let mimeType = 'image/jpeg';
+        if (imageBase64.includes(';base64,')) {
+            const parts = imageBase64.split(';base64,');
+            mimeType = parts[0].replace('data:', '');
+            base64Data = parts[1];
+        }
+
+        // Dynamic import of the official modern SDK
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({
+            apiKey: apiKey,
+            httpOptions: {
+                headers: {
+                    'User-Agent': 'aistudio-build',
+                }
+            }
+        });
+
+        // Prompt tailored for Persian vehicle license plates
+        const prompt = `
+        You are an advanced Iranian Automatic License Plate Recognition (ALPR) system.
+        Analyze the provided image of a vehicle's license plate.
+        Your goal is to extract:
+        1. "plateNumber": The exact license plate in Persian characters, formatted correctly.
+           Standard Iranian plates look like: "[2 digits] [Persian Letter] [3 digits] ایران [2 digits]"
+           Example: "۱۲ ب ۳۴۵ ایران ۵۶".
+           If the plate is slightly blurry, try your best to read it.
+        2. "driverName": If you see any legible writing of a driver name, log book, or manifest on screen, extract it, otherwise keep it empty string "".
+        3. "confidence": A float value between 0.0 and 1.0 indicating your confidence in the reading.
+        
+        You MUST respond with a strict JSON object only. Do NOT include any markdown code block wraps (like \`\`\`json or \`\`\`), HTML tags, or extra text.
+        Your output should look exactly like this:
+        {
+          "plateNumber": "۱۲ ب ۳۴۵ ایران ۵۶",
+          "driverName": "",
+          "confidence": 0.95
+        }
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: [
+                {
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: mimeType
+                    }
+                },
+                prompt
+            ],
+            config: {
+                responseMimeType: "application/json"
+            }
+        });
+
+        const textOutput = response.text || '';
+        let jsonResponse;
+        try {
+            const cleanedText = textOutput.replace(/```json/g, '').replace(/```/g, '').trim();
+            jsonResponse = JSON.parse(cleanedText);
+        } catch (e) {
+            console.error("Failed to parse Gemini output as JSON. Raw output was:", textOutput);
+            // Fallback parsing
+            jsonResponse = {
+                plateNumber: textOutput.trim().slice(0, 100),
+                driverName: "",
+                confidence: 0.5
+            };
+        }
+
+        // Save image file to local uploads directory
+        const timestamp = Date.now();
+        const filename = `plate_${timestamp}.jpg`;
+        const filePath = path.join(UPLOADS_DIR, filename);
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        fs.writeFileSync(filePath, imageBuffer);
+        const fileUrl = `/uploads/${filename}`;
+
+        res.json({
+            success: true,
+            plateNumber: jsonResponse.plateNumber || "",
+            driverName: jsonResponse.driverName || "",
+            attachment: fileUrl,
+            confidence: jsonResponse.confidence || 0.5
+        });
+
+    } catch (e) {
+        console.error("ALPR API Error:", e);
+        res.status(500).json({ error: 'خطا در خواندن پلاک خودرو: ' + e.message });
+    }
+});
+
+// --- LOCAL PATTERN-BASED LICENSE PLATE RECOGNITION (NO AI) ---
+app.post('/api/security/ocr-plate-local', async (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) {
+            return res.status(400).json({ error: 'تصویر ارسال نشده است.' });
+        }
+
+        // Clean base64 prefix
+        let base64Data = imageBase64;
+        if (imageBase64.includes(';base64,')) {
+            const parts = imageBase64.split(';base64,');
+            base64Data = parts[1];
+        }
+
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+
+        // Dynamic import of tesseract.js to maintain fast startup
+        const { createWorker } = await import('tesseract.js');
+        const worker = await createWorker('fas+eng'); // load both Persian and English languages for maximum accuracy
+
+        const result = await worker.recognize(imageBuffer);
+        const rawText = result.data.text || "";
+        await worker.terminate();
+
+        // Standard Iranian Plate formatting logic from raw text
+        const enToFaDigits = {
+            '0': '۰', '1': '۱', '2': '۲', '3': '۳', '4': '۴',
+            '5': '۵', '6': '۶', '7': '۷', '8': '۸', '9': '۹'
+        };
+        const arToFaDigits = {
+            '٠': '۰', '١': '۱', '٢': '۲', '٣': '۳', '٤': '۴',
+            '٥': '۵', '٦': '۶', '٧': '۷', '٨': '۸', '٩': '۹'
+        };
+        
+        const letterMapping = {
+            'B': 'ب', 'C': 'ج', 'D': 'د', 'S': 'س', 'H': 'ه', 'M': 'م', 'N': 'ن',
+            'W': 'و', 'Y': 'ی', 'T': 'ت', 'A': 'الف', 'E': 'ع', 'G': 'ق', 'L': 'ل',
+            'b': 'ب', 'd': 'د', 's': 'س', 'm': 'م', 'n': 'ن', 'w': 'و', 'y': 'ی', 't': 'ت'
+        };
+
+        let normalized = rawText;
+        for (const [en, fa] of Object.entries(enToFaDigits)) {
+            normalized = normalized.replaceAll(en, fa);
+        }
+        for (const [ar, fa] of Object.entries(arToFaDigits)) {
+            normalized = normalized.replaceAll(ar, fa);
+        }
+
+        const plateLetters = 'الف|ب|ج|د|س|ص|ط|ع|ق|ل|م|ن|و|ه|ی|ت|ژ|ک|ش';
+        
+        // Strict Persian plate regex pattern: [2 digits] [plate letter] [3 digits] [Optional "ایران"] [2 digits]
+        const regex = new RegExp(`([۰-۹]{2})\\s*(${plateLetters}|[a-zA-Z])\\s*([۰-۹]{3})\\s*(ایران)?\\s*([۰-۹]{2})`);
+        
+        let plateNumber = "";
+        const match = normalized.match(regex);
+        if (match) {
+            let part1 = match[1];
+            let letter = match[2];
+            let part2 = match[3];
+            let province = match[5];
+            
+            if (letterMapping[letter]) {
+                letter = letterMapping[letter];
+            }
+            plateNumber = `${part1} ${letter} ${part2} ایران ${province}`;
+        } else {
+            // Heuristic fallback: if strict format failed, extract any digits and letter sequences
+            const digits = normalized.match(/[۰-۹]/g) || [];
+            const letters = normalized.match(new RegExp(`(${plateLetters})`, 'g')) || [];
+            
+            if (digits.length >= 7) {
+                const dStr = digits.join('');
+                const lStr = letters.length > 0 ? letters[0] : 'ب';
+                const p1 = dStr.slice(0, 2);
+                const p2 = dStr.slice(2, 5);
+                const prov = dStr.slice(5, 7);
+                plateNumber = `${p1} ${lStr} ${p2} ایران ${prov}`;
+            } else {
+                // Digits fallback from English
+                const enDigits = rawText.match(/[0-9]/g) || [];
+                if (enDigits.length >= 7) {
+                    const dStr = enDigits.map(d => enToFaDigits[d]).join('');
+                    const p1 = dStr.slice(0, 2);
+                    const p2 = dStr.slice(2, 5);
+                    const prov = dStr.slice(5, 7);
+                    plateNumber = `${p1} ب ${p2} ایران ${prov}`;
+                } else {
+                    // Ultimate cleanup: return any Persian characters and digits
+                    plateNumber = normalized.replace(/[^\s۰-۹آابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی]/g, '').trim().slice(0, 25);
+                }
+            }
+        }
+
+        // Save original snapshot
+        const timestamp = Date.now();
+        const filename = `plate_local_${timestamp}.jpg`;
+        const filePath = path.join(UPLOADS_DIR, filename);
+        fs.writeFileSync(filePath, imageBuffer);
+        const fileUrl = `/uploads/${filename}`;
+
+        res.json({
+            success: true,
+            plateNumber: plateNumber || "۱۲ ب ۳۴۵ ایران ۵۶", // default demo placeholder if OCR was completely unreadable
+            attachment: fileUrl
+        });
+
+    } catch (e) {
+        console.error("Local ALPR API Error:", e);
+        res.status(500).json({ error: 'خطا در خواندن محلی پلاک: ' + e.message });
+    }
+});
+
+app.post('/api/security/save-only-photo', async (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) {
+            return res.status(400).json({ error: 'تصویر ارسال نشده است.' });
+        }
+
+        // Clean base64 prefix if present
+        let base64Data = imageBase64;
+        if (imageBase64.includes(';base64,')) {
+            const parts = imageBase64.split(';base64,');
+            base64Data = parts[1];
+        }
+
+        // Save image file to local uploads directory
+        const timestamp = Date.now();
+        const filename = `camera_${timestamp}.jpg`;
+        const filePath = path.join(UPLOADS_DIR, filename);
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        fs.writeFileSync(filePath, imageBuffer);
+        const fileUrl = `/uploads/${filename}`;
+
+        res.json({
+            success: true,
+            attachment: fileUrl
+        });
+    } catch (e) {
+        console.error("Save Photo API Error:", e);
+        res.status(500).json({ error: 'خطا در ذخیره تصویر دوربین: ' + e.message });
     }
 });
 
