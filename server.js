@@ -1448,17 +1448,21 @@ app.post('/api/cheque-receipts/parse-cheques', async (req, res) => {
                 imagePart,
                 {
                     text: `You are an expert Iranian financial accountant and expert document scanner.
-Extract all details of Iranian Sayyad cheques (چک های صیادی ایران) from this document (which can be a scanned PDF page or image containing multiple cheques).
+Extract all details of Iranian Sayyad cheques (چک های صیادی ایران) from this document (which can be a scanned PDF page or image containing one or multiple cheques).
 
-For each cheque found in the image/document, extract:
-- bankName: The name of the Iranian bank (نام بانک) like "ملی", "صادرات", "سپه", "ملت", "تجارت", "پاسارگاد", "سامان", "پارسیان", etc.
-- chequeNumber: The cheque serial number (شماره چک / شماره سریال) usually found on the top right or bottom of the cheque.
-- sayyadId: The 16-digit unique Sayyad ID number (شناسه صیاد ۱۶ رقمی) usually printed in a distinct box on the top left or top center.
-- dueDate: The due date (تاریخ سررسید) written on the cheque in Persian/Jalali format (e.g., "1403/05/20"). Normalize it to YYYY/MM/DD.
-- amount: The cheque amount (مبلغ چک). Convert it to a numeric value in Iranian Rials (ریال). If the written amount is in Tomans (تومان), multiply by 10 to normalize to Rials.
-- drawerName: The drawer name or issuer name (صاحب حساب / صادرکننده چک).
+CRITICAL INSTRUCTIONS:
+1. Examine the entire document (all pages if it is a PDF, or the full image).
+2. For each DISTINCT, physical Sayyad cheque found, extract its information.
+3. DO NOT hallucinate, guess, or create duplicate entries for the same cheque. If there is only 1 cheque in the entire document, you must return an array with EXACTLY 1 item. If there are multiple cheques, return EXACTLY that many items.
+4. Ensure each extracted cheque has:
+   - bankName: The official name of the Iranian bank (نام بانک) like "ملی", "صادرات", "سپه", "ملت", "تجارت", "پاسارگاد", "سامان", "پارسیان", etc. Do not include extra text.
+   - chequeNumber: The cheque serial number (شماره چک / شماره سریال) usually found on the top right or bottom of the cheque. It is typically a 6 to 8 digit number.
+   - sayyadId: The 16-digit unique Sayyad ID number (شناسه صیاد ۱۶ رقمی) usually printed in a distinct box on the top left or top center. It must contain exactly 16 digits.
+   - dueDate: The due date (تاریخ سررسید) written on the cheque in Persian/Jalali format (e.g., "1403/05/20"). Normalize it strictly to YYYY/MM/DD.
+   - amount: The cheque amount (مبلغ چک). Convert it to a numeric value in Iranian Rials (ریال). If the written amount is in Tomans (تومان) or written as Tomans, multiply by 10 to normalize strictly to Rials (ریال).
+   - drawerName: The drawer name or issuer name (صاحب حساب / صادرکننده چک). If blank or unclear, default to the customer's name or leave empty string if unknown.
 
-Respond strictly with a JSON array conforming to this structure. No Markdown formatting or conversational wrapping, just raw valid JSON.`
+Ensure that your JSON output is a clean array containing only the valid, physically visible cheques in the document.`
                 }
             ],
             config: {
@@ -2677,6 +2681,42 @@ app.post('/api/upload', (req, res) => {
         if (err) return res.status(500).send('Upload failed');
         res.json({ fileName, url: `/uploads/${uniqueName}` });
     });
+});
+
+app.get('/api/upload-get-base64', (req, res) => {
+    const fileUrl = req.query.url;
+    if (!fileUrl) {
+        return res.status(400).json({ error: 'آدرس فایل ارسال نشده است' });
+    }
+
+    let filename = '';
+    if (fileUrl.startsWith('/uploads/')) {
+        filename = fileUrl.replace('/uploads/', '');
+    } else {
+        filename = path.basename(fileUrl);
+    }
+
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'فایل یافت نشد' });
+    }
+
+    try {
+        const fileBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        let mimeType = 'application/octet-stream';
+        if (ext === '.pdf') mimeType = 'application/pdf';
+        else if (ext === '.png') mimeType = 'image/png';
+        else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+        else if (ext === '.gif') mimeType = 'image/gif';
+
+        const base64 = fileBuffer.toString('base64');
+        const fileData = `data:${mimeType};base64,${base64}`;
+        res.json({ fileData });
+    } catch (e) {
+        console.error('Error reading file for base64:', e);
+        res.status(500).json({ error: 'خطا در خواندن فایل: ' + e.message });
+    }
 });
 
 const chunkTempDir = path.join(ROOT_DIR, 'chunk-temp');

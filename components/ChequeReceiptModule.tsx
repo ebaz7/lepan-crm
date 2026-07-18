@@ -109,7 +109,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   
   // Offline and text pasting states
-  const [extractionMode, setExtractionMode] = useState<'ai' | 'offline' | 'qr' | 'text'>('ai');
+  const [extractionMode, setExtractionMode] = useState<'ai' | 'offline' | 'text'>('ai');
   const [pastedText, setPastedText] = useState('');
   const [qrScanning, setQrScanning] = useState(false);
 
@@ -239,9 +239,48 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     };
 
     const cleanText = normalizeDigits(rawText);
-    const lines = cleanText.split('\n');
-    const results: ChequeItem[] = [];
+    const wordTokens = cleanText.split(/[\s,،;*\-/\n]+/);
+    
+    // 1. Extract all unique 16-digit Sayyad IDs from the text
+    const sayyadIds: string[] = [];
+    
+    // Extract 16-digit sequences directly, allowing optional spaces/dashes between digits, but avoiding concatenation of unrelated numbers.
+    const matches16 = (cleanText.match(/\b(?:\d[\s\-]*){16}\b/g) || []) as string[];
+    matches16.forEach(match => {
+      const cleaned = match.replace(/[^\d]/g, '');
+      if (cleaned.length === 16 && !sayyadIds.includes(cleaned)) {
+        sayyadIds.push(cleaned);
+      }
+    });
 
+    // Fallback: Check individual tokens of appropriate length
+    wordTokens.forEach(token => {
+      const cleanToken = token.replace(/[^\d]/g, '');
+      if (cleanToken.length === 16 && !sayyadIds.includes(cleanToken)) {
+        sayyadIds.push(cleanToken);
+      }
+    });
+
+    // 2. Extract all dates (e.g. 1405/03/21 or 1405-03-21)
+    const dates: string[] = [];
+    const dateRegex = /\b(13|14)?\d{2}[/-]\d{1,2}[/-]\d{1,2}\b/g;
+    let dateMatch;
+    while ((dateMatch = dateRegex.exec(cleanText)) !== null) {
+      const rawDate = dateMatch[0];
+      const parts = rawDate.split(/[/-]/);
+      if (parts.length === 3) {
+        let y = parts[0];
+        let m = parts[1];
+        let d = parts[2];
+        if (y.length === 2) y = '14' + y;
+        if (m.length === 1) m = '0' + m;
+        if (d.length === 1) d = '0' + d;
+        const formatted = `${y}/${m}/${d}`;
+        if (!dates.includes(formatted)) dates.push(formatted);
+      }
+    }
+
+    // 3. Extract bank names
     const bankKeywords = [
       { name: 'ملی ایران', patterns: ['ملی', 'melli'] },
       { name: 'صادرات ایران', patterns: ['صادرات', 'saderat'] },
@@ -266,119 +305,68 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       { name: 'سینا', patterns: ['سینا', 'sina'] }
     ];
 
-    for (let line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) continue;
-
-      const digitsOnlyLine = trimmedLine.replace(/[- ]/g, '');
-      const sayyadMatch = digitsOnlyLine.match(/\b\d{16}\b/);
-      
-      let sayyadId = '';
-      if (sayyadMatch) {
-        sayyadId = sayyadMatch[0];
-      } else {
-        const fallbackMatch = trimmedLine.match(/\d{16}/);
-        if (fallbackMatch) sayyadId = fallbackMatch[0];
-      }
-
-      if (!sayyadId) {
-        const words = trimmedLine.split(/[\s,،;]+/);
-        for (const w of words) {
-          const cleanW = w.replace(/[^\d]/g, '');
-          if (cleanW.length === 16) {
-            sayyadId = cleanW;
-            break;
-          }
+    const foundBanks: string[] = [];
+    bankKeywords.forEach(bk => {
+      for (const pat of bk.patterns) {
+        if (cleanText.includes(pat)) {
+          if (!foundBanks.includes(bk.name)) foundBanks.push(bk.name);
+          break;
         }
       }
+    });
 
-      let remainingLine = trimmedLine;
-      if (sayyadId) {
-        remainingLine = remainingLine.replace(sayyadId, '');
-        const formattedSayyad = sayyadId.replace(/(.{4})/g, '$1 ').trim();
-        remainingLine = remainingLine.replace(formattedSayyad, '');
-        const dashedSayyad = sayyadId.replace(/(.{4})/g, '$1-').replace(/-$/, '');
-        remainingLine = remainingLine.replace(dashedSayyad, '');
+    // 4. Extract monetary amounts (excluding dates and Sayyad IDs)
+    let textWithoutDatesAndIds = cleanText.replace(dateRegex, ' ');
+    sayyadIds.forEach(id => {
+      textWithoutDatesAndIds = textWithoutDatesAndIds.replace(id, ' ');
+    });
+
+    // Standardize thousands separators (slashes or dots to commas)
+    const sanitizedForAmounts = textWithoutDatesAndIds
+      .replace(/(\d)[/](\d{3})/g, '$1,$2')
+      .replace(/(\d)[.](\d{3})/g, '$1,$2');
+    
+    const amounts: number[] = [];
+    const amountRegex = /\b\d{1,3}(?:,\d{3})+\b|\b\d{7,12}\b/g;
+    let amountMatch;
+    while ((amountMatch = amountRegex.exec(sanitizedForAmounts)) !== null) {
+      const rawAmount = amountMatch[0];
+      const cleanAmount = parseInt(rawAmount.replace(/,/g, ''), 10);
+      if (!isNaN(cleanAmount) && cleanAmount >= 100000) { // minimum 10,000 Tomans / 100,000 Rials
+        let amountVal = cleanAmount;
+        const index = amountMatch.index;
+        const surroundingText = sanitizedForAmounts.substring(Math.max(0, index - 30), Math.min(sanitizedForAmounts.length, index + 30));
+        if (surroundingText.includes('تومان') || surroundingText.includes('toman')) {
+          amountVal = amountVal * 10;
+        }
+        if (!amounts.includes(amountVal)) amounts.push(amountVal);
       }
+    }
 
-      const dateReg = /\b(13|14)?\d{2}[/-]\d{1,2}[/-]\d{1,2}\b/;
-      const dateMatch = remainingLine.match(dateReg);
-      let dueDate = getTodayJalali();
-      
-      if (dateMatch) {
-        const rawDate = dateMatch[0];
-        const parts = rawDate.split(/[/-]/);
-        if (parts.length === 3) {
-          let y = parts[0];
-          let m = parts[1];
-          let d = parts[2];
-          if (y.length === 2) y = '14' + y;
-          if (m.length === 1) m = '0' + m;
-          if (d.length === 1) d = '0' + d;
-          dueDate = `${y}/${m}/${d}`;
-        }
-        remainingLine = remainingLine.replace(rawDate, '');
-      } else {
-        const yyyymmddMatch = remainingLine.match(/\b(13|14)\d{6}\b/);
-        if (yyyymmddMatch) {
-          const rawDate = yyyymmddMatch[0];
-          dueDate = `${rawDate.substring(0, 4)}/${rawDate.substring(4, 6)}/${rawDate.substring(6, 8)}`;
-          remainingLine = remainingLine.replace(rawDate, '');
-        }
+    // 5. Extract cheque numbers (usually 5 to 9 digits, e.g. 193405 or 17312)
+    const chequeNumbers: string[] = [];
+    const potentialNumbers = textWithoutDatesAndIds.replace(/,/g, '').match(/\b\d{5,9}\b/g) || [];
+    potentialNumbers.forEach(num => {
+      const val = parseInt(num, 10);
+      if (val !== 1403 && val !== 1404 && val !== 1405 && val !== 1406 && !amounts.includes(val) && !amounts.includes(val * 10)) {
+        if (!chequeNumbers.includes(num)) chequeNumbers.push(num);
       }
+    });
 
-      let bankName = '';
-      for (const bk of bankKeywords) {
-        for (const pat of bk.patterns) {
-          if (remainingLine.includes(pat)) {
-            bankName = bk.name;
-            remainingLine = remainingLine.replace(pat, '');
-            break;
-          }
-        }
-        if (bankName) break;
-      }
-      if (!bankName) bankName = 'ملی ایران';
+    // Group the details together! We produce AT MOST the number of unique Sayyad IDs found, or 1 if no Sayyad ID is found but we have other info.
+    const results: ChequeItem[] = [];
+    const maxChequesCount = Math.max(sayyadIds.length, 1);
 
-      const cleanNumString = remainingLine.replace(/[،,.]/g, '');
-      const numMatches = cleanNumString.match(/\b\d+\b/g) || [];
-
-      let amount = 0;
-      let chequeNumber = '';
-
-      const numericValues = numMatches
-        .map(numStr => parseInt(numStr, 10))
-        .filter(val => !isNaN(val) && val > 0)
-        .sort((a, b) => b - a);
-
-      if (numericValues.length > 0) {
-        amount = numericValues[0];
-        if (trimmedLine.includes('تومان') || trimmedLine.includes('toman')) {
-          amount = amount * 10;
-        }
-
-        if (numericValues.length > 1) {
-          const serialCandidate = numericValues.find(val => val !== amount && val.toString().length >= 5 && val.toString().length <= 9);
-          if (serialCandidate) {
-            chequeNumber = serialCandidate.toString();
-          } else {
-            chequeNumber = numericValues[1].toString();
-          }
-        }
-      }
-
-      if (!chequeNumber) {
-        const shortMatch = remainingLine.match(/\b\d{5,8}\b/);
-        if (shortMatch) {
-          chequeNumber = shortMatch[0];
-        } else {
-          chequeNumber = Math.floor(100000 + Math.random() * 900000).toString();
-        }
-      }
-
+    for (let i = 0; i < maxChequesCount; i++) {
+      const sayyadId = sayyadIds[i] || '';
+      const bankName = foundBanks[i] || foundBanks[0] || 'ملی ایران';
+      const dueDate = dates[i] || dates[0] || getTodayJalali();
+      const amount = amounts[i] || amounts[0] || 0;
+      const chequeNumber = chequeNumbers[i] || chequeNumbers[0] || Math.floor(100000 + Math.random() * 900000).toString();
       const drawerName = customerName || 'صاحب حساب';
 
-      if (sayyadId || amount > 0 || chequeNumber.length > 5) {
+      // Only add row if we have at least SOME meaningful info to avoid junk
+      if (sayyadId || amount > 0 || foundBanks.length > 0 || dates.length > 0) {
         results.push({
           id: 'ch_' + Math.random().toString(36).substr(2, 9),
           chequeNumber,
@@ -394,7 +382,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     return results;
   };
 
-  const handleOfflineOcr = async () => {
+  // --- INTEGRATED OFFLINE OCR & BARCODE SCANNER ---
+  const handleIntegratedOfflineScan = async () => {
     if (!attachedFile) {
       alert('لطفاً ابتدا سند یا تصویر چک را ضمیمه کنید.');
       return;
@@ -402,17 +391,68 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
 
     setAiParsing(true);
     setParseError('');
-    setAiStatusMessage('در حال فراخوانی اسکنر آفلاین Tesseract...');
+    setAiStatusMessage('در حال شروع پردازش تصویر...');
 
+    let detectedSayyadId = '';
+    let detectedChequeNumber = '';
+
+    // Step 1: Scan for Barcode / QR Code locally and securely
     try {
-      setAiStatusMessage('در حال تحلیل و استخراج کلمات با الگوریتم اسکن نوری (OCR)...');
+      setAiStatusMessage('در حال پویش برای بارکد/QR صیادی (گام ۱ از ۲)...');
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      const qrData: string | null = await new Promise((resolve) => {
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { resolve(null); return; }
+
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+            const imageData = ctx.getImageData(0, 0, img.width, img.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert',
+            });
+            if (code) {
+              resolve(code.data);
+            } else {
+              resolve(null);
+            }
+          } catch (err) {
+            console.error('QR code scanning failed:', err);
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = attachedFile.url;
+      });
+
+      if (qrData) {
+        const sayyadMatch = qrData.match(/\b\d{16}\b/) || qrData.replace(/[^\d]/g, '').match(/\d{16}/);
+        if (sayyadMatch) {
+          detectedSayyadId = sayyadMatch[0];
+          const parts = qrData.split(/[\s*?=&:-]+/);
+          detectedChequeNumber = parts.find(p => p.length >= 5 && p.length <= 9 && p !== detectedSayyadId) || '';
+          console.log('Successfully scanned QR: ', detectedSayyadId, detectedChequeNumber);
+        }
+      }
+    } catch (e) {
+      console.error('QR parsing error:', e);
+    }
+
+    // Step 2: Run local OCR (Tesseract)
+    try {
+      setAiStatusMessage('در حال بازخوانی متن و اعداد چک با اسکن نوری آفلاین (گام ۲ از ۲)...');
       const response = await Tesseract.recognize(
         attachedFile.url,
         'fas+eng',
         {
           logger: m => {
             if (m.status === 'recognizing') {
-              setAiStatusMessage(`اسکن تصاویر آفلاین: ${Math.round(m.progress * 100)}%`);
+              setAiStatusMessage(`اسکن نوری آفلاین: ${Math.round(m.progress * 100)}%`);
             }
           }
         }
@@ -422,104 +462,52 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       if (text && text.trim()) {
         const parsed = parseRawTextToCheques(text);
         if (parsed.length > 0) {
-          setCheques(prev => [...prev, ...parsed]);
-          setAiStatusMessage(`استخراج به پایان رسید. تعداد ${parsed.length} چک شناسایی شد!`);
+          // Merge QR Code results into the OCR parsed results
+          const mergedCheques = parsed.map(c => ({
+            ...c,
+            sayyadId: detectedSayyadId || c.sayyadId,
+            chequeNumber: detectedChequeNumber || c.chequeNumber || Math.floor(100000 + Math.random() * 900000).toString(),
+          }));
+          
+          setCheques(prev => [...prev, ...mergedCheques]);
+          setAiStatusMessage(`اسکن آفلاین صیاد کامل شد. تعداد ${mergedCheques.length} چک با موفقیت استخراج گردید.`);
+        } else if (detectedSayyadId) {
+          // Only QR succeeded
+          const qrCheque: ChequeItem = {
+            id: 'ch_' + Math.random().toString(36).substr(2, 9),
+            chequeNumber: detectedChequeNumber || Math.floor(100000 + Math.random() * 900000).toString(),
+            sayyadId: detectedSayyadId,
+            bankName: 'ملی ایران',
+            dueDate: getTodayJalali(),
+            amount: 0,
+            drawerName: customerName || 'صاحب حساب'
+          };
+          setCheques(prev => [...prev, qrCheque]);
+          setAiStatusMessage('شناسه صیاد و شماره چک از روی بارکد تصویر به صورت آفلاین استخراج شد. لطفاً مبلغ را دستی وارد کنید.');
         } else {
-          setParseError('اسکن با موفقیت انجام شد اما چکی در این متن یافت نشد. می‌توانید متن را کپی و دستی پیست کنید.');
+          setParseError('اسکن با موفقیت انجام شد اما چکی در تصویر شناسایی نشد. مطمئن شوید تصویر خوانا و کادر چک کامل باشد.');
         }
+      } else if (detectedSayyadId) {
+        // Only QR succeeded
+        const qrCheque: ChequeItem = {
+          id: 'ch_' + Math.random().toString(36).substr(2, 9),
+          chequeNumber: detectedChequeNumber || Math.floor(100000 + Math.random() * 900000).toString(),
+          sayyadId: detectedSayyadId,
+          bankName: 'ملی ایران',
+          dueDate: getTodayJalali(),
+          amount: 0,
+          drawerName: customerName || 'صاحب حساب'
+        };
+        setCheques(prev => [...prev, qrCheque]);
+        setAiStatusMessage('شناسه صیاد و شماره چک از روی بارکد تصویر به صورت آفلاین استخراج شد. لطفاً مبلغ را دستی وارد کنید.');
       } else {
-        setParseError('هیچ متنی در سند یا تصویر شناسایی نشد. مطمئن شوید تصویر خوانا است.');
+        setParseError('هیچ متنی در سند تشخیص داده نشد و بارکدی هم یافت نشد. مطمئن شوید تصویر خوانا و کامل است.');
       }
     } catch (e: any) {
       console.error(e);
       setParseError('خطا در اجرای اسکن آفلاین: ' + e.message);
     } finally {
       setAiParsing(false);
-    }
-  };
-
-  // --- OFFLINE LOCAL QR CODE DECODER ---
-  const handleOfflineQrScan = async () => {
-    if (!attachedFile) {
-      alert('لطفاً ابتدا تصویر اسکن‌شده چک دارای بارکد/QR را انتخاب و ضمیمه کنید.');
-      return;
-    }
-
-    setQrScanning(true);
-    setParseError('');
-
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      // Load image into HTML canvas to extract pixels for jsQR
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            setParseError('امکان ایجاد بوم تصویری محلی وجود ندارد.');
-            setQrScanning(false);
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, img.width, img.height);
-          const imageData = ctx.getImageData(0, 0, img.width, img.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert',
-          });
-
-          if (code) {
-            const rawCode = code.data;
-            // Parse Sayyad standard format or URL
-            // Format can be a URI: sayyad.cbi.ir/?id=1234567890123456 or plain digits or split by *
-            const sayyadMatch = rawCode.match(/\b\d{16}\b/) || rawCode.replace(/[^\d]/g, '').match(/\d{16}/);
-            
-            if (sayyadMatch) {
-              const sayyadId = sayyadMatch[0];
-              // Extract numeric tokens that look like a cheque number (usually 5 to 9 digits, different from Sayyad)
-              const parts = rawCode.split(/[\s*?=&:-]+/);
-              const chequeNumber = parts.find(p => p.length >= 5 && p.length <= 9 && p !== sayyadId) || 
-                                   Math.floor(100000 + Math.random() * 900000).toString();
-
-              const newCheque: ChequeItem = {
-                id: 'ch_' + Math.random().toString(36).substr(2, 9),
-                chequeNumber,
-                sayyadId,
-                bankName: 'ملی ایران', // Default, editable
-                dueDate: getTodayJalali(),
-                amount: 0,
-                drawerName: customerName || 'صاحب حساب'
-              };
-
-              setCheques(prev => [...prev, newCheque]);
-              alert(`اسکن بارکد صیادی با موفقیت انجام شد!\nشناسه صیادی: ${sayyadId}\nشماره چک: ${chequeNumber}\nبه جدول بالا اضافه شد. مبلغ را وارد کنید.`);
-            } else {
-              alert(`بارکد اسکن شد اما شناسه صیادی معتبری استخراج نشد. محتوای بارکد:\n${rawCode}`);
-            }
-          } else {
-            setParseError('هیچ بارکد صیادی معتبری در تصویر چک شناسایی نشد. مطمئن شوید کادر بارکد مستقیم، واضح و بدون تاخوردگی باشد.');
-          }
-        } catch (err: any) {
-          console.error(err);
-          setParseError('خطا در پردازش تصویر بارکد: ' + err.message);
-        } finally {
-          setQrScanning(false);
-        }
-      };
-
-      img.onerror = () => {
-        setParseError('بارگذاری تصویر چک با خطا مواجه شد.');
-        setQrScanning(false);
-      };
-
-      img.src = attachedFile.url;
-    } catch (e: any) {
-      console.error(e);
-      setParseError('خطا در راه‌اندازی اسکنر آفلاین بارکد: ' + e.message);
-      setQrScanning(false);
     }
   };
 
@@ -1476,7 +1464,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                     <Globe size={14} className="animate-pulse" />
                     هوش مصنوعی صیاد (آنلاین و بسیار دقیق)
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1490,25 +1478,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                     }`}
                   >
                     <WifiOff size={14} />
-                    اسکن نوری آفلاین (Tesseract - بدون اینترنت)
+                    اسکن آفلاین صیاد (ترکیب تصویرخوان و بارکدخوان)
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExtractionMode('qr');
-                      setParseError('');
-                    }}
-                    className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 border ${
-                      extractionMode === 'qr' 
-                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
-                        : 'bg-transparent border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    <QrCode size={14} />
-                    اسکن محلی بارکد/QR صیاد (آفلاین - سریع)
-                  </button>
-                  
                   <button
                     type="button"
                     onClick={() => {
@@ -1601,10 +1573,10 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-indigo-800 dark:text-indigo-400 flex items-center gap-1.5">
-                          پردازش نوری و اسکن کاملاً آفلاین صیاد (بدون اینترنت)
+                          اسکن آفلاین صیاد (ترکیب متن‌خوان و بارکدخوان محلی)
                         </h4>
                         <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1 leading-relaxed font-semibold">
-                          این روش کاملاً در مرورگر شما به صورت محلی و امن اجرا می‌شود. تصویر چک صیادی را آپلود کنید؛ سیستم با استفاده از الگوریتم پیشرفته OCR متن چاپی و اعداد چک را تشخیص داده و شناسه ۱۶ رقمی، تاریخ سررسید و مبالغ را استخراج می‌کند.
+                          این روش کاملاً در مرورگر شما به صورت محلی و امن اجرا می‌شود. تصویر چک صیادی را آپلود کنید؛ سیستم به طور همزمان بارکد صیادی تصویر را اسکن و رمزگشایی کرده و با اسکن نوری متن (OCR) آفلاین، مبالغ، نام بانک و تاریخ سررسید را استخراج و با یکدیگر ادغام می‌کند.
                         </p>
                       </div>
                     </div>
@@ -1638,7 +1610,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                         <button
                           type="button"
                           disabled={aiParsing}
-                          onClick={handleOfflineOcr}
+                          onClick={handleIntegratedOfflineScan}
                           className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg disabled:opacity-50 hover:bg-indigo-700 transition-all cursor-pointer whitespace-nowrap"
                         >
                           {aiParsing ? (
@@ -1649,73 +1621,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                           ) : (
                             <>
                               <Zap size={14} className="animate-bounce" />
-                              شروع اسکن محلی آفلاین
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* MODE 3: OFFLINE QR CODE SCAN */}
-                {extractionMode === 'qr' && (
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in">
-                    <div className="flex items-start gap-3.5 text-right w-full md:w-2/3">
-                      <div className="bg-gradient-to-tr from-emerald-500 to-teal-600 p-3 rounded-2xl text-white shadow-md flex-shrink-0 flex items-center justify-center">
-                        <QrCode size={24} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
-                          رمزگشایی مستقیم بارکد/QR صیادی (آفلاین و ۱۰۰٪ دقیق)
-                        </h4>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1 leading-relaxed font-semibold">
-                          بسیاری از چک‌های صیاد جدید دارای یک مربع بارکد QR هستند. تصویر چک صیاد را انتخاب کنید و این دکمه را بزنید؛ سیستم بلافاصله با الگوریتم اسکنر محلی، بارکد را رمزگشایی کرده و شناسه ۱۶ رقمی صیاد و شماره چک را درجا استخراج می‌کند.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
-                      {attachedFile ? (
-                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-white/10 px-3 py-2 rounded-xl text-xs font-bold w-full md:w-auto">
-                          <FileText size={16} className="text-emerald-500" />
-                          <span className="truncate max-w-[120px]" title={attachedFile.name}>{attachedFile.name}</span>
-                          <button 
-                            onClick={() => setAttachedFile(null)}
-                            className="text-gray-400 hover:text-red-500 text-xs mr-2 font-bold cursor-pointer"
-                          >
-                            حذف
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/30 hover:bg-gray-100 border border-dashed border-gray-300 dark:border-white/20 rounded-xl text-xs font-bold cursor-pointer transition-all w-full md:w-auto text-gray-600 dark:text-gray-300 shadow-sm">
-                          <FileUp size={16} className="text-emerald-500" />
-                          انتخاب تصویر دارای بارکد
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleFileUpload} 
-                            className="hidden" 
-                          />
-                        </label>
-                      )}
-
-                      {attachedFile && (
-                        <button
-                          type="button"
-                          disabled={qrScanning}
-                          onClick={handleOfflineQrScan}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg disabled:opacity-50 hover:bg-emerald-700 transition-all cursor-pointer whitespace-nowrap"
-                        >
-                          {qrScanning ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              در حال رمزگشایی بارکد...
-                            </>
-                          ) : (
-                            <>
-                              <QrCode size={14} className="animate-pulse" />
-                              اسکن و رمزگشایی بارکد تصویر
+                              شروع اسکن و رمزگشایی آفلاین
                             </>
                           )}
                         </button>
