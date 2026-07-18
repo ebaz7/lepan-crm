@@ -71,8 +71,10 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
                     const txDate = new Date(tx.date);
                     if (!isNaN(txDate.getTime())) {
                         const shamsiDate = txDate.toLocaleDateString('fa-IR-u-nu-latn');
-                        const shamsiYear = parseInt(shamsiDate.split('/')[0]);
-                        const targetYear = parseInt(financialYear);
+                        const shamsiYearStr = shamsiDate.split('/')[0].replace(/[^\d]/g, '');
+                        const shamsiYear = parseInt(shamsiYearStr, 10);
+                        const targetYearStr = financialYear.replace(/[^\d]/g, '');
+                        const targetYear = parseInt(targetYearStr, 10);
                         if (shamsiYear < targetYear) {
                             const txItem = tx.items.find(i => i.itemId === selectedItem);
                             if (txItem) {

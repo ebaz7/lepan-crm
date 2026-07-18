@@ -604,8 +604,10 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         try {
                             const d = new Date(tx.date);
                             const shamsi = d.toLocaleDateString('fa-IR-u-nu-latn');
-                            const year = parseInt(shamsi.split('/')[0]);
-                            const targetYear = parseInt(financialYear);
+                            const yearStr = shamsi.split('/')[0].replace(/[^\d]/g, '');
+                            const year = parseInt(yearStr, 10);
+                            const targetYearStr = financialYear.replace(/[^\d]/g, '');
+                            const targetYear = parseInt(targetYearStr, 10);
                             return year <= targetYear;
                         } catch (e) { return true; }
                     })

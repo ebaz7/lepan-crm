@@ -64,6 +64,7 @@ import {
   Globe,
   ClipboardList,
   Lock,
+  Camera,
 } from "lucide-react";
 import { apiCall } from "../services/apiService";
 import { Capacitor } from "@capacitor/core";
@@ -133,6 +134,7 @@ const Settings: React.FC<SettingsProps> = ({
     | "bot"
     | "meetings"
     | "secretariat"
+    | "camera"
   >("system");
 
   // --- Secretariat Settings State ---
@@ -254,6 +256,117 @@ const Settings: React.FC<SettingsProps> = ({
   const [editingTemplate, setEditingTemplate] = useState<PrintTemplate | null>(
     null,
   );
+
+  // --- CAMERA SETTINGS STATES ---
+  const [localCameras, setLocalCameras] = useState<MediaDeviceInfo[]>([]);
+  const [cameraPermissionGranted, setCameraPermissionGranted] = useState<boolean | null>(null);
+  const [defaultCameraId, setDefaultCameraId] = useState<string>(() => localStorage.getItem("defaultCameraDeviceId") || "");
+  const [cameraResolution, setCameraResolution] = useState<string>(() => localStorage.getItem("cameraResolution") || "720p");
+  const [cameraMirror, setCameraMirror] = useState<boolean>(() => localStorage.getItem("cameraMirror") === "true");
+  const [cameraBeepOnSuccess, setCameraBeepOnSuccess] = useState<boolean>(() => localStorage.getItem("cameraBeepOnSuccess") !== "false");
+  const [cameraAutoStart, setCameraAutoStart] = useState<boolean>(() => localStorage.getItem("cameraAutoStart") === "true");
+  const [testStream, setTestStream] = useState<MediaStream | null>(null);
+  const [isTestingCamera, setIsTestingCamera] = useState(false);
+  const testVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const requestCameraPermissionAndList = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      setCameraPermissionGranted(true);
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === "videoinput");
+      setLocalCameras(videoDevices);
+      
+      if (videoDevices.length > 0 && !defaultCameraId) {
+        setDefaultCameraId(videoDevices[videoDevices.length - 1].deviceId);
+      }
+    } catch (err) {
+      console.error("Camera permissions failed:", err);
+      setCameraPermissionGranted(false);
+    }
+  };
+
+  const startTestCamera = async () => {
+    try {
+      if (testStream) {
+        testStream.getTracks().forEach(t => t.stop());
+      }
+      
+      let width = 1280;
+      let height = 720;
+      if (cameraResolution === "1080p") {
+        width = 1920;
+        height = 1080;
+      } else if (cameraResolution === "480p") {
+        width = 854;
+        height = 480;
+      }
+        
+      const constraints = {
+        video: defaultCameraId 
+          ? { deviceId: { exact: defaultCameraId }, width: { ideal: width }, height: { ideal: height } } 
+          : { width: { ideal: width }, height: { ideal: height } }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      setTestStream(stream);
+      setIsTestingCamera(true);
+      setTimeout(() => {
+        if (testVideoRef.current) {
+          testVideoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (e) {
+      console.error("Test camera failed:", e);
+      alert("امکان شروع تست دوربین وجود ندارد. مجوز دسترسی و اتصالات سخت‌افزاری را بررسی کنید.");
+    }
+  };
+  
+  const stopTestCamera = () => {
+    if (testStream) {
+      testStream.getTracks().forEach(t => t.stop());
+      setTestStream(null);
+    }
+    setIsTestingCamera(false);
+    if (testVideoRef.current) {
+      testVideoRef.current.srcObject = null;
+    }
+  };
+
+  useEffect(() => {
+    if (activeCategory === "camera") {
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+        const videoDevices = devices.filter(device => device.kind === "videoinput");
+        const hasLabels = videoDevices.some(d => !!d.label);
+        
+        if (videoDevices.length > 0) {
+          setLocalCameras(videoDevices);
+          if (hasLabels) {
+            setCameraPermissionGranted(true);
+          }
+        }
+      }).catch(err => {
+        console.error("Error enumerating devices:", err);
+      });
+    } else {
+      // Stop test camera if leaving tab
+      if (testStream) {
+        testStream.getTracks().forEach(t => t.stop());
+        setTestStream(null);
+      }
+      setIsTestingCamera(false);
+    }
+  }, [activeCategory]);
+
+  useEffect(() => {
+    return () => {
+      if (testStream) {
+        testStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [testStream]);
 
   // Local States for Form Inputs
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -669,6 +782,14 @@ const Settings: React.FC<SettingsProps> = ({
 
       await saveSettings(syncedSettings);
       setSettings(syncedSettings);
+      
+      // Save camera settings to localStorage
+      localStorage.setItem("defaultCameraDeviceId", defaultCameraId);
+      localStorage.setItem("cameraResolution", cameraResolution);
+      localStorage.setItem("cameraMirror", String(cameraMirror));
+      localStorage.setItem("cameraBeepOnSuccess", String(cameraBeepOnSuccess));
+      localStorage.setItem("cameraAutoStart", String(cameraAutoStart));
+
       if (onUpdateSettings) onUpdateSettings(syncedSettings);
       setMessage("ذخیره شد ✅");
       setTimeout(() => setMessage(""), 3000);
@@ -1333,6 +1454,13 @@ const Settings: React.FC<SettingsProps> = ({
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === "secretariat" ? "glass-panel shadow text-purple-700 font-bold" : "text-gray-600 hover:bg-gray-100"}`}
               >
                 <FileText size={18} /> تنظیمات دبیرخانه
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCategory("camera")}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === "camera" ? "glass-panel shadow text-cyan-700 font-bold" : "text-gray-600 hover:bg-gray-100"}`}
+              >
+                <Camera size={18} /> تنظیمات دوربین
               </button>
             </>
           )}
@@ -5036,6 +5164,174 @@ const Settings: React.FC<SettingsProps> = ({
                       قالبی یافت نشد.
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {activeCategory === "camera" && (
+              <div className="space-y-6 animate-fade-in text-right" dir="rtl">
+                <div className="glass-panel p-6 rounded-2xl border border-gray-200/60 shadow-sm">
+                  <h3 className="font-bold text-gray-800 dark:text-white mb-6 border-b pb-3 flex items-center gap-2">
+                    <Camera size={22} className="text-cyan-600 animate-pulse" /> تنظیمات دوربین و تصویربرداری
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Right col: Settings parameters */}
+                    <div className="space-y-6">
+                      {/* Default camera selection */}
+                      <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10">
+                        <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-2">
+                          انتخاب دستگاه دوربین پیش‌فرض
+                        </label>
+                        {localCameras.length > 0 ? (
+                          <select
+                            value={defaultCameraId}
+                            onChange={(e) => setDefaultCameraId(e.target.value)}
+                            className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans focus:ring-2 focus:ring-cyan-500 outline-none"
+                          >
+                            {localCameras.map((dev, i) => (
+                              <option key={dev.deviceId} value={dev.deviceId}>
+                                {dev.label || `دوربین شماره ${i + 1}`}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed font-semibold">
+                              مرورگر به اسامی دوربین‌ها دسترسی ندارد یا دوربینی یافت نشد. برای راه‌اندازی و شناسایی دوربین‌های متصل، روی دکمه زیر کلیک کنید.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={requestCameraPermissionAndList}
+                              className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40 rounded-lg text-xs font-black hover:bg-blue-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Camera size={14} /> اسکن و فعال‌سازی دوربین‌ها
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resolution setting */}
+                      <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10">
+                        <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-2">
+                          کیفیت و رزولوشن تصویربرداری
+                        </label>
+                        <select
+                          value={cameraResolution}
+                          onChange={(e) => setCameraResolution(e.target.value)}
+                          className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans focus:ring-2 focus:ring-cyan-500 outline-none"
+                        >
+                          <option value="720p">استاندارد (720p - توصیه شده)</option>
+                          <option value="1080p">کیفیت فوق‌العاده بالا (Full HD - 1080p)</option>
+                          <option value="480p">سرعت بالا و حجم کم (480p)</option>
+                        </select>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 leading-relaxed">
+                          وضوح بالاتر برای فواصل دور یا نور ضعیف مناسب است اما بار پردازشی بیشتری به سیستم تحمیل می‌کند.
+                        </p>
+                      </div>
+
+                      {/* Behavioral Toggles */}
+                      <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-white/10 space-y-4">
+                        <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2">حالت‌های نمایشی و رفتاری</h4>
+                        
+                        {/* Mirror */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">حالت آینه‌ای پیش‌نمایش تصویر (جهت افقی معکوس)</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={cameraMirror}
+                              onChange={(e) => setCameraMirror(e.target.checked)}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Auto-start */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">راه‌اندازی خودکار دوربین هنگام ورود به بخش دربان</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={cameraAutoStart}
+                              onChange={(e) => setCameraAutoStart(e.target.checked)}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Sound Feedback */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">پخش صدای بیپ کوتاه هنگام اسکن پلاک موفق</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={cameraBeepOnSuccess}
+                              onChange={(e) => setCameraBeepOnSuccess(e.target.checked)}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Left col: Live Preview Test */}
+                    <div className="p-5 bg-zinc-900 text-white rounded-2xl flex flex-col justify-between shadow-inner">
+                      <div>
+                        <h4 className="text-xs font-bold mb-1 flex items-center gap-1.5 text-cyan-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75 ${isTestingCamera ? '' : 'hidden'}`}></span>
+                            <span className={`relative inline-flex rounded-full h-2 w-2 bg-cyan-500 ${isTestingCamera ? '' : 'bg-gray-500'}`}></span>
+                          </span>
+                          تست زنده پیش‌نمایش دوربین
+                        </h4>
+                        <p className="text-[10px] text-zinc-400 mb-4 font-semibold leading-relaxed">
+                          جهت اطمینان از عملکرد صحیح سخت‌افزار دوربین، کیفیت زاویه دید و کادربندی پلاک‌خوان می‌توانید پیش‌نمایش زنده را در اینجا بررسی کنید.
+                        </p>
+                        
+                        <div className="relative overflow-hidden rounded-xl border border-zinc-800 bg-black aspect-video max-w-sm mx-auto shadow-2xl flex items-center justify-center">
+                          {isTestingCamera ? (
+                            <video
+                              ref={testVideoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className={`w-full h-full object-cover ${cameraMirror ? 'transform -scale-x-100' : ''}`}
+                            />
+                          ) : (
+                            <div className="text-center p-6 space-y-2">
+                              <Camera className="mx-auto text-zinc-700" size={36} />
+                              <p className="text-[11px] text-zinc-500 font-bold">پیش‌نمایش غیرفعال است</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex gap-2">
+                        {!isTestingCamera ? (
+                          <button
+                            type="button"
+                            onClick={startTestCamera}
+                            className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Camera size={14} />
+                            شروع تست دوربین انتخابی
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={stopTestCamera}
+                            className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            متوقف کردن تست
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

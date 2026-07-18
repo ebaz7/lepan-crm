@@ -64,13 +64,33 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     // --- WEBCAM & AI ALPR STATES ---
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
+        return localStorage.getItem('defaultCameraDeviceId') || '';
+    });
     const [isReadingPlate, setIsReadingPlate] = useState(false);
     const [isReadingPlateLocal, setIsReadingPlateLocal] = useState(false);
     const [isSavingPhoto, setIsSavingPhoto] = useState(false);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [capturedImagePreview, setCapturedImagePreview] = useState<string | null>(null);
     const [viewAttachmentUrl, setViewAttachmentUrl] = useState<string | null>(null);
+
+    const playBeep = () => {
+        try {
+            const shouldBeep = localStorage.getItem('cameraBeepOnSuccess') !== 'false';
+            if (!shouldBeep) return;
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15); // 150ms beep
+        } catch (e) {
+            console.error("Failed to play beep:", e);
+        }
+    };
 
     const startCamera = async () => {
         try {
@@ -86,10 +106,21 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                 setSelectedDeviceId(deviceId);
             }
 
+            const resolution = localStorage.getItem('cameraResolution') || '720p';
+            let idealWidth = 1280;
+            let idealHeight = 720;
+            if (resolution === '1080p') {
+                idealWidth = 1920;
+                idealHeight = 1080;
+            } else if (resolution === '480p') {
+                idealWidth = 854;
+                idealHeight = 480;
+            }
+
             const constraints = {
                 video: deviceId 
-                    ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } 
-                    : { width: { ideal: 1280 }, height: { ideal: 720 } }
+                    ? { deviceId: { exact: deviceId }, width: { ideal: idealWidth }, height: { ideal: idealHeight } } 
+                    : { width: { ideal: idealWidth }, height: { ideal: idealHeight } }
             };
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -146,6 +177,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
 
             const data = await response.json();
             if (data.success) {
+                playBeep();
                 setLogForm(prev => ({
                     ...prev,
                     plateNumber: data.plateNumber || prev.plateNumber || '',
@@ -194,6 +226,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
 
             const data = await response.json();
             if (data.success) {
+                playBeep();
                 setLogForm(prev => ({
                     ...prev,
                     plateNumber: data.plateNumber || prev.plateNumber || '',
@@ -260,6 +293,19 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             startCamera();
         }
     }, [selectedDeviceId]);
+
+    useEffect(() => {
+        const autoStart = localStorage.getItem('cameraAutoStart') === 'true';
+        if (autoStart) {
+            const timer = setTimeout(() => {
+                startCamera();
+            }, 600);
+            return () => clearTimeout(timer);
+        }
+        return () => {
+            stopCamera();
+        };
+    }, []);
 
     useEffect(() => {
         if (financialYear) {
@@ -976,7 +1022,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                                     autoPlay 
                                                     playsInline 
                                                     muted 
-                                                    className="w-full h-full object-cover" 
+                                                    className={`w-full h-full object-cover ${localStorage.getItem('cameraMirror') === 'true' ? 'transform -scale-x-100' : ''}`} 
                                                 />
                                                 <div className="absolute inset-x-0 bottom-0 bg-black/85 p-2 flex flex-col gap-2 justify-center items-center">
                                                     <div className="flex flex-col gap-2 w-full">
