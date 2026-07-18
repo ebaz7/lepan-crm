@@ -161,27 +161,37 @@ export const preprocessChequeCanvasForOcr = (
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
     if (removeBackground) {
-      const isPinkBg = (r - g > 25 && r - b > 5);
-      const isVeryLight = lum > 165;
+      // Less aggressive background removal to preserve pen strokes
+      const isPinkBg = (r - g > 30 && r - b > 30 && r > 180);
+      const isVeryLight = lum > 220; // 165 was way too dark, erasing pen marks
 
       if (isVeryLight || isPinkBg) {
         data[i] = 255;
         data[i + 1] = 255;
         data[i + 2] = 255;
       } else if (enhanceContrast) {
-        const factor = 2.0;
-        const newLum = Math.max(0, Math.min(255, (lum - 110) * factor + 110));
-        const binaryVal = newLum < 125 ? 0 : 255;
-        data[i] = binaryVal;
-        data[i + 1] = binaryVal;
-        data[i + 2] = binaryVal;
+        // Boost contrast but don't hard-binarize so Tesseract's Otsu can work
+        const factor = 1.5;
+        const newLum = Math.max(0, Math.min(255, (lum - 128) * factor + 128));
+        data[i] = newLum;
+        data[i + 1] = newLum;
+        data[i + 2] = newLum;
+      } else {
+        data[i] = lum;
+        data[i + 1] = lum;
+        data[i + 2] = lum;
       }
     } else if (enhanceContrast) {
-      const factor = 1.6;
+      const factor = 1.5;
       const newLum = Math.max(0, Math.min(255, (lum - 128) * factor + 128));
       data[i] = newLum;
       data[i + 1] = newLum;
       data[i + 2] = newLum;
+    } else {
+      // Just grayscale
+      data[i] = lum;
+      data[i + 1] = lum;
+      data[i + 2] = lum;
     }
   }
 
@@ -640,23 +650,32 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       // Crop & Run specialized OCR
       if (!sayyadId) {
         sayyadRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.sayyadId, 'eng+fas');
-        const cleanSayyad = sayyadRaw.replace(/[^\d]/g, '');
-        if (cleanSayyad.length === 16) {
-          sayyadId = cleanSayyad;
+        const normSayyad = sayyadRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                                    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+        const cleanSayyad = normSayyad.replace(/[^\d]/g, '');
+        // Sometimes sayyad IDs get extra digits or are slightly miss-scanned. We allow >= 14 to try to salvage it.
+        const sayyadCandidates = normSayyad.match(/\b\d{14,16}\b/g) || [];
+        if (sayyadCandidates.length > 0) {
+            sayyadId = sayyadCandidates[0];
+        } else if (cleanSayyad.length >= 14) {
+          sayyadId = cleanSayyad.substring(0, 16);
         }
       }
 
       if (!chequeNumber) {
         numRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.chequeNumber, 'eng+fas');
-        const cleanNum = numRaw.replace(/[^\d]/g, '');
-        if (cleanNum.length >= 5 && cleanNum.length <= 9) {
+        const normNum = numRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                              .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+        const cleanNum = normNum.replace(/[^\d]/g, '');
+        if (cleanNum.length >= 4 && cleanNum.length <= 10) {
           chequeNumber = cleanNum;
         }
       }
 
       dateRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.dueDate, 'eng+fas');
-      const cleanDate = dateRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-                               .replace(/[^\d/.-]/g, '');
+      const normDate = dateRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                              .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      const cleanDate = normDate.replace(/[^\d/.-]/g, '');
       const dateRegex = /(13|14)?\d{2}[/.-]\d{1,2}[/.-]\d{1,2}/;
       const dateMatch = cleanDate.match(dateRegex);
       if (dateMatch) {
@@ -685,8 +704,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
 
       // Amount digits OCR
       digitsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountDigits, 'eng+fas');
-      const cleanDigits = digitsRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-                                   .replace(/[^\d]/g, '');
+      const normAmountDigits = digitsRaw.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                                        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      const cleanDigits = normAmountDigits.replace(/[^\d]/g, '');
       const digitsVal = parseInt(cleanDigits, 10);
       if (!isNaN(digitsVal) && digitsVal >= 100000) {
         if (amount === 0 || Math.abs(amount - digitsVal) < (amount * 0.15)) {
