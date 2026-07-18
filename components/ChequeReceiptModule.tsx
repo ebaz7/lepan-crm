@@ -769,16 +769,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       if (matched) break;
     }
 
-    // 5. Check if it's EXACTLY the Melli sample check to support fallback alignment for the sample demonstration
-    const isExactSampleCheck = sayyadId === '5257040153964045' || chequeNumber === '193405';
-    if (isExactSampleCheck) {
-      sayyadId = '5257040153964045';
-      chequeNumber = '193405';
-      dueDate = '1405/03/31';
-      amount = 500000000;
-      detectedBank = 'ملی ایران';
-    }
-
+    // 5. Removed exact sample check fallback logic to ensure the system only relies on real extracted OCR text.
+    
     // Default heuristics if some elements are still empty
     if (sayyadId || amount > 0 || dueDate || chequeNumber) {
       const finalSayyadId = sayyadId || '';
@@ -797,7 +789,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
         bankName: detectedBank,
         dueDate: finalDueDate,
         amount: finalAmount,
-        drawerName: isExactSampleCheck ? 'سیدباقر موسوی' : (customerName || 'صاحب حساب')
+        drawerName: customerName || 'صاحب حساب'
       });
     }
 
