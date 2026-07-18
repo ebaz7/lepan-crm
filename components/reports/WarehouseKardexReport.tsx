@@ -56,98 +56,50 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
     const kardexRows = useMemo(() => {
         if (!selectedCompany || !selectedItem) return [];
 
-        let openingBalance = 0;
         const txSource = allTransactions || transactions;
 
-        // 1. Calculate balance from all transactions before the selected financial year
-        if (financialYear && financialYear !== 'all') {
-            txSource.forEach(tx => {
-                if (tx.company !== selectedCompany) return;
-                if (tx.status === 'REJECTED') return;
-                const hasItem = tx.items.some(i => i.itemId === selectedItem);
-                if (!hasItem) return;
-
-                try {
-                    const txDate = new Date(tx.date);
-                    if (!isNaN(txDate.getTime())) {
-                        const shamsiDate = txDate.toLocaleDateString('fa-IR-u-nu-latn');
-                        const shamsiYearStr = shamsiDate.split('/')[0].replace(/[^\d]/g, '');
-                        const shamsiYear = parseInt(shamsiYearStr, 10);
-                        const targetYearStr = financialYear.replace(/[^\d]/g, '');
-                        const targetYear = parseInt(targetYearStr, 10);
-                        if (shamsiYear < targetYear) {
-                            const txItem = tx.items.find(i => i.itemId === selectedItem);
-                            if (txItem) {
-                                const qty = txItem.quantity;
-                                if (tx.type === 'IN') {
-                                    openingBalance += qty;
-                                } else if (tx.type === 'OUT') {
-                                    openingBalance -= qty;
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error parsing date for opening balance", e);
-                }
-            });
-        }
-
-        // 2. Add current financial year transactions before dateRange.from
-        if (dateRange.from) {
-            const fromDate = parsePersianDate(dateRange.from);
-            if (fromDate) {
-                transactions.forEach(tx => {
-                    if (tx.company !== selectedCompany) return;
-                    if (tx.status === 'REJECTED') return;
-                    const hasItem = tx.items.some(i => i.itemId === selectedItem);
-                    if (!hasItem) return;
-
-                    const txDate = new Date(tx.date);
-                    if (txDate < fromDate) {
-                        const txItem = tx.items.find(i => i.itemId === selectedItem);
-                        if (txItem) {
-                            const qty = txItem.quantity;
-                            if (tx.type === 'IN') {
-                                openingBalance += qty;
-                            } else if (tx.type === 'OUT') {
-                                openingBalance -= qty;
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        // 3. Filter transactions for the selected date range within current financial year
-        let filteredTxs = transactions.filter(tx => {
+        // 1. Filter and sort ALL historical transactions for the selected item and company
+        const itemTxs = txSource.filter(tx => {
             if (tx.company !== selectedCompany) return false;
-            if (tx.status === 'REJECTED') return false; 
-            if (txType !== 'ALL' && tx.type !== txType) return false;
-            
-            const hasItem = tx.items.some(i => i.itemId === selectedItem);
-            if (!hasItem) return false;
-
-            if (dateRange.from) {
-                const txDate = new Date(tx.date);
-                const fromDate = parsePersianDate(dateRange.from);
-                if (fromDate && txDate < fromDate) return false;
-            }
-            if (dateRange.to) {
-                const txDate = new Date(tx.date);
-                const toDate = parsePersianDate(dateRange.to);
-                if (toDate) {
-                    toDate.setHours(23, 59, 59);
-                    if (txDate > toDate) return false;
-                }
-            }
-            return true;
+            if (tx.status === 'REJECTED') return false;
+            return tx.items.some(i => i.itemId === selectedItem);
         });
 
-        filteredTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // Sort chronologically by date
+        itemTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        let runningBalance = openingBalance;
-        const rows: {
+        // 2. Compute running balance chronologically across ALL transactions
+        let currentBalance = 0;
+        const txsWithBalance = itemTxs.map(tx => {
+            const txItem = tx.items.find(i => i.itemId === selectedItem);
+            const qty = txItem ? txItem.quantity : 0;
+            const weight = txItem ? txItem.weight : 0;
+            const unitPrice = txItem ? txItem.unitPrice : 0;
+
+            if (tx.type === 'IN') {
+                currentBalance += qty;
+            } else {
+                currentBalance -= qty;
+            }
+
+            return {
+                tx,
+                qty,
+                weight,
+                unitPrice,
+                balanceAtThisPoint: currentBalance
+            };
+        });
+
+        // 3. Segment into openingBalance (before the active window) and visibleRows
+        const targetYear = financialYear && financialYear !== 'all' ? parseInt(financialYear.replace(/[^\d]/g, ''), 10) : null;
+        const fromDate = dateRange.from ? parsePersianDate(dateRange.from) : null;
+        const toDate = dateRange.to ? parsePersianDate(dateRange.to) : null;
+        if (toDate) {
+            toDate.setHours(23, 59, 59, 999);
+        }
+
+        const visibleRows: {
             id: string;
             date: string;
             number: string | number;
@@ -158,36 +110,73 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
             balance: number;
             weight: number;
             unitPrice: number;
-        }[] = filteredTxs.map(tx => {
-            const txItem = tx.items.find(i => i.itemId === selectedItem);
-            const qty = txItem ? txItem.quantity : 0;
-            const weight = txItem ? txItem.weight : 0;
+        }[] = [];
 
-            const inQty = tx.type === 'IN' ? qty : 0;
-            const outQty = tx.type === 'OUT' ? qty : 0;
-            const unitPrice = txItem ? txItem.unitPrice : 0;
+        let openingBalance = 0;
 
-            runningBalance += (inQty - outQty);
+        txsWithBalance.forEach(item => {
+            const { tx, qty, weight, unitPrice, balanceAtThisPoint } = item;
+            const txDate = new Date(tx.date);
 
-            return {
-                id: tx.id,
-                date: tx.date,
-                number: tx.number || tx.proformaNumber || '-',
-                type: tx.type,
-                description: tx.type === 'IN' 
-                    ? `پروفرما: ${tx.proformaNumber}` 
-                    : `گیرنده: ${tx.recipientName || '-'} | مقصد: ${tx.destination || '-'}`,
-                in: inQty,
-                out: outQty,
-                balance: runningBalance,
-                weight: weight,
-                unitPrice: unitPrice
-            };
+            // Determine if it matches the financial year
+            let matchesYear = true;
+            let isBeforeYear = false;
+
+            if (targetYear !== null) {
+                try {
+                    const shamsiDate = txDate.toLocaleDateString('fa-IR-u-nu-latn');
+                    const shamsiYearStr = shamsiDate.split('/')[0].replace(/[^\d]/g, '');
+                    const shamsiYear = parseInt(shamsiYearStr, 10);
+                    matchesYear = shamsiYear === targetYear;
+                    isBeforeYear = shamsiYear < targetYear;
+                } catch (e) {
+                    matchesYear = true; 
+                }
+            }
+
+            // Determine if it matches the date range
+            let isBeforeDate = false;
+            let isAfterDate = false;
+
+            if (fromDate && txDate < fromDate) {
+                isBeforeDate = true;
+            }
+            if (toDate && txDate > toDate) {
+                isAfterDate = true;
+            }
+
+            // If it is before the selected range, it contributes to the opening balance
+            if (isBeforeYear || (matchesYear && isBeforeDate)) {
+                if (tx.type === 'IN') {
+                    openingBalance += qty;
+                } else {
+                    openingBalance -= qty;
+                }
+            } else if (matchesYear && !isBeforeDate && !isAfterDate) {
+                // It is in the visible range!
+                // Filter by transaction type if needed, but preserve correct historical balance!
+                if (txType === 'ALL' || tx.type === txType) {
+                    visibleRows.push({
+                        id: tx.id,
+                        date: tx.date,
+                        number: tx.number || tx.proformaNumber || '-',
+                        type: tx.type,
+                        description: tx.type === 'IN' 
+                            ? `پروفرما: ${tx.proformaNumber}` 
+                            : `گیرنده: ${tx.recipientName || '-'} | مقصد: ${tx.destination || '-'}`,
+                        in: tx.type === 'IN' ? qty : 0,
+                        out: tx.type === 'OUT' ? qty : 0,
+                        balance: balanceAtThisPoint, // The 100% correct chronological balance
+                        weight: weight,
+                        unitPrice: unitPrice
+                    });
+                }
+            }
         });
 
         // Prepend opening balance row if there is a start date filter or a specific financial year selected
         if (dateRange.from || (financialYear && financialYear !== 'all')) {
-            rows.unshift({
+            visibleRows.unshift({
                 id: 'opening-balance',
                 date: '',
                 number: '-',
@@ -203,7 +192,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
             });
         }
 
-        return rows;
+        return visibleRows;
     }, [transactions, allTransactions, financialYear, selectedCompany, selectedItem, dateRange, txType]);
 
     const activeItemName = items.find(i => i.id === selectedItem)?.name || '-';
