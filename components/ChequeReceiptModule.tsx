@@ -163,16 +163,18 @@ export const preprocessChequeCanvasForOcr = (
     if (removeBackground) {
       // Less aggressive background removal to preserve pen strokes
       const isPinkBg = (r - g > 30 && r - b > 30 && r > 180);
-      const isVeryLight = lum > 220; // 165 was way too dark, erasing pen marks
+      const isVeryLight = lum > 235; // Higher threshold to avoid erasing faint pen marks
 
       if (isVeryLight || isPinkBg) {
         data[i] = 255;
         data[i + 1] = 255;
         data[i + 2] = 255;
       } else if (enhanceContrast) {
-        // Boost contrast but don't hard-binarize so Tesseract's Otsu can work
-        const factor = 1.5;
-        const newLum = Math.max(0, Math.min(255, (lum - 128) * factor + 128));
+        // Aggressively darken anything that isn't background to help Tesseract read faint pen marks
+        let newLum = lum;
+        if (lum < 220) {
+          newLum = Math.max(0, lum - 100);
+        }
         data[i] = newLum;
         data[i + 1] = newLum;
         data[i + 2] = newLum;
@@ -182,8 +184,10 @@ export const preprocessChequeCanvasForOcr = (
         data[i + 2] = lum;
       }
     } else if (enhanceContrast) {
-      const factor = 1.5;
-      const newLum = Math.max(0, Math.min(255, (lum - 128) * factor + 128));
+      let newLum = lum;
+      if (lum < 220) {
+        newLum = Math.max(0, lum - 100);
+      }
       data[i] = newLum;
       data[i + 1] = newLum;
       data[i + 2] = newLum;
@@ -456,8 +460,18 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   // --- OFFLINE HEURISTIC PARSER ---
   const parseRawTextToCheques = (rawText: string): ChequeItem[] => {
     const normalizeDigits = (str: string): string => {
-      return str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      let normalized = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                          .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+      
+      // Fix common OCR errors for numbers where letters are recognized instead
+      normalized = normalized.replace(/o/gi, '0')
+                             .replace(/i/gi, '1')
+                             .replace(/l/g, '1')
+                             .replace(/s/gi, '5')
+                             .replace(/b/gi, '6')
+                             .replace(/z/gi, '2')
+                             .replace(/q/gi, '9');
+      return normalized;
     };
 
     const cleanText = normalizeDigits(rawText);
@@ -488,9 +502,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     // 2. EXTRACT JALALI DATES (YYYY/MM/DD or YY/MM/DD)
     const dates: string[] = [];
     
-    // Strict Shamsi date match: Year can be 1390-1415, Month 01-12, Day 01-31
+    // Strict Shamsi date match: Year can be 1390-1415, 400-415, Month 01-12, Day 01-31
     // Matches separators: /, -, ., space
-    const dateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|0[0-9]|1[0-5])[\/\-\.\s](0?[1-9]|1[0-2])[\/\-\.\s](0?[1-9]|[12][0-9]|3[01])\b/g;
+    const dateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])[\/\-\.\s](0?[1-9]|1[0-2])[\/\-\.\s](0?[1-9]|[12][0-9]|3[01])\b/g;
     let dateMatch;
     while ((dateMatch = dateRegex.exec(cleanText)) !== null) {
       let y = dateMatch[1];
@@ -499,6 +513,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       
       if (y.length === 2) {
         y = '14' + y;
+      } else if (y.length === 3) {
+        y = '1' + y;
       }
       const formattedM = m.padStart(2, '0');
       const formattedD = d.padStart(2, '0');
@@ -570,7 +586,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
         // Check surrounding context for Toman (تومان / تومن / تومب)
         const index = amountMatch.index;
         const context = cleanText.substring(Math.max(0, index - 25), Math.min(cleanText.length, index + raw.length + 25));
-        if (context.includes('تومان') || context.includes('تومب') || context.includes('تومن') || context.includes('toman')) {
+        if (context.includes('تومان') || context.includes('تومب') || context.includes('تومن') || context.includes('toman') || context.includes('t0man')) {
           finalVal = finalVal * 10;
         }
         if (!amounts.includes(finalVal)) {
@@ -591,7 +607,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
         
         const index = amountMatch.index;
         const context = cleanText.substring(Math.max(0, index - 25), Math.min(cleanText.length, index + raw.length + 25));
-        if (context.includes('تومان') || context.includes('تومب') || context.includes('تومن') || context.includes('toman')) {
+        if (context.includes('تومان') || context.includes('تومب') || context.includes('تومن') || context.includes('toman') || context.includes('t0man')) {
           finalVal = finalVal * 10;
         }
         if (!amounts.includes(finalVal)) {
@@ -739,6 +755,22 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       }
     } catch (err) {
       console.error('Full page offline OCR error:', err);
+    }
+
+    // 2.5 Run targeted crops for handwritten/typed fields that might have been missed
+    try {
+      const sayyadRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.sayyadId, 'eng+fas');
+      const numRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.chequeNumber, 'eng+fas');
+      const dateRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.dueDate, 'fas+eng');
+      const wordsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountWords, 'fas');
+      const digitsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountDigits, 'eng+fas');
+      
+      const cropsText = [sayyadRaw, numRaw, dateRaw, wordsRaw, digitsRaw].join('\n');
+      console.log('Crops OCR Raw Text:', cropsText);
+      // Combine full text and crops text so the parser has multiple chances to find matches
+      fullText = fullText + '\n' + cropsText;
+    } catch (err) {
+      console.error('Crops OCR error:', err);
     }
 
     // 3. Extract features using our redesigned, state-of-the-art robust offline parsing algorithm
