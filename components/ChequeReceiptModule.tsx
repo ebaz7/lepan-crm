@@ -368,7 +368,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   
   // Offline and text pasting states
-  const [extractionMode, setExtractionMode] = useState<'ai' | 'offline' | 'text'>('ai');
+  const [extractionMode, setExtractionMode] = useState<'ai' | 'text'>('ai');
   const [pastedText, setPastedText] = useState('');
   const [qrScanning, setQrScanning] = useState(false);
 
@@ -1141,6 +1141,48 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       }
       return c;
     }));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, idx: number, field: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const fieldsOrder = ['bankName', 'chequeNumber', 'sayyadId', 'dueDate', 'amount', 'drawerName'];
+      const currentFieldIndex = fieldsOrder.indexOf(field);
+      
+      if (currentFieldIndex < fieldsOrder.length - 1) {
+        const nextField = fieldsOrder[currentFieldIndex + 1];
+        const selector = `[data-row-index="${idx}"][data-field="${nextField}"]`;
+        const nextEl = document.querySelector(selector) as HTMLElement;
+        if (nextEl) {
+          nextEl.focus();
+          if (nextEl instanceof HTMLInputElement) {
+            nextEl.select();
+          }
+        }
+      } else {
+        const newId = 'ch_' + Math.random().toString(36).substr(2, 9);
+        const newCheque: ChequeItem = {
+          id: newId,
+          chequeNumber: '',
+          sayyadId: '',
+          bankName: '',
+          dueDate: getTodayJalali(),
+          amount: 0,
+          drawerName: customerName || ''
+        };
+        setCheques(prev => {
+          const updated = [...prev, newCheque];
+          setTimeout(() => {
+            const selector = `[data-row-index="${updated.length - 1}"][data-field="bankName"]`;
+            const nextEl = document.querySelector(selector) as HTMLElement;
+            if (nextEl) {
+              nextEl.focus();
+            }
+          }, 100);
+          return updated;
+        });
+      }
+    }
   };
 
   const handleHandwritingSelectText = (text: string, targetField: string) => {
@@ -2088,22 +2130,6 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                   <button
                     type="button"
                     onClick={() => {
-                      setExtractionMode('offline');
-                      setParseError('');
-                    }}
-                    className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 border ${
-                      extractionMode === 'offline' 
-                        ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500/30 text-indigo-600 dark:text-indigo-400' 
-                        : 'bg-transparent border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    <WifiOff size={14} />
-                    اسکن آفلاین صیاد (ترکیب تصویرخوان و بارکدخوان)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
                       setExtractionMode('text');
                       setParseError('');
                     }}
@@ -2184,116 +2210,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                   </div>
                 )}
 
-                {/* MODE 2: OFFLINE OCR SCAN */}
-                {extractionMode === 'offline' && (
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in">
-                    <div className="flex items-start gap-3.5 text-right w-full md:w-2/3">
-                      <div className="bg-gradient-to-tr from-indigo-500 to-purple-600 p-3 rounded-2xl text-white shadow-md flex-shrink-0 flex items-center justify-center">
-                        <WifiOff size={24} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-indigo-800 dark:text-indigo-400 flex items-center gap-1.5">
-                          اسکن آفلاین صیاد (ترکیب متن‌خوان و بارکدخوان محلی)
-                        </h4>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1 leading-relaxed font-semibold">
-                          این روش کاملاً در مرورگر شما به صورت محلی و امن اجرا می‌شود. تصویر چک صیادی را آپلود کنید؛ سیستم به طور همزمان بارکد صیادی تصویر را اسکن و رمزگشایی کرده و با اسکن نوری متن (OCR) آفلاین، مبالغ، نام بانک و تاریخ سررسید را استخراج و با یکدیگر ادغام می‌کند.
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
-                      {attachedFile ? (
-                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-white/10 px-3 py-2 rounded-xl text-xs font-bold w-full md:w-auto">
-                          <FileText size={16} className="text-indigo-500" />
-                          <span className="truncate max-w-[120px]" title={attachedFile.name}>{attachedFile.name}</span>
-                          <button 
-                            onClick={() => setAttachedFile(null)}
-                            className="text-gray-400 hover:text-red-500 text-xs mr-2 font-bold cursor-pointer"
-                          >
-                            حذف
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/30 hover:bg-gray-100 border border-dashed border-gray-300 dark:border-white/20 rounded-xl text-xs font-bold cursor-pointer transition-all w-full md:w-auto text-gray-600 dark:text-gray-300 shadow-sm">
-                          <FileUp size={16} className="text-indigo-500" />
-                          انتخاب سند چک‌ها (PDF / تصویر آفلاین)
-                          <input 
-                            type="file" 
-                            accept="application/pdf, image/*" 
-                            onChange={handleFileUpload} 
-                            className="hidden" 
-                          />
-                        </label>
-                      )}
-
-                      {attachedFile && (
-                        <button
-                          type="button"
-                          disabled={aiParsing}
-                          onClick={handleIntegratedOfflineScan}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg disabled:opacity-50 hover:bg-indigo-700 transition-all cursor-pointer whitespace-nowrap"
-                        >
-                          {aiParsing ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              درحال اسکن آفلاین...
-                            </>
-                          ) : (
-                            <>
-                              <Zap size={14} className="animate-bounce" />
-                              شروع اسکن و رمزگشایی آفلاین
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-
-                    {attachedFile && (
-                      <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl text-right animate-fade-in w-full">
-                        <h5 className="text-xs font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-3">
-                          <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400" />
-                          دستیار تفکیک و پیش‌پردازش دست‌نویس آفلاین (ابزار آستانه‌گذاری تطبیقی)
-                        </h5>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed font-semibold mb-4">
-                          تصویر یا سند ضمیمه شده به صورت زنده به ۵ بخش تخصصی تقسیم شده و با اعمال فیلتر رنگ‌زدایی و آستانه‌گذاری تطبیقی به منظور بهینه‌سازی هوش‌ مصنوعی دست‌نویس، پاکسازی می‌شود. روی هر ناحیه کلیک کنید تا جزئیات پردازش و قوانین استخراج را مشاهده نمایید.
-                        </p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                          {Object.entries(CHEQUE_FIELDS).map(([key, field]) => (
-                            <div 
-                              key={key}
-                              className="p-3 bg-white dark:bg-gray-800/80 border border-indigo-50 dark:border-white/5 rounded-xl text-center shadow-sm hover:shadow hover:border-indigo-300 dark:hover:border-indigo-800 transition-all cursor-pointer"
-                            >
-                              <div className="text-[11px] font-black text-indigo-900 dark:text-indigo-200 mb-1">{field.label}</div>
-                              <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold mb-2">
-                                موقعیت: x={field.x}٪ | y={field.y}٪
-                              </div>
-                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-black rounded">
-                                <Check size={10} />
-                                فیلتر {key === 'amountWords' ? 'Fas (فارسی)' : 'Eng+Fas'}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-indigo-100/50 dark:border-indigo-950/50 flex flex-wrap gap-x-6 gap-y-2 text-[10px] text-gray-600 dark:text-gray-400 font-bold">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            کاهش نویز با فیلتر آستینه‌گذاری: فعال
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                            الگوریتم تطبیق واژگانی حروف به عدد: آماده و فعال
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-                            اسکنر موازی اسناد PDF چندبرگی: آماده
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* MODE 4: TEXT PASTE PARSER */}
                 {extractionMode === 'text' && (
@@ -2432,6 +2349,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                             <select
                               value={c.bankName}
                               onChange={(e) => handleChequeFieldChange(c.id, 'bankName', e.target.value)}
+                              data-row-index={idx}
+                              data-field="bankName"
+                              onKeyDown={(e) => handleKeyDown(e, idx, 'bankName')}
                               className="w-full px-2 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none"
                             >
                               <option value="">انتخاب بانک...</option>
@@ -2446,6 +2366,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                                 type="text"
                                 value={c.chequeNumber}
                                 onChange={(e) => handleChequeFieldChange(c.id, 'chequeNumber', e.target.value)}
+                                data-row-index={idx}
+                                data-field="chequeNumber"
+                                onKeyDown={(e) => handleKeyDown(e, idx, 'chequeNumber')}
                                 placeholder="مثال: ۷۴۸۲۹"
                                 className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-mono font-bold text-gray-900 dark:text-white outline-none"
                               />
@@ -2470,6 +2393,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                                 maxLength={16}
                                 value={c.sayyadId}
                                 onChange={(e) => handleChequeFieldChange(c.id, 'sayyadId', e.target.value.replace(/[^\d]/g, ''))}
+                                data-row-index={idx}
+                                data-field="sayyadId"
+                                onKeyDown={(e) => handleKeyDown(e, idx, 'sayyadId')}
                                 placeholder="۱۶ رقم بدون فاصله"
                                 className={`w-full pl-7 pr-2 py-1.5 rounded-lg border text-xs font-mono font-bold outline-none ${c.sayyadId.length === 16 ? 'border-green-300 dark:border-green-800 text-green-700 dark:text-green-400' : 'border-gray-200 dark:border-white/10 text-gray-900 dark:text-white'}`}
                               />
@@ -2494,6 +2420,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                                 placeholder="۱۴۰۳/۰۵/۲۰"
                                 value={c.dueDate}
                                 onChange={(e) => handleChequeFieldChange(c.id, 'dueDate', e.target.value)}
+                                data-row-index={idx}
+                                data-field="dueDate"
+                                onKeyDown={(e) => handleKeyDown(e, idx, 'dueDate')}
                                 className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-center text-xs font-mono font-bold text-gray-900 dark:text-white outline-none"
                               />
                               <button
@@ -2517,6 +2446,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                                   type="text"
                                   value={c.amount === 0 ? '' : new Intl.NumberFormat('fa-IR').format(c.amount)}
                                   onChange={(e) => handleChequeFieldChange(c.id, 'amount', e.target.value)}
+                                  data-row-index={idx}
+                                  data-field="amount"
+                                  onKeyDown={(e) => handleKeyDown(e, idx, 'amount')}
                                   placeholder="مبلغ به ریال"
                                   className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-mono font-bold text-gray-900 dark:text-white outline-none text-left"
                                 />
@@ -2546,6 +2478,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                                 type="text"
                                 value={c.drawerName}
                                 onChange={(e) => handleChequeFieldChange(c.id, 'drawerName', e.target.value)}
+                                data-row-index={idx}
+                                data-field="drawerName"
+                                onKeyDown={(e) => handleKeyDown(e, idx, 'drawerName')}
                                 placeholder="نام صادرکننده/مشتری"
                                 className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none"
                               />

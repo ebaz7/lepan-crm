@@ -1387,7 +1387,8 @@ app.delete('/api/cheque-receipts/:id', (req, res) => {
 app.get('/api/next-cheque-receipt-number', (req, res) => {
     const db = getDb();
     const receipts = db.chequeReceipts || [];
-    let maxNum = 1000;
+    const settings = db.settings || {};
+    let maxNum = (settings.currentChequeReceiptNumber ? Number(settings.currentChequeReceiptNumber) - 1 : 1000);
     receipts.forEach(r => {
         const clean = r.serialNumber ? r.serialNumber.replace(/[^\d]/g, '') : '';
         const num = parseInt(clean, 10);
@@ -1444,10 +1445,11 @@ app.post('/api/cheque-receipts/parse-cheques', async (req, res) => {
 
         const response = await ai.models.generateContent({
             model: 'gemini-3.5-flash',
-            contents: [
-                imagePart,
-                {
-                    text: `You are an expert Iranian financial accountant and expert document scanner.
+            contents: {
+                parts: [
+                    imagePart,
+                    {
+                        text: `You are an expert Iranian financial accountant and expert document scanner.
 Extract all details of Iranian Sayyad cheques (چک های صیادی ایران) from this document (which can be a scanned PDF page or image containing one or multiple cheques).
 
 CRITICAL INSTRUCTIONS:
@@ -1463,8 +1465,9 @@ CRITICAL INSTRUCTIONS:
    - drawerName: The drawer name or issuer name (صاحب حساب / صادرکننده چک). If blank or unclear, default to the customer's name or leave empty string if unknown.
 
 Ensure that your JSON output is a clean array containing only the valid, physically visible cheques in the document.`
-                }
-            ],
+                    }
+                ]
+            },
             config: {
                 responseMimeType: 'application/json',
                 responseSchema: {

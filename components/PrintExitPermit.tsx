@@ -52,29 +52,63 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
         if (embed) return;
         const wrapper = containerWrapperRef.current;
         if (wrapper) {
-            const wrapperWidth = wrapper.clientWidth;
+            let wrapperWidth = wrapper.clientWidth;
+            // Safeguard: If the modal is animating or not yet visible in DOM, clientWidth might be 0 or tiny.
+            // Fall back to window.innerWidth with some margin.
+            if (wrapperWidth < 100) {
+                wrapperWidth = Math.max(320, window.innerWidth - 32);
+            }
             const wrapperHeight = window.innerHeight;
             const targetWidth = 794; 
             const targetHeight = 1120;
             
+            let computedScale = 1;
             if (scaleMode === 'fit') {
-                const scaleX = (wrapperWidth - 32) / targetWidth;
-                const scaleY = (wrapperHeight - 160) / targetHeight; // 160px margin for header and toolbar
-                setScale(Math.min(scaleX, scaleY, 1.2)); // Cap at 1.2x to prevent oversized on giant screens
+                const scaleX = Math.max(0.1, (wrapperWidth - 32) / targetWidth);
+                const scaleY = Math.max(0.1, (wrapperHeight - 160) / targetHeight); // 160px margin for header and toolbar
+                computedScale = Math.min(scaleX, scaleY, 1.2); // Cap at 1.2x to prevent oversized on giant screens
             } else if (scaleMode === 'width') {
                 if (wrapperWidth < targetWidth + 40) {
-                    setScale((wrapperWidth - 32) / targetWidth);
+                    computedScale = Math.max(0.1, (wrapperWidth - 32) / targetWidth);
                 } else {
-                    setScale(1);
+                    computedScale = 1;
                 }
             } else {
-                setScale(customZoom);
+                computedScale = customZoom;
             }
+            // Enforce hard boundaries for scale to prevent vanishing/extreme sizes
+            setScale(Math.max(0.25, Math.min(2.5, computedScale)));
         }
     };
+
     handleResize();
+
+    // Trigger multiple delayed updates on mount to capture stable dimensions after transitions
+    const timers = [
+        setTimeout(handleResize, 50),
+        setTimeout(handleResize, 150),
+        setTimeout(handleResize, 300),
+        setTimeout(handleResize, 600)
+    ];
+
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    // Also use ResizeObserver for immediate feedback when container expands
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerWrapperRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+            handleResize();
+        });
+        resizeObserver.observe(containerWrapperRef.current);
+    }
+
+    return () => {
+        window.removeEventListener('resize', handleResize);
+        timers.forEach(t => clearTimeout(t));
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+        }
+    };
   }, [embed, scaleMode, customZoom]);
 
   const Stamp = ({ title, name, date, time, isSecurity }: { title: string, name: string, date?: string, time?: string, isSecurity?: boolean }) => (

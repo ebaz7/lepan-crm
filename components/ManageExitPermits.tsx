@@ -125,11 +125,14 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
         else if (activeTab === 'PROFORMA_ARCHIVE') source = proformaArchivePermits;
         else source = exitArchivePermits;
 
+        const term = (searchTerm || '').trim().toLowerCase();
+        if (!term) return source;
+
         return source.filter(p => 
-            p.permitNumber?.toString().includes(searchTerm) || 
-            p.recipientName?.includes(searchTerm) || 
-            p.goodsName?.includes(searchTerm) ||
-            p.driverName?.includes(searchTerm)
+            (p.permitNumber?.toString() || '').toLowerCase().includes(term) || 
+            (p.recipientName || '').toLowerCase().includes(term) || 
+            (p.goodsName || '').toLowerCase().includes(term) ||
+            (p.driverName || '').toLowerCase().includes(term)
         );
     };
 
