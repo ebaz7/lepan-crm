@@ -171,6 +171,7 @@ export interface CompanySequenceConfig {
     startTrackingNumber?: number;
     startExitPermitNumber?: number;
     startBijakNumber?: number;
+    startChequeReceiptNumber?: number;
 }
 
 export interface FiscalYear {
@@ -259,6 +260,7 @@ export interface SystemSettings {
   appName?: string;
   currentTrackingNumber: number;
   currentExitPermitNumber: number;
+  currentChequeReceiptNumber?: number; // شماره جاری رسید دریافت چک عمومی
   companyNames: string[];
   companies?: Company[];
   defaultCompany?: string;
@@ -1301,6 +1303,7 @@ export interface ChequeItem {
     dueDate: string;      // تاریخ سررسید (مثال: ۱۴۰۳/۰۵/۲۰)
     amount: number;       // مبلغ چک به ریال
     drawerName: string;   // صادرکننده چک / صاحب حساب
+    chequeStatus?: 'box' | 'cashed' | 'deposited' | 'spent'; // وضعیت چک: صندوق، وصول شده، به حساب خوابانده شده، خرج شده
 }
 
 export interface ChequeReceipt {
@@ -1309,6 +1312,7 @@ export interface ChequeReceipt {
     registrationDate: string;// تاریخ ثبت رسید (شمسی)
     totalAmount: number;     // جمع کل مبالغ چک‌ها به ریال
     serialNumber: string;    // پشت نمره (شناسه پیگیری متوالی)
+    company?: string;        // نام شرکت
     attachedFile?: {
         name: string;
         url: string;

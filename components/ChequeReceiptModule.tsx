@@ -14,7 +14,8 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ChequeReceipt, ChequeItem, UserRole } from '../types';
 import { 
   getChequeReceipts, saveChequeReceipt, deleteChequeReceipt, 
-  updateChequeReceipt, getNextChequeReceiptNumber, parseChequesFromDocument, uploadFileChunked 
+  updateChequeReceipt, getNextChequeReceiptNumber, parseChequesFromDocument, uploadFileChunked,
+  getSettings
 } from '../services/storageService';
 import { apiCall } from '../services/apiService';
 import { PersianHandwritingPad } from './PersianHandwritingPad';
@@ -385,18 +386,43 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   const [treasuryBankFilter, setTreasuryBankFilter] = useState('');
   const [treasuryStatusFilter, setTreasuryStatusFilter] = useState('');
   const [treasuryDueDateFilter, setTreasuryDueDateFilter] = useState('all'); // all, today, week, month
+  const [treasuryChequeStatusFilter, setTreasuryChequeStatusFilter] = useState<'all' | 'box' | 'cashed' | 'deposited' | 'spent'>('all');
+
+  // Company and settings states
+  const [settings, setSettings] = useState<any>(null);
+  const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
 
   useEffect(() => {
     loadReceipts();
     loadCustomers();
-    fetchNextNumber();
+    
+    getSettings().then(s => {
+      setSettings(s);
+      const names = s?.companies?.map((c: any) => c.name) || s?.companyNames || [];
+      setAvailableCompanies(names);
+      if (s?.defaultCompany) {
+        setSelectedCompany(s.defaultCompany);
+        fetchNextNumber(s.defaultCompany);
+      } else if (names.length > 0) {
+        setSelectedCompany(names[0]);
+        fetchNextNumber(names[0]);
+      } else {
+        fetchNextNumber();
+      }
+    });
   }, []);
 
   const loadReceipts = async () => {
     setLoading(true);
     try {
       const data = await getChequeReceipts();
-      setReceipts(data);
+      const sorted = [...data].sort((a, b) => {
+        const d1 = a.registrationDate || '';
+        const d2 = b.registrationDate || '';
+        return d2.localeCompare(d1); // Newest first
+      });
+      setReceipts(sorted);
     } catch (e) {
       console.error(e);
     } finally {
@@ -420,9 +446,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     }
   };
 
-  const fetchNextNumber = async () => {
+  const fetchNextNumber = async (companyName?: string) => {
     try {
-      const num = await getNextChequeReceiptNumber();
+      const num = await getNextChequeReceiptNumber(companyName || selectedCompany);
       setSerialNumber(num);
     } catch (e) {
       console.error(e);
@@ -1262,6 +1288,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       registrationDate,
       totalAmount,
       serialNumber,
+      company: selectedCompany || undefined,
       attachedFile: attachedFile || undefined,
       cheques,
       status: saveStatus as any, // 'draft' or 'pending_sales'
@@ -1277,7 +1304,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       setCheques([]);
       setActiveSubTab('list');
       loadReceipts();
-      fetchNextNumber();
+      fetchNextNumber(selectedCompany);
     } catch (e) {
       console.error(e);
       alert('خطا در ذخیره‌سازی رسید چک');
@@ -1369,6 +1396,37 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     }
   };
 
+  const handleUpdateChequeStatus = async (receiptId: string, chequeId: string, status: 'box' | 'cashed' | 'deposited' | 'spent') => {
+    try {
+      const receipt = receipts.find(r => r.id === receiptId);
+      if (!receipt) return;
+      const updatedCheques = receipt.cheques.map(c => {
+        if (c.id === chequeId) {
+          return { ...c, chequeStatus: status };
+        }
+        return c;
+      });
+      const updatedReceipt = { ...receipt, cheques: updatedCheques };
+      setLoading(true);
+      const res = await updateChequeReceipt(updatedReceipt);
+      
+      const sorted = [...res].sort((a, b) => {
+        const d1 = a.registrationDate || '';
+        const d2 = b.registrationDate || '';
+        return d2.localeCompare(d1);
+      });
+      setReceipts(sorted);
+      
+      if (selectedReceipt && selectedReceipt.id === receiptId) {
+        setSelectedReceipt(updatedReceipt);
+      }
+    } catch (e) {
+      console.error('Failed to update cheque status:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('fa-IR').format(val) + ' ریال';
   };
@@ -1401,7 +1459,12 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
         });
       }
     });
-    return list;
+    // Sort cheques by due date (ascending: nearest due date first)
+    return list.sort((a, b) => {
+      const d1 = a.cheque.dueDate || '';
+      const d2 = b.cheque.dueDate || '';
+      return d1.localeCompare(d2);
+    });
   };
 
   // Filter cheques in treasury
@@ -1423,6 +1486,13 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
 
     // Status
     const matchesStatus = !treasuryStatusFilter || r.status === treasuryStatusFilter;
+
+    // Cheque Status
+    let matchesChequeStatus = true;
+    if (treasuryChequeStatusFilter !== 'all') {
+      const status = c.chequeStatus || 'box';
+      matchesChequeStatus = status === treasuryChequeStatusFilter;
+    }
 
     // Due date
     let matchesDueDate = true;
@@ -1450,7 +1520,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       }
     }
 
-    return matchesSearch && matchesBank && matchesStatus && matchesDueDate;
+    return matchesSearch && matchesBank && matchesStatus && matchesDueDate && matchesChequeStatus;
   });
 
   const totalTreasuryAmount = filteredCheques.reduce((sum, item) => sum + item.cheque.amount, 0);
@@ -1881,7 +1951,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
             </div>
 
             {/* Treasury Filters */}
-            <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-md">
+            <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 grid grid-cols-1 md:grid-cols-5 gap-4 shadow-md">
               <div className="relative">
                 <label className="block text-[10px] font-bold text-gray-500 mb-1">جستجوی متنی (شماره، شناسه صیاد، مشتری)</label>
                 <div className="relative">
@@ -1927,6 +1997,21 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
               </div>
 
               <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">وضعیت چک</label>
+                <select
+                  value={treasuryChequeStatusFilter}
+                  onChange={(e) => setTreasuryChequeStatusFilter(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none"
+                >
+                  <option value="all">همه چک‌ها</option>
+                  <option value="box">چک صندوق (نه وصول، نه خوابانده، نه خرج)</option>
+                  <option value="cashed">وصول شده</option>
+                  <option value="deposited">به حساب خوابانده شده</option>
+                  <option value="spent">خرج شده</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-bold text-gray-500 mb-1">محدوده سررسید چک</label>
                 <select
                   value={treasuryDueDateFilter}
@@ -1959,7 +2044,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                       <th className="p-3 text-center">تاریخ سررسید</th>
                       <th className="p-3 text-left">مبلغ (ریال)</th>
                       <th className="p-3 text-center">پشت نمره رسید</th>
-                      <th className="p-3 text-center">وضعیت</th>
+                      <th className="p-3 text-center">وضعیت رسید</th>
+                      <th className="p-3 text-center">وضعیت چک</th>
                       <th className="p-3 text-center">ضمیمه</th>
                       <th className="p-3 text-center">پرونده</th>
                     </tr>
@@ -1976,6 +2062,26 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                         <td className="p-3 text-left font-black text-emerald-600 font-mono">{formatCurrency(item.cheque.amount).replace(' ریال', '')}</td>
                         <td className="p-3 text-center font-mono font-bold text-blue-500">{item.receipt.serialNumber}</td>
                         <td className="p-3 text-center">{getStatusBadge(item.receipt.status || 'pending_sales')}</td>
+                        <td className="p-3 text-center">
+                          <select
+                            value={item.cheque.chequeStatus || 'box'}
+                            onChange={(e) => handleUpdateChequeStatus(item.receipt.id, item.cheque.id, e.target.value as any)}
+                            className={`px-2 py-1 rounded text-[10px] font-bold outline-none border ${
+                              (item.cheque.chequeStatus || 'box') === 'box'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30'
+                                : (item.cheque.chequeStatus) === 'cashed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30'
+                                : (item.cheque.chequeStatus) === 'deposited'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/30'
+                                : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+                            }`}
+                          >
+                            <option value="box">صندوق (منتظر اقدام)</option>
+                            <option value="cashed">وصول شده</option>
+                            <option value="deposited">به حساب خوابانده شده</option>
+                            <option value="spent">خرج شده</option>
+                          </select>
+                        </td>
                         <td className="p-3 text-center">
                           {item.receipt.attachedFile ? (
                             <a 
@@ -2003,7 +2109,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                     ))}
                     {filteredCheques.length === 0 && (
                       <tr>
-                        <td colSpan={11} className="p-8 text-center text-gray-400">هیچ چکی منطبق با شرایط فیلتر در صندوق یافت نشد.</td>
+                        <td colSpan={12} className="p-8 text-center text-gray-400">هیچ چکی منطبق با شرایط فیلتر در صندوق یافت نشد.</td>
                       </tr>
                     )}
                   </tbody>
@@ -2020,8 +2126,26 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
           >
             {/* Create Receipt Form */}
             <div className="glass-panel p-6 rounded-3xl shadow-xl border border-gray-200/50 dark:border-white/10">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                 
+                {/* Company Selection Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">شرکت دریافت‌کننده *</label>
+                  <select
+                    value={selectedCompany}
+                    onChange={(e) => {
+                      const co = e.target.value;
+                      setSelectedCompany(co);
+                      fetchNextNumber(co);
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500 shadow-sm"
+                  >
+                    {availableCompanies.map((c, i) => (
+                      <option key={i} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Customer name lookup combobox */}
                 <div className="relative">
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">نام مشتری / پرداخت‌کننده *</label>

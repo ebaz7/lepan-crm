@@ -378,9 +378,10 @@ export const deleteChequeReceipt = async (id: string): Promise<ChequeReceipt[]> 
     return await apiCall<ChequeReceipt[]>(`/cheque-receipts/${id}`, 'DELETE');
 };
 
-export const getNextChequeReceiptNumber = async (): Promise<string> => {
+export const getNextChequeReceiptNumber = async (company?: string): Promise<string> => {
     try {
-        const response = await apiCall<{ nextNumber: string }>(`/next-cheque-receipt-number?t=${Date.now()}`);
+        const queryParam = company ? `&company=${encodeURIComponent(company)}` : '';
+        const response = await apiCall<{ nextNumber: string }>(`/next-cheque-receipt-number?t=${Date.now()}${queryParam}`);
         return response.nextNumber;
     } catch (e) {
         return 'CR-' + Date.now();

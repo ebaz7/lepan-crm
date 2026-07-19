@@ -726,7 +726,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t11.Field_037 as Amount,
                     t02.Field_003 as GroupName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                                          AND t11.Field_003 = t10.Field_004 
+                                          AND t11.Field_036 = t10.Field_009
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                 LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
@@ -759,7 +761,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t11.Field_037 as Amount,
                         t02.Field_003 as GroupName
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t10.Field_001 = t11.Field_004
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                                              AND t11.Field_003 = t10.Field_004 
+                                              AND t11.Field_036 = t10.Field_009
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
                     LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003

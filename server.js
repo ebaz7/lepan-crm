@@ -1386,18 +1386,28 @@ app.delete('/api/cheque-receipts/:id', (req, res) => {
 
 app.get('/api/next-cheque-receipt-number', (req, res) => {
     const db = getDb();
+    const company = req.query.company || '';
     const receipts = db.chequeReceipts || [];
     const settings = db.settings || {};
-    let maxNum = (settings.currentChequeReceiptNumber ? Number(settings.currentChequeReceiptNumber) - 1 : 1000);
+    let minStart = settings.currentChequeReceiptNumber || 1000;
+    if (settings.activeFiscalYearId && company) {
+        const year = (settings.fiscalYears || []).find(y => y.id === settings.activeFiscalYearId);
+        if (year && year.companySequences && year.companySequences[company]) {
+            minStart = year.companySequences[company].startChequeReceiptNumber || minStart;
+        }
+    }
+    let maxNum = Number(minStart) - 1;
     receipts.forEach(r => {
-        const clean = r.serialNumber ? r.serialNumber.replace(/[^\d]/g, '') : '';
-        const num = parseInt(clean, 10);
-        if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
+        if (!company || r.company === company) {
+            const clean = r.serialNumber ? r.serialNumber.replace(/[^\d]/g, '') : '';
+            const num = parseInt(clean, 10);
+            if (!isNaN(num) && num > maxNum) {
+                maxNum = num;
+            }
         }
     });
     const nextNum = maxNum + 1;
-    res.json({ nextNumber: `CR-${nextNum}` });
+    res.json({ nextNumber: `${nextNum}` });
 });
 
 app.post('/api/cheque-receipts/parse-cheques', async (req, res) => {
