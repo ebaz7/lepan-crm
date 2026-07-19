@@ -135,12 +135,27 @@ const getTodayJalali = (): string => {
 
 // --- OFFLINE HANDWRITING PREPROCESSING & OCR HELPERS ---
 
+export const normalizeDigits = (str: string): string => {
+  let normalized = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+  
+  // Fix common OCR errors for numbers where letters are recognized instead
+  normalized = normalized.replace(/o/gi, '0')
+                         .replace(/i/gi, '1')
+                         .replace(/l/g, '1')
+                         .replace(/s/gi, '5')
+                         .replace(/b/gi, '6')
+                         .replace(/z/gi, '2')
+                         .replace(/q/gi, '9');
+  return normalized;
+};
+
 export const CHEQUE_FIELDS = {
-  sayyadId: { label: 'شناسه صیاد ۱۶ رقمی', x: 18, y: 17, w: 26, h: 8 },
-  dueDate: { label: 'تاریخ سررسید', x: 65, y: 11, w: 22, h: 8 },
-  amountDigits: { label: 'مبلغ به عدد (ریال)', x: 9, y: 59, w: 38, h: 10 },
-  amountWords: { label: 'مبلغ به حروف', x: 16, y: 28, w: 62, h: 11 },
-  chequeNumber: { label: 'شماره چک', x: 23, y: 11, w: 18, h: 8 }
+  sayyadId: { label: 'شناسه صیاد ۱۶ رقمی', x: 12, y: 12, w: 26, h: 9 },
+  chequeNumber: { label: 'شماره چک', x: 12, y: 3, w: 26, h: 8 },
+  dueDate: { label: 'تاریخ سررسید', x: 62, y: 10, w: 24, h: 11 },
+  amountDigits: { label: 'مبلغ به عدد (ریال)', x: 4, y: 53, w: 37, h: 12 },
+  amountWords: { label: 'مبلغ به حروف', x: 15, y: 26, w: 68, h: 14 }
 };
 
 export const preprocessChequeCanvasForOcr = (
@@ -153,6 +168,21 @@ export const preprocessChequeCanvasForOcr = (
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imgData.data;
 
+  // Step 1: Find min and max luminance in this region
+  let minLum = 255;
+  let maxLum = 0;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum < minLum) minLum = lum;
+    if (lum > maxLum) maxLum = lum;
+  }
+
+  const range = maxLum - minLum;
+
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
@@ -162,40 +192,45 @@ export const preprocessChequeCanvasForOcr = (
 
     if (removeBackground) {
       // Less aggressive background removal to preserve pen strokes
-      const isPinkBg = (r - g > 30 && r - b > 30 && r > 180);
-      const isVeryLight = lum > 235; // Higher threshold to avoid erasing faint pen marks
+      const isPinkBg = (r - g > 25 && r - b > 25 && r > 160);
+      
+      let stretchedLum = lum;
+      if (range > 15) {
+        stretchedLum = ((lum - minLum) / range) * 255;
+      }
 
-      if (isVeryLight || isPinkBg) {
+      if (stretchedLum > 180 || isPinkBg) {
         data[i] = 255;
         data[i + 1] = 255;
         data[i + 2] = 255;
       } else if (enhanceContrast) {
-        // Aggressively darken anything that isn't background to help Tesseract read faint pen marks
-        let newLum = lum;
-        if (lum < 220) {
-          newLum = Math.max(0, lum - 100);
-        }
-        data[i] = newLum;
-        data[i + 1] = newLum;
-        data[i + 2] = newLum;
+        // Aggressively make the text dark
+        const finalLum = stretchedLum < 120 ? Math.max(0, stretchedLum - 60) : stretchedLum;
+        data[i] = finalLum;
+        data[i + 1] = finalLum;
+        data[i + 2] = finalLum;
       } else {
-        data[i] = lum;
-        data[i + 1] = lum;
-        data[i + 2] = lum;
+        data[i] = stretchedLum;
+        data[i + 1] = stretchedLum;
+        data[i + 2] = stretchedLum;
       }
     } else if (enhanceContrast) {
-      let newLum = lum;
-      if (lum < 220) {
-        newLum = Math.max(0, lum - 100);
+      let stretchedLum = lum;
+      if (range > 15) {
+        stretchedLum = ((lum - minLum) / range) * 255;
       }
-      data[i] = newLum;
-      data[i + 1] = newLum;
-      data[i + 2] = newLum;
+      const finalLum = stretchedLum < 120 ? Math.max(0, stretchedLum - 60) : stretchedLum;
+      data[i] = finalLum;
+      data[i + 1] = finalLum;
+      data[i + 2] = finalLum;
     } else {
-      // Just grayscale
-      data[i] = lum;
-      data[i + 1] = lum;
-      data[i + 2] = lum;
+      let stretchedLum = lum;
+      if (range > 15) {
+        stretchedLum = ((lum - minLum) / range) * 255;
+      }
+      data[i] = stretchedLum;
+      data[i + 1] = stretchedLum;
+      data[i + 2] = stretchedLum;
     }
   }
 
@@ -241,7 +276,8 @@ export const recognizeCropOffline = async (
   imageSrc: string | HTMLCanvasElement, 
   cropRect: { x: number; y: number; w: number; h: number },
   lang = 'fas+eng',
-  whitelist?: string
+  removeBg = true,
+  enhanceCont = true
 ): Promise<string> => {
   return new Promise(async (resolve) => {
     try {
@@ -249,20 +285,31 @@ export const recognizeCropOffline = async (
       img.crossOrigin = 'anonymous';
       img.onload = async () => {
         try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width * (cropRect.w / 100);
-          canvas.height = img.height * (cropRect.h / 100);
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { resolve(''); return; }
-
           const sourceX = img.width * (cropRect.x / 100);
           const sourceY = img.height * (cropRect.y / 100);
           const sourceW = img.width * (cropRect.w / 100);
           const sourceH = img.height * (cropRect.h / 100);
 
+          // Ensure the cropped region has high-resolution dimensions for Tesseract
+          // Upscaling to at least 250px height or 500px width ensures large, crisp characters
+          const targetHeight = 250;
+          const targetWidth = 500;
+          const upscaleFactor = Math.max(3, targetHeight / sourceH, targetWidth / sourceW);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(sourceW * upscaleFactor);
+          canvas.height = Math.round(sourceH * upscaleFactor);
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(''); return; }
+
+          // Use high quality image scaling
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+
           ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, canvas.width, canvas.height);
 
-          preprocessChequeCanvasForOcr(canvas, true, true);
+          preprocessChequeCanvasForOcr(canvas, removeBg, enhanceCont);
 
           const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
@@ -459,21 +506,6 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
 
   // --- OFFLINE HEURISTIC PARSER ---
   const parseRawTextToCheques = (rawText: string): ChequeItem[] => {
-    const normalizeDigits = (str: string): string => {
-      let normalized = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-                          .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
-      
-      // Fix common OCR errors for numbers where letters are recognized instead
-      normalized = normalized.replace(/o/gi, '0')
-                             .replace(/i/gi, '1')
-                             .replace(/l/g, '1')
-                             .replace(/s/gi, '5')
-                             .replace(/b/gi, '6')
-                             .replace(/z/gi, '2')
-                             .replace(/q/gi, '9');
-      return normalized;
-    };
-
     const cleanText = normalizeDigits(rawText);
     const lowercaseText = cleanText.toLowerCase();
 
@@ -502,9 +534,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     // 2. EXTRACT JALALI DATES (YYYY/MM/DD or YY/MM/DD)
     const dates: string[] = [];
     
-    // Strict Shamsi date match: Year can be 1390-1415, 400-415, Month 01-12, Day 01-31
-    // Matches separators: /, -, ., space
-    const dateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])[\/\-\.\s](0?[1-9]|1[0-2])[\/\-\.\s](0?[1-9]|[12][0-9]|3[01])\b/g;
+    // Strict Shamsi date match with optional spacing around separators (e.g. 1405 / 4 / 13)
+    const dateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])\s*[\/\-\.\s]\s*(0?[1-9]|1[0-2])\s*[\/\-\.\s]\s*(0?[1-9]|[12][0-9]|3[01])\b/g;
     let dateMatch;
     while ((dateMatch = dateRegex.exec(cleanText)) !== null) {
       let y = dateMatch[1];
@@ -523,18 +554,27 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
         dates.push(formatted);
       }
     }
-
-    // Match consecutive 8 digits like 14030520
-    const consecutiveRegex = /\b(139[0-9]|140[0-9]|141[0-5])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b/g;
-    while ((dateMatch = consecutiveRegex.exec(cleanText)) !== null) {
-      const y = dateMatch[1];
-      const m = dateMatch[2];
-      const d = dateMatch[3];
+    
+    // Fallback for contiguous dates like 14030520 or 030520
+    const contiguousDateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b/g;
+    while ((dateMatch = contiguousDateRegex.exec(cleanText)) !== null) {
+      let y = dateMatch[1];
+      let m = dateMatch[2];
+      let d = dateMatch[3];
+      
+      if (y.length === 2) {
+        y = '14' + y;
+      } else if (y.length === 3) {
+        y = '1' + y;
+      }
       const formatted = `${y}/${m}/${d}`;
       if (!dates.includes(formatted)) {
         dates.push(formatted);
       }
     }
+
+    // Match consecutive 8 digits like 14030520 (already handled by contiguousDateRegex)
+    // Removed old consecutive regex block
 
     // 3. EXTRACT BANK NAMES
     const bankKeywords = [
@@ -602,8 +642,9 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       const val = parseInt(raw, 10);
       if (val >= 100000) {
         let finalVal = val;
-        // Skip years or dates or Sayyad ID parts
-        if (val >= 139000 && val <= 142000) continue; 
+        // Skip obvious date sequences: 140x xx xx or 139x xx xx (8 digits starting with 139, 140, 141)
+        if (raw.length === 8 && (raw.startsWith('139') || raw.startsWith('140') || raw.startsWith('141') || raw.startsWith('40') || raw.startsWith('41'))) continue;
+        if (raw.length === 6 && (raw.startsWith('99') || raw.startsWith('00') || raw.startsWith('01') || raw.startsWith('02') || raw.startsWith('03'))) continue;
         
         const index = amountMatch.index;
         const context = cleanText.substring(Math.max(0, index - 25), Math.min(cleanText.length, index + raw.length + 25));
@@ -718,12 +759,15 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     let qrSayyadId = '';
     let qrChequeNumber = '';
     try {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      const qrCtx = canvas.getContext('2d');
+      if (qrCtx) {
+        const imgData = qrCtx.getImageData(0, 0, canvas.width, canvas.height);
+        let code = jsQR(imgData.data, imgData.width, imgData.height, {
           inversionAttempts: 'dontInvert',
         });
+        if (!code) {
+           code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'invertFirst' });
+        }
         if (code && code.data) {
           const sayyadMatch = code.data.match(/\b\d{16}\b/) || code.data.replace(/[^\d]/g, '').match(/\d{16}/);
           if (sayyadMatch) {
@@ -738,8 +782,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       console.error('Barcode scanning err:', err);
     }
 
-    // 2. Run highly optimized full-page OCR
-    let fullText = '';
+    // 2. Run OCR on un-enhanced canvas for crisp typed text
+    let fullTextTyped = '';
     try {
       const fullCanvas = document.createElement('canvas');
       fullCanvas.width = canvas.width;
@@ -747,27 +791,87 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       const fctx = fullCanvas.getContext('2d');
       if (fctx) {
         fctx.drawImage(canvas, 0, 0);
-        // Clean and enhance contrast for full-page OCR
-        preprocessChequeCanvasForOcr(fullCanvas, false, true);
-        const fullRes = await Tesseract.recognize(fullCanvas.toDataURL('image/jpeg'), 'fas+eng');
-        fullText = fullRes.data.text || '';
-        console.log('Full-page OCR Raw Text:', fullText);
+        // DO NOT preprocess so typed text stays crisp
+        const fullRes = await Tesseract.recognize(fullCanvas.toDataURL('image/jpeg'), 'eng+fas');
+        fullTextTyped = fullRes.data.text || '';
+        console.log('Full-page OCR (Typed/Unprocessed):', fullTextTyped);
       }
     } catch (err) {
       console.error('Full page offline OCR error:', err);
     }
 
     // 2.5 Run targeted crops for handwritten/typed fields that might have been missed
+    let fullText = fullTextTyped;
+    
+    let cropSayyadId = '';
+    let cropChequeNumber = '';
+    let cropDueDate = '';
+    let cropAmount = 0;
+    
     try {
-      const sayyadRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.sayyadId, 'eng+fas');
-      const numRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.chequeNumber, 'eng+fas');
-      const dateRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.dueDate, 'fas+eng');
-      const wordsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountWords, 'fas');
-      const digitsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountDigits, 'eng+fas');
+      // 1. Sayyad ID (typed in Persian/Latin digits)
+      // Use 'fas+eng' with moderate contrast enhancement to pop typed text from patterned background
+      const sayyadRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.sayyadId, 'fas+eng', true, true);
+      console.log('Direct Crop Sayyad Raw:', sayyadRaw);
+      const cleanedSayyad = normalizeDigits(sayyadRaw).replace(/[^\d]/g, '');
+      const sayyadMatch = cleanedSayyad.match(/\d{16}/);
+      if (sayyadMatch) {
+        cropSayyadId = sayyadMatch[0];
+      } else if (cleanedSayyad.length >= 14 && cleanedSayyad.length <= 18) {
+        cropSayyadId = cleanedSayyad.substring(0, 16);
+      }
+
+      // 2. Cheque Number (typed in Persian/Latin digits)
+      const numRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.chequeNumber, 'fas+eng', true, true);
+      console.log('Direct Crop Cheque Number Raw:', numRaw);
+      const cleanedNum = normalizeDigits(numRaw).replace(/[^\d]/g, '');
+      const numMatch = cleanedNum.match(/\d{6,8}/);
+      if (numMatch) {
+        cropChequeNumber = numMatch[0];
+      } else if (cleanedNum.length >= 5) {
+        cropChequeNumber = cleanedNum.substring(Math.max(0, cleanedNum.length - 8));
+      }
+      
+      // 3. Due Date (handwritten, top-right)
+      const dateRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.dueDate, 'fas+eng', true, true);
+      console.log('Direct Crop Due Date Raw:', dateRaw);
+      const cleanDateRaw = normalizeDigits(dateRaw);
+      const dateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])\s*[\/\-\.\s]\s*(0?[1-9]|1[0-2])\s*[\/\-\.\s]\s*(0?[1-9]|[12][0-9]|3[01])\b/g;
+      const dMatch = dateRegex.exec(cleanDateRaw);
+      if (dMatch) {
+        let y = dMatch[1];
+        let m = dMatch[2];
+        let d = dMatch[3];
+        if (y.length === 2) y = '14' + y;
+        else if (y.length === 3) y = '1' + y;
+        cropDueDate = `${y}/${m.padStart(2, '0')}/${d.padStart(2, '0')}`;
+      } else {
+        const contiguousDateRegex = /\b(139[0-9]|140[0-9]|141[0-5]|40[0-9]|41[0-5]|0[0-9]|1[0-5])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b/;
+        const contMatch = contiguousDateRegex.exec(cleanDateRaw);
+        if (contMatch) {
+          let y = contMatch[1];
+          let m = contMatch[2];
+          let d = contMatch[3];
+          if (y.length === 2) y = '14' + y;
+          else if (y.length === 3) y = '1' + y;
+          cropDueDate = `${y}/${m.padStart(2, '0')}/${d.padStart(2, '0')}`;
+        }
+      }
+
+      // 4. Amount Words (handwritten, middle)
+      const wordsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountWords, 'fas', true, true);
+      console.log('Direct Crop Amount Words Raw:', wordsRaw);
+
+      // 5. Amount Digits (handwritten, bottom-left)
+      const digitsRaw = await recognizeCropOffline(canvas, CHEQUE_FIELDS.amountDigits, 'fas+eng', true, true);
+      console.log('Direct Crop Amount Digits Raw:', digitsRaw);
+      const cleanedDigits = normalizeDigits(digitsRaw).replace(/[^\d]/g, '');
+      if (cleanedDigits.length >= 5) {
+        cropAmount = parseInt(cleanedDigits, 10);
+      }
       
       const cropsText = [sayyadRaw, numRaw, dateRaw, wordsRaw, digitsRaw].join('\n');
-      console.log('Crops OCR Raw Text:', cropsText);
-      // Combine full text and crops text so the parser has multiple chances to find matches
+      console.log('Crops OCR Combined Raw Text:', cropsText);
       fullText = fullText + '\n' + cropsText;
     } catch (err) {
       console.error('Crops OCR error:', err);
@@ -776,28 +880,58 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     // 3. Extract features using our redesigned, state-of-the-art robust offline parsing algorithm
     const parsedCheques = parseRawTextToCheques(fullText);
 
-    // 4. Merge barcode results with OCR results if applicable
+    // 4. Merge barcode results and high-confidence direct crops with OCR results if applicable
     if (parsedCheques.length > 0) {
       parsedCheques.forEach(cheque => {
-        if (qrSayyadId && !cheque.sayyadId) {
+        // High confidence barcode override
+        if (qrSayyadId) {
           cheque.sayyadId = qrSayyadId;
+        } else if (cropSayyadId && (!cheque.sayyadId || cheque.sayyadId.length !== 16)) {
+          cheque.sayyadId = cropSayyadId;
         }
-        if (qrChequeNumber && !cheque.chequeNumber) {
+
+        if (qrChequeNumber) {
           cheque.chequeNumber = qrChequeNumber;
+        } else if (cropChequeNumber && !cheque.chequeNumber) {
+          cheque.chequeNumber = cropChequeNumber;
         }
+
+        if (cropDueDate && !cheque.dueDate) {
+          cheque.dueDate = cropDueDate;
+        }
+
+        if (cropAmount > 0 && (cheque.amount === 0 || cheque.amount < 100000)) {
+          cheque.amount = cropAmount;
+        }
+
+        // Final sanitation
+        if (cheque.sayyadId) {
+          cheque.sayyadId = cheque.sayyadId.replace(/[^\d]/g, '');
+        }
+        if (cheque.chequeNumber) {
+          cheque.chequeNumber = cheque.chequeNumber.replace(/[^\d]/g, '');
+        }
+
         results.push(cheque);
       });
-    } else if (qrSayyadId || qrChequeNumber) {
-      // If barcode found something but OCR couldn't extract anything else, create a single record
-      results.push({
-        id: 'ch_' + Math.random().toString(36).substr(2, 9),
-        chequeNumber: qrChequeNumber || '',
-        sayyadId: qrSayyadId || '',
-        bankName: 'ملی ایران',
-        dueDate: '',
-        amount: 0,
-        drawerName: customerName || 'صاحب حساب'
-      });
+    } else {
+      // Create a record from direct crops if general parser returned nothing
+      const finalSayyad = qrSayyadId || cropSayyadId || '';
+      const finalChequeNumber = qrChequeNumber || cropChequeNumber || '';
+      const finalDueDate = cropDueDate || '';
+      const finalAmount = cropAmount || 0;
+
+      if (finalSayyad || finalChequeNumber || finalDueDate || finalAmount > 0) {
+        results.push({
+          id: 'ch_' + Math.random().toString(36).substr(2, 9),
+          chequeNumber: finalChequeNumber,
+          sayyadId: finalSayyad,
+          bankName: 'ملی ایران', // Default fallback
+          dueDate: finalDueDate,
+          amount: finalAmount,
+          drawerName: customerName || 'صاحب حساب'
+        });
+      }
     }
 
     return results;
