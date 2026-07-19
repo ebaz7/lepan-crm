@@ -136,17 +136,20 @@ const getTodayJalali = (): string => {
 // --- OFFLINE HANDWRITING PREPROCESSING & OCR HELPERS ---
 
 export const normalizeDigits = (str: string): string => {
+  if (!str) return '';
   let normalized = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
                       .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
   
-  // Fix common OCR errors for numbers where letters are recognized instead
+  // Fix common OCR errors for numbers where letters or symbols are recognized instead
   normalized = normalized.replace(/o/gi, '0')
-                         .replace(/i/gi, '1')
-                         .replace(/l/g, '1')
+                         .replace(/[iIl|\[\]\(\)\{\}]/g, '1')
                          .replace(/s/gi, '5')
                          .replace(/b/gi, '6')
+                         .replace(/B/g, '8')
                          .replace(/z/gi, '2')
-                         .replace(/q/gi, '9');
+                         .replace(/q/gi, '9')
+                         .replace(/g/g, '9')
+                         .replace(/G/g, '6');
   return normalized;
 };
 
@@ -945,7 +948,50 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
 
     setAiParsing(true);
     setParseError('');
-    setAiStatusMessage('در حال شروع پردازش سند به صورت کاملاً آفلاین...');
+    setAiStatusMessage('در حال فراخوانی موتور هوشمند استخراج تصویر صیاد (مبتنی بر الگوریتم‌های پیشرفته گوگل لنز)...');
+
+    try {
+      // 1. First, attempt to use the highly precise server-side Gemini scanner (Google Lens-like) for flawless Persian handwriting and layout parsing
+      const fileRes = await apiCall<{ fileData: string }>(`/upload-get-base64?url=${encodeURIComponent(attachedFile.url)}`);
+      setAiStatusMessage('در حال آنالیز الگو، مبلغ، تاریخ صیاد و امضا با هوش مصنوعی (گوگل لنز)...');
+      const result = await parseChequesFromDocument(fileRes.fileData, attachedFile.name);
+      
+      if (result && Array.isArray(result.cheques) && result.cheques.length > 0) {
+        const parsedCheques = result.cheques.map((c: any) => ({
+          ...c,
+          id: 'ch_' + Math.random().toString(36).substr(2, 9),
+          drawerName: c.drawerName || customerName || 'صاحب حساب'
+        }));
+        setCheques(prev => [...prev, ...parsedCheques]);
+        setAiStatusMessage('استخراج موفقیت‌آمیز چک‌ها با فناوری هوشمند صیاد (گوگل لنز) انجام شد!');
+        
+        // Play success beep
+        if (typeof (window as any).playBeep === 'function') {
+          (window as any).playBeep();
+        } else {
+          try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15);
+          } catch (e) {
+            console.error('Beep sound play failed:', e);
+          }
+        }
+        setAiParsing(false);
+        return; // Flawless result obtained. Return early.
+      }
+    } catch (apiErr: any) {
+      console.warn('API/Gemini parsing failed or is offline. Falling back to local/client-side OCR pipeline...', apiErr);
+    }
+
+    // 2. Fallback to local/client-side OCR pipeline if the server-side parsing failed or returned no results
+    setAiStatusMessage('موتور پردازش آنلاین ابری در دسترس نبود. در حال شروع پردازش سند به صورت کاملاً آفلاین محلی...');
 
     try {
       const isPdf = attachedFile.name.toLowerCase().endsWith('.pdf') || (attachedFile.fileObj && attachedFile.fileObj.type === 'application/pdf');

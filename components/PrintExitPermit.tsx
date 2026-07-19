@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole, SalesContact, User } from '../types';
 import { formatDate, formatCurrency, formatIranianPlate } from '../constants';
-import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown } from 'lucide-react';
+import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown, Minimize2, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator'; 
@@ -34,6 +34,8 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   }, []);
 
   // Scaling State
+  const [scaleMode, setScaleMode] = useState<'fit' | 'width' | 'custom'>(embed ? 'width' : 'fit');
+  const [customZoom, setCustomZoom] = useState(1);
   const [scale, setScale] = useState(1);
   const containerWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -51,20 +53,29 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
         const wrapper = containerWrapperRef.current;
         if (wrapper) {
             const wrapperWidth = wrapper.clientWidth;
+            const wrapperHeight = window.innerHeight;
             const targetWidth = 794; 
+            const targetHeight = 1120;
             
-            if (wrapperWidth < targetWidth + 40) {
-                const newScale = (wrapperWidth - 32) / targetWidth;
-                setScale(newScale);
+            if (scaleMode === 'fit') {
+                const scaleX = (wrapperWidth - 32) / targetWidth;
+                const scaleY = (wrapperHeight - 160) / targetHeight; // 160px margin for header and toolbar
+                setScale(Math.min(scaleX, scaleY, 1.2)); // Cap at 1.2x to prevent oversized on giant screens
+            } else if (scaleMode === 'width') {
+                if (wrapperWidth < targetWidth + 40) {
+                    setScale((wrapperWidth - 32) / targetWidth);
+                } else {
+                    setScale(1);
+                }
             } else {
-                setScale(1);
+                setScale(customZoom);
             }
         }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [embed]);
+  }, [embed, scaleMode, customZoom]);
 
   const Stamp = ({ title, name, date, time, isSecurity }: { title: string, name: string, date?: string, time?: string, isSecurity?: boolean }) => (
       <div className={`border-2 ${isSecurity ? 'border-black text-black' : 'border-blue-800 text-blue-800'} rounded-xl p-2 rotate-[-5deg] opacity-90 inline-block glass-panel/80 print:bg-transparent shadow-sm min-w-[90px]`}>
@@ -258,16 +269,14 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
 
   const content = (
       <div id={containerId} 
-        className="printable-content glass-panel mx-auto shadow-2xl relative text-gray-900 flex flex-col" 
+        className="printable-content glass-panel mx-auto shadow-2xl relative text-gray-900 flex flex-col animate-fade-in" 
         style={{ 
             direction: 'rtl', 
             width: '210mm', 
-            height: '296mm', 
+            minHeight: '296mm', 
             padding: '10mm', 
             boxSizing: 'border-box',
             margin: '0 auto',
-            maxHeight: '296mm',
-            overflow: 'hidden',
             backgroundColor: 'white'
         }}>
             {watermark === 'DELETED' && (<div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none overflow-hidden"><div className="border-[12px] border-red-500 text-red-500 font-black text-9xl opacity-40 rotate-[-45deg] p-10 rounded-3xl whitespace-nowrap bg-white/50 backdrop-blur-[2px]">حذف شد</div></div>)}
@@ -508,7 +517,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   if (embed) return content;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-start p-2 overflow-y-auto animate-fade-in safe-pb">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex flex-col items-center pt-6 md:pt-10 pb-16 md:pb-20 overflow-y-auto overflow-x-hidden justify-start p-2 animate-fade-in safe-pb">
         <div className="bg-white p-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-wrap items-center justify-between gap-3 w-full max-w-5xl no-print mb-6 sticky top-0 z-[10000] border-2 border-blue-100 backdrop-blur-xl bg-white/95">
             <div className="flex items-center gap-3">
                 <button onClick={onClose} className="p-2 hover:bg-red-50 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95"><X size={20}/></button>
@@ -532,6 +541,64 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'EXIT' ? 'bg-white shadow-sm text-amber-600' : 'text-gray-500 hover:bg-gray-200'}`}
                     >
                         خروج
+                    </button>
+                </div>
+            )}
+
+            {/* Zoom / Scale Controls */}
+            {!embed && (
+                <div className="flex items-center gap-1.5 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-xl border border-gray-200/50 dark:border-white/5 no-print">
+                    <button
+                        type="button"
+                        title="نمایش یکجای کل صفحه بدون اسکرول"
+                        onClick={() => setScaleMode('fit')}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                            scaleMode === 'fit' 
+                                ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400 font-black border border-blue-100 dark:border-blue-900/30' 
+                                : 'text-gray-600 hover:bg-white/50'
+                        }`}
+                    >
+                        <Minimize2 size={13} />
+                        <span className="hidden md:inline">نمایش یکجا</span>
+                    </button>
+                    <button
+                        type="button"
+                        title="برازش پهنای صفحه"
+                        onClick={() => setScaleMode('width')}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                            scaleMode === 'width' 
+                                ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400 font-black border border-blue-100 dark:border-blue-900/30' 
+                                : 'text-gray-600 hover:bg-white/50'
+                        }`}
+                    >
+                        <Maximize2 size={13} />
+                        <span className="hidden md:inline">برازش پهنا</span>
+                    </button>
+                    <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                    <button
+                        type="button"
+                        title="کوچک‌نمایی"
+                        onClick={() => {
+                            setScaleMode('custom');
+                            setCustomZoom(prev => Math.max(0.3, prev - 0.1));
+                        }}
+                        className="p-1 text-gray-500 hover:bg-white/50 rounded-lg transition-all cursor-pointer"
+                    >
+                        <ZoomOut size={13} />
+                    </button>
+                    <span className="text-[10px] font-black font-mono text-gray-700 min-w-[34px] text-center" dir="ltr">
+                        {Math.round(scale * 100)}%
+                    </span>
+                    <button
+                        type="button"
+                        title="بزرگ‌نمایی"
+                        onClick={() => {
+                            setScaleMode('custom');
+                            setCustomZoom(prev => Math.min(2.0, prev + 0.1));
+                        }}
+                        className="p-1 text-gray-500 hover:bg-white/50 rounded-lg transition-all cursor-pointer"
+                    >
+                        <ZoomIn size={13} />
                     </button>
                 </div>
             )}
@@ -647,15 +714,26 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
         {/* Responsive Wrapper */}
         <div className="order-2 w-full flex justify-center pb-10" ref={containerWrapperRef}>
             <div style={{ 
-              width: '210mm', 
-              height: '296mm',
-              backgroundColor: 'white', 
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-              transform: `scale(${scale})`,
-              transformOrigin: 'top center',
-              marginBottom: `${(1 - scale) * -100}px` 
+              width: `${scale * 794}px`,
+              height: `${scale * 1120}px`,
+              overflow: 'hidden',
+              position: 'relative',
+              borderRadius: '12px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+              transition: 'all 0.1s ease-out'
             }}>
-                {content}
+                <div style={{ 
+                  width: '794px', 
+                  height: '1120px',
+                  backgroundColor: 'white', 
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'top left',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0
+                }}>
+                    {content}
+                </div>
             </div>
         </div>
     </div>
