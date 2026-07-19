@@ -461,44 +461,86 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     };
 
     const cleanText = normalizeDigits(rawText);
-    const wordTokens = cleanText.split(/[\s,،;*\-/\n]+/);
-    
-    // 1. Extract all unique 16-digit Sayyad IDs from the text
+
+    // 1. Extract all unique 16-digit Sayyad IDs from the text without word boundary restrictions
     const sayyadIds: string[] = [];
-    
-    // Extract 16-digit sequences directly, allowing optional spaces/dashes between digits, but avoiding concatenation of unrelated numbers.
-    const matches16 = (cleanText.match(/\b(?:\d[\s\-]*){16}\b/g) || []) as string[];
-    matches16.forEach(match => {
-      const cleaned = match.replace(/[^\d]/g, '');
+    const normalizedNoSymbols = cleanText.replace(/[^\d\s\-]/g, ' ');
+    const potentialSayyads = (normalizedNoSymbols.match(/[\d\s\-]{14,24}/g) || []) as string[];
+    potentialSayyads.forEach((seq: string) => {
+      const cleaned = seq.replace(/[^\d]/g, '');
       if (cleaned.length === 16 && !sayyadIds.includes(cleaned)) {
         sayyadIds.push(cleaned);
       }
     });
 
-    // Fallback: Check individual tokens of appropriate length
-    wordTokens.forEach(token => {
+    // Fallback: search words
+    const wordTokens = cleanText.split(/[\s,،;*\-/\n]+/);
+    wordTokens.forEach((token: string) => {
       const cleanToken = token.replace(/[^\d]/g, '');
       if (cleanToken.length === 16 && !sayyadIds.includes(cleanToken)) {
         sayyadIds.push(cleanToken);
       }
     });
 
-    // 2. Extract all dates (e.g. 1405/03/21 or 1405-03-21)
+    // 2. Extract all dates (using robust Shamsi date finder)
     const dates: string[] = [];
-    const dateRegex = /\b(13|14)?\d{2}[/-]\d{1,2}[/-]\d{1,2}\b/g;
+    const regexWithSeparators = /(?:13|14)?\d{2}[\/\-\.\s]\d{1,2}[\/\-\.\s]\d{1,2}/g;
     let dateMatch;
-    while ((dateMatch = dateRegex.exec(cleanText)) !== null) {
+    while ((dateMatch = regexWithSeparators.exec(cleanText)) !== null) {
       const rawDate = dateMatch[0];
-      const parts = rawDate.split(/[/-]/);
+      const parts = rawDate.split(/[\/\-\.\s]+/);
       if (parts.length === 3) {
-        let y = parts[0];
-        let m = parts[1];
-        let d = parts[2];
-        if (y.length === 2) y = '14' + y;
-        if (m.length === 1) m = '0' + m;
-        if (d.length === 1) d = '0' + d;
-        const formatted = `${y}/${m}/${d}`;
-        if (!dates.includes(formatted)) dates.push(formatted);
+        let y = parts[0].trim();
+        let m = parts[1].trim();
+        let d = parts[2].trim();
+        if (y.length === 2) {
+          const yNum = parseInt(y, 10);
+          if (yNum >= 0 && yNum <= 25) y = '14' + y;
+          else if (yNum >= 90 && yNum <= 99) y = '13' + y;
+        }
+        if (y.length === 3 && y.startsWith('4')) {
+          y = '1' + y;
+        }
+        const yNum = parseInt(y, 10);
+        const mNum = parseInt(m, 10);
+        const dNum = parseInt(d, 10);
+        if (yNum >= 1390 && yNum <= 1420 && mNum >= 1 && mNum <= 12 && dNum >= 1 && dNum <= 31) {
+          const formattedM = m.length === 1 ? '0' + m : m;
+          const formattedD = d.length === 1 ? '0' + d : d;
+          const formatted = `${y}/${formattedM}/${formattedD}`;
+          if (!dates.includes(formatted)) dates.push(formatted);
+        }
+      }
+    }
+    // Consecutive 8 digit dates
+    const consecutiveRegex = /\b(13|14)?\d{6}\b/g;
+    while ((dateMatch = consecutiveRegex.exec(cleanText)) !== null) {
+      const rawDate = dateMatch[0];
+      if (rawDate.length === 8) {
+        const y = rawDate.slice(0, 4);
+        const m = rawDate.slice(4, 6);
+        const d = rawDate.slice(6, 8);
+        const yNum = parseInt(y, 10);
+        const mNum = parseInt(m, 10);
+        const dNum = parseInt(d, 10);
+        if (yNum >= 1390 && yNum <= 1420 && mNum >= 1 && mNum <= 12 && dNum >= 1 && dNum <= 31) {
+          const formatted = `${y}/${m}/${d}`;
+          if (!dates.includes(formatted)) dates.push(formatted);
+        }
+      } else if (rawDate.length === 6) {
+        let y = rawDate.slice(0, 2);
+        const m = rawDate.slice(2, 4);
+        const d = rawDate.slice(4, 6);
+        const yNum = parseInt(y, 10);
+        if (yNum >= 0 && yNum <= 25) y = '14' + y;
+        else if (yNum >= 90 && yNum <= 99) y = '13' + y;
+        const fullYNum = parseInt(y, 10);
+        const mNum = parseInt(m, 10);
+        const dNum = parseInt(d, 10);
+        if (fullYNum >= 1390 && fullYNum <= 1420 && mNum >= 1 && mNum <= 12 && dNum >= 1 && dNum <= 31) {
+          const formatted = `${y}/${m}/${d}`;
+          if (!dates.includes(formatted)) dates.push(formatted);
+        }
       }
     }
 
@@ -530,50 +572,94 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     const foundBanks: string[] = [];
     bankKeywords.forEach(bk => {
       for (const pat of bk.patterns) {
-        if (cleanText.includes(pat)) {
+        if (cleanText.toLowerCase().includes(pat)) {
           if (!foundBanks.includes(bk.name)) foundBanks.push(bk.name);
           break;
         }
       }
     });
 
-    // 4. Extract monetary amounts (excluding dates and Sayyad IDs)
-    let textWithoutDatesAndIds = cleanText.replace(dateRegex, ' ');
+    // 4. Extract monetary amounts
+    let cleanForAmounts = cleanText;
     sayyadIds.forEach(id => {
-      textWithoutDatesAndIds = textWithoutDatesAndIds.replace(id, ' ');
+      cleanForAmounts = cleanForAmounts.replaceAll(id, ' ');
+    });
+    dates.forEach(d => {
+      cleanForAmounts = cleanForAmounts.replaceAll(d, ' ');
     });
 
-    // Standardize thousands separators (slashes or dots to commas)
-    const sanitizedForAmounts = textWithoutDatesAndIds
-      .replace(/(\d)[/](\d{3})/g, '$1,$2')
-      .replace(/(\d)[.](\d{3})/g, '$1,$2');
-    
+    // Standardize thousands separators (remove dots, commas, slashes, or spaces between digits)
+    const processedForAmounts = cleanForAmounts
+      .replace(/(\d)[\,\.\/\s]+(\d{3})[\,\.\/\s]+(\d{3})/g, '$1$2$3')
+      .replace(/(\d)[\,\.\/\s]+(\d{3})/g, '$1$2');
+
     const amounts: number[] = [];
-    const amountRegex = /\b\d{1,3}(?:,\d{3})+\b|\b\d{7,12}\b/g;
+    const amountRegex = /\b\d{6,12}\b/g;
     let amountMatch;
-    while ((amountMatch = amountRegex.exec(sanitizedForAmounts)) !== null) {
-      const rawAmount = amountMatch[0];
-      const cleanAmount = parseInt(rawAmount.replace(/,/g, ''), 10);
-      if (!isNaN(cleanAmount) && cleanAmount >= 100000) { // minimum 10,000 Tomans / 100,000 Rials
-        let amountVal = cleanAmount;
+    while ((amountMatch = amountRegex.exec(processedForAmounts)) !== null) {
+      const rawNum = amountMatch[0];
+      const val = parseInt(rawNum, 10);
+      if (!isNaN(val) && val >= 500000) {
+        let amountVal = val;
         const index = amountMatch.index;
-        const surroundingText = sanitizedForAmounts.substring(Math.max(0, index - 30), Math.min(sanitizedForAmounts.length, index + 30));
-        if (surroundingText.includes('تومان') || surroundingText.includes('toman')) {
+        const context = processedForAmounts.substring(Math.max(0, index - 20), Math.min(processedForAmounts.length, index + 30));
+        if (context.includes('تومان') || context.includes('toman') || context.includes('تومب') || context.includes('تومن')) {
           amountVal = amountVal * 10;
         }
-        if (!amounts.includes(amountVal)) amounts.push(amountVal);
+        if (!amounts.includes(amountVal)) {
+          amounts.push(amountVal);
+        }
       }
     }
 
-    // 5. Extract cheque numbers (usually 5 to 9 digits, e.g. 193405 or 17312)
-    const chequeNumbers: string[] = [];
-    const potentialNumbers = textWithoutDatesAndIds.replace(/,/g, '').match(/\b\d{5,9}\b/g) || [];
-    potentialNumbers.forEach(num => {
-      const val = parseInt(num, 10);
-      if (val !== 1403 && val !== 1404 && val !== 1405 && val !== 1406 && !amounts.includes(val) && !amounts.includes(val * 10)) {
-        if (!chequeNumbers.includes(num)) chequeNumbers.push(num);
+    // Heuristic: check words for amounts
+    const lines = cleanText.split('\n');
+    lines.forEach(line => {
+      if (line.includes('ریال') || line.includes('تومان') || line.includes('میلیون') || line.includes('هزار')) {
+        const wordsVal = parsePersianWordsToNumber(line);
+        if (wordsVal > 0 && !amounts.includes(wordsVal)) {
+          amounts.push(wordsVal);
+        }
       }
     });
+
+    // 5. Extract cheque numbers (usually 6 to 8 digits, avoiding collision with Sayyad, dates, and amounts)
+    let cleanForNumbers = cleanText;
+    sayyadIds.forEach(id => {
+      cleanForNumbers = cleanForNumbers.replaceAll(id, ' ');
+    });
+    dates.forEach(d => {
+      cleanForNumbers = cleanForNumbers.replaceAll(d, ' ');
+      const parts = d.split('/');
+      parts.forEach(p => { if (p.length >= 2) cleanForNumbers = cleanForNumbers.replaceAll(p, ' '); });
+    });
+    amounts.forEach(a => {
+      cleanForNumbers = cleanForNumbers.replaceAll(a.toString(), ' ');
+      if (a % 10 === 0) cleanForNumbers = cleanForNumbers.replaceAll((a / 10).toString(), ' ');
+    });
+
+    const chequeNumbers: string[] = [];
+    const numberRegex = /\b\d{6,8}\b/g;
+    let numMatch;
+    while ((numMatch = numberRegex.exec(cleanForNumbers)) !== null) {
+      const num = numMatch[0];
+      const val = parseInt(num, 10);
+      if (val !== 1403 && val !== 1404 && val !== 1405 && val !== 1406 && val !== 1407) {
+        if (!chequeNumbers.includes(num)) chequeNumbers.push(num);
+      }
+    }
+
+    // Fallback search for 5 or 9 digit numbers
+    if (chequeNumbers.length === 0) {
+      const fallbackNumberRegex = /\b\d{5,9}\b/g;
+      while ((numMatch = fallbackNumberRegex.exec(cleanForNumbers)) !== null) {
+        const num = numMatch[0];
+        const val = parseInt(num, 10);
+        if (val !== 1403 && val !== 1404 && val !== 1405 && val !== 1406 && val !== 1407) {
+          if (!chequeNumbers.includes(num)) chequeNumbers.push(num);
+        }
+      }
+    }
 
     // Group the details together! We produce AT MOST the number of unique Sayyad IDs found, or 1 if no Sayyad ID is found but we have other info.
     const results: ChequeItem[] = [];
@@ -582,13 +668,13 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     for (let i = 0; i < maxChequesCount; i++) {
       const sayyadId = sayyadIds[i] || '';
       const bankName = foundBanks[i] || foundBanks[0] || 'ملی ایران';
-      const dueDate = dates[i] || dates[0] || getTodayJalali();
-      const amount = amounts[i] || amounts[0] || 0;
-      const chequeNumber = chequeNumbers[i] || chequeNumbers[0] || Math.floor(100000 + Math.random() * 900000).toString();
+      const dueDate = dates[i] || dates[0] || ''; // NEVER default to today's date! If not found, let it be empty so the user fills it cleanly.
+      const amount = amounts[i] || amounts[0] || 0; // NEVER default to 50 million Rials! Let it be 0 if not found.
+      const chequeNumber = chequeNumbers[i] || chequeNumbers[0] || ''; // NEVER randomize! Let it be empty if not found.
       const drawerName = customerName || 'صاحب حساب';
 
-      // Only add row if we have at least SOME meaningful info to avoid junk
-      if (sayyadId || amount > 0 || foundBanks.length > 0 || dates.length > 0) {
+      // Only add row if we have at least SOME meaningful info to avoid empty rows
+      if (sayyadId || amount > 0 || foundBanks.length > 0 || dates.length > 0 || chequeNumber) {
         results.push({
           id: 'ch_' + Math.random().toString(36).substr(2, 9),
           chequeNumber,
@@ -789,26 +875,15 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
       if (matched) break;
     }
 
-    // 5. Removed exact sample check fallback logic to ensure the system only relies on real extracted OCR text.
-    
-    // Default heuristics if some elements are still empty
+    // Default heuristics if some elements are still empty - NO fake data placeholders!
     if (sayyadId || amount > 0 || dueDate || chequeNumber) {
-      const finalSayyadId = sayyadId || '';
-      const finalChequeNumber = chequeNumber || Math.floor(100000 + Math.random() * 900000).toString();
-      const finalDueDate = dueDate || getTodayJalali();
-      
-      let finalAmount = amount;
-      if (finalAmount === 0) {
-        finalAmount = 50000000; // default 50 million Rials
-      }
-
       results.push({
         id: 'ch_' + Math.random().toString(36).substr(2, 9),
-        chequeNumber: finalChequeNumber,
-        sayyadId: finalSayyadId,
+        chequeNumber: chequeNumber || '',
+        sayyadId: sayyadId || '',
         bankName: detectedBank,
-        dueDate: finalDueDate,
-        amount: finalAmount,
+        dueDate: dueDate || '',
+        amount: amount || 0,
         drawerName: customerName || 'صاحب حساب'
       });
     }
