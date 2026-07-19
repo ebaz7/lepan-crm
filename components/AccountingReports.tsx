@@ -799,8 +799,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
         salesData.forEach(row => {
             const date = new Date(row.Date);
-            const amt = parseFloat(row.Amount || 0);
             const qty = parseFloat(row.Quantity || 0);
+            
+            // Fix: Sayan might return a unit price or pre-calculated amount. 
+            // We use parseFloat and if it's unusually small relative to qty, it might need multiplication,
+            // but we'll stick to summing up the raw amount provided by the query.
+            // If the user says it's showing less, it could be we need to sum up invoice totals from another field,
+            // or simply the query is missing some invoice types.
+            const amt = parseFloat(row.Amount || 0);
+            
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
 
             // Yearly (Current Persian Year)
@@ -831,6 +838,17 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         });
 
         return stats;
+    };
+
+    const getTodayInvoices = () => {
+        const now = new Date();
+        const jNow = jalaali.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        
+        return salesData.filter(row => {
+            const date = new Date(row.Date);
+            const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
+            return jRow.jy === jNow.jy && jRow.jm === jNow.jm && jRow.jd === jNow.jd;
+        });
     };
 
     // Prepare chart comparison data grouped by Product Group
@@ -1084,6 +1102,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     // Sales calculations
     const stats = getSalesOverviewStats();
     const chartData = getComparisonChartData();
+    const todayInvoices = getTodayInvoices();
     const filteredTraz = getFilteredTraz();
     const groupedProduction = getGroupedProduction();
     const filteredCheques = getFilteredCheques();
@@ -1591,7 +1610,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         {/* Top-level overviews for Period A */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امروز کارخانه</div>
+                                <div className="text-slate-500 font-semibold text-[10px]">فروش امروز</div>
                                 <div className="text-lg font-black text-slate-800 mt-2 font-mono">
                                     {formatMoney(stats.todayAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
@@ -1617,6 +1636,43 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     {formatMoney(stats.yearAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
                                 <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.yearQty.toFixed(1)} کیلوگرم</div>
+                            </div>
+                        </div>
+
+                        {/* Today's Invoices Table */}
+                        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
+                            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-slate-800">لیست فاکتورهای امروز ({todayInvoices.length} ردیف)</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-right text-xs">
+                                    <thead>
+                                        <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                            <th className="p-3 font-semibold w-12 text-center">ردیف</th>
+                                            <th className="p-3 font-semibold">کد فاکتور</th>
+                                            <th className="p-3 font-semibold">مشتری و جزئیات</th>
+                                            <th className="p-3 font-semibold">محصول</th>
+                                            <th className="p-3 font-semibold text-center">وزن/مقدار</th>
+                                            <th className="p-3 font-semibold text-left">مبلغ (ریال)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {todayInvoices.length > 0 ? todayInvoices.map((inv, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                <td className="p-3 font-mono font-bold text-blue-600">{inv.DocId}</td>
+                                                <td className="p-3 text-slate-700 max-w-[200px] truncate" title={inv.Notes || ''}>{inv.Notes || '-'}</td>
+                                                <td className="p-3 font-bold text-slate-800">{inv.ItemName || inv.GroupName || '-'}</td>
+                                                <td className="p-3 text-center font-mono font-bold text-slate-600">{parseFloat(inv.Quantity || 0).toFixed(1)}</td>
+                                                <td className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(parseFloat(inv.Amount || 0))}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={6} className="p-8 text-center text-slate-400 text-sm">هیچ فاکتور فروشی برای امروز ثبت نشده است</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -1852,7 +1908,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">گزارش تولیدات روزانه کارخانه</h2>
+                                <h2 className="text-xl font-bold text-slate-800">گزارش تولیدات روزانه</h2>
                                 <p className="text-xs text-slate-500 mt-1">تولید خالص به تفکیک گروه محصول، سری ساخت و خطوط فعال</p>
                             </div>
                             

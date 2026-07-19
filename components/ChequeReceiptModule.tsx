@@ -386,7 +386,6 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   const [treasuryBankFilter, setTreasuryBankFilter] = useState('');
   const [treasuryStatusFilter, setTreasuryStatusFilter] = useState('');
   const [treasuryDueDateFilter, setTreasuryDueDateFilter] = useState('all'); // all, today, week, month
-  const [treasuryChequeStatusFilter, setTreasuryChequeStatusFilter] = useState<'all' | 'box' | 'cashed' | 'deposited' | 'spent'>('box');
 
   // Company and settings states
   const [settings, setSettings] = useState<any>(null);
@@ -1511,12 +1510,8 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
     // Status
     const matchesStatus = !treasuryStatusFilter || r.status === treasuryStatusFilter;
 
-    // Cheque Status
-    let matchesChequeStatus = true;
-    if (treasuryChequeStatusFilter !== 'all') {
-      const status = c.chequeStatus || 'box';
-      matchesChequeStatus = status === treasuryChequeStatusFilter;
-    }
+    // Cheque Status (Strictly only show cheques currently in the box)
+    const matchesChequeStatus = (c.chequeStatus || 'box') === 'box';
 
     // Due date
     let matchesDueDate = true;
@@ -1582,7 +1577,10 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
           </button>
 
           <button 
-            onClick={() => setActiveSubTab('create')}
+            onClick={() => {
+              setActiveSubTab('create');
+              fetchNextNumber(selectedCompany);
+            }}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSubTab === 'create' ? 'bg-white dark:bg-gray-900 text-emerald-600 shadow-md' : 'text-gray-600 hover:text-emerald-500'}`}
           >
             <PlusCircle size={16} />
@@ -1774,6 +1772,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                           <th className="border border-gray-300 p-2">شناسه ۱۶ رقمی صیاد</th>
                           <th className="border border-gray-300 p-2">نام بانک صادرکننده</th>
                           <th className="border border-gray-300 p-2 text-center">تاریخ سررسید</th>
+                          <th className="border border-gray-300 p-2 text-center">وضعیت</th>
                           <th className="border border-gray-300 p-2 text-left">مبلغ (ریال)</th>
                         </tr>
                       </thead>
@@ -1785,6 +1784,26 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                             <td className="border border-gray-300 p-2 font-mono tracking-wider">{c.sayyadId}</td>
                             <td className="border border-gray-300 p-2">{c.bankName}</td>
                             <td className="border border-gray-300 p-2 text-center font-mono">{c.dueDate}</td>
+                            <td className="border border-gray-300 p-2 text-center no-print">
+                              <select
+                                value={c.chequeStatus || 'box'}
+                                onChange={(e) => handleUpdateChequeStatus(selectedReceipt.id, c.id, e.target.value as any)}
+                                className={`px-2 py-1 rounded text-[10px] font-bold outline-none border ${
+                                  (c.chequeStatus || 'box') === 'box'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : (c.chequeStatus) === 'cashed'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : (c.chequeStatus) === 'deposited'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                                }`}
+                              >
+                                <option value="box">صندوق</option>
+                                <option value="cashed">وصول شده</option>
+                                <option value="deposited">به حساب خوابانده شده</option>
+                                <option value="spent">خرج شده</option>
+                              </select>
+                            </td>
                             <td className="border border-gray-300 p-2 text-left font-bold font-mono">{formatCurrency(c.amount).replace(' ریال', '')}</td>
                           </tr>
                         ))}
@@ -1822,7 +1841,10 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white">هیچ رسید چکی ثبت نشده است</h3>
                 <p className="text-xs text-gray-500 mt-2">اولین رسید چک مشتری را با کلیک بر روی دکمه ثبت رسید جدید اضافه کنید.</p>
                 <button 
-                  onClick={() => setActiveSubTab('create')}
+                  onClick={() => {
+                    setActiveSubTab('create');
+                    fetchNextNumber(selectedCompany);
+                  }}
                   className="mt-6 flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-blue-700 transition-all"
                 >
                   <PlusCircle size={16} /> ثبت اولین رسید
@@ -2016,21 +2038,6 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                   <option value="">همه وضعیت‌ها (تایید شده یا بایگانی)</option>
                   <option value="approved">تایید نهایی شده</option>
                   <option value="archived">بایگانی شده در صندوق</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 mb-1">وضعیت چک</label>
-                <select
-                  value={treasuryChequeStatusFilter}
-                  onChange={(e) => setTreasuryChequeStatusFilter(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="all">همه چک‌ها</option>
-                  <option value="box">چک صندوق (نه وصول، نه خوابانده، نه خرج)</option>
-                  <option value="cashed">وصول شده</option>
-                  <option value="deposited">به حساب خوابانده شده</option>
-                  <option value="spent">خرج شده</option>
                 </select>
               </div>
 
