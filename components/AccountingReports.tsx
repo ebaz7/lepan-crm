@@ -727,12 +727,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t02.Field_003 as GroupName
                 FROM STR_TBL_010 t10
                 INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
-                                          AND t11.Field_003 = t10.Field_004 
-                                          AND t11.Field_036 = t10.Field_009
+                                          AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
+                LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_008
                 WHERE t10.Field_009 IN ('3', '12', '23')
+                  AND t11.Field_036 = t10.Field_009
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
@@ -762,12 +762,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t02.Field_003 as GroupName
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
-                                              AND t11.Field_003 = t10.Field_004 
-                                              AND t11.Field_036 = t10.Field_009
+                                              AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                    LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_003
+                    LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_008
                     WHERE t10.Field_009 IN ('3', '12', '23')
+                      AND t11.Field_036 = t10.Field_009
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
@@ -1661,9 +1661,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                         {/* Detailed Sales comparison tables */}
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-800">
-                                {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : 'جدول ریز تراکنش‌های فاکتور فروش'}
-                            </h3>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <h3 className="text-sm font-bold text-slate-800">
+                                    {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : 'جدول ریز تراکنش‌های فاکتور فروش'}
+                                </h3>
+                                {!compareMode && salesData.length > 500 && (
+                                    <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-semibold">
+                                        در حال نمایش ۵۰۰ فاکتور اخیر از مجموع {salesData.length.toLocaleString('fa-IR')} مورد جهت سرعت بالا
+                                    </span>
+                                )}
+                            </div>
                             
                             <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
                                 {/* Desktop view */}
@@ -1729,7 +1736,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     <td colSpan={8} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
                                                 </tr>
                                             ) : (
-                                                salesData.map((row, idx) => {
+                                                salesData.slice(0, 500).map((row, idx) => {
                                                     const netW = parseNetWeight(row);
                                                     const grossW = parseGrossWeight(row);
                                                     const fee = parseFee(row, netW);
@@ -1797,7 +1804,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         salesData.length === 0 ? (
                                             <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</div>
                                         ) : (
-                                            salesData.map((row, idx) => {
+                                            salesData.slice(0, 500).map((row, idx) => {
                                                 const netW = parseNetWeight(row);
                                                 const grossW = parseGrossWeight(row);
                                                 const fee = parseFee(row, netW);

@@ -184,6 +184,8 @@ const Settings: React.FC<SettingsProps> = ({
     appName: "سیستم من",
     currentTrackingNumber: 1000,
     currentExitPermitNumber: 1000,
+    currentChequeReceiptNumber: 1000,
+    chequeArchiveCutoffDate: "",
     companyNames: [],
     companies: [],
     defaultCompany: "",
@@ -1713,7 +1715,7 @@ const Settings: React.FC<SettingsProps> = ({
                     نکته: این تنظیمات فقط در صورتی اعمال می‌شود که سال مالی فعال
                     نباشد یا تنظیمی برای شرکت در سال مالی وجود نداشته باشد.
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="text-sm font-bold text-gray-700 block mb-1">
                         شروع شماره دستور پرداخت
@@ -1758,6 +1760,23 @@ const Settings: React.FC<SettingsProps> = ({
                           setSettings({
                             ...settings,
                             currentChequeReceiptNumber: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-gray-700 block mb-1">
+                        تاریخ قطع نمایش چک‌های اقدام شده قدیمی
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg p-2 text-center"
+                        value={settings.chequeArchiveCutoffDate || ""}
+                        placeholder="مثال: ۱۴۰۳/۰۱/۰۱"
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            chequeArchiveCutoffDate: e.target.value,
                           })
                         }
                       />

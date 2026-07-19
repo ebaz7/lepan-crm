@@ -386,7 +386,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   const [treasuryBankFilter, setTreasuryBankFilter] = useState('');
   const [treasuryStatusFilter, setTreasuryStatusFilter] = useState('');
   const [treasuryDueDateFilter, setTreasuryDueDateFilter] = useState('all'); // all, today, week, month
-  const [treasuryChequeStatusFilter, setTreasuryChequeStatusFilter] = useState<'all' | 'box' | 'cashed' | 'deposited' | 'spent'>('all');
+  const [treasuryChequeStatusFilter, setTreasuryChequeStatusFilter] = useState<'all' | 'box' | 'cashed' | 'deposited' | 'spent'>('box');
 
   // Company and settings states
   const [settings, setSettings] = useState<any>(null);
@@ -1452,17 +1452,41 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
   // --- TREASURY FLAT CHEQUE EXTRACTION ---
   const getAllCheques = (): { cheque: ChequeItem; receipt: ChequeReceipt }[] => {
     const list: { cheque: ChequeItem; receipt: ChequeReceipt }[] = [];
+    const cutoffDate = settings?.chequeArchiveCutoffDate;
+    
     receipts.forEach(r => {
+      // Exclude draft and pending receipts from treasury box/cabinet
+      if (r.status !== 'approved' && r.status !== 'archived') {
+        return;
+      }
+      
       if (r.cheques && Array.isArray(r.cheques)) {
         r.cheques.forEach(c => {
+          const status = c.chequeStatus || 'box';
+          const isActioned = status !== 'box';
+          
+          if (isActioned && cutoffDate) {
+            const dueDate = c.dueDate || '';
+            if (dueDate < cutoffDate) {
+              return; // Skip actioned cheques before cutoff date
+            }
+          }
           list.push({ cheque: c, receipt: r });
         });
       }
     });
-    // Sort cheques by due date (ascending: nearest due date first)
+    // Sort cheques by due date: Unmatured (not yet due) first, then matured (due passed)
+    const todayStr = getTodayJalali();
     return list.sort((a, b) => {
       const d1 = a.cheque.dueDate || '';
       const d2 = b.cheque.dueDate || '';
+      
+      const unmatured1 = d1 >= todayStr;
+      const unmatured2 = d2 >= todayStr;
+      
+      if (unmatured1 && !unmatured2) return -1;
+      if (!unmatured1 && unmatured2) return 1;
+      
       return d1.localeCompare(d2);
     });
   };
@@ -1882,49 +1906,51 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">تعداد کل چک‌های موجود</span>
-                  <div className="text-2xl font-black text-gray-900 dark:text-white font-mono mt-1">
-                    {getAllCheques().length} <span className="text-xs font-bold">فقره</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">تعداد چک‌های واقعی در صندوق</span>
+                  <div className="text-2xl font-black text-amber-600 font-mono mt-1">
+                    {getAllCheques().filter(item => (item.cheque.chequeStatus || 'box') === 'box').length} <span className="text-xs font-bold text-gray-400">فقره</span>
                   </div>
                 </div>
-                <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500">
+                <div className="bg-amber-500/10 p-3 rounded-xl text-amber-600">
                   <Coins size={24} />
                 </div>
               </div>
 
               <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">ارزش کل صندوق (ریال)</span>
-                  <div className="text-xl font-black text-emerald-600 font-mono mt-1">
-                    {new Intl.NumberFormat('fa-IR').format(getAllCheques().reduce((sum, item) => sum + item.cheque.amount, 0))}
+                  <span className="text-xs text-gray-500 dark:text-gray-400">ارزش واقعی چک‌های در صندوق</span>
+                  <div className="text-xl font-black text-amber-600 font-mono mt-1">
+                    {new Intl.NumberFormat('fa-IR').format(
+                      getAllCheques()
+                        .filter(item => (item.cheque.chequeStatus || 'box') === 'box')
+                        .reduce((sum, item) => sum + item.cheque.amount, 0)
+                    )} <span className="text-xs font-bold text-gray-400">ریال</span>
                   </div>
                 </div>
-                <div className="bg-emerald-500/10 p-3 rounded-xl text-emerald-500">
+                <div className="bg-amber-500/10 p-3 rounded-xl text-amber-600">
                   <TrendingUp size={24} />
                 </div>
               </div>
 
               <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">بایگانی و نهایی شده</span>
-                  <div className="text-2xl font-black text-indigo-600 font-mono mt-1">
-                    {getAllCheques().filter(item => item.receipt.status === 'archived').length} <span className="text-xs font-bold">فقره</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">کل چک‌های دریافتی (تاریخچه)</span>
+                  <div className="text-2xl font-black text-blue-600 font-mono mt-1">
+                    {getAllCheques().length} <span className="text-xs font-bold">فقره</span>
                   </div>
                 </div>
-                <div className="bg-indigo-500/10 p-3 rounded-xl text-indigo-500">
+                <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500">
                   <Archive size={24} />
                 </div>
               </div>
 
               <div className="glass-panel p-4 rounded-2xl border border-gray-200/50 dark:border-white/10 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">بایگانی شده (ریال)</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">ارزش کل چک‌های دریافتی</span>
                   <div className="text-xl font-black text-blue-600 font-mono mt-1">
                     {new Intl.NumberFormat('fa-IR').format(
-                      getAllCheques()
-                        .filter(item => item.receipt.status === 'archived')
-                        .reduce((sum, item) => sum + item.cheque.amount, 0)
-                    )}
+                      getAllCheques().reduce((sum, item) => sum + item.cheque.amount, 0)
+                    )} <span className="text-xs font-bold text-gray-400">ریال</span>
                   </div>
                 </div>
                 <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500">
@@ -1987,10 +2013,7 @@ export const ChequeReceiptModule: React.FC<ChequeReceiptModuleProps> = ({ curren
                   onChange={(e) => setTreasuryStatusFilter(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 dark:bg-gray-900 text-xs font-bold text-gray-900 dark:text-white outline-none"
                 >
-                  <option value="">همه وضعیت‌ها</option>
-                  <option value="draft">پیش‌نویس</option>
-                  <option value="pending_sales">در انتظار تایید مدیر فروش</option>
-                  <option value="pending_ceo">در انتظار تایید مدیر عامل</option>
+                  <option value="">همه وضعیت‌ها (تایید شده یا بایگانی)</option>
                   <option value="approved">تایید نهایی شده</option>
                   <option value="archived">بایگانی شده در صندوق</option>
                 </select>

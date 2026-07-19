@@ -261,6 +261,7 @@ export interface SystemSettings {
   currentTrackingNumber: number;
   currentExitPermitNumber: number;
   currentChequeReceiptNumber?: number; // شماره جاری رسید دریافت چک عمومی
+  chequeArchiveCutoffDate?: string; // تاریخ قطع نمایش چک‌های اقدام شده قدیمی
   companyNames: string[];
   companies?: Company[];
   defaultCompany?: string;

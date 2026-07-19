@@ -2,7 +2,7 @@ const http = require('http');
 
 const options = {
   hostname: 'localhost',
-  port: 3001,
+  port: 3000,
   path: '/api/settings',
   method: 'GET'
 };
