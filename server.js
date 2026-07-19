@@ -1751,14 +1751,22 @@ app.post('/api/bot/send-by-phone', async (req, res) => {
 // --- PROXY NETWORK CAMERA SNAPSHOT TO PREVENT CORS ---
 app.post('/api/security/proxy-snapshot', async (req, res) => {
     try {
-        const { url } = req.body;
+        const { url, username, password } = req.body;
         if (!url) {
             return res.status(400).json({ error: 'آدرس ارسال نشده است.' });
         }
         
-        const response = await fetch(url);
+        const fetchOptions = {};
+        if (username && password) {
+            const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+            fetchOptions.headers = {
+                'Authorization': authHeader
+            };
+        }
+        
+        const response = await fetch(url, fetchOptions);
         if (!response.ok) {
-            throw new Error(`خطا در ارتباط با دوربین: ${response.statusText}`);
+            throw new Error(`خطا در ارتباط با دوربین: ${response.status} ${response.statusText}`);
         }
         
         const arrayBuffer = await response.arrayBuffer();

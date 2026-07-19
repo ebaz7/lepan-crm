@@ -77,17 +77,59 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
     const [cameraNetworkUrl, setCameraNetworkUrl] = useState<string>(() => localStorage.getItem('cameraNetworkUrl') || '');
     const [cameraNetworkType, setCameraNetworkType] = useState<"mjpeg" | "snapshot">(() => (localStorage.getItem('cameraNetworkType') as "mjpeg" | "snapshot") || 'mjpeg');
     const [cameraSnapshotInterval, setCameraSnapshotInterval] = useState<number>(() => parseInt(localStorage.getItem('cameraSnapshotInterval') || '1000', 10));
+    const [cameraNetworkUsername, setCameraNetworkUsername] = useState<string>(() => localStorage.getItem('cameraNetworkUsername') || '');
+    const [cameraNetworkPassword, setCameraNetworkPassword] = useState<string>(() => localStorage.getItem('cameraNetworkPassword') || '');
+    const [liveSnapshotBase64, setLiveSnapshotBase64] = useState<string | null>(null);
+    const [isLiveFetching, setIsLiveFetching] = useState(false);
     const [snapshotTime, setSnapshotTime] = useState<number>(Date.now());
     const [showQuickCameraSettings, setShowQuickCameraSettings] = useState(false);
 
     useEffect(() => {
-        if (isCameraActive && cameraType === "network" && cameraNetworkType === "snapshot") {
-            const interval = setInterval(() => {
+        let active = true;
+        let timer: any = null;
+
+        const fetchLiveSnapshot = async () => {
+            if (!isCameraActive || cameraType !== 'network') return;
+            if (isLiveFetching) return;
+            setIsLiveFetching(true);
+            try {
+                const response = await fetch('/api/security/proxy-snapshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        url: cameraNetworkUrl,
+                        username: cameraNetworkUsername,
+                        password: cameraNetworkPassword
+                    })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && active) {
+                        setLiveSnapshotBase64(data.imageBase64);
+                    }
+                }
+            } catch (err) {
+                console.error("Live snapshot proxy error in SecurityModule:", err);
+            } finally {
+                setIsLiveFetching(false);
+            }
+        };
+
+        if (isCameraActive && cameraType === 'network') {
+            fetchLiveSnapshot();
+            timer = setInterval(() => {
+                fetchLiveSnapshot();
                 setSnapshotTime(Date.now());
             }, cameraSnapshotInterval || 1000);
-            return () => clearInterval(interval);
+        } else {
+            setLiveSnapshotBase64(null);
         }
-    }, [isCameraActive, cameraType, cameraNetworkType, cameraSnapshotInterval]);
+
+        return () => {
+            active = false;
+            if (timer) clearInterval(timer);
+        };
+    }, [isCameraActive, cameraType, cameraNetworkUrl, cameraSnapshotInterval, cameraNetworkUsername, cameraNetworkPassword]);
 
     const playBeep = () => {
         try {
@@ -184,7 +226,11 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
             const response = await fetch('/api/security/proxy-snapshot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: cameraNetworkUrl })
+                body: JSON.stringify({ 
+                    url: cameraNetworkUrl,
+                    username: cameraNetworkUsername,
+                    password: cameraNetworkPassword
+                })
             });
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
@@ -1107,6 +1153,34 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-2">
                                                                 <div>
+                                                                    <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">نام کاربری:</label>
+                                                                    <input 
+                                                                        type="text" 
+                                                                        className="w-full text-xs p-1.5 border rounded font-mono" 
+                                                                        value={cameraNetworkUsername} 
+                                                                        onChange={e => {
+                                                                            setCameraNetworkUsername(e.target.value);
+                                                                            localStorage.setItem('cameraNetworkUsername', e.target.value);
+                                                                        }}
+                                                                        placeholder="admin"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">کلمه عبور:</label>
+                                                                    <input 
+                                                                        type="password" 
+                                                                        className="w-full text-xs p-1.5 border rounded font-mono" 
+                                                                        value={cameraNetworkPassword} 
+                                                                        onChange={e => {
+                                                                            setCameraNetworkPassword(e.target.value);
+                                                                            localStorage.setItem('cameraNetworkPassword', e.target.value);
+                                                                        }}
+                                                                        placeholder="******"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
                                                                     <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">نوع جریان تصویر:</label>
                                                                     <select 
                                                                         value={cameraNetworkType} 
@@ -1162,7 +1236,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                                             <div className="relative overflow-hidden rounded border bg-black aspect-video max-w-sm mx-auto shadow-inner">
                                                 {cameraType === 'network' ? (
                                                     <img 
-                                                        src={cameraNetworkType === 'snapshot' ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl}
+                                                        src={liveSnapshotBase64 || (cameraNetworkType === 'snapshot' ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl)}
                                                         referrerPolicy="no-referrer"
                                                         className={`w-full h-full object-contain ${localStorage.getItem('cameraMirror') === 'true' ? 'transform -scale-x-100' : ''}`} 
                                                         alt="Network Camera Feed"

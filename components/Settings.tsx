@@ -269,19 +269,61 @@ const Settings: React.FC<SettingsProps> = ({
   const [cameraNetworkUrl, setCameraNetworkUrl] = useState<string>(() => localStorage.getItem("cameraNetworkUrl") || "");
   const [cameraNetworkType, setCameraNetworkType] = useState<"mjpeg" | "snapshot">((localStorage.getItem("cameraNetworkType") as "mjpeg" | "snapshot") || "mjpeg");
   const [cameraSnapshotInterval, setCameraSnapshotInterval] = useState<number>(() => parseInt(localStorage.getItem("cameraSnapshotInterval") || "1000", 10));
+  const [cameraNetworkUsername, setCameraNetworkUsername] = useState<string>(() => localStorage.getItem("cameraNetworkUsername") || "");
+  const [cameraNetworkPassword, setCameraNetworkPassword] = useState<string>(() => localStorage.getItem("cameraNetworkPassword") || "");
+  const [liveSnapshotBase64, setLiveSnapshotBase64] = useState<string | null>(null);
+  const [isLiveFetching, setIsLiveFetching] = useState(false);
   const [snapshotTime, setSnapshotTime] = useState<number>(Date.now());
   const [testStream, setTestStream] = useState<MediaStream | null>(null);
   const [isTestingCamera, setIsTestingCamera] = useState(false);
   const testVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (isTestingCamera && cameraType === "network" && cameraNetworkType === "snapshot") {
-      const interval = setInterval(() => {
+    let active = true;
+    let timer: any = null;
+
+    const fetchLiveSnapshot = async () => {
+      if (!isTestingCamera || cameraType !== "network") return;
+      if (isLiveFetching) return;
+      setIsLiveFetching(true);
+      try {
+        const response = await fetch('/api/security/proxy-snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            url: cameraNetworkUrl,
+            username: cameraNetworkUsername,
+            password: cameraNetworkPassword
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && active) {
+            setLiveSnapshotBase64(data.imageBase64);
+          }
+        }
+      } catch (err) {
+        console.error("Live test snapshot proxy error:", err);
+      } finally {
+        setIsLiveFetching(false);
+      }
+    };
+
+    if (isTestingCamera && cameraType === "network") {
+      fetchLiveSnapshot();
+      timer = setInterval(() => {
+        fetchLiveSnapshot();
         setSnapshotTime(Date.now());
       }, cameraSnapshotInterval || 1000);
-      return () => clearInterval(interval);
+    } else {
+      setLiveSnapshotBase64(null);
     }
-  }, [isTestingCamera, cameraType, cameraNetworkType, cameraSnapshotInterval]);
+
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [isTestingCamera, cameraType, cameraNetworkUrl, cameraSnapshotInterval, cameraNetworkUsername, cameraNetworkPassword]);
 
   const requestCameraPermissionAndList = async () => {
     try {
@@ -816,6 +858,8 @@ const Settings: React.FC<SettingsProps> = ({
       localStorage.setItem("cameraNetworkUrl", cameraNetworkUrl);
       localStorage.setItem("cameraNetworkType", cameraNetworkType);
       localStorage.setItem("cameraSnapshotInterval", String(cameraSnapshotInterval));
+      localStorage.setItem("cameraNetworkUsername", cameraNetworkUsername);
+      localStorage.setItem("cameraNetworkPassword", cameraNetworkPassword);
 
       if (onUpdateSettings) onUpdateSettings(syncedSettings);
       setMessage("ذخیره شد ✅");
@@ -5294,6 +5338,35 @@ const Settings: React.FC<SettingsProps> = ({
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
+                              <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-1.5">
+                                نام کاربری (DVR / Camera)
+                              </label>
+                              <input
+                                type="text"
+                                value={cameraNetworkUsername}
+                                onChange={(e) => setCameraNetworkUsername(e.target.value)}
+                                placeholder="مثال: admin"
+                                dir="ltr"
+                                className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-mono focus:ring-2 focus:ring-cyan-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-black text-gray-700 dark:text-gray-300 mb-1.5">
+                                کلمه عبور (DVR / Camera)
+                              </label>
+                              <input
+                                type="password"
+                                value={cameraNetworkPassword}
+                                onChange={(e) => setCameraNetworkPassword(e.target.value)}
+                                placeholder="******"
+                                dir="ltr"
+                                className="w-full text-xs border rounded-lg p-2 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-mono focus:ring-2 focus:ring-cyan-500 outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
                               <label className="block text-[10px] font-black text-gray-600 dark:text-gray-400 mb-1">
                                 نوع جریان شبکه
                               </label>
@@ -5408,7 +5481,7 @@ const Settings: React.FC<SettingsProps> = ({
                           {isTestingCamera ? (
                             cameraType === "network" ? (
                               <img
-                                src={cameraNetworkType === "snapshot" ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl}
+                                src={liveSnapshotBase64 || (cameraNetworkType === "snapshot" ? `${cameraNetworkUrl}${cameraNetworkUrl.includes('?') ? '&' : '?'}t=${snapshotTime}` : cameraNetworkUrl)}
                                 referrerPolicy="no-referrer"
                                 className={`w-full h-full object-contain ${cameraMirror ? 'transform -scale-x-100' : ''}`}
                                 alt="Network Stream"
