@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Check, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests, getTaskGroups, getTasks, updateTask } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -515,10 +515,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                                 pendingTasks.map(task => (
                                                     <div 
                                                         key={task.id} 
-                                                        className="flex items-start gap-2.5 p-2 bg-white/60 dark:bg-gray-900/40 rounded-lg hover:bg-white transition"
+                                                        onClick={() => onGoToTaskGroup && onGoToTaskGroup(group.id)}
+                                                        className="flex items-start gap-2.5 p-2 bg-white/60 dark:bg-gray-900/40 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-blue-200 border border-transparent transition cursor-pointer select-none"
+                                                        title="کلیک برای انتقال به گفتگو و تسک‌های این گروه"
                                                     >
                                                         <button 
-                                                            onClick={() => {
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 const updatedTask = { 
                                                                     ...task, 
                                                                     status: 'completed' as const,
@@ -529,9 +532,10 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                                                     setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
                                                                 });
                                                             }}
-                                                            className="mt-0.5 rounded-full border border-gray-300 dark:border-gray-700 w-4 h-4 flex items-center justify-center hover:border-green-500 shrink-0"
+                                                            className="mt-0.5 rounded-full border-2 border-gray-300 dark:border-gray-700 w-5 h-5 flex items-center justify-center hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950/20 text-slate-400 hover:text-green-600 transition shrink-0 cursor-pointer"
+                                                            title="علامت‌گذاری به عنوان انجام شده"
                                                         >
-                                                            <CheckCircle size={10} className="text-white opacity-0 hover:opacity-100 hover:text-green-500"/>
+                                                            <Check size={11} className="stroke-[3]" />
                                                         </button>
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate" title={task.title}>{task.title}</p>

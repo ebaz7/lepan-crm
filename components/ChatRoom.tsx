@@ -373,6 +373,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [taskDueDate, setTaskDueDate] = useState('');
     const [activeTaskForDetail, setActiveTaskForDetail] = useState<GroupTask | null>(null);
     const [taskReplyText, setTaskReplyText] = useState('');
+    const [userSearchText, setUserSearchText] = useState('');
 
     useEffect(() => {
         if (!inputText && inputAreaRef.current) {
@@ -1473,6 +1474,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             setTaskDescription('');
                                             setTaskAssignedTo([]);
                                             setTaskDueDate('');
+                                            setUserSearchText('');
                                             setShowCreateTaskModal(true);
                                         }}
                                         className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition"
@@ -2275,33 +2277,115 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 mb-1 block">ارجاع به کاربر خاص (مسئولین تسک)</label>
-                                <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-xl p-2 space-y-1 bg-white dark:bg-gray-900 custom-scrollbar">
-                                    {users.filter(u => {
-                                        const tg = taskGroups.find(g => g.id === activeChannel.id);
-                                        return !tg || (tg.members || []).includes(u.username);
-                                    }).map(u => {
-                                        const isChecked = taskAssignedTo.includes(u.username);
-                                        return (
-                                            <label key={u.username} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors text-sm">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={isChecked}
-                                                    onChange={() => {
-                                                        if (isChecked) {
-                                                            setTaskAssignedTo(prev => prev.filter(un => un !== u.username));
-                                                        } else {
-                                                            setTaskAssignedTo(prev => [...prev, u.username]);
-                                                        }
-                                                    }}
-                                                    className="rounded text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{u.fullName}</span>
-                                                    <span className="text-[10px] text-gray-400">@{u.username}</span>
+                                
+                                {/* Selected Assignees Chips */}
+                                {taskAssignedTo.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-gray-50 dark:bg-gray-950/40 rounded-xl border border-dashed border-gray-100 dark:border-gray-800">
+                                        {taskAssignedTo.map(username => {
+                                            const matchedUser = users.find(u => u.username === username);
+                                            const name = matchedUser ? matchedUser.fullName : username;
+                                            return (
+                                                <div key={username} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/55 border border-blue-100 dark:border-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg text-xs font-bold animate-scale-in">
+                                                    <div className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-black uppercase">
+                                                        {name.charAt(0)}
+                                                    </div>
+                                                    <span>{name}</span>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setTaskAssignedTo(prev => prev.filter(un => un !== username))}
+                                                        className="hover:bg-blue-100 dark:hover:bg-blue-900/60 p-0.5 rounded text-blue-500 hover:text-blue-700 transition cursor-pointer"
+                                                    >
+                                                        <X size={10} className="stroke-[3]" />
+                                                    </button>
                                                 </div>
-                                            </label>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Searchable Dropdown */}
+                                <div className="relative">
+                                    <div className="relative flex items-center bg-gray-100 dark:bg-gray-950 rounded-xl px-3 border border-transparent focus-within:border-blue-500 transition-colors">
+                                        <Search size={16} className="text-gray-400 shrink-0 ml-2" />
+                                        <input 
+                                            type="text"
+                                            value={userSearchText}
+                                            onChange={e => setUserSearchText(e.target.value)}
+                                            placeholder="جستجو و ارجاع کاربر جدید..."
+                                            className="w-full py-2.5 bg-transparent border-none outline-none text-xs font-bold text-right"
+                                        />
+                                        {userSearchText && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setUserSearchText('')}
+                                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Dropdown Box - Always visible if group has users, filtered by search */}
+                                    <div className="mt-1 max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800/60 rounded-xl shadow-lg bg-white dark:bg-gray-900 custom-scrollbar absolute w-full z-10 left-0 right-0 animate-fade-in divide-y divide-gray-50 dark:divide-gray-800/40">
+                                        {(() => {
+                                            const tg = taskGroups.find(g => g.id === activeChannel.id);
+                                            const filtered = users.filter(u => {
+                                                const isMember = !tg || (tg.members || []).includes(u.username);
+                                                const isSelf = currentUser && u.username === currentUser.username;
+                                                const matchesSearch = u.fullName.toLowerCase().includes(userSearchText.toLowerCase()) || u.username.toLowerCase().includes(userSearchText.toLowerCase());
+                                                return (isMember || isSelf) && matchesSearch;
+                                            });
+
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <div className="p-3 text-center text-xs text-gray-400">
+                                                        کاربری یافت نشد 🔍
+                                                    </div>
+                                                );
+                                            }
+
+                                            return filtered.map(u => {
+                                                const isSelected = taskAssignedTo.includes(u.username);
+                                                const isCurrentUser = currentUser && u.username === currentUser.username;
+                                                return (
+                                                    <button
+                                                        key={u.username}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setTaskAssignedTo(prev => prev.filter(un => un !== u.username));
+                                                            } else {
+                                                                setTaskAssignedTo(prev => [...prev, u.username]);
+                                                            }
+                                                            setUserSearchText('');
+                                                        }}
+                                                        className="w-full flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-850 text-right transition cursor-pointer"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-black text-[10px]">
+                                                                {u.fullName.charAt(0)}
+                                                            </div>
+                                                            <div className="flex flex-col text-right">
+                                                                <span className="font-bold text-xs text-gray-800 dark:text-gray-200">
+                                                                    {u.fullName} {isCurrentUser && <span className="text-[9px] text-green-600 bg-green-50 dark:bg-green-950/40 px-1 py-0.5 rounded mr-1 font-semibold">(خودم)</span>}
+                                                                </span>
+                                                                <span className="text-[9px] text-gray-400">@{u.username}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center justify-center">
+                                                            {isSelected ? (
+                                                                <div className="w-4 h-4 rounded bg-blue-600 text-white flex items-center justify-center">
+                                                                    <Check size={10} className="stroke-[3]" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-4 h-4 rounded border-2 border-gray-200 dark:border-gray-850" />
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                             <div>

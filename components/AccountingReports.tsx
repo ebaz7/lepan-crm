@@ -717,6 +717,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const sqlA = `
                 SELECT 
                     t10.Field_001 as DocId,
+                    t10.Field_007 as InvoiceNum,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
                     t11.Field_005 as ItemCode,
@@ -737,8 +738,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
-            setSalesData(dataA);
-            setCompareSalesDataA(dataA);
+            const processedA = dataA.map((row: any) => ({
+                ...row,
+                Amount: row.Amount ? (parseFloat(row.Amount) * 1000).toString() : '0'
+            }));
+            setSalesData(processedA);
+            setCompareSalesDataA(processedA);
 
             // Fetch Period B for comparison if active
             if (compareMode && salesDateFromB && salesDateToB) {
@@ -752,6 +757,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
+                        t10.Field_007 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
                         t11.Field_005 as ItemCode,
@@ -772,7 +778,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
-                setCompareSalesDataB(dataB);
+                const processedB = dataB.map((row: any) => ({
+                    ...row,
+                    Amount: row.Amount ? (parseFloat(row.Amount) * 1000).toString() : '0'
+                }));
+                setCompareSalesDataB(processedB);
             }
         } catch (err: any) {
             toast.error(`خطا در واکشی اطلاعات فروش: ${err.message}`);
@@ -849,6 +859,278 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
             return jRow.jy === jNow.jy && jRow.jm === jNow.jm && jRow.jd === jNow.jd;
         });
+    };
+
+    const handlePrintTodaySales = () => {
+        const todayInvs = getTodayInvoices();
+        const title = 'گزارش رسمی فروش روزانه (امروز)';
+        const docHtml = `
+            <html dir="rtl" lang="fa">
+            <head>
+                <meta charset="utf-8">
+                <title>${title}</title>
+                <style>
+                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 30px; background: #fff; color: #333; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
+                    .header h1 { margin: 0; font-size: 22px; color: #0f172a; font-weight: bold; }
+                    .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
+                    .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
+                    .stat-card h3 { margin: 0 0 8px 0; font-size: 11px; color: #64748b; font-weight: bold; }
+                    .stat-card p { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 12px 14px; text-align: right; font-size: 12px; line-height: 1.6; }
+                    th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
+                    tr:nth-child(even) { background-color: #f8fafc; }
+                    .total { font-weight: bold; background: #e2e8f0 !important; }
+                    .footer { text-align: center; margin-top: 45px; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
+                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 60px; text-align: center; font-size: 12px; font-weight: bold; }
+                    .signature-box { height: 100px; border-bottom: 1px solid #cbd5e1; margin-bottom: 10px; }
+                    @media print {
+                        body { padding: 0; }
+                        button { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div>
+                        <h1>${title}</h1>
+                        <p>سیستم یکپارچه گزارشات فروش سایان ERP</p>
+                    </div>
+                    <div style="text-align: left;">
+                        <p>تاریخ فاکتورها: ${formatDateToJalali(new Date().toISOString())}</p>
+                        <p>تاریخ چاپ: ${formatDateToJalali(new Date().toISOString())}</p>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <h3>تعداد فاکتورهای امروز</h3>
+                        <p>${todayInvs.length} فاکتور</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>مجموع وزن فروش امروز</h3>
+                        <p>${formatMoney(todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Quantity || 0), 0))} کیلوگرم</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>مبلغ کل فروش امروز</h3>
+                        <p>${formatMoney(todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Amount || 0), 0))} ریال</p>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 50px; text-align: center;">ردیف</th>
+                            <th style="width: 100px; text-align: center;">شماره فاکتور</th>
+                            <th>مشتری و جزئیات فاکتور</th>
+                            <th>محصول فروخته شده</th>
+                            <th style="width: 100px; text-align: center;">وزن (ک‌گ)</th>
+                            <th style="width: 180px; text-align: left;">مبلغ کل (ریال)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${todayInvs.length > 0 ? todayInvs.map((inv, idx) => `
+                            <tr>
+                                <td style="text-align: center;">${idx + 1}</td>
+                                <td style="text-align: center; font-family: monospace; font-weight: bold;">${inv.InvoiceNum || inv.DocId}</td>
+                                <td>${inv.Notes || '-'}</td>
+                                <td style="font-weight: bold;">${inv.ItemName || inv.GroupName || '-'}</td>
+                                <td style="text-align: center; font-family: monospace; font-weight: bold;">${parseFloat(inv.Quantity || 0).toFixed(1)}</td>
+                                <td style="text-align: left; font-family: monospace; font-weight: 800;">${formatMoney(parseFloat(inv.Amount || 0))}</td>
+                            </tr>
+                        `).join('') : `
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">هیچ فاکتور فروشی برای امروز ثبت نشده است.</td>
+                            </tr>
+                        `}
+                        ${todayInvs.length > 0 ? `
+                        <tr class="total">
+                            <td colspan="4" style="text-align: left;">جمع کل فاکتورها:</td>
+                            <td style="text-align: center; font-family: monospace;">${todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Quantity || 0), 0).toFixed(1)}</td>
+                            <td style="text-align: left; font-family: monospace;">${formatMoney(todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Amount || 0), 0))}</td>
+                        </tr>
+                        ` : ''}
+                    </tbody>
+                </table>
+
+                <div class="signatures">
+                    <div>
+                        <p>امضا تهیه کننده</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیر مالی</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیریت عامل</p>
+                        <div class="signature-box"></div>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(docHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
+    };
+
+    const handlePrintPeriodSales = () => {
+        const title = 'گزارش جامع تراکنش‌های فروش دوره‌ای';
+        const docHtml = `
+            <html dir="rtl" lang="fa">
+            <head>
+                <meta charset="utf-8">
+                <title>${title}</title>
+                <style>
+                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 30px; background: #fff; color: #333; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
+                    .header h1 { margin: 0; font-size: 22px; color: #0f172a; font-weight: bold; }
+                    .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
+                    .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
+                    .stat-card h3 { margin: 0 0 8px 0; font-size: 11px; color: #64748b; font-weight: bold; }
+                    .stat-card p { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; font-size: 11px; line-height: 1.5; }
+                    th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
+                    tr:nth-child(even) { background-color: #f8fafc; }
+                    .total { font-weight: bold; background: #e2e8f0 !important; }
+                    .footer { text-align: center; margin-top: 45px; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
+                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 60px; text-align: center; font-size: 12px; font-weight: bold; }
+                    .signature-box { height: 100px; border-bottom: 1px solid #cbd5e1; margin-bottom: 10px; }
+                    @media print {
+                        body { padding: 0; }
+                        button { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div>
+                        <h1>${title}</h1>
+                        <p>سیستم یکپارچه گزارشات فروش سایان ERP</p>
+                    </div>
+                    <div style="text-align: left;">
+                        <p>بازه گزارش: از ${dateFrom} تا ${dateTo}</p>
+                        <p>تاریخ چاپ: ${formatDateToJalali(new Date().toISOString())}</p>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <h3>کل تراکنش‌های ثبت شده</h3>
+                        <p>${salesData.length} ردیف</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>کل وزن خالص فروخته شده</h3>
+                        <p>${salesData.reduce((sum, r) => sum + parseNetWeight(r), 0).toFixed(2)} کیلوگرم</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>مبلغ کل فروش بازه</h3>
+                        <p>${formatMoney(salesData.reduce((sum, r) => sum + parseFloat(r.Amount || 0), 0))} ریال</p>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40px; text-align: center;">ردیف</th>
+                            <th style="width: 75px; text-align: center;">تاریخ فاکتور</th>
+                            <th style="width: 80px; text-align: center;">شماره فاکتور</th>
+                            <th style="width: 120px;">گروه کالا</th>
+                            <th>شرح کالای فاکتور</th>
+                            <th style="width: 80px; text-align: center;">وزن خالص</th>
+                            <th style="width: 80px; text-align: center;">وزن ناخالص</th>
+                            <th style="width: 100px; text-align: left;">فی واحد (ریال)</th>
+                            <th style="width: 130px; text-align: left;">مجموع مبلغ (ریال)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${salesData.slice(0, 1000).map((row, idx) => {
+                            const netW = parseNetWeight(row);
+                            const grossW = parseGrossWeight(row);
+                            const fee = parseFee(row, netW);
+                            return `
+                                <tr>
+                                    <td style="text-align: center;">${idx + 1}</td>
+                                    <td style="text-align: center;">${formatDateToJalali(row.Date)}</td>
+                                    <td style="text-align: center; font-family: monospace; font-weight: bold;">${row.InvoiceNum || row.DocId}</td>
+                                    <td>${row.GroupName || 'سایر گروه‌ها'}</td>
+                                    <td style="font-weight: 500;">
+                                        ${row.ItemName || 'کالای فروخته شده'}
+                                        ${row.ItemNotes ? `<span style="display: block; font-size: 9px; color: #64748b;">${row.ItemNotes}</span>` : ''}
+                                    </td>
+                                    <td style="text-align: center; font-family: monospace;">${netW.toFixed(2)}</td>
+                                    <td style="text-align: center; font-family: monospace;">${grossW > 0 ? grossW.toFixed(2) : '-'}</td>
+                                    <td style="text-align: left; font-family: monospace;">${fee > 0 ? formatMoney(fee) : '-'}</td>
+                                    <td style="text-align: left; font-family: monospace; font-weight: bold;">${formatMoney(parseFloat(row.Amount || 0))}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                        ${salesData.length > 1000 ? `
+                            <tr>
+                                <td colspan="9" style="text-align: center; color: #475569; font-weight: bold; background-color: #fef08a;">
+                                    نمایش ۱۰۰۰ ردیف اول از مجموع ${salesData.length} ردیف جهت کارایی چاپ
+                                </td>
+                            </tr>
+                        ` : ''}
+                        <tr class="total">
+                            <td colspan="5" style="text-align: left;">جمع کل بازه:</td>
+                            <td style="text-align: center; font-family: monospace;">${salesData.reduce((sum, r) => sum + parseNetWeight(r), 0).toFixed(2)}</td>
+                            <td style="text-align: center; font-family: monospace;">${salesData.reduce((sum, r) => sum + parseGrossWeight(r), 0).toFixed(2)}</td>
+                            <td>-</td>
+                            <td style="text-align: left; font-family: monospace;">${formatMoney(salesData.reduce((sum, r) => sum + parseFloat(r.Amount || 0), 0))}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="signatures">
+                    <div>
+                        <p>امضا تهیه کننده</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیر مالی</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیریت عامل</p>
+                        <div class="signature-box"></div>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(docHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
     };
 
     // Prepare chart comparison data grouped by Product Group
@@ -1554,7 +1836,24 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 <p className="text-xs text-slate-500 mt-1">پایش دوره‌ای فروش با ابزار مقایسه‌ای پیشرفته محصول و وزن کالا</p>
                             </div>
                             
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button 
+                                    onClick={handlePrintTodaySales}
+                                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
+                                    title="دریافت گزارش تفکیکی فروش امروز با فرمت چاپی رسمی و خروجی PDF"
+                                >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>فرم چاپی فروش روزانه (PDF)</span>
+                                </button>
+                                <button 
+                                    onClick={handlePrintPeriodSales}
+                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
+                                    title="دریافت گزارش جامع فاکتورهای دوره‌ای با فرمت رسمی و خروجی PDF"
+                                >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>فرم چاپی فروش دوره‌ای (PDF)</span>
+                                </button>
+
                                 <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 transition-colors">
                                     <input 
                                         type="checkbox" 
@@ -1660,7 +1959,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         {todayInvoices.length > 0 ? todayInvoices.map((inv, idx) => (
                                             <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                <td className="p-3 font-mono font-bold text-blue-600">{inv.DocId}</td>
+                                                <td className="p-3 font-mono font-bold text-blue-600">{inv.InvoiceNum || inv.DocId}</td>
                                                 <td className="p-3 text-slate-700 max-w-[200px] truncate" title={inv.Notes || ''}>{inv.Notes || '-'}</td>
                                                 <td className="p-3 font-bold text-slate-800">{inv.ItemName || inv.GroupName || '-'}</td>
                                                 <td className="p-3 text-center font-mono font-bold text-slate-600">{parseFloat(inv.Quantity || 0).toFixed(1)}</td>
@@ -1745,7 +2044,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         ) : (
                                             <tr>
                                                 <th className="p-3.5 font-bold text-slate-700 w-24">تاریخ فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 w-24">شماره سند</th>
+                                                <th className="p-3.5 font-bold text-slate-700 w-24">شماره فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 w-36">گروه کالا</th>
                                                 <th className="p-3.5 font-bold text-slate-700">شرح کالای فاکتور</th>
                                                 <th className="p-3.5 font-bold text-slate-700 text-left w-24">وزن خالص (ک‌گ)</th>
@@ -1799,7 +2098,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     return (
                                                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                                             <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.DocId}</td>
+                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.InvoiceNum || row.DocId}</td>
                                                             <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
                                                             <td className="p-3 font-semibold text-slate-900">
                                                                 {row.ItemName || 'کالای فروخته شده'}
@@ -1867,7 +2166,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 return (
                                                     <div key={idx} className="p-4 space-y-2 text-xs">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-[10px] text-slate-400 font-bold font-mono">سند: {row.DocId} | {formatDateToJalali(row.Date)}</span>
+                                                            <span className="text-[10px] text-slate-400 font-bold font-mono">فاکتور: {row.InvoiceNum || row.DocId} | {formatDateToJalali(row.Date)}</span>
                                                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
                                                         </div>
                                                         <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
