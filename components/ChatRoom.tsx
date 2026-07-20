@@ -236,7 +236,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     // Handle directChatTarget updates dynamically
     useEffect(() => {
         if (directChatTarget && directChatTarget.id) {
-            setActiveTab('CHATS');
+            console.log("ChatRoom: Received directChatTarget", directChatTarget);
+            if (directChatTarget.type === 'task_group') {
+                setActiveTab('TASKS');
+            } else if (directChatTarget.type === 'group') {
+                setActiveTab('GROUPS');
+            } else {
+                setActiveTab('CHATS');
+            }
+            
             setActiveChannel({ type: directChatTarget.type as 'private' | 'group' | 'public' | 'task_group', id: directChatTarget.id });
             
             if (directChatTarget.taskId) {
@@ -559,7 +567,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             ]);
             console.log("ChatRoom: Meta preloads loaded in parallel");
             
-            setUsers(usrList.filter(u => u.username !== currentUser.username));
+            setUsers(usrList);
             
             const isManager = [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
             const visibleGroups = grpList.filter(g => isManager || g.members.includes(currentUser.username) || g.createdBy === currentUser.username);
@@ -657,6 +665,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         list.push({ type: 'public', id: 'public', name: 'کانال عمومی', avatar: null, isOnline: true, lastMsg: null, unread: 0 });
         
         users.forEach(u => {
+            if (currentUser && u.username === currentUser.username) return;
             list.push({ type: 'private', id: u.username, name: u.fullName, avatar: resolveImageUrl(u.avatar), isOnline: false, lastMsg: null, unread: 0 });
         });
         
@@ -712,6 +721,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             // 4. Private chats
             users.forEach(u => {
+                if (currentUser && u.username === currentUser.username) return;
                 const last = getLastMessage(u.username, 'private');
                 const isOnline = u.lastSeen ? (Date.now() - u.lastSeen) < 5 * 60 * 1000 : false;
                 
@@ -727,6 +737,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             // If empty, add some users for accessibility
             if (list.length <= 1 && !term) {
                  users.slice(0, 10).forEach(u => {
+                     if (currentUser && u.username === currentUser.username) return;
                      if (!list.find(i => i.id === u.username)) {
                           list.push({
                              type: 'private', id: u.username, name: u.fullName,
@@ -772,6 +783,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
             // Include users with messages OR all users if looking at CHATS tab and no filters
             users.forEach(u => {
+                if (currentUser && u.username === currentUser.username) return;
                 const last = getLastMessage(u.username, 'private');
                 const isOnline = u.lastSeen ? (Date.now() - u.lastSeen) < 5 * 60 * 1000 : false;
                 
@@ -788,6 +800,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             // If list is still very empty (just Public), add some frequent users or just all users for accessibility
             if (list.length <= 1 && !term) {
                  users.slice(0, 10).forEach(u => {
+                     if (currentUser && u.username === currentUser.username) return;
                      if (!list.find(i => i.id === u.username)) {
                          list.push({
                             type: 'private', id: u.username, name: u.fullName,

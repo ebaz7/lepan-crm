@@ -1006,6 +1006,41 @@ function App() {
   }, [currentUser]);
 
   useEffect(() => {
+      if (!currentUser) return;
+      
+      // If we are on the chat tab, poll messages more frequently (every 2 seconds) for a real-time experience!
+      let fastChatInterval: any = null;
+      if (activeTab === 'chat') {
+          const fetchChatMessages = async () => {
+              try {
+                  const messagesData = await getMessages();
+                  const safeMessages = Array.isArray(messagesData) ? messagesData : [];
+                  setChatMessages(prev => {
+                      // Compare to see if updated
+                      if (prev.length !== safeMessages.length) return safeMessages;
+                      if (prev.length > 0 && safeMessages.length > 0) {
+                          const pLast = prev[prev.length - 1];
+                          const sLast = safeMessages[safeMessages.length - 1];
+                          if (pLast.id !== sLast.id || pLast.timestamp !== sLast.timestamp || pLast.readBy?.length !== sLast.readBy?.length) {
+                              return safeMessages;
+                          }
+                      }
+                      return prev;
+                  });
+              } catch (e) {
+                  console.error("Fast chat poll failed", e);
+              }
+          };
+          
+          fastChatInterval = setInterval(fetchChatMessages, 2000);
+      }
+      
+      return () => {
+          if (fastChatInterval) clearInterval(fastChatInterval);
+      };
+  }, [currentUser, activeTab]);
+
+  useEffect(() => {
       if (currentUser) {
           setupNativePushNotifications(currentUser.username, currentUser.role).catch(console.error);
       }

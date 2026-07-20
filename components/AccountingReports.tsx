@@ -725,32 +725,37 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const sqlA = `
                 SELECT 
                     t10.Field_001 as DocId,
-                    t10.Field_007 as InvoiceNum,
+                    t10.Field_006 as InvoiceNum,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
                     t11.Field_005 as ItemCode,
                     t22.Field_004 as ItemName,
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
-                    t11.Field_037 as Amount,
-                    t02.Field_003 as GroupName,
+                    t11.Field_007 as Amount,
+                    t_group.GroupName,
                     t07.Field_006 as CustomerName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
-                LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_008
+                LEFT JOIN (
+                    SELECT t21_sub.Field_004 as ItemCode, MIN(t02_sub.Field_003) as GroupName
+                    FROM IND_TBL_021 t21_sub
+                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                    GROUP BY t21_sub.Field_004
+                ) t_group ON t11.Field_005 = t_group.ItemCode
                 LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                 WHERE t10.Field_009 IN ('3', '12', '23')
                   AND t11.Field_036 = t10.Field_009
+                  AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
             const processedA = dataA.map((row: any) => ({
                 ...row,
-                Amount: row.Amount ? (parseFloat(row.Amount) * 1000).toString() : '0'
+                Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
             }));
             setSalesData(processedA);
             setCompareSalesDataA(processedA);
@@ -767,32 +772,37 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
-                        t10.Field_007 as InvoiceNum,
+                        t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
                         t11.Field_031 as ItemNotes,
-                        t11.Field_037 as Amount,
-                        t02.Field_003 as GroupName,
+                        t11.Field_007 as Amount,
+                        t_group.GroupName,
                         t07.Field_006 as CustomerName
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
-                    LEFT JOIN IND_TBL_021 t21 ON t11.Field_005 = t21.Field_004
-                    LEFT JOIN IND_TBL_002 t02 ON t21.Field_003 = t02.Field_008
+                    LEFT JOIN (
+                        SELECT t21_sub.Field_004 as ItemCode, MIN(t02_sub.Field_003) as GroupName
+                        FROM IND_TBL_021 t21_sub
+                        LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                        GROUP BY t21_sub.Field_004
+                    ) t_group ON t11.Field_005 = t_group.ItemCode
                     LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                     WHERE t10.Field_009 IN ('3', '12', '23')
                       AND t11.Field_036 = t10.Field_009
+                      AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
                 const processedB = dataB.map((row: any) => ({
                     ...row,
-                    Amount: row.Amount ? (parseFloat(row.Amount) * 1000).toString() : '0'
+                    Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
                 }));
                 setCompareSalesDataB(processedB);
             }
@@ -2052,7 +2062,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     existing.totalAmount += itemAmt;
                                                     existing.totalQuantity += itemQty;
                                                     existing.items.push({
-                                                        itemName: row.ItemName || 'کالای بدون نام',
+                                                        itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
                                                         itemCode: row.ItemCode || '',
                                                         groupName: row.GroupName || '',
                                                         quantity: itemQty,
@@ -2069,7 +2079,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                         totalAmount: itemAmt,
                                                         totalQuantity: itemQty,
                                                         items: [{
-                                                            itemName: row.ItemName || 'کالای بدون نام',
+                                                            itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
                                                             itemCode: row.ItemCode || '',
                                                             groupName: row.GroupName || '',
                                                             quantity: itemQty,
