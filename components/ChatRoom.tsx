@@ -25,11 +25,11 @@ interface ChatRoomProps {
     sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
     onClearSharedData?: () => void;
     onMessagesRead?: (msgIds: string[]) => void;
-    directChatTarget?: { type: 'private' | 'group' | 'public' | 'task_group', id: string } | null;
+    directChatTarget?: { type: 'private' | 'group' | 'public' | 'task_group', id: string, taskId?: string } | null;
     onClearDirectChatTarget?: () => void;
 }
 
-type TabType = 'CHATS' | 'GROUPS' | 'TASKS';
+type TabType = 'ALL' | 'CHATS' | 'GROUPS' | 'TASKS';
 
 interface ChannelItem {
     type: 'public' | 'private' | 'group' | 'task_group';
@@ -201,13 +201,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     });
     
     // --- UI State ---
-    const [activeTab, setActiveTab] = useState<TabType>('CHATS');
+    const [activeTab, setActiveTab] = useState<TabType>('ALL');
     const [activeChannel, setActiveChannel] = useState<{type: 'public' | 'private' | 'group' | 'task_group', id: string | null} | null>(null);
     const [searchTerm, setSearchTerm] = useState(''); // Main List Search
     const [innerSearchTerm, setInnerSearchTerm] = useState(''); // Inside Chat Search
     const [showInnerSearch, setShowInnerSearch] = useState(false);
     
     const notifiedMessageIdsRef = useRef<Set<string>>(new Set());
+    const pendingTaskIdRef = useRef<string | null>(null);
 
     // Initialize the ref with existing messages so they don't trigger new notifications on mount
     useEffect(() => {
@@ -237,11 +238,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         if (directChatTarget && directChatTarget.id) {
             setActiveTab('CHATS');
             setActiveChannel({ type: directChatTarget.type as 'private' | 'group' | 'public' | 'task_group', id: directChatTarget.id });
+            
+            if (directChatTarget.taskId) {
+                pendingTaskIdRef.current = directChatTarget.taskId;
+                const foundTask = tasks.find(t => t.id === directChatTarget.taskId);
+                if (foundTask) {
+                    setActiveTaskForDetail(foundTask);
+                    setTaskReplyText('');
+                    pendingTaskIdRef.current = null;
+                }
+            }
+
             if (onClearDirectChatTarget) {
                 onClearDirectChatTarget();
             }
         }
-    }, [directChatTarget, onClearDirectChatTarget]);
+    }, [directChatTarget, onClearDirectChatTarget, tasks]);
+
+    // Handle lazy-resolving pending task ID when tasks array loads/updates
+    useEffect(() => {
+        if (pendingTaskIdRef.current && tasks.length > 0) {
+            const foundTask = tasks.find(t => t.id === pendingTaskIdRef.current);
+            if (foundTask) {
+                setActiveTaskForDetail(foundTask);
+                setTaskReplyText('');
+                pendingTaskIdRef.current = null;
+            }
+        }
+    }, [tasks]);
     
     // --- File Progress & Management ---
     const [fileProgress, setFileProgress] = useState<{ [key: string]: number }>({});
@@ -571,7 +595,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
     // --- Helpers ---
     const getUnreadCount = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
-        if (type === 'task_group') return 0;
         return messages.filter(m => {
             if (m.senderUsername === currentUser.username) return false;
             const isRead = m.readBy?.includes(currentUser.username);
@@ -579,7 +602,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             
             if (type === 'private') {
                 return (m.senderUsername === channelId && m.recipient === currentUser.username);
-            } else if (type === 'group') {
+            } else if (type === 'group' || type === 'task_group') {
                 return m.groupId === channelId;
             }
             return false;
@@ -587,25 +610,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     };
 
     const getLastMessage = (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
-        if (type === 'task_group') return null;
         const relevant = displayMessages.filter(m => {
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username) || (m.senderUsername === currentUser.username && m.recipient === channelId);
-            if (type === 'group') return m.groupId === channelId;
+            if (type === 'group' || type === 'task_group') return m.groupId === channelId;
             return false;
         });
         return relevant.length > 0 ? relevant[relevant.length - 1] : null;
     };
 
     const markAsRead = async (channelId: string, type: 'private' | 'group' | 'public' | 'task_group') => {
-        if (type === 'task_group') return;
         const unreadMsgs = messages.filter(m => {
             if (m.senderUsername === currentUser.username) return false;
             if (m.readBy?.includes(currentUser.username)) return false;
             
             if (type === 'public') return !m.recipient && !m.groupId;
             if (type === 'private') return (m.senderUsername === channelId && m.recipient === currentUser.username);
-            if (type === 'group') return m.groupId === channelId;
+            if (type === 'group' || type === 'task_group') return m.groupId === channelId;
             return false;
         });
 
@@ -640,7 +661,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         });
         
         groups.forEach(g => {
-            list.push({ type: 'group', id: g.id, name: g.name, avatar: null, isOnline: false, lastMsg: null, unread: 0 });
+            list.push({ type: 'group', id: g.id, name: g.name, avatar: g.avatar || null, isOnline: false, lastMsg: null, unread: 0 });
+        });
+
+        taskGroups.forEach(tg => {
+            list.push({ type: 'task_group', id: tg.id, name: tg.name, avatar: tg.avatar || null, isOnline: false, lastMsg: null, unread: 0 });
         });
         
         return list;
@@ -650,7 +675,68 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
         const list: ChannelItem[] = [];
         const term = searchTerm.toLowerCase().trim();
 
-        if (activeTab === 'CHATS') {
+        if (activeTab === 'ALL') {
+            // 1. Public Channel
+            const lastPub = getLastMessage('public', 'public');
+            list.push({
+                type: 'public', id: 'public', name: 'کانال عمومی', 
+                avatar: null, isOnline: true, 
+                lastMsg: lastPub, unread: getUnreadCount('public', 'public')
+            });
+
+            // 2. Groups (with avatars)
+            groups.forEach(g => {
+                const last = getLastMessage(g.id, 'group');
+                const isMember = g.members.includes(currentUser.username) || g.createdBy === currentUser.username;
+                if (isMember || last || term) {
+                    list.push({
+                        type: 'group', id: g.id, name: g.name,
+                        avatar: g.avatar || null, isOnline: false,
+                        lastMsg: last, unread: getUnreadCount(g.id, 'group')
+                    });
+                }
+            });
+
+            // 3. Task Groups (with avatars)
+            taskGroups.forEach(g => {
+                const last = getLastMessage(g.id, 'task_group');
+                const isMember = g.members.includes(currentUser.username) || g.createdBy === currentUser.username;
+                if (isMember || last || term) {
+                    list.push({
+                        type: 'task_group', id: g.id, name: g.name,
+                        avatar: g.avatar || null, isOnline: false,
+                        lastMsg: last, unread: getUnreadCount(g.id, 'task_group')
+                    });
+                }
+            });
+
+            // 4. Private chats
+            users.forEach(u => {
+                const last = getLastMessage(u.username, 'private');
+                const isOnline = u.lastSeen ? (Date.now() - u.lastSeen) < 5 * 60 * 1000 : false;
+                
+                if (last || term) {
+                    list.push({
+                        type: 'private', id: u.username, name: u.fullName,
+                        avatar: u.avatar || null, isOnline, lastSeen: u.lastSeen,
+                        lastMsg: last, unread: getUnreadCount(u.username, 'private')
+                    });
+                }
+            });
+
+            // If empty, add some users for accessibility
+            if (list.length <= 1 && !term) {
+                 users.slice(0, 10).forEach(u => {
+                     if (!list.find(i => i.id === u.username)) {
+                          list.push({
+                             type: 'private', id: u.username, name: u.fullName,
+                             avatar: u.avatar || null, isOnline: false,
+                             lastMsg: null, unread: 0
+                          });
+                     }
+                 });
+            }
+        } else if (activeTab === 'CHATS') {
             const lastPub = getLastMessage('public', 'public');
             list.push({
                 type: 'public', id: 'public', name: 'کانال عمومی', 
@@ -665,8 +751,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 if (isMember || last || term) {
                     list.push({
                         type: 'group', id: g.id, name: g.name,
-                        avatar: null, isOnline: false,
+                        avatar: g.avatar || null, isOnline: false,
                         lastMsg: last, unread: getUnreadCount(g.id, 'group')
+                    });
+                }
+            });
+
+            // Include task groups too if they have messages or match search
+            taskGroups.forEach(g => {
+                const last = getLastMessage(g.id, 'task_group');
+                const isMember = g.members.includes(currentUser.username) || g.createdBy === currentUser.username;
+                if (last || (isMember && term)) {
+                    list.push({
+                        type: 'task_group', id: g.id, name: g.name,
+                        avatar: g.avatar || null, isOnline: false,
+                        lastMsg: last, unread: getUnreadCount(g.id, 'task_group')
                     });
                 }
             });
@@ -703,25 +802,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 const last = getLastMessage(g.id, 'group');
                 list.push({
                     type: 'group', id: g.id, name: g.name,
-                    avatar: null, isOnline: false,
+                    avatar: g.avatar || null, isOnline: false,
                     lastMsg: last, unread: getUnreadCount(g.id, 'group')
                 });
             });
         } else if (activeTab === 'TASKS') {
             taskGroups.forEach(g => {
+                const last = getLastMessage(g.id, 'task_group');
                 list.push({
                     type: 'task_group', id: g.id, name: g.name,
-                    avatar: null, isOnline: false,
-                    lastMsg: null, unread: 0
+                    avatar: g.avatar || null, isOnline: false,
+                    lastMsg: last, unread: getUnreadCount(g.id, 'task_group')
                 });
             });
         }
 
         return list.filter(item => item.name.toLowerCase().includes(term)).sort((a, b) => {
-            if (activeTab === 'TASKS') return a.name.localeCompare(b.name);
             const timeA = a.lastMsg?.timestamp || 0;
             const timeB = b.lastMsg?.timestamp || 0;
-            return timeB - timeA;
+            if (timeA || timeB) return timeB - timeA;
+            return a.name.localeCompare(b.name);
         });
     };
 
@@ -1348,14 +1448,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                 {/* Header */}
                 <div className="sticky top-0 z-10 shrink-0 p-3 border-b bg-gray-50 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200">
                     <div className="flex justify-between items-center mb-3">
-                        <div className="flex gap-2 bg-gray-200 dark:bg-white/10 p-1 rounded-lg text-xs font-bold w-full">
-                            <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'CHATS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گفتگوها</button>
-                            <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'GROUPS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>گروه‌ها</button>
-                            <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 rounded-md transition-all ${activeTab === 'TASKS' ? 'glass-panel shadow text-blue-600' : 'text-gray-500'}`}>تسک‌ها</button>
+                        <div className="flex gap-1.5 bg-gray-200 dark:bg-white/10 p-1 rounded-lg text-[11px] font-bold w-full overflow-x-auto custom-scrollbar">
+                            <button onClick={() => setActiveTab('ALL')} className={`flex-1 py-1.5 px-2 rounded-md transition-all whitespace-nowrap ${activeTab === 'ALL' ? 'glass-panel shadow text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>همه</button>
+                            <button onClick={() => setActiveTab('CHATS')} className={`flex-1 py-1.5 px-2 rounded-md transition-all whitespace-nowrap ${activeTab === 'CHATS' ? 'glass-panel shadow text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>گفتگوها</button>
+                            <button onClick={() => setActiveTab('GROUPS')} className={`flex-1 py-1.5 px-2 rounded-md transition-all whitespace-nowrap ${activeTab === 'GROUPS' ? 'glass-panel shadow text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>گروه‌ها</button>
+                            <button onClick={() => setActiveTab('TASKS')} className={`flex-1 py-1.5 px-2 rounded-md transition-all whitespace-nowrap ${activeTab === 'TASKS' ? 'glass-panel shadow text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>تسک‌ها</button>
                         </div>
                         {(activeTab === 'GROUPS' || activeTab === 'TASKS') && <button onClick={() => {
                             setShowGroupModal(activeTab === 'TASKS' ? 'task_group' : 'group');
-                        }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full"><Plus size={16}/></button>}
+                        }} className="mr-2 text-blue-600 bg-blue-50 p-1.5 rounded-full shrink-0"><Plus size={16}/></button>}
                     </div>
                     <div className="relative">
                         <input className="w-full glass-panel border rounded-xl pl-8 pr-3 py-2 text-sm bg-white dark:bg-white/5" placeholder="جستجو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -1426,6 +1527,50 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                         <div className="sticky top-0 glass-panel p-2 px-4 flex justify-between items-center shadow-sm z-50 shrink-0 safe-pt bg-white/90 dark:bg-[#0b141a]/90 backdrop-blur-md">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => window.history.back()} className="md:hidden p-1 hover:bg-gray-100 rounded-full"><ArrowRight/></button>
+                                
+                                {/* Dynamic Conversation Avatar */}
+                                {(() => {
+                                    let avatarUrl: string | null = null;
+                                    let initial = '?';
+                                    let bgColor = 'bg-gradient-to-br from-blue-400 to-blue-600';
+                                    
+                                    if (activeChannel.type === 'private') {
+                                        const u = users.find(x => x.username === activeChannel.id);
+                                        avatarUrl = u?.avatar || null;
+                                        initial = u?.fullName.charAt(0) || '?';
+                                        bgColor = 'bg-gradient-to-br from-blue-400 to-blue-600';
+                                    } else if (activeChannel.type === 'group') {
+                                        const g = groups.find(x => x.id === activeChannel.id);
+                                        avatarUrl = g?.avatar || null;
+                                        initial = g?.name.charAt(0) || '?';
+                                        bgColor = 'bg-gradient-to-br from-orange-400 to-orange-600';
+                                    } else if (activeChannel.type === 'task_group') {
+                                        const tg = taskGroups.find(x => x.id === activeChannel.id);
+                                        avatarUrl = tg?.avatar || null;
+                                        initial = tg?.name.charAt(0) || '?';
+                                        bgColor = 'bg-gradient-to-br from-purple-400 to-purple-600';
+                                    } else {
+                                        initial = 'ع';
+                                        bgColor = 'bg-gradient-to-br from-green-400 to-green-600';
+                                    }
+                                    
+                                    return (
+                                        <div 
+                                            onClick={() => {
+                                                if(activeChannel.type === 'private') setShowContactInfo(users.find(u=>u.username===activeChannel.id) || null);
+                                                else if(activeChannel.type === 'group') setShowGroupInfo(groups.find(g=>g.id===activeChannel.id) || null);
+                                                else if(activeChannel.type === 'task_group') {
+                                                    const tg = taskGroups.find(g=>g.id===activeChannel.id);
+                                                    if (tg) setShowGroupInfo({...tg, isTaskGroup: true});
+                                                }
+                                            }}
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base shadow-inner cursor-pointer overflow-hidden shrink-0 ${bgColor}`}
+                                        >
+                                            {avatarUrl ? <img src={resolveImageUrl(avatarUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : initial}
+                                        </div>
+                                    );
+                                })()}
+
                                 <div className="flex flex-col cursor-pointer" onClick={() => {
                                     if(activeChannel.type === 'private') setShowContactInfo(users.find(u=>u.username===activeChannel.id) || null);
                                     else if(activeChannel.type === 'group') setShowGroupInfo(groups.find(g=>g.id===activeChannel.id) || null);
@@ -1910,41 +2055,66 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {/* --- OVERLAYS --- */}
             
             {/* 1. Context Menu */}
-            {contextMenuMsg && (
-                <div className="fixed inset-0 z-[200]" onClick={() => setContextMenuMsg(null)}>
-                    <div 
-                        className="absolute glass-panel rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
-                        style={{ top: Math.min(contextMenuMsg.y, window.innerHeight - 200), left: Math.min(contextMenuMsg.x, window.innerWidth - 200) }}
-                    >
-                        <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
-                        <button onClick={() => { handleCopyMessage(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
-                        <button onClick={() => { handleNativeShare(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Share2 size={16}/> اشتراک‌گذاری</button>
-                        <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setShowForwardModal(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Forward size={16}/> فوروارد</button>
-                        {contextMenuMsg.msg.senderUsername === currentUser.username && (
-                            <button onClick={() => { setEditingMessageId(contextMenuMsg.msg.id); setInputText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Edit2 size={16}/> ویرایش</button>
-                        )}
-                        <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setSelectionMode(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><CheckSquare size={16}/> انتخاب</button>
-                        <button onClick={() => { setMessages(prev => prev.filter(m => m.id !== contextMenuMsg.msg.id)); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-orange-50 text-orange-600 flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف برای من</button>
-                        {(contextMenuMsg.msg.senderUsername === currentUser.username || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
-                            <button 
-                                onClick={async () => { 
-                                    if(confirm('آیا از حذف این پیام برای همه اطمینان دارید؟')) {
-                                        try {
-                                            await deleteMessage(contextMenuMsg.msg.id); 
-                                            setMessages(prev => prev.filter(m => m.id !== contextMenuMsg.msg.id));
-                                            onRefresh(); 
-                                        } catch (e) { alert("خطا در حذف پیام"); }
-                                    }
-                                    setContextMenuMsg(null); 
-                                }} 
-                                className="w-full text-right px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 text-sm"
-                            >
-                                <Trash2 size={16}/> حذف دو طرفه
-                            </button>
-                        )}
+            {contextMenuMsg && (() => {
+                const canDeleteForEveryone = contextMenuMsg.msg.senderUsername === currentUser.username || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole);
+                const isOwner = contextMenuMsg.msg.senderUsername === currentUser.username;
+                const totalItems = 6 + (isOwner ? 1 : 0) + (canDeleteForEveryone ? 1 : 0);
+                const menuHeight = totalItems * 38 + 10; // Dynamic height based on actual visible items
+                const menuWidth = 192;
+                let topPosition = contextMenuMsg.y;
+                let leftPosition = contextMenuMsg.x;
+
+                // Smart Upward/Downward detection based on click position relative to viewport height
+                if (contextMenuMsg.y > window.innerHeight / 2) {
+                    // Clicked in bottom half, open upwards
+                    topPosition = Math.max(10, contextMenuMsg.y - menuHeight);
+                } else {
+                    // Clicked in top half, open downwards
+                    topPosition = Math.max(10, Math.min(contextMenuMsg.y, window.innerHeight - menuHeight - 10));
+                }
+
+                if (leftPosition + menuWidth > window.innerWidth) {
+                    leftPosition = Math.max(10, window.innerWidth - menuWidth - 10);
+                } else {
+                    leftPosition = Math.max(10, leftPosition);
+                }
+
+                return (
+                    <div className="fixed inset-0 z-[200]" onClick={() => setContextMenuMsg(null)}>
+                        <div 
+                            className="absolute glass-panel rounded-xl shadow-2xl border w-48 py-1 overflow-hidden animate-scale-in"
+                            style={{ top: topPosition, left: leftPosition }}
+                        >
+                            <button onClick={() => { setReplyingTo(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Reply size={16}/> پاسخ</button>
+                            <button onClick={() => { handleCopyMessage(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Copy size={16}/> کپی</button>
+                            <button onClick={() => { handleNativeShare(contextMenuMsg.msg); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Share2 size={16}/> اشتراک‌گذاری</button>
+                            <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setShowForwardModal(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Forward size={16}/> فوروارد</button>
+                            {contextMenuMsg.msg.senderUsername === currentUser.username && (
+                                <button onClick={() => { setEditingMessageId(contextMenuMsg.msg.id); setInputText(contextMenuMsg.msg.message); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><Edit2 size={16}/> ویرایش</button>
+                            )}
+                            <button onClick={() => { setSelectedMessages(new Set([contextMenuMsg.msg.id])); setSelectionMode(true); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"><CheckSquare size={16}/> انتخاب</button>
+                            <button onClick={() => { setMessages(prev => prev.filter(m => m.id !== contextMenuMsg.msg.id)); setContextMenuMsg(null); }} className="w-full text-right px-4 py-2 hover:bg-orange-50 text-orange-600 flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف برای من</button>
+                            {(contextMenuMsg.msg.senderUsername === currentUser.username || [UserRole.ADMIN, UserRole.MANAGER, UserRole.CEO].includes(currentUser.role as UserRole)) && (
+                                <button 
+                                    onClick={async () => { 
+                                        if(confirm('آیا از حذف این پیام برای همه اطمینان دارید؟')) {
+                                            try {
+                                                await deleteMessage(contextMenuMsg.msg.id); 
+                                                setMessages(prev => prev.filter(m => m.id !== contextMenuMsg.msg.id));
+                                                onRefresh(); 
+                                            } catch (e) { alert("خطا در حذف پیام"); }
+                                        }
+                                        setContextMenuMsg(null); 
+                                    }} 
+                                    className="w-full text-right px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2 text-sm"
+                                >
+                                    <Trash2 size={16}/> حذف دو طرفه
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* 2. Image Viewer */}
             {showImageViewer && (
@@ -2053,7 +2223,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                 <div className="w-20 h-20 rounded-3xl bg-white/20 flex items-center justify-center text-3xl font-black mb-3 shadow-lg backdrop-blur-md overflow-hidden">
                                     {showGroupInfo.avatar ? <img src={resolveImageUrl(showGroupInfo.avatar)} className="w-full h-full object-cover"/> : showGroupInfo.name.charAt(0)}
                                 </div>
-                                {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
+                                {(showGroupInfo.createdBy === currentUser.username || ((showGroupInfo as any).admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
                                     <button 
                                         onClick={() => {
                                             const input = document.createElement('input');
@@ -2080,7 +2250,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             </div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-xl font-black">{showGroupInfo.name}</h3>
-                                {((showGroupInfo.admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
+                                {(showGroupInfo.createdBy === currentUser.username || ((showGroupInfo as any).admins || []).includes(currentUser.username) || currentUser.role === UserRole.ADMIN) && (
                                     <button 
                                         onClick={() => {
                                             const newName = prompt('نام جدید گروه را وارد کنید:', showGroupInfo.name);

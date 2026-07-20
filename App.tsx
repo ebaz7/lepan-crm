@@ -45,7 +45,7 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
-  const [directChatTarget, setDirectChatTarget] = useState<{ type: 'private' | 'group' | 'public' | 'task_group', id: string } | null>(null);
+  const [directChatTarget, setDirectChatTarget] = useState<{ type: 'private' | 'group' | 'public' | 'task_group', id: string, taskId?: string } | null>(null);
 
   const activeTabRef = useRef(activeTab);
   const tabHistoryRef = useRef(tabHistory);
@@ -1243,8 +1243,8 @@ function App() {
                         onGoToBijakApprovals={handleGoToWarehouseApprovals} 
                         onGoToPurchaseApprovals={handleGoToPurchaseApprovals} 
                         financialYear={financialYear} 
-                        onGoToTaskGroup={(groupId) => {
-                            setDirectChatTarget({ type: 'task_group', id: groupId });
+                        onGoToTaskGroup={(groupId, taskId) => {
+                            setDirectChatTarget({ type: 'task_group', id: groupId, taskId });
                             setActiveTab('chat');
                         }}
                     />

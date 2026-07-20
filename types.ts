@@ -672,6 +672,8 @@ export interface TaskGroup {
     createdBy: string;
     createdAt: number;
     isTaskGroup?: boolean;
+    avatar?: string | null;
+    description?: string;
 }
 
 export interface SystemAnnouncement {

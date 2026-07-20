@@ -2707,8 +2707,98 @@ app.put('/api/task-groups/:id', (req, res) => { const db = getDb(); const idx = 
 app.delete('/api/task-groups/:id', (req, res) => { const db = getDb(); db.taskGroups = db.taskGroups.filter(g => g.id !== req.params.id); saveDb(db); res.json(db.taskGroups); });
 
 app.get('/api/tasks', (req, res) => res.json(getDb().tasks || []));
-app.post('/api/tasks', (req, res) => { const db = getDb(); if(!db.tasks) db.tasks=[]; db.tasks.push(req.body); saveDb(db); res.json(db.tasks); });
-app.put('/api/tasks/:id', (req, res) => { const db = getDb(); const idx = db.tasks.findIndex(t => t.id === req.params.id); if(idx > -1) { db.tasks[idx] = { ...db.tasks[idx], ...req.body }; saveDb(db); res.json(db.tasks); } else res.status(404).send('Not Found'); });
+app.post('/api/tasks', (req, res) => { 
+    const db = getDb(); 
+    if(!db.tasks) db.tasks=[]; 
+    const task = req.body;
+    db.tasks.push(task); 
+    saveDb(db); 
+    res.json(db.tasks); 
+
+    // Send notification
+    try {
+        const taskGroup = db.taskGroups?.find(tg => tg.id === task.groupId);
+        const groupName = taskGroup ? taskGroup.name : 'گروه کاری';
+        let targets = null;
+        if (task.assignedTo && task.assignedTo.length > 0) {
+            targets = [...task.assignedTo];
+        } else if (taskGroup && taskGroup.members) {
+            targets = [...taskGroup.members];
+        }
+        const exclude = task.createdBy ? [task.createdBy] : null;
+
+        broadcastNotification(
+            `تسک جدید: ${task.title}`,
+            `یک تسک جدید در گروه "${groupName}" ثبت شد.`,
+            `/chat?group=${task.groupId}&task=${task.id}`,
+            null,
+            targets,
+            exclude
+        ).catch(err => console.error("Task creation broadcast error:", err));
+    } catch(e) {
+        console.error("Task creation notification error:", e);
+    }
+});
+app.put('/api/tasks/:id', (req, res) => { 
+    const db = getDb(); 
+    const idx = db.tasks.findIndex(t => t.id === req.params.id); 
+    if(idx > -1) { 
+        const currentTask = db.tasks[idx];
+        const updatedTask = req.body;
+        const statusChanged = updatedTask.status && updatedTask.status !== currentTask.status;
+        const repliesChanged = updatedTask.replies && (!currentTask.replies || updatedTask.replies.length > currentTask.replies.length);
+
+        db.tasks[idx] = { ...currentTask, ...updatedTask }; 
+        saveDb(db); 
+        res.json(db.tasks); 
+
+        // Send notifications
+        try {
+            const taskGroup = db.taskGroups?.find(tg => tg.id === currentTask.groupId);
+            const groupName = taskGroup ? taskGroup.name : 'گروه کاری';
+
+            if (statusChanged && updatedTask.status === 'completed') {
+                const completedBy = updatedTask.completedBy || 'کاربر';
+                let targets = [currentTask.createdBy];
+                if (currentTask.assignedTo) {
+                    targets = [...targets, ...currentTask.assignedTo];
+                }
+                targets = Array.from(new Set(targets));
+                const exclude = updatedTask.completedBy ? [updatedTask.completedBy] : null;
+
+                broadcastNotification(
+                    `تسک انجام شد: ${currentTask.title}`,
+                    `تسک "${currentTask.title}" در گروه "${groupName}" توسط ${completedBy} انجام شد.`,
+                    `/chat?group=${currentTask.groupId}&task=${currentTask.id}`,
+                    null,
+                    targets,
+                    exclude
+                ).catch(err => console.error("Task completed broadcast error:", err));
+            } else if (repliesChanged) {
+                const lastReply = updatedTask.replies[updatedTask.replies.length - 1];
+                const sender = lastReply.sender || 'کاربر';
+                const senderUsername = lastReply.senderUsername;
+                
+                let targets = [currentTask.createdBy];
+                if (currentTask.assignedTo) {
+                    targets = [...targets, ...currentTask.assignedTo];
+                }
+                targets = Array.from(new Set(targets));
+
+                broadcastNotification(
+                    `دیدگاه جدید روی تسک: ${currentTask.title}`,
+                    `${sender}: ${lastReply.message}`,
+                    `/chat?group=${currentTask.groupId}&task=${currentTask.id}`,
+                    null,
+                    targets,
+                    [senderUsername]
+                ).catch(err => console.error("Task reply broadcast error:", err));
+            }
+        } catch(e) {
+            console.error("Task update notification error:", e);
+        }
+    } else res.status(404).send('Not Found'); 
+});
 app.delete('/api/tasks/:id', (req, res) => { const db = getDb(); db.tasks = db.tasks.filter(t => t.id !== req.params.id); saveDb(db); res.json(db.tasks); });
 
 app.get('/api/announcements', (req, res) => res.json(getDb().announcements || []));

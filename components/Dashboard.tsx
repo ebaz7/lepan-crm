@@ -20,7 +20,7 @@ interface DashboardProps {
   onGoToExitApprovals: () => void;
   onGoToBijakApprovals: () => void;
   onGoToPurchaseApprovals: () => void;
-  onGoToTaskGroup?: (groupId: string) => void;
+  onGoToTaskGroup?: (groupId: string, taskId?: string) => void;
   financialYear?: string;
 }
 
@@ -515,7 +515,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                                                 pendingTasks.map(task => (
                                                     <div 
                                                         key={task.id} 
-                                                        onClick={() => onGoToTaskGroup && onGoToTaskGroup(group.id)}
+                                                        onClick={() => onGoToTaskGroup && onGoToTaskGroup(group.id, task.id)}
                                                         className="flex items-start gap-2.5 p-2 bg-white/60 dark:bg-gray-900/40 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-blue-200 border border-transparent transition cursor-pointer select-none"
                                                         title="کلیک برای انتقال به گفتگو و تسک‌های این گروه"
                                                     >
