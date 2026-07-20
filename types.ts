@@ -686,6 +686,14 @@ export interface SystemAnnouncement {
     type?: 'task' | 'general';
 }
 
+export interface TaskReply {
+    id: string;
+    sender: string;
+    senderUsername: string;
+    message: string;
+    timestamp: number;
+}
+
 export interface GroupTask {
     id: string;
     groupId: string;
@@ -700,6 +708,7 @@ export interface GroupTask {
     createdAt: number;
     completedBy?: string;
     completedAt?: number;
+    replies?: TaskReply[];
 }
 
 export enum TradeStage {

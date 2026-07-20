@@ -25,7 +25,7 @@ interface ChatRoomProps {
     sharedData?: { fileUrl?: string; text?: string; title?: string } | null;
     onClearSharedData?: () => void;
     onMessagesRead?: (msgIds: string[]) => void;
-    directChatTarget?: { type: 'private' | 'group' | 'public', id: string } | null;
+    directChatTarget?: { type: 'private' | 'group' | 'public' | 'task_group', id: string } | null;
     onClearDirectChatTarget?: () => void;
 }
 
@@ -364,6 +364,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
+
+    // Task Custom Modals State
+    const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+    const [taskTitle, setTaskTitle] = useState('');
+    const [taskDescription, setTaskDescription] = useState('');
+    const [taskAssignedTo, setTaskAssignedTo] = useState<string[]>([]);
+    const [taskDueDate, setTaskDueDate] = useState('');
+    const [activeTaskForDetail, setActiveTaskForDetail] = useState<GroupTask | null>(null);
+    const [taskReplyText, setTaskReplyText] = useState('');
 
     useEffect(() => {
         if (!inputText && inputAreaRef.current) {
@@ -1456,62 +1465,179 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
 
                         {activeChannel.type === 'task_group' ? (
                             <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-y-auto w-full custom-scrollbar">
-                                <div className="p-4 border-b glass-panel flex justify-between items-center sticky top-0 z-10 shadow-sm">
-                                    <h4 className="font-bold text-gray-800">تسک‌های این گروه</h4>
+                                <div className="p-4 border-b glass-panel flex justify-between items-center sticky top-0 z-10 shadow-sm bg-white/90 dark:bg-gray-900/90 backdrop-blur-md">
+                                    <h4 className="font-bold text-gray-800 dark:text-gray-200">تسک‌های این گروه</h4>
                                     <button 
                                         onClick={() => {
-                                            const title = prompt('عنوان تسک؟');
-                                            if (title) {
-                                                const newTask: GroupTask = {
-                                                    id: generateUUID(),
-                                                    groupId: activeChannel.id!,
-                                                    title,
-                                                    status: 'pending',
-                                                    assignedTo: [],
-                                                    createdBy: currentUser.username,
-                                                    createdAt: Date.now()
-                                                };
-                                                createTask(newTask).then(() => {
-                                                    setTasks(prev => [newTask, ...prev]);
-                                                });
-                                            }
+                                            setTaskTitle('');
+                                            setTaskDescription('');
+                                            setTaskAssignedTo([]);
+                                            setTaskDueDate('');
+                                            setShowCreateTaskModal(true);
                                         }}
                                         className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition"
                                     >
                                         <Plus size={18}/> تسک جدید
                                     </button>
                                 </div>
-                                <div className="p-4 space-y-3">
-                                    {tasks.filter(t => t.groupId === activeChannel.id).length === 0 ? (
-                                        <div className="text-center text-gray-400 py-20">
-                                            <ListTodo size={48} className="mx-auto mb-2 opacity-20"/>
-                                            <p className="text-sm">تسکی یافت نشد</p>
-                                        </div>
-                                    ) : tasks.filter(t => t.groupId === activeChannel.id).map(task => (
-                                        <div key={task.id} className="glass-panel p-4 rounded-xl border border-gray-100 shadow-sm group hover:shadow transition">
-                                            <div className="flex justify-between items-start">
-                                                 <div className="flex items-start gap-4 flex-1">
-                                                    <button 
-                                                        onClick={() => {
-                                                            const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-                                                            const updatedTask = { ...task, status: newStatus as any };
-                                                            updateTask(updatedTask).then(() => {
-                                                                setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
-                                                            });
-                                                        }}
-                                                        className={`mt-0.5 rounded-full border-2 transition-colors flex items-center justify-center ${task.status === 'completed' ? 'bg-green-500 border-green-500 w-5 h-5' : 'border-gray-300 w-5 h-5 glass-panel'}`}
-                                                    >
-                                                        {task.status === 'completed' && <Check size={14} className="text-white"/>}
-                                                    </button>
-                                                    <div>
-                                                        <h5 className={`font-bold ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>{task.title}</h5>
-                                                        <span className="text-[10px] text-gray-400 block mt-1">{formatDate(task.createdAt)}</span>
-                                                    </div>
-                                                 </div>
-                                                 <button onClick={() => deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)))} className="p-2 text-red-500 hover:bg-red-50 rounded-lg shrink-0 opacity-0 group-hover:opacity-100 transition"><Trash2 size={16}/></button>
+                                <div className="p-4 space-y-6">
+                                    {/* 1. Active Tasks Section */}
+                                    <div>
+                                        <h5 className="text-xs font-black text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                            <span>تسک‌های فعال</span>
+                                            <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                {tasks.filter(t => t.groupId === activeChannel.id && t.status !== 'completed').length}
+                                            </span>
+                                        </h5>
+                                        {tasks.filter(t => t.groupId === activeChannel.id && t.status !== 'completed').length === 0 ? (
+                                            <div className="text-center text-gray-400 dark:text-gray-600 py-12 bg-white dark:bg-gray-900/35 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                                                <ListTodo size={32} className="mx-auto mb-2 opacity-20"/>
+                                                <p className="text-xs">تسک فعال و در جریانی در این گروه وجود ندارد</p>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {tasks.filter(t => t.groupId === activeChannel.id && t.status !== 'completed').map(task => (
+                                                    <div 
+                                                        key={task.id} 
+                                                        onClick={() => { setActiveTaskForDetail(task); setTaskReplyText(''); }}
+                                                        className="glass-panel p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm group hover:shadow-md transition cursor-pointer flex justify-between items-start"
+                                                    >
+                                                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const updatedTask = { 
+                                                                        ...task, 
+                                                                        status: 'completed' as const,
+                                                                        completedBy: currentUser.username,
+                                                                        completedAt: Date.now()
+                                                                    };
+                                                                    updateTask(updatedTask).then(() => {
+                                                                        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+                                                                    });
+                                                                }}
+                                                                className="mt-0.5 rounded-full border-2 border-gray-300 dark:border-gray-700 w-5 h-5 transition-colors flex items-center justify-center hover:border-green-500 bg-white dark:bg-gray-800 shrink-0"
+                                                            >
+                                                                <Check size={14} className="text-white opacity-0 group-hover:opacity-100 group-hover:text-green-500 transition-opacity"/>
+                                                            </button>
+                                                            <div className="min-w-0 flex-1">
+                                                                <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm truncate">{task.title}</h5>
+                                                                {task.description && (
+                                                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 line-clamp-1">{task.description}</p>
+                                                                )}
+                                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400 mt-2">
+                                                                    <span>توسط: @{task.createdBy}</span>
+                                                                    <span>ثبت: {formatDate(task.createdAt)}</span>
+                                                                    {task.dueDate && (
+                                                                        <span className="text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded">مهلت: {formatDate(new Date(task.dueDate).getTime())}</span>
+                                                                    )}
+                                                                    {task.replies && task.replies.length > 0 && (
+                                                                        <span className="text-blue-500 font-semibold">💬 {task.replies.length} پاسخ</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {task.assignedTo && task.assignedTo.length > 0 && (
+                                                                <div className="flex -space-x-1.5 hover:space-x-0.5 transition-all">
+                                                                    {task.assignedTo.slice(0, 3).map(un => {
+                                                                        const uObj = users.find(u => u.username === un);
+                                                                        return (
+                                                                            <div key={un} className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black flex items-center justify-center border border-white dark:border-gray-800 shadow-sm" title={uObj?.fullName || un}>
+                                                                                {uObj?.avatar ? <img src={resolveImageUrl(uObj.avatar)} className="w-full h-full rounded-full object-cover" /> : un.charAt(0)}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {task.assignedTo.length > 3 && (
+                                                                        <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-[9px] font-bold flex items-center justify-center border border-white dark:border-gray-800 shadow-sm">
+                                                                            +{task.assignedTo.length - 3}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm('آیا مایل به حذف این تسک هستید؟')) {
+                                                                        deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)));
+                                                                    }
+                                                                }} 
+                                                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg opacity-0 group-hover:opacity-100 transition"
+                                                            >
+                                                                <Trash2 size={16}/>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 2. Completed Tasks Section */}
+                                    <div className="pt-2">
+                                        <h5 className="text-xs font-black text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                            <span>تسک‌های انجام‌شده</span>
+                                            <span className="bg-green-100 text-green-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                {tasks.filter(t => t.groupId === activeChannel.id && t.status === 'completed').length}
+                                            </span>
+                                        </h5>
+                                        {tasks.filter(t => t.groupId === activeChannel.id && t.status === 'completed').length === 0 ? (
+                                            <p className="text-xs text-gray-400 dark:text-gray-500 italic py-4">تسکی در لیست انجام‌شده‌ها قرار ندارد.</p>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {tasks.filter(t => t.groupId === activeChannel.id && t.status === 'completed').map(task => (
+                                                    <div 
+                                                        key={task.id} 
+                                                        onClick={() => { setActiveTaskForDetail(task); setTaskReplyText(''); }}
+                                                        className="glass-panel p-4 rounded-xl border border-gray-100 dark:border-gray-800/80 shadow-sm group hover:shadow transition cursor-pointer flex justify-between items-start opacity-75 hover:opacity-100"
+                                                    >
+                                                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const updatedTask = { 
+                                                                        ...task, 
+                                                                        status: 'pending' as const,
+                                                                        completedBy: undefined,
+                                                                        completedAt: undefined
+                                                                    };
+                                                                    updateTask(updatedTask).then(() => {
+                                                                        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+                                                                    });
+                                                                }}
+                                                                className="mt-0.5 rounded-full bg-green-500 border-2 border-green-500 w-5 h-5 flex items-center justify-center transition-colors hover:bg-green-600 shrink-0"
+                                                            >
+                                                                <Check size={14} className="text-white"/>
+                                                            </button>
+                                                            <div className="min-w-0 flex-1">
+                                                                <h5 className="font-bold text-gray-400 dark:text-gray-500 text-sm line-through truncate">{task.title}</h5>
+                                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400 mt-2">
+                                                                    <span>توسط: @{task.createdBy}</span>
+                                                                    {task.completedBy && (
+                                                                        <span className="text-green-600">انجام‌شده توسط: @{task.completedBy}</span>
+                                                                    )}
+                                                                    {task.replies && task.replies.length > 0 && (
+                                                                        <span className="text-blue-500">💬 {task.replies.length} پاسخ</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (confirm('آیا مایل به حذف این تسک هستید؟')) {
+                                                                    deleteTask(task.id).then(() => setTasks(prev => prev.filter(t => t.id !== task.id)));
+                                                                }
+                                                            }} 
+                                                            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg opacity-0 group-hover:opacity-100 transition shrink-0"
+                                                        >
+                                                            <Trash2 size={16}/>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -2113,6 +2239,249 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                             <button className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 hover:shadow-xl transition-all" onClick={() => { setActiveChannel({type: 'private', id: showContactInfo.username}); setShowContactInfo(null); }}>
                                 ارسال پیام
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 6. Custom Task Creation Modal */}
+            {showCreateTaskModal && (
+                <div className="fixed inset-0 bg-black/50 z-[301] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreateTaskModal(false)}>
+                    <div className="glass-panel rounded-2xl w-full max-w-md flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                            <h3 className="font-bold flex items-center gap-2"><ListTodo size={20} className="text-blue-500"/> ایجاد تسک جدید</h3>
+                            <button onClick={() => setShowCreateTaskModal(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">عنوان تسک <span className="text-red-500">*</span></label>
+                                <input 
+                                    type="text" 
+                                    value={taskTitle} 
+                                    onChange={e => setTaskTitle(e.target.value)}
+                                    placeholder="مثلاً: بررسی تراکنش‌های حسابداری"
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm font-bold"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">توضیحات و جزئیات تسک</label>
+                                <textarea 
+                                    value={taskDescription} 
+                                    onChange={e => setTaskDescription(e.target.value)}
+                                    placeholder="شرح وظایف و جزئیات بیشتر در مورد تسک..."
+                                    rows={4}
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">ارجاع به کاربر خاص (مسئولین تسک)</label>
+                                <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-xl p-2 space-y-1 bg-white dark:bg-gray-900 custom-scrollbar">
+                                    {users.filter(u => {
+                                        const tg = taskGroups.find(g => g.id === activeChannel.id);
+                                        return !tg || (tg.members || []).includes(u.username);
+                                    }).map(u => {
+                                        const isChecked = taskAssignedTo.includes(u.username);
+                                        return (
+                                            <label key={u.username} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors text-sm">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isChecked}
+                                                    onChange={() => {
+                                                        if (isChecked) {
+                                                            setTaskAssignedTo(prev => prev.filter(un => un !== u.username));
+                                                        } else {
+                                                            setTaskAssignedTo(prev => [...prev, u.username]);
+                                                        }
+                                                    }}
+                                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{u.fullName}</span>
+                                                    <span className="text-[10px] text-gray-400">@{u.username}</span>
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-1 block">زمان و تاریخ مهلت (Due Date)</label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={taskDueDate} 
+                                    onChange={e => setTaskDueDate(e.target.value)}
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm"
+                                />
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    if (!taskTitle.trim()) return;
+                                    const newTask: GroupTask = {
+                                        id: generateUUID(),
+                                        groupId: activeChannel.id!,
+                                        title: taskTitle.trim(),
+                                        description: taskDescription.trim() || undefined,
+                                        assignedTo: taskAssignedTo,
+                                        dueDate: taskDueDate || undefined,
+                                        status: 'pending',
+                                        createdBy: currentUser.username,
+                                        createdAt: Date.now(),
+                                        replies: []
+                                    };
+                                    createTask(newTask).then(() => {
+                                        setTasks(prev => [newTask, ...prev]);
+                                        setShowCreateTaskModal(false);
+                                    });
+                                }}
+                                disabled={!taskTitle.trim()}
+                                className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all mt-2"
+                            >
+                                ثبت و ایجاد تسک
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 7. Custom Task Details & Conversation/Replies Modal */}
+            {activeTaskForDetail && (
+                <div className="fixed inset-0 bg-black/50 z-[301] flex items-start pt-12 md:pt-20 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={() => setActiveTaskForDetail(null)}>
+                    <div className="glass-panel rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+                            <div className="flex items-center gap-2">
+                                <ListTodo size={20} className="text-blue-500"/>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100">جزئیات و گفتگو درباره تسک</h3>
+                            </div>
+                            <button onClick={() => setActiveTaskForDetail(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button>
+                        </div>
+                        <div className="p-5 flex-1 overflow-y-auto max-h-[65vh] space-y-4 custom-scrollbar">
+                            <div className="flex items-start gap-3">
+                                <button 
+                                    onClick={() => {
+                                        const newStatus = activeTaskForDetail.status === 'completed' ? 'pending' : 'completed';
+                                        const updatedTask = { 
+                                            ...activeTaskForDetail, 
+                                            status: newStatus as any,
+                                            completedBy: newStatus === 'completed' ? currentUser.username : undefined,
+                                            completedAt: newStatus === 'completed' ? Date.now() : undefined
+                                        };
+                                        updateTask(updatedTask).then(() => {
+                                            setTasks(prev => prev.map(t => t.id === activeTaskForDetail.id ? updatedTask : t));
+                                            setActiveTaskForDetail(updatedTask);
+                                        });
+                                    }}
+                                    className={`mt-1 rounded-full border-2 transition-colors flex items-center justify-center ${activeTaskForDetail.status === 'completed' ? 'bg-green-500 border-green-500 w-6 h-6' : 'border-gray-300 w-6 h-6 glass-panel shrink-0'}`}
+                                >
+                                    {activeTaskForDetail.status === 'completed' && <Check size={16} className="text-white"/>}
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className={`text-lg font-black leading-snug break-words ${activeTaskForDetail.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800 dark:text-white'}`}>{activeTaskForDetail.title}</h4>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 mt-2">
+                                        <span>ایجادکننده: @{activeTaskForDetail.createdBy}</span>
+                                        <span>ثبت: {formatDate(activeTaskForDetail.createdAt)}</span>
+                                        {activeTaskForDetail.status === 'completed' && activeTaskForDetail.completedAt && (
+                                            <span className="text-green-600 font-bold bg-green-50 dark:bg-green-950/20 px-2 py-0.5 rounded">توسط: @{activeTaskForDetail.completedBy} در {formatDate(activeTaskForDetail.completedAt)}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Description / Extra Details */}
+                            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl space-y-1">
+                                <h5 className="text-xs font-bold text-gray-400">جزئیات و توضیحات</h5>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                    {activeTaskForDetail.description || 'توضیحات بیشتری برای این تسک ثبت نشده است.'}
+                                </p>
+                            </div>
+
+                            {/* Assigned users */}
+                            <div className="space-y-2">
+                                <h5 className="text-xs font-bold text-gray-400">مسئولین تسک</h5>
+                                <div className="flex flex-wrap gap-2">
+                                    {(!activeTaskForDetail.assignedTo || activeTaskForDetail.assignedTo.length === 0) ? (
+                                        <span className="text-xs text-gray-400 italic">به شخص خاصی ارجاع داده نشده است (عمومی)</span>
+                                    ) : (
+                                        activeTaskForDetail.assignedTo.map(username => {
+                                            const u = users.find(user => user.username === username);
+                                            return (
+                                                <div key={username} className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs font-bold border border-blue-100">
+                                                    <div className="w-5 h-5 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-[10px] font-black overflow-hidden">
+                                                        {u?.avatar ? <img src={resolveImageUrl(u.avatar)} className="w-full h-full object-cover"/> : username.charAt(0)}
+                                                    </div>
+                                                    <span>{u?.fullName || username}</span>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Due Date */}
+                            {activeTaskForDetail.dueDate && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-xl border border-amber-100">
+                                    <Clock size={16}/>
+                                    <span>مهلت انجام: {formatDate(new Date(activeTaskForDetail.dueDate).getTime())}</span>
+                                </div>
+                            )}
+
+                            {/* Conversation/Replies List */}
+                            <div className="border-t pt-4 space-y-3">
+                                <h5 className="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-2">
+                                    <MessageSquare size={16} className="text-blue-500"/>
+                                    گفتگو و پاسخ‌ها ({activeTaskForDetail.replies?.length || 0})
+                                </h5>
+                                <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                                    {(!activeTaskForDetail.replies || activeTaskForDetail.replies.length === 0) ? (
+                                        <p className="text-xs text-gray-400 italic text-center py-6">پاسخی برای این تسک ثبت نشده است. بحث خود را آغاز کنید!</p>
+                                    ) : (
+                                        activeTaskForDetail.replies.map(reply => (
+                                            <div key={reply.id} className="p-3 bg-gray-50/75 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 space-y-1">
+                                                <div className="flex justify-between items-center text-[10px] font-bold text-gray-400">
+                                                    <span>{reply.sender} (@{reply.senderUsername})</span>
+                                                    <span>{formatDate(reply.timestamp)}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{reply.message}</p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Reply Input Area */}
+                                <div className="flex items-end gap-2 pt-2">
+                                    <textarea 
+                                        value={taskReplyText}
+                                        onChange={e => setTaskReplyText(e.target.value)}
+                                        placeholder="پاسخ خود را بنویسید..."
+                                        rows={2}
+                                        className="flex-1 p-2 bg-gray-50 dark:bg-gray-900 border rounded-xl text-xs focus:ring-2 focus:ring-blue-100 outline-none resize-none"
+                                    />
+                                    <button 
+                                        onClick={() => {
+                                            if (!taskReplyText.trim()) return;
+                                            const newReply = {
+                                                id: generateUUID(),
+                                                sender: currentUser.fullName || currentUser.username,
+                                                senderUsername: currentUser.username,
+                                                message: taskReplyText.trim(),
+                                                timestamp: Date.now()
+                                            };
+                                            const updatedTask = {
+                                                ...activeTaskForDetail,
+                                                replies: [...(activeTaskForDetail.replies || []), newReply]
+                                            };
+                                            updateTask(updatedTask).then(() => {
+                                                setTasks(prev => prev.map(t => t.id === activeTaskForDetail.id ? updatedTask : t));
+                                                setActiveTaskForDetail(updatedTask);
+                                                setTaskReplyText('');
+                                            });
+                                        }}
+                                        disabled={!taskReplyText.trim()}
+                                        className="bg-blue-600 disabled:opacity-50 text-white px-4 py-2 h-10 rounded-xl text-xs font-bold hover:bg-blue-700 transition flex items-center justify-center gap-1.5 shrink-0"
+                                    >
+                                        <Send size={14}/> ثبت پاسخ
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

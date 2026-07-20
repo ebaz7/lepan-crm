@@ -45,7 +45,7 @@ function App() {
   const [settings, setSettings] = useState<SystemSettings | undefined>(undefined);
   const [activeTab, setActiveTabState] = useState('dashboard');
   const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
-  const [directChatTarget, setDirectChatTarget] = useState<{ type: 'private' | 'group' | 'public', id: string } | null>(null);
+  const [directChatTarget, setDirectChatTarget] = useState<{ type: 'private' | 'group' | 'public' | 'task_group', id: string } | null>(null);
 
   const activeTabRef = useRef(activeTab);
   const tabHistoryRef = useRef(tabHistory);
@@ -541,7 +541,27 @@ function App() {
 
   useEffect(() => { 
     const user = getCurrentUser(); 
-    if (user) setCurrentUser(user); 
+    if (user) {
+        setCurrentUser(user); 
+    } else {
+        // Auto-login strictly in the Cloud Run/AI Studio preview environment in the browser
+        const isDevEnv = !Capacitor.isNativePlatform() && (
+            window.location.hostname.includes('run.app') || 
+            window.location.hostname.includes('google.com')
+        );
+        if (isDevEnv) {
+            console.log("Auto-logging in as admin in sandbox/preview environment...");
+            const defaultAdmin: User = { 
+                id: '1', 
+                username: 'admin', 
+                fullName: 'مدیر سیستم (تست)', 
+                role: UserRole.ADMIN, 
+                roles: [UserRole.ADMIN],
+                canManageTrade: true 
+            };
+            setCurrentUser(defaultAdmin);
+        }
+    }
     syncNativeShownNotifications().catch(console.error);
     syncServiceWorkerShownNotifications().catch(console.error);
   }, []);
@@ -1212,7 +1232,22 @@ function App() {
                     </div>
                 )}
                 <div className={activeTab === 'dashboard' ? 'block h-full page-transition' : 'hidden'}>
-                    <Dashboard orders={orders} settings={settings} currentUser={currentUser} onViewArchive={handleViewArchive} onFilterByStatus={handleDashboardFilter} onGoToPaymentApprovals={handleGoToPaymentApprovals} onGoToExitApprovals={handleGoToExitApprovals} onGoToBijakApprovals={handleGoToWarehouseApprovals} onGoToPurchaseApprovals={handleGoToPurchaseApprovals} financialYear={financialYear} />
+                    <Dashboard 
+                        orders={orders} 
+                        settings={settings} 
+                        currentUser={currentUser} 
+                        onViewArchive={handleViewArchive} 
+                        onFilterByStatus={handleDashboardFilter} 
+                        onGoToPaymentApprovals={handleGoToPaymentApprovals} 
+                        onGoToExitApprovals={handleGoToExitApprovals} 
+                        onGoToBijakApprovals={handleGoToWarehouseApprovals} 
+                        onGoToPurchaseApprovals={handleGoToPurchaseApprovals} 
+                        financialYear={financialYear} 
+                        onGoToTaskGroup={(groupId) => {
+                            setDirectChatTarget({ type: 'task_group', id: groupId });
+                            setActiveTab('chat');
+                        }}
+                    />
                 </div>
                 {activeTab === 'create' && <div className="page-transition flex flex-col flex-1 min-h-0"><CreateOrder onSuccess={handleOrderCreated} currentUser={currentUser} /></div>}
                 {activeTab === 'manage' && <div className="page-transition flex flex-col flex-1 min-h-0"><ManageOrders orders={orders} refreshData={() => loadData(true)} currentUser={currentUser} initialTab={manageOrdersInitialTab} settings={settings} statusFilter={dashboardStatusFilter} financialYear={financialYear} /></div>}

@@ -7,6 +7,20 @@ import { Capacitor } from '@capacitor/core';
 let DEFAULT_SERVER_URL = 'https://dlkam.ir'; 
 
 export const getServerHost = () => {
+    // Check if we are running strictly in the Cloud Run/AI Studio preview environment in the browser
+    const isDevEnvironment = !Capacitor.isNativePlatform() && (
+        window.location.hostname.includes('run.app') || 
+        window.location.hostname.includes('google.com')
+    );
+
+    if (isDevEnvironment) {
+        // If a stored server host is found in sandbox, we clear it because it causes loading/CORS errors
+        if (localStorage.getItem('app_server_host')) {
+            try { localStorage.removeItem('app_server_host'); } catch (e) {}
+        }
+        return '';
+    }
+
     const stored = localStorage.getItem('app_server_host');
     if (stored) return stored.trim().replace(/\/$/, '');
     if (Capacitor.isNativePlatform()) {

@@ -5,10 +5,10 @@ import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp, Clock, CheckCircle, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
-import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests } from '../services/storageService';
+import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests, getTaskGroups, getTasks, updateTask } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
 import { getRandomQuote } from '../utils/quotes';
-import { Note, PurchaseRequest, PurchaseRequestStatus } from '../types';
+import { Note, PurchaseRequest, PurchaseRequestStatus, GroupTask, TaskGroup } from '../types';
 
 interface DashboardProps {
   orders: PaymentOrder[];
@@ -20,13 +20,14 @@ interface DashboardProps {
   onGoToExitApprovals: () => void;
   onGoToBijakApprovals: () => void;
   onGoToPurchaseApprovals: () => void;
+  onGoToTaskGroup?: (groupId: string) => void;
   financialYear?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, financialYear }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, onGoToTaskGroup, financialYear }) => {
   const orders = useMemo(() => {
         if (!financialYear || financialYear === 'all') return rawOrders;
         return rawOrders.filter(o => isInFinancialYear(o.date, financialYear) || isInFinancialYear(o.payDate, financialYear));
@@ -117,6 +118,28 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
             mod.getUsers().then(u => setAllUsers(u || []));
         });
     }, []);
+
+    // Chat Task groups & tasks data for dashboard
+    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
+    const [tasks, setTasks] = useState<GroupTask[]>([]);
+    const [showTasksInDashboard, setShowTasksInDashboard] = useState<boolean>(() => {
+        return localStorage.getItem('dashboard_show_chat_tasks') !== 'false';
+    });
+
+    const loadTasksData = () => {
+        getTaskGroups().then(groups => {
+            const myGroups = groups.filter(g => (g.members || []).includes(currentUser.username));
+            setTaskGroups(myGroups);
+        }).catch(e => console.error("Load task groups error", e));
+
+        getTasks().then(allTasks => {
+            setTasks(allTasks);
+        }).catch(e => console.error("Load tasks error", e));
+    };
+
+    useEffect(() => {
+        loadTasksData();
+    }, [currentUser]);
 
     const handleCreateAnnouncement = async () => {
         if (!announceText.trim()) return;
@@ -420,6 +443,124 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                             ))}
                         </div>
                     </>
+                )}
+            </div>
+        )}
+
+        {/* TASK GROUPS WIDGET */}
+        {!showTasksInDashboard ? (
+            <div className="flex justify-end my-3">
+                <button 
+                    onClick={() => {
+                        setShowTasksInDashboard(true);
+                        localStorage.setItem('dashboard_show_chat_tasks', 'true');
+                    }}
+                    className="text-xs text-gray-400 hover:text-blue-600 font-bold transition flex items-center gap-1.5 py-1 px-3 rounded-lg hover:bg-gray-100"
+                >
+                    <ListChecks size={14}/> نمایش مجدد تسک‌های گفتگو در داشبورد
+                </button>
+            </div>
+        ) : (
+            <div className="rounded-2xl border border-blue-100 bg-white/50 p-6 shadow-sm relative transition-all my-5">
+                <div className="flex justify-between items-center mb-5">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600">
+                            <ListChecks size={20} />
+                        </div>
+                        <h3 className="font-black text-gray-800">📌 دسترسی سریع به تسک‌های گفتگو</h3>
+                    </div>
+                    <button 
+                        onClick={() => {
+                            if (confirm('آیا مایل به لغو نمایش تسک‌های گفتگو در داشبورد هستید؟ (همواره می‌توانید از انتهای این بخش مجدداً آن را فعال کنید)')) {
+                                setShowTasksInDashboard(false);
+                                localStorage.setItem('dashboard_show_chat_tasks', 'false');
+                            }
+                        }}
+                        className="text-xs text-gray-400 hover:text-red-500 font-bold transition flex items-center gap-1 hover:bg-red-50 px-2.5 py-1.5 rounded-lg"
+                        title="لغو نمایش تسک‌ها در داشبورد"
+                    >
+                        <X size={14}/> عدم نمایش در داشبورد
+                    </button>
+                </div>
+
+                {taskGroups.length === 0 ? (
+                    <div className="text-center text-gray-400 py-10 bg-white/30 rounded-xl border border-dashed">
+                        <ListChecks size={36} className="mx-auto mb-2 opacity-20"/>
+                        <p className="text-xs font-bold">شما در هیچ گروه تسک فعالی عضو نیستید.</p>
+                        <p className="text-[10px] text-gray-400 mt-1">تسک‌ها پس از عضویت شما در گروه‌های تسک گفتگو در این بخش نمایش داده می‌شوند.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {taskGroups.map(group => {
+                            const groupTasks = tasks.filter(t => t.groupId === group.id);
+                            const pendingTasks = groupTasks.filter(t => t.status !== 'completed');
+                            const completedTasks = groupTasks.filter(t => t.status === 'completed');
+
+                            return (
+                                <div key={group.id} className="glass-panel p-4 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col justify-between min-h-[220px]">
+                                    <div>
+                                        <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
+                                            <h4 className="font-black text-sm text-gray-800 dark:text-gray-200">{group.name}</h4>
+                                            <span className="bg-orange-50 text-orange-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                {pendingTasks.length} تسک فعال
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pl-1">
+                                            {pendingTasks.length === 0 ? (
+                                                <div className="text-center py-6 text-gray-400">
+                                                    <p className="text-xs">تسک فعال و معلقی در این گروه وجود ندارد ✨</p>
+                                                </div>
+                                            ) : (
+                                                pendingTasks.map(task => (
+                                                    <div 
+                                                        key={task.id} 
+                                                        className="flex items-start gap-2.5 p-2 bg-white/60 dark:bg-gray-900/40 rounded-lg hover:bg-white transition"
+                                                    >
+                                                        <button 
+                                                            onClick={() => {
+                                                                const updatedTask = { 
+                                                                    ...task, 
+                                                                    status: 'completed' as const,
+                                                                    completedBy: currentUser.username,
+                                                                    completedAt: Date.now()
+                                                                };
+                                                                updateTask(updatedTask).then(() => {
+                                                                    setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+                                                                });
+                                                            }}
+                                                            className="mt-0.5 rounded-full border border-gray-300 dark:border-gray-700 w-4 h-4 flex items-center justify-center hover:border-green-500 shrink-0"
+                                                        >
+                                                            <CheckCircle size={10} className="text-white opacity-0 hover:opacity-100 hover:text-green-500"/>
+                                                        </button>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate" title={task.title}>{task.title}</p>
+                                                            {task.assignedTo && task.assignedTo.length > 0 && (
+                                                                <span className="text-[9px] text-blue-600 bg-blue-50 dark:bg-blue-950/20 px-1 py-0.5 rounded mt-1 inline-block font-semibold">ارجاع: @{task.assignedTo.join(', @')}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                                        <span className="text-[10px] text-gray-400 font-medium">{completedTasks.length} تسک انجام‌شده</span>
+                                        {onGoToTaskGroup && (
+                                            <button 
+                                                onClick={() => onGoToTaskGroup(group.id)}
+                                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline transition-all"
+                                            >
+                                                <span>ورود به گفتگو و تسک‌ها</span>
+                                                <ArrowUpRight size={14}/>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
         )}
