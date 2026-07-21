@@ -390,6 +390,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
     const fileInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
     const inputAreaRef = useRef<HTMLTextAreaElement>(null);
+    const taskTitleInputRef = useRef<HTMLInputElement>(null);
 
     // --- Modals ---
     const [showGroupModal, setShowGroupModal] = useState<string | false>(false);
@@ -412,6 +413,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             inputAreaRef.current.style.height = 'auto';
         }
     }, [inputText]);
+
+    // Focus task title input immediately when creation modal opens
+    useEffect(() => {
+        if (showCreateTaskModal) {
+            const timer = setTimeout(() => {
+                taskTitleInputRef.current?.focus();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [showCreateTaskModal]);
 
     // --- Effects ---
     useEffect(() => { 
@@ -2433,19 +2444,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
             {showCreateTaskModal && (
                 <div className="fixed inset-0 bg-black/50 z-[301] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreateTaskModal(false)}>
                     <div className="glass-panel rounded-2xl w-full max-w-md flex flex-col shadow-2xl overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800">
-                            <h3 className="font-bold flex items-center gap-2"><ListTodo size={20} className="text-blue-500"/> ایجاد تسک جدید</h3>
-                            <button onClick={() => setShowCreateTaskModal(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"><X size={20}/></button>
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800 bg-white dark:bg-gray-900">
+                            <h3 className="font-bold flex items-center gap-2 text-gray-800 dark:text-gray-100"><ListTodo size={20} className="text-blue-500"/> ایجاد تسک جدید</h3>
+                            <button onClick={() => setShowCreateTaskModal(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400"><X size={20}/></button>
                         </div>
-                        <div className="p-4 space-y-4">
+                        
+                        {/* Scrollable Form Body */}
+                        <div className="p-4 space-y-4 overflow-y-auto max-h-[55vh] custom-scrollbar">
                             <div>
                                 <label className="text-xs font-bold text-gray-500 mb-1 block">عنوان تسک <span className="text-red-500">*</span></label>
                                 <input 
+                                    ref={taskTitleInputRef}
                                     type="text" 
                                     value={taskTitle} 
                                     onChange={e => setTaskTitle(e.target.value)}
                                     placeholder="مثلاً: بررسی تراکنش‌های حسابداری"
-                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm font-bold"
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm font-bold text-gray-800 dark:text-gray-200"
                                 />
                             </div>
                             <div>
@@ -2455,7 +2469,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     onChange={e => setTaskDescription(e.target.value)}
                                     placeholder="شرح وظایف و جزئیات بیشتر در مورد تسک..."
                                     rows={4}
-                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm resize-none"
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm resize-none text-gray-800 dark:text-gray-200"
                                 />
                             </div>
                             <div>
@@ -2495,7 +2509,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                             value={userSearchText}
                                             onChange={e => setUserSearchText(e.target.value)}
                                             placeholder="جستجو و ارجاع کاربر جدید..."
-                                            className="w-full py-2.5 bg-transparent border-none outline-none text-xs font-bold text-right"
+                                            className="w-full py-2.5 bg-transparent border-none outline-none text-xs font-bold text-right text-gray-800 dark:text-gray-200"
                                         />
                                         {userSearchText && (
                                             <button 
@@ -2577,9 +2591,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     type="datetime-local" 
                                     value={taskDueDate} 
                                     onChange={e => setTaskDueDate(e.target.value)}
-                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm"
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-950 rounded-xl border-none outline-none focus:ring-2 focus:ring-blue-200 text-sm text-gray-800 dark:text-gray-200"
                                 />
                             </div>
+                        </div>
+
+                        {/* Fixed Footer for register/submit button */}
+                        <div className="p-4 border-t bg-gray-50 dark:bg-gray-800/50 flex items-center justify-end">
                             <button 
                                 onClick={() => {
                                     if (!taskTitle.trim()) return;
@@ -2601,7 +2619,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, preloadedMessages, onR
                                     });
                                 }}
                                 disabled={!taskTitle.trim()}
-                                className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all mt-2"
+                                className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all"
                             >
                                 ثبت و ایجاد تسک
                             </button>
