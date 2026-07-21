@@ -90,6 +90,35 @@ const resolveUser = (db, platform, chatId) => {
     return null;
 };
 
+const runSayanQuery = async (db, queryStr) => {
+    const settings = db.settings || {};
+    const serverSayanBaseUrl = settings.sayanApiUrl;
+    const serverSayanApiKey = settings.sayanApiKey;
+    
+    if (!serverSayanBaseUrl || !serverSayanApiKey) {
+        throw new Error('تنظیمات اتصال به سرور سایان (آدرس و رمز API) در سیستم پیکربندی نشده است.');
+    }
+    
+    const finalUrl = `${serverSayanBaseUrl.replace(/\/$/, '')}/query`;
+    const response = await fetch(finalUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${serverSayanApiKey}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: queryStr })
+    });
+    
+    if (!response.ok) {
+        const errDetails = await response.json().catch(() => ({}));
+        throw new Error(errDetails.error || 'خطای اتصال به سرور سایان ERP');
+    }
+    
+    const data = await response.json();
+    return data.data || [];
+};
+
 const getAvailableYears = (list) => {
     const years = new Set();
     list.forEach(o => {
@@ -198,6 +227,8 @@ const KEYBOARDS = {
             [{ text: '📊 خلاصه وضعیت امروز', callback_data: 'RPT_DAILY' }],
             [{ text: '🗓 عملکرد ماه جاری', callback_data: 'RPT_MONTHLY' }],
             [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
+            [{ text: '🧾 فاکتور فروش روزانه سایان (PDF)', callback_data: 'BOT_SAYAN_DAILY_SALES' }],
+            [{ text: '⚖️ مقایسه فروش دو بازه (PDF)', callback_data: 'BOT_SAYAN_COMPARE_SALES' }],
             [{ text: '⏳ وضعیت کارتابل‌ها (مانده)', callback_data: 'RPT_PENDING' }],
             [{ text: '💰 گزارشات مالی (دیگر)', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
@@ -1132,6 +1163,36 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 const successMsg = `✅ *پیوند حساب برقرار شد!*\n🔢 کد حسابداری شما \`${code}\` با موفقیت در ربات ذخیره گردید.\n\n⚠️ اما در حال حاضر رکوردی با این کد در فایل مانده حساب‌های سیستم یافت نشد. به محض بارگذاری اطلاعات جدید توسط مدیر مالی، مانده حساب شما نمایش داده خواهد شد.`;
                 return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
             }
+        }
+
+        if (session.state === 'BOT_SAYAN_WAIT_COMPARE_DATES') {
+            const val = text.trim();
+            // Expected format: YYYY-MM-DD, YYYY-MM-DD | YYYY-MM-DD, YYYY-MM-DD
+            const parts = val.split('|');
+            if (parts.length !== 2) {
+                return sendFn(chatId, "⚠️ فرمت وارد شده اشتباه است. لطفاً دقیقاً مانند الگو بنویسید:\n\nتاریخ شروع بازه ۱, تاریخ پایان بازه ۱ | تاریخ شروع بازه ۲, تاریخ پایان بازه ۲\n\nمثال:\n2023-10-01, 2023-10-10 | 2023-11-01, 2023-11-10", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'BOT_SAYAN_COMPARE_SALES' }]] } });
+            }
+            
+            const rangeA = parts[0].split(',').map(s => s.trim());
+            const rangeB = parts[1].split(',').map(s => s.trim());
+            
+            if (rangeA.length !== 2 || rangeB.length !== 2) {
+                return sendFn(chatId, "⚠️ فرمت وارد شده برای تاریخ‌های بازه اول یا دوم ناقص است. مثال:\n2023-10-01, 2023-10-10 | 2023-11-01, 2023-11-10", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'BOT_SAYAN_COMPARE_SALES' }]] } });
+            }
+            
+            const dateFromA = rangeA[0];
+            const dateToA = rangeA[1];
+            const dateFromB = rangeB[0];
+            const dateToB = rangeB[1];
+            
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(dateFromA) || !dateRegex.test(dateToA) || !dateRegex.test(dateFromB) || !dateRegex.test(dateToB)) {
+                return sendFn(chatId, "⚠️ لطفاً از فرمت میلادی معتبر YYYY-MM-DD (مثال: 2023-10-01) استفاده کنید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'BOT_SAYAN_COMPARE_SALES' }]] } });
+            }
+            
+            session.state = 'IDLE';
+            await generateAndSendComparisonPDF(db, chatId, sendFn, sendDocFn, dateFromA, dateToA, dateFromB, dateToB, "بازه انتخابی اول", "بازه انتخابی دوم");
+            return;
         }
 
         if (session.state === 'FIN_WAIT_CUSTOMER_BALANCE_SEARCH') {
@@ -3106,6 +3167,151 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     // --- MANAGEMENT REPORTS HANDLERS ---
+    if (data === 'BOT_SAYAN_DAILY_SALES') {
+        if (!hasSayanReportsAccess(user)) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی سایان در ربات را ندارید. لطفاً از طریق پنل مدیریت دسترسی خود را فعال کنید.");
+        }
+        
+        await sendFn(chatId, "⏳ در حال استعلام اطلاعات فروش امروز از سرور سایان و تولید فرم چاپی... لطفا شکیبا باشید.");
+        
+        try {
+            const todayStr = getTehranDateString();
+            
+            const sql = `
+                SELECT 
+                    t10.Field_005 as DocId,
+                    t10.Field_006 as InvoiceNum,
+                    t10.Field_008 as Date,
+                    t10.Field_029 as Notes,
+                    t11.Field_005 as ItemCode,
+                    t22.Field_004 as ItemName,
+                    t11.Field_006 as Quantity,
+                    t11.Field_031 as ItemNotes,
+                    t11.Field_007 as Amount,
+                    t_group.GroupName,
+                    t07.Field_006 as CustomerName
+                FROM STR_TBL_010 t10
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                                          AND t11.Field_003 = t10.Field_004
+                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                LEFT JOIN (
+                    SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                    FROM IND_TBL_021 t21_sub
+                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                    GROUP BY t21_sub.Field_004
+                ) t_group ON t11.Field_005 = t_group.ItemCode
+                LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                WHERE t10.Field_009 IN ('3', '12', '23')
+                  AND t11.Field_036 = t10.Field_009
+                  AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+                  AND t10.Field_008 = '${todayStr}'
+                ORDER BY t10.Field_008 DESC
+            `;
+            
+            const salesRows = await runSayanQuery(db, sql);
+            
+            if (salesRows.length === 0) {
+                return sendFn(chatId, `⚠️ هیچ فاکتور فروشی برای امروز (${toShamsiFull(new Date())}) در سرور سایان ثبت نشده است.`);
+            }
+            
+            const title = `گزارش رسمی فروش روزانه سایان - مورخ ${toShamsiFull(new Date())}`;
+            const columns = ['ردیف', 'شماره فاکتور', 'مشتری', 'نام کالا', 'گروه کالا', 'مقدار (کیلوگرم)', 'مبلغ کل (ریال)'];
+            
+            let totalQty = 0;
+            let totalAmt = 0;
+            
+            const tableRows = salesRows.map((row, idx) => {
+                const qty = parseFloat(row.Quantity || 0);
+                const amt = parseFloat(row.Amount || 0);
+                totalQty += qty;
+                totalAmt += amt;
+                
+                const customerName = row.CustomerName || (() => {
+                    const notes = row.Notes || '';
+                    const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
+                    return match ? match[1].trim() : notes;
+                })() || 'نامعلوم';
+                
+                return [
+                    (idx + 1).toLocaleString('fa-IR'),
+                    (row.InvoiceNum || row.DocId || '-').toLocaleString('fa-IR'),
+                    customerName,
+                    row.ItemName || 'کالای بدون نام',
+                    row.GroupName || 'بدون گروه',
+                    qty.toLocaleString('fa-IR'),
+                    amt.toLocaleString('fa-IR')
+                ];
+            });
+            
+            tableRows.push([
+                'جمع کل',
+                '-',
+                '-',
+                '-',
+                '-',
+                totalQty.toLocaleString('fa-IR'),
+                totalAmt.toLocaleString('fa-IR')
+            ]);
+            
+            const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
+            const filename = `Sayan_Daily_Sales_${todayStr}.pdf`;
+            
+            await sendDocFn(chatId, pdfBuffer, filename, ` Sayan ERP 🧾 ${title}\n تعداد ردیف‌های فروش: ${salesRows.length}\n مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`);
+        } catch (err) {
+            console.error("Bot Daily Sales Error:", err);
+            sendFn(chatId, `❌ خطا در تهیه گزارش فروش سایان: ${err.message}`);
+        }
+        return;
+    }
+
+    if (data === 'BOT_SAYAN_COMPARE_SALES') {
+        if (!hasSayanReportsAccess(user)) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی سایان در ربات را ندارید. لطفاً از طریق پنل مدیریت دسترسی خود را فعال کنید.");
+        }
+        
+        const kb = [
+            [{ text: '🔄 مقایسه دیروز با امروز', callback_data: 'BOT_SAYAN_COMPARE_PRESETS_YESTERDAY_TODAY' }],
+            [{ text: '📅 مقایسه این هفته با هفته قبل', callback_data: 'BOT_SAYAN_COMPARE_PRESETS_WEEK' }],
+            [{ text: '🗓 مقایسه این ماه با ماه قبل', callback_data: 'BOT_SAYAN_COMPARE_PRESETS_MONTH' }],
+            [{ text: '⌨️ ورود بازه زمانی دلخواه (تایپ)', callback_data: 'BOT_SAYAN_COMPARE_CUSTOM' }],
+            [{ text: '🔙 بازگشت', callback_data: 'MENU_REPORTS' }]
+        ];
+        return sendFn(chatId, "⚖️ *انتخاب بازه مقایسه فروش سایان*\nیکی از بازه‌های پیش‌فرض زیر را انتخاب کنید یا بازه زمانی دلخواه خود را وارد نمایید:", { reply_markup: { inline_keyboard: kb }, parse_mode: 'Markdown' });
+    }
+
+    if (data === 'BOT_SAYAN_COMPARE_PRESETS_YESTERDAY_TODAY') {
+        const dateFromA = getTehranOffsetDateString(0);
+        const dateToA = getTehranOffsetDateString(0);
+        const dateFromB = getTehranOffsetDateString(1);
+        const dateToB = getTehranOffsetDateString(1);
+        await generateAndSendComparisonPDF(db, chatId, sendFn, sendDocFn, dateFromA, dateToA, dateFromB, dateToB, "امروز", "دیروز");
+        return;
+    }
+
+    if (data === 'BOT_SAYAN_COMPARE_PRESETS_WEEK') {
+        const dateFromA = getTehranOffsetDateString(6);
+        const dateToA = getTehranOffsetDateString(0);
+        const dateFromB = getTehranOffsetDateString(13);
+        const dateToB = getTehranOffsetDateString(7);
+        await generateAndSendComparisonPDF(db, chatId, sendFn, sendDocFn, dateFromA, dateToA, dateFromB, dateToB, "۷ روز اخیر", "۷ روز قبل از آن");
+        return;
+    }
+
+    if (data === 'BOT_SAYAN_COMPARE_PRESETS_MONTH') {
+        const dateFromA = getTehranOffsetDateString(29);
+        const dateToA = getTehranOffsetDateString(0);
+        const dateFromB = getTehranOffsetDateString(59);
+        const dateToB = getTehranOffsetDateString(30);
+        await generateAndSendComparisonPDF(db, chatId, sendFn, sendDocFn, dateFromA, dateToA, dateFromB, dateToB, "۳۰ روز اخیر", "۳۰ روز قبل از آن");
+        return;
+    }
+
+    if (data === 'BOT_SAYAN_COMPARE_CUSTOM') {
+        session.state = 'BOT_SAYAN_WAIT_COMPARE_DATES';
+        return sendFn(chatId, "⌨️ *لطفاً بازه‌های مقایسه‌ای خود را دقیقاً با فرمت زیر به صورت تاریخ میلادی بنویسید:*\n\nتاریخ شروع بازه ۱, تاریخ پایان بازه ۱ | تاریخ شروع بازه ۲, تاریخ پایان بازه ۲\n\nالگوی نمونه:\n`2024-01-01, 2024-01-10 | 2024-02-01, 2024-02-10`", { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'BOT_SAYAN_COMPARE_SALES' }]] }, parse_mode: 'Markdown' });
+    }
+
     if (data === 'RPT_DAILY') {
         const today = getTehranDateString(); // YYYY-MM-DD
         const shamsiToday = toShamsiFull(new Date());

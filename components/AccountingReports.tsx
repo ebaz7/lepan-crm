@@ -82,6 +82,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
+    const [salesViewMode, setSalesViewMode] = useState<'today' | 'range'>('today');
     const [compareMode, setCompareMode] = useState(false);
     const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
     // Period B for sales comparison
@@ -740,9 +741,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN (
-                    SELECT t21_sub.Field_004 as ItemCode, MIN(t02_sub.Field_003) as GroupName
+                    SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
                     LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
                     GROUP BY t21_sub.Field_004
                 ) t_group ON t11.Field_005 = t_group.ItemCode
                 LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
@@ -787,9 +789,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN (
-                        SELECT t21_sub.Field_004 as ItemCode, MIN(t02_sub.Field_003) as GroupName
+                        SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                         FROM IND_TBL_021 t21_sub
                         LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                        LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
                         GROUP BY t21_sub.Field_004
                     ) t_group ON t11.Field_005 = t_group.ItemCode
                     LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
@@ -1443,6 +1446,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const stats = getSalesOverviewStats();
     const chartData = getComparisonChartData();
     const todayInvoices = getTodayInvoices();
+    const displayedInvoices = salesViewMode === 'range' ? salesData : todayInvoices;
     const filteredTraz = getFilteredTraz();
     const groupedProduction = getGroupedProduction();
     const filteredCheques = getFilteredCheques();
@@ -1912,6 +1916,23 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <span>فرم چاپی فروش دوره‌ای (PDF)</span>
                                 </button>
 
+                                <div className="flex bg-slate-150 p-1 rounded-lg border border-slate-200 select-none">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSalesViewMode('today')}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${salesViewMode === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                    >
+                                        فروش روزانه
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSalesViewMode('range')}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${salesViewMode === 'range' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                    >
+                                        فروش طبق بازه
+                                    </button>
+                                </div>
+
                                 <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 transition-colors">
                                     <input 
                                         type="checkbox" 
@@ -2000,10 +2021,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
                             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-slate-800">
-                                    لیست فاکتورهای فروش روز ({
+                                    {salesViewMode === 'range' ? 'لیست فاکتورهای فروش طبق بازه' : 'لیست فاکتورهای فروش روز'} ({
                                         (() => {
                                             const invoicesMap = new Map<string, any>();
-                                            todayInvoices.forEach(row => {
+                                            displayedInvoices.forEach(row => {
                                                 const key = row.InvoiceNum || row.DocId;
                                                 if (key) invoicesMap.set(key, true);
                                             });
@@ -2045,7 +2066,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 }[];
                                             }>();
                                             
-                                            todayInvoices.forEach(row => {
+                                            displayedInvoices.forEach(row => {
                                                 const key = row.InvoiceNum || row.DocId;
                                                 if (!key) return;
                                                 
@@ -2095,7 +2116,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             if (groupedList.length === 0) {
                                                 return (
                                                     <tr>
-                                                        <td colSpan={7} className="p-8 text-center text-slate-400 text-sm">هیچ فاکتور فروشی برای تاریخ انتخابی ثبت نشده است</td>
+                                                        <td colSpan={7} className="p-8 text-center text-slate-400 text-sm">{salesViewMode === 'range' ? 'هیچ فاکتور فروشی برای بازه زمانی انتخابی ثبت نشده است' : 'هیچ فاکتور فروشی برای تاریخ انتخابی ثبت نشده است'}</td>
                                                     </tr>
                                                 );
                                             }

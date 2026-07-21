@@ -34,6 +34,7 @@ export interface User {
   mobileNavOrder?: string[];
   lastSeen?: number; // New: For online status
   signatureUrl?: string; // Appended for Secretariat letter signatures
+  canAccessBotReports?: boolean;
 }
 
 export interface AppNotification {

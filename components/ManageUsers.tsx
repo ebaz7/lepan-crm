@@ -21,6 +21,7 @@ const ManageUsers: React.FC = () => {
     canManageSales: false, 
     receiveNotifications: true, 
     canAccessSecretariat: false,
+    canAccessBotReports: false,
     secretariatAllowedCompanies: [],
     canManageSecretariatSettings: false,
     avatar: '', 
@@ -81,6 +82,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           canAccessSecretariat: false,
+          canAccessBotReports: false,
           canManageSecretariatSettings: false,
           secretariatAllowedCompanies: [],
           avatar: '', 
@@ -104,6 +106,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: user.canManageSales || false, 
           receiveNotifications: user.receiveNotifications !== false, 
           canAccessSecretariat: user.canAccessSecretariat || false,
+          canAccessBotReports: user.canAccessBotReports || false,
           canManageSecretariatSettings: user.canManageSecretariatSettings || false,
           secretariatAllowedCompanies: user.secretariatAllowedCompanies || [],
           avatar: user.avatar || '', 
@@ -127,6 +130,7 @@ const ManageUsers: React.FC = () => {
           canManageSales: false, 
           receiveNotifications: true, 
           canAccessSecretariat: false,
+          canAccessBotReports: false,
           secretariatAllowedCompanies: [],
           canManageSecretariatSettings: false,
           avatar: '', 
@@ -328,6 +332,10 @@ const ManageUsers: React.FC = () => {
               <label className="flex items-center gap-2 text-xs text-gray-700 bg-purple-50 px-2 py-1.5 rounded cursor-pointer border border-purple-200">
                   <input type="checkbox" checked={formData.canAccessSecretariat} onChange={e => setFormData({...formData, canAccessSecretariat: e.target.checked})} className="w-4 h-4 text-purple-600" />
                   <span>دسترسی به دبیرخانه</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-700 bg-amber-50 px-2 py-1.5 rounded cursor-pointer border border-amber-200">
+                  <input type="checkbox" checked={formData.canAccessBotReports || false} onChange={e => setFormData({...formData, canAccessBotReports: e.target.checked})} className="w-4 h-4 text-amber-600" />
+                  <span>دسترسی به گزارشات مالی بات (مانده، فروش روزانه و مقایسه‌ای)</span>
               </label>
               
               {formData.canAccessSecretariat && settings?.companies && (
