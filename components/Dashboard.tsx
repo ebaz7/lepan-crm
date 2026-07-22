@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentOrder, OrderStatus, SystemSettings, User, ExitPermit, ExitPermitStatus, WarehouseTransaction, UserRole, SystemAnnouncement } from '../types';
 import { formatCurrency, getShamsiDateFromIso } from '../constants';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, Clock, CheckCircle, Check, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText } from 'lucide-react';
+import { TrendingUp, Clock, CheckCircle, Check, Activity, XCircle, Banknote, Calendar as CalendarIcon, ShieldCheck, ArrowUpRight, CheckSquare, Truck, Package, ListChecks, PieChart, BarChart, BookOpen, PenTool, Edit3, Plus, Trash2, Send, X, FileText, Users } from 'lucide-react';
 import { getRolePermissions } from '../services/authService';
 import { getExitPermits, getWarehouseTransactions, getNotes, getPurchaseRequests, getTaskGroups, getTasks, updateTask } from '../services/storageService';
 import { isInFinancialYear } from '../utils/dateUtils';
@@ -21,13 +21,14 @@ interface DashboardProps {
   onGoToBijakApprovals: () => void;
   onGoToPurchaseApprovals: () => void;
   onGoToTaskGroup?: (groupId: string, taskId?: string) => void;
+  onNavigate?: (tab: string) => void;
   financialYear?: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 const MONTHS = [ 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند' ];
 
-const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, onGoToTaskGroup, financialYear }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, currentUser, onViewArchive, onFilterByStatus, onGoToPaymentApprovals, onGoToExitApprovals, onGoToBijakApprovals, onGoToPurchaseApprovals, onGoToTaskGroup, onNavigate, financialYear }) => {
   const orders = useMemo(() => {
         if (!financialYear || financialYear === 'all') return rawOrders;
         return rawOrders.filter(o => isInFinancialYear(o.date, financialYear) || isInFinancialYear(o.payDate, financialYear));
@@ -343,6 +344,27 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
 
   const topBank = bankStats.length > 0 ? bankStats[0] : { name: '-', value: 0 };
   const mostActiveMonth = { label: '-', total: 0 }; // Simplified for now
+
+  const quickTiles = [
+      { id: 'create', title: 'ثبت پرداخت', badge: 'پرداخت', icon: Plus, gradient: 'from-blue-600 to-indigo-600', onClick: () => onNavigate ? onNavigate('create') : null },
+      { id: 'manage', title: 'کارتابل مالی', badge: 'مالی', count: pendingPaymentCount, icon: CheckSquare, gradient: 'from-amber-500 to-orange-600', onClick: onGoToPaymentApprovals },
+      { id: 'create-exit', title: 'ثبت خروج بار', badge: 'خروج', icon: Truck, gradient: 'from-emerald-500 to-teal-600', onClick: () => onNavigate ? onNavigate('create-exit') : null },
+      { id: 'manage-exit', title: 'کارتابل خروج', badge: 'انتظامات', count: pendingExitCount, icon: ShieldCheck, gradient: 'from-indigo-600 to-purple-600', onClick: onGoToExitApprovals },
+      { id: 'manage-invoices', title: 'فاکتور فروش', badge: 'فاکتور', icon: FileText, gradient: 'from-sky-500 to-blue-600', onClick: () => onNavigate ? onNavigate('manage-invoices') : null },
+      { id: 'warehouse', title: 'مدیریت انبار', badge: 'انبار', count: pendingBijakCount, icon: Package, gradient: 'from-teal-600 to-emerald-700', onClick: onGoToBijakApprovals },
+      { id: 'sayan', title: 'گزارشات سایان', badge: 'ERP سایان', icon: TrendingUp, gradient: 'from-purple-600 to-pink-600', onClick: () => onNavigate ? onNavigate('sayan') : null },
+      { id: 'secretariat', title: 'دبیرخانه اداری', badge: 'اداری', icon: BookOpen, gradient: 'from-blue-700 to-cyan-600', onClick: () => onNavigate ? onNavigate('secretariat') : null },
+      { id: 'cheque-receipts', title: 'رسید چک', badge: 'چک صیادی', icon: Banknote, gradient: 'from-emerald-600 to-green-700', onClick: () => onNavigate ? onNavigate('cheque-receipts') : null },
+      { id: 'chat', title: 'گفتگو و تسک‌ها', badge: 'ارتباطات', icon: Send, gradient: 'from-violet-600 to-purple-700', onClick: () => onNavigate ? onNavigate('chat') : null },
+      { id: 'knowledge', title: 'یادداشت‌ها', badge: 'یادداشت', icon: Edit3, gradient: 'from-amber-600 to-yellow-600', onClick: () => onNavigate ? onNavigate('knowledge') : null },
+      { id: 'trade', title: 'بازرگانی ارزی', badge: 'تجارت', icon: Activity, gradient: 'from-blue-600 to-indigo-700', onClick: () => onNavigate ? onNavigate('trade') : null },
+      { id: 'balances', title: 'مانده حساب', badge: 'استعلام', icon: Activity, gradient: 'from-rose-500 to-pink-600', onClick: () => onNavigate ? onNavigate('balances') : null },
+      { id: 'products', title: 'کاتالوگ کالاها', badge: 'محصولات', icon: Package, gradient: 'from-cyan-600 to-blue-600', onClick: () => onNavigate ? onNavigate('products') : null },
+      { id: 'sales', title: 'مدیریت مشتریان', badge: 'CRM', icon: Users, gradient: 'from-orange-500 to-amber-600', onClick: () => onNavigate ? onNavigate('sales') : null },
+      { id: 'purchase', title: 'درخواست خرید', badge: 'خرید کالا', count: pendingPurchaseCount, icon: Plus, gradient: 'from-fuchsia-600 to-pink-600', onClick: onGoToPurchaseApprovals },
+      { id: 'users', title: 'کاربران سیستم', badge: 'دسترسی', icon: Users, gradient: 'from-gray-700 to-zinc-900', onClick: () => onNavigate ? onNavigate('users') : null },
+      { id: 'settings', title: 'تنظیمات', badge: 'سیستم', icon: PenTool, gradient: 'from-slate-600 to-gray-800', onClick: () => onNavigate ? onNavigate('settings') : null },
+  ];
 
   return (
     <div className="space-y-6 pb-20 md:pb-0 animate-fade-in">
@@ -794,6 +816,53 @@ const Dashboard: React.FC<DashboardProps> = ({ orders: rawOrders, settings, curr
                 </div>
             </>
         )}
+
+        {/* QUICK ACCESS SQUARE TILES GRID */}
+        <div className="glass-panel p-4 md:p-5 rounded-3xl border border-blue-100/80 shadow-sm bg-gradient-to-br from-white via-blue-50/20 to-indigo-50/20 dark:from-gray-800 dark:to-gray-900">
+            <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></div>
+                    <h3 className="font-black text-sm md:text-base text-gray-800 dark:text-gray-100">
+                        کاشی‌های دسترسی سریع (Quick Access Tiles)
+                    </h3>
+                </div>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
+                    پیشنهادی موبایل و دسکتاپ
+                </span>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-2.5 md:gap-3">
+                {quickTiles.map((tile) => (
+                    <button
+                        key={tile.id}
+                        onClick={tile.onClick}
+                        className="group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-white dark:bg-gray-800/90 border border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-lg hover:border-blue-300 active:scale-95 transition-all aspect-square cursor-pointer"
+                    >
+                        {/* Pending Count Badge */}
+                        {tile.count !== undefined && tile.count > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce z-20">
+                                {tile.count}
+                            </span>
+                        )}
+
+                        {/* Top Category Badge / Pill */}
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/40 truncate max-w-full">
+                            {tile.badge}
+                        </span>
+
+                        {/* Vibrant Gradient Icon Box */}
+                        <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br ${tile.gradient} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform my-1`}>
+                            <tile.icon size={20} className="sm:w-5 sm:h-5" />
+                        </div>
+
+                        {/* Title */}
+                        <span className="text-[10px] sm:text-[11px] font-black text-gray-800 dark:text-gray-200 text-center leading-tight line-clamp-1">
+                            {tile.title}
+                        </span>
+                    </button>
+                ))}
+            </div>
+        </div>
 
         {/* Bank Report Modal */}
         {showBankReport && hasPaymentAccess && (

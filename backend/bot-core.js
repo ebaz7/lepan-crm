@@ -119,6 +119,149 @@ const runSayanQuery = async (db, queryStr) => {
     return data.data || [];
 };
 
+const hasSayanReportsAccess = (user) => {
+    if (!user) return false;
+    if (['admin', 'financial', 'ceo', 'manager'].includes(user.role)) return true;
+    if (user.canViewSayanReports === true || user.canViewAccountingReports === true) return true;
+    return false;
+};
+
+const getTehranOffsetDateString = (offsetDays = 0) => {
+    const now = new Date();
+    const target = new Date(now.getTime() - offsetDays * 24 * 60 * 60 * 1000);
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tehran',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    return formatter.format(target);
+};
+
+const generateAndSendComparisonPDF = async (db, chatId, sendFn, sendDocFn, dateFromA, dateToA, dateFromB, dateToB, nameA = "بازه اول", nameB = "بازه دوم") => {
+    await sendFn(chatId, `⏳ در حال محاسبه و استعلام گزارش مقایسه‌ای فروش سایان (${nameA} در برابر ${nameB})... لطفا شکیبا باشید.`);
+    
+    try {
+        const buildSql = (from, to) => `
+            SELECT 
+                t10.Field_005 as DocId,
+                t10.Field_006 as InvoiceNum,
+                t10.Field_008 as Date,
+                t11.Field_005 as ItemCode,
+                t22.Field_004 as ItemName,
+                t11.Field_006 as Quantity,
+                t11.Field_007 as Amount,
+                t_group.GroupName,
+                t07.Field_006 as CustomerName
+            FROM STR_TBL_010 t10
+            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
+            LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+            LEFT JOIN (
+                SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                FROM IND_TBL_021 t21_sub
+                LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                GROUP BY t21_sub.Field_004
+            ) t_group ON t11.Field_005 = t_group.ItemCode
+            LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+            WHERE t10.Field_009 IN ('3', '12', '23')
+              AND t11.Field_036 = t10.Field_009
+              AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+              AND t10.Field_008 BETWEEN '${from}' AND '${to}'
+            ORDER BY t10.Field_008 DESC
+        `;
+
+        const [rowsA, rowsB] = await Promise.all([
+            runSayanQuery(db, buildSql(dateFromA, dateToA)),
+            runSayanQuery(db, buildSql(dateFromB, dateToB))
+        ]);
+
+        const groupMap = new Map();
+
+        const processRows = (rows, isPeriodA) => {
+            rows.forEach(r => {
+                const grp = r.GroupName || 'سایر موارد';
+                const qty = parseFloat(r.Quantity || 0);
+                const amt = parseFloat(r.Amount || 0);
+
+                if (!groupMap.has(grp)) {
+                    groupMap.set(grp, { qtyA: 0, amtA: 0, qtyB: 0, amtB: 0 });
+                }
+                const entry = groupMap.get(grp);
+                if (isPeriodA) {
+                    entry.qtyA += qty;
+                    entry.amtA += amt;
+                } else {
+                    entry.qtyB += qty;
+                    entry.amtB += amt;
+                }
+            });
+        };
+
+        processRows(rowsA, true);
+        processRows(rowsB, false);
+
+        let sumQtyA = 0, sumAmtA = 0, sumQtyB = 0, sumAmtB = 0;
+        const columns = ['ردیف', 'گروه کالا', `مقدار ${nameA}`, `مبلغ ${nameA} (ریال)`, `مقدار ${nameB}`, `مبلغ ${nameB} (ریال)`, 'تغییر مبلغ (%)'];
+
+        const tableRows = [];
+        let index = 1;
+
+        groupMap.forEach((data, groupName) => {
+            sumQtyA += data.qtyA;
+            sumAmtA += data.amtA;
+            sumQtyB += data.qtyB;
+            sumAmtB += data.amtB;
+
+            const diffAmt = data.amtA - data.amtB;
+            const pct = data.amtB > 0 ? ((diffAmt / data.amtB) * 100).toFixed(1) : (data.amtA > 0 ? '+100' : '0');
+            const pctStr = Number(pct) >= 0 ? `+${pct}%` : `${pct}%`;
+
+            tableRows.push([
+                (index++).toLocaleString('fa-IR'),
+                groupName,
+                data.qtyA.toLocaleString('fa-IR'),
+                data.amtA.toLocaleString('fa-IR'),
+                data.qtyB.toLocaleString('fa-IR'),
+                data.amtB.toLocaleString('fa-IR'),
+                pctStr
+            ]);
+        });
+
+        const totalDiffAmt = sumAmtA - sumAmtB;
+        const totalPct = sumAmtB > 0 ? ((totalDiffAmt / sumAmtB) * 100).toFixed(1) : (sumAmtA > 0 ? '+100' : '0');
+        const totalPctStr = Number(totalPct) >= 0 ? `+${totalPct}%` : `${totalPct}%`;
+
+        tableRows.push([
+            'جمع کل',
+            'خلاصه عملکرد',
+            sumQtyA.toLocaleString('fa-IR'),
+            sumAmtA.toLocaleString('fa-IR'),
+            sumQtyB.toLocaleString('fa-IR'),
+            sumAmtB.toLocaleString('fa-IR'),
+            totalPctStr
+        ]);
+
+        const title = `گزارش مدیریتی مقایسه فروش Sayan ERP (${nameA} در برابر ${nameB})`;
+        const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
+        const filename = `Sayan_Sales_Comparison_${dateFromA}_VS_${dateFromB}.pdf`;
+
+        const caption = `📊 *گزارش مقایسه‌ای فروش Sayan ERP*\n\n` +
+            `🔹 **${nameA} (${dateFromA} تا ${dateToA}):**\n` +
+            `   📦 مقدار کل: ${sumQtyA.toLocaleString('fa-IR')} کیلوگرم\n` +
+            `   💰 مبلغ کل: ${sumAmtA.toLocaleString('fa-IR')} ریال\n\n` +
+            `🔸 **${nameB} (${dateFromB} تا ${dateToB}):**\n` +
+            `   📦 مقدار کل: ${sumQtyB.toLocaleString('fa-IR')} کیلوگرم\n` +
+            `   💰 مبلغ کل: ${sumAmtB.toLocaleString('fa-IR')} ریال\n\n` +
+            `📈 **درصد تغییرات فروش:** ${totalPctStr}`;
+
+        await sendDocFn(chatId, pdfBuffer, filename, caption);
+    } catch (err) {
+        console.error("Bot Comparative Sales Error:", err);
+        sendFn(chatId, `❌ خطا در استعلام گزارش مقایسه‌ای سایان: ${err.message}`);
+    }
+};
+
 const getAvailableYears = (list) => {
     const years = new Set();
     list.forEach(o => {
@@ -179,9 +322,10 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
-            [{ text: '📦 لیست کامل قیمت', callback_data: 'SALES_LIST_ALL' }],
-            [{ text: '💰 گزارشات مالی', callback_data: 'SALES_FIN_REPORTS' }],
-            [{ text: '📢 ارسال پیام گروهی', callback_data: 'SALES_BROADCAST' }],
+            [{ text: '📦 لیست کامل قیمت محصولات', callback_data: 'SALES_LIST_ALL' }],
+            [{ text: '🏢 گزارشات مالی و ERP سایان', callback_data: 'SAYAN_REPORTS_MENU' }],
+            [{ text: '💰 گزارشات مالی عمومی', callback_data: 'SALES_FIN_REPORTS' }],
+            [{ text: '📢 ارسال پیام گروهی به مشتریان', callback_data: 'SALES_BROADCAST' }],
             [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
             [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
@@ -224,15 +368,23 @@ const KEYBOARDS = {
     },
     REPORTS: { 
         inline_keyboard: [
-            [{ text: '📊 خلاصه وضعیت امروز', callback_data: 'RPT_DAILY' }],
-            [{ text: '🗓 عملکرد ماه جاری', callback_data: 'RPT_MONTHLY' }],
-            [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
-            [{ text: '🧾 فاکتور فروش روزانه سایان (PDF)', callback_data: 'BOT_SAYAN_DAILY_SALES' }],
-            [{ text: '⚖️ مقایسه فروش دو بازه (PDF)', callback_data: 'BOT_SAYAN_COMPARE_SALES' }],
-            [{ text: '⏳ وضعیت کارتابل‌ها (مانده)', callback_data: 'RPT_PENDING' }],
-            [{ text: '💰 گزارشات مالی (دیگر)', callback_data: 'SALES_FIN_REPORTS' }],
+            [{ text: '📊 خلاصه وضعیت امور جاری', callback_data: 'RPT_DAILY' }],
+            [{ text: '🗓 عملکرد ماه جاری سیستم', callback_data: 'RPT_MONTHLY' }],
+            [{ text: '🏢 گزارشات حسابداری و ERP سایان', callback_data: 'SAYAN_REPORTS_MENU' }],
+            [{ text: '⏳ وضعیت کارتابل‌ها (پاسخ‌نشده)', callback_data: 'RPT_PENDING' }],
+            [{ text: '💰 گزارشات مالی عمومی', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ] 
+    },
+    SAYAN_REPORTS: {
+        inline_keyboard: [
+            [{ text: '💳 استعلام و مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
+            [{ text: '🧾 فاکتور فروش روزانه سایان (PDF)', callback_data: 'BOT_SAYAN_DAILY_SALES' }],
+            [{ text: '⚖️ مقایسه تحلیل فروش دو بازه (PDF)', callback_data: 'BOT_SAYAN_COMPARE_SALES' }],
+            [{ text: '🔴 دانلود لیست بدهکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS' }, { text: '📊 اکسل بدهکاران', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' }],
+            [{ text: '🟢 دانلود لیست بستانکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS' }, { text: '📈 اکسل بستانکاران', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX' }],
+            [{ text: '🔙 بازگشت به گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }]
+        ]
     },
     BACK: { inline_keyboard: [[{ text: '🔙 انصراف', callback_data: 'MENU_MAIN' }]] }
 };
@@ -1201,13 +1353,9 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 return sendFn(chatId, "⚠️ لطفا یک عبارت معتبر برای جستجو وارد کنید:");
             }
             const balances = db.customerBalances || [];
-            if (balances.length === 0) {
-                session.state = 'IDLE';
-                return sendFn(chatId, "⚠️ هیچ اطلاعات مانده حسابی در سیستم بارگذاری نشده است. ابتدا فایل اکسل مانده حساب را در نرم‌افزار بارگذاری نمایید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
-            }
 
             const terms = query.split(/\s+/).filter(Boolean);
-            const found = balances.filter(b => {
+            let found = balances.filter(b => {
                 return terms.every(term => {
                     const normTerm = term.toLowerCase();
                     return (b.accountCode || '').toLowerCase().includes(normTerm) || 
@@ -1215,8 +1363,33 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 });
             }).sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
 
+            // Fallback to Sayan ERP live query if local balances are empty or no match
+            if (found.length === 0 && db.settings?.sayanApiUrl) {
+                try {
+                    const sql = `
+                        SELECT Field_005 as accountCode, Field_006 as name
+                        FROM ACT_TBL_007
+                        WHERE (Field_004 = '11' OR Field_004 = '31')
+                          AND (Field_005 LIKE '%${query}%' OR Field_006 LIKE N'%${query}%')
+                        ORDER BY Field_005
+                    `;
+                    const sayanCustomers = await runSayanQuery(db, sql);
+                    if (sayanCustomers && sayanCustomers.length > 0) {
+                        found = sayanCustomers.map(sc => ({
+                            accountCode: sc.accountCode,
+                            name: sc.name || 'مشتری سایان',
+                            balance: 0,
+                            type: 'ثبت شده در سایان ERP',
+                            updatedAt: Date.now()
+                        }));
+                    }
+                } catch (err) {
+                    console.error("Sayan customer search fallback error:", err);
+                }
+            }
+
             if (found.length === 0) {
-                return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یافت نشد.\n\n🔍 تلاش مجدد (نام یا کد):`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف و بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
+                return sendFn(chatId, `❌ هیچ مشتری با عبارت "${query}" در لیست مانده حساب‌ها یا سرور سایان یافت نشد.\n\n🔍 تلاش مجدد (نام یا کد):`, { reply_markup: { inline_keyboard: [[{ text: '🔙 انصراف و بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
             }
 
             if (found.length === 1) {
@@ -2580,6 +2753,14 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         if (data === 'MENU_REPORTS') {
             session.lastFinMenu = 'MENU_REPORTS';
             return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
+        }
+
+        if (data === 'SAYAN_REPORTS_MENU') {
+            if (!hasSayanReportsAccess(user)) {
+                return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی و ERP سایان را ندارید.");
+            }
+            session.lastFinMenu = 'SAYAN_REPORTS_MENU';
+            return sendFn(chatId, "🏢 *گزارشات و اطلاعات مالی ERP سایان*\n\nلطفاً یکی از گزینه‌های تخصصی زیر را انتخاب نمایید:", { reply_markup: KEYBOARDS.SAYAN_REPORTS, parse_mode: 'Markdown' });
         }
     }
 

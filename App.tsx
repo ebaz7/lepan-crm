@@ -1277,6 +1277,7 @@ function App() {
                         onGoToExitApprovals={handleGoToExitApprovals} 
                         onGoToBijakApprovals={handleGoToWarehouseApprovals} 
                         onGoToPurchaseApprovals={handleGoToPurchaseApprovals} 
+                        onNavigate={(tab) => setActiveTab(tab)}
                         financialYear={financialYear} 
                         onGoToTaskGroup={(groupId, taskId) => {
                             setDirectChatTarget({ type: 'task_group', id: groupId, taskId });

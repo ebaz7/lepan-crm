@@ -7,7 +7,7 @@ import { formatDate, formatIranianPlate } from '../constants';
 import { 
     Eye, Trash2, Search, CheckCircle, Truck, XCircle, Edit, Loader2, 
     Package, Archive, RefreshCw, UserCheck, ShieldCheck, Warehouse, 
-    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText
+    User as UserIcon, Building2, Bell, AlertTriangle, MoreVertical, Edit3, FileText, Paperclip
 } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import WarehouseFinalizeModal from './WarehouseFinalizeModal'; 
@@ -214,15 +214,21 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             await updateExitPermitStatus(p.id, nextStatus, currentUser, extraUpdateData);
             
-            // Notification queue
-            setActiveAutoSends(prev => [...prev, updatedPermit]);
+            // Release processing spinner immediately and reload data for instant UI response
+            setProcessingId(null);
+            loadData();
             
+            // Send notifications asynchronously in background
+            setActiveAutoSends(prev => [...prev, updatedPermit]);
             setTimeout(async () => {
-                await sendNotification(updatedPermit, p.status);
-                setProcessingId(null);
-                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
-                loadData();
-            }, 2500);
+                try {
+                    await sendNotification(updatedPermit, p.status);
+                } catch (err) {
+                    console.error("Background notification error", err);
+                } finally {
+                    setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
+                }
+            }, 100);
 
         } catch (e) {
             alert('خطا در عملیات تایید');
@@ -393,14 +399,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
 
             await editExitPermit(updatedPermit); 
             
-            setActiveAutoSends(prev => [...prev, updatedPermit]);
+            setProcessingId(null);
+            loadData();
             
+            setActiveAutoSends(prev => [...prev, updatedPermit]);
             setTimeout(async () => {
-                await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY);
-                setProcessingId(null);
-                setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
-                loadData();
-            }, 2500);
+                try {
+                    await sendNotification(updatedPermit, ExitPermitStatus.PENDING_SECURITY);
+                } catch (e) {
+                    console.error("Background security notif error", e);
+                } finally {
+                    setActiveAutoSends(prev => prev.filter(x => x.id !== updatedPermit.id));
+                }
+            }, 100);
         } catch (e) {
             alert('خطا در ثبت مشخصات انتظامات');
             setProcessingId(null);
@@ -424,13 +435,19 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             
             await editExitPermit(updated); 
             
+            setProcessingId(null);
+            loadData();
+
             setActiveAutoSends(prev => [...prev, updated]);
             setTimeout(async () => {
-                await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
-                setProcessingId(null);
-                setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
-                loadData();
-            }, 2500);
+                try {
+                    await sendNotification(updated, ExitPermitStatus.PENDING_WAREHOUSE);
+                } catch (e) {
+                    console.error("Background warehouse notif error", e);
+                } finally {
+                    setActiveAutoSends(prev => prev.filter(x => x.id !== updated.id));
+                }
+            }, 100);
         } catch(e) { alert('خطا در ثبت انبار'); setProcessingId(null); }
     };
 
@@ -653,6 +670,16 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                 <span>📅 {formatDate(p.date)}</span>
             </div>
 
+            {p.attachments && p.attachments.length > 0 && (
+                <div 
+                    onClick={() => { setViewMode('EXIT'); setViewPermit(p); }}
+                    className="mb-3 flex items-center gap-1.5 bg-emerald-50 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-emerald-200 w-fit cursor-pointer active:scale-95 transition-all"
+                >
+                    <Paperclip size={13} className="text-emerald-600" />
+                    <span>فایل/تصویر پیوست انتظامات ({p.attachments.length})</span>
+                </div>
+            )}
+
             <div className="flex gap-2 mt-2">
                 {canAct && !processingId && (
                      <button onClick={() => { setViewMode(p.status === ExitPermitStatus.EXITED ? 'EXIT' : 'PROFORMA'); handleApprove(p); }} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-sm">
@@ -706,7 +733,18 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
                             </div>
                             <div>
                                 <h3 className="font-bold text-gray-800 text-lg">{p.recipientName}</h3>
-                                <p className="text-xs text-gray-500">{p.goodsName} | {formatDate(p.date)}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <p className="text-xs text-gray-500">{p.goodsName} | {formatDate(p.date)}</p>
+                                    {p.attachments && p.attachments.length > 0 && (
+                                        <span 
+                                            onClick={() => { setViewMode('EXIT'); setViewPermit(p); }} 
+                                            className="bg-emerald-50 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-lg border border-emerald-200 cursor-pointer hover:bg-emerald-100 flex items-center gap-1 transition-all"
+                                        >
+                                            <Paperclip size={12} className="text-emerald-600" />
+                                            <span>پیوست انتظامات ({p.attachments.length})</span>
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         

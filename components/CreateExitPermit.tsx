@@ -207,7 +207,10 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
             // Call API
             await saveExitPermit(newPermit);
             
-            // Initiate Auto-Send Process
+            // Navigate/clear immediately for instant response
+            onSuccess();
+            
+            // Initiate Auto-Send Process asynchronously in background
             setTempPermit(newPermit);
             
             setTimeout(async () => {
@@ -264,10 +267,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                         }
                     } catch (e) { console.error("Notification Error", e); }
                 }
-                
-                // Clear and navigate
-                onSuccess();
-            }, 2000);
+            }, 300);
 
         } catch (e: any) {
             console.error("Submit Error:", e);

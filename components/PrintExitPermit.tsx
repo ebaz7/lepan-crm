@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExitPermit, ExitPermitStatus, SystemSettings, UserRole, SalesContact, User } from '../types';
 import { formatDate, formatCurrency, formatIranianPlate } from '../constants';
-import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown, Minimize2, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, Printer, Clock, MapPin, Package, Truck, CheckCircle, XCircle, Share2, Edit, Loader2, Users, Search, FileDown, Minimize2, Maximize2, ZoomIn, ZoomOut, Paperclip, Eye, Image as ImageIcon } from 'lucide-react';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
 import { generatePdf } from '../utils/pdfGenerator'; 
@@ -28,6 +28,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
   const [processing, setProcessing] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
   const [botSubscribers, setBotSubscribers] = useState<any[]>([]);
+  const [lightboxImg, setLightboxImg] = useState<{ fileName: string; data: string } | null>(null);
 
   useEffect(() => {
      apiCall<any[]>('/bot-subscribers').then(setBotSubscribers).catch(() => {});
@@ -478,6 +479,50 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 )}
                 
                 {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات فاکتور</h3><div className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} rounded-xl p-3 glass-panel text-sm min-h-[40px]`}>{permit.description}</div></div>)}
+
+                {permit.attachments && permit.attachments.length > 0 && (
+                    <div className="space-y-2 no-print my-3">
+                        <h3 className="font-black text-sm flex items-center gap-2 text-gray-800">
+                            <Paperclip size={18} className="text-emerald-600" />
+                            <span>تصاویر و مدارک پیوست انتظامات ({permit.attachments.length} فایل)</span>
+                        </h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-emerald-50/40 p-3 rounded-2xl border-2 border-emerald-200">
+                            {permit.attachments.map((att, idx) => {
+                                const isImg = att.data?.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(att.fileName);
+                                return (
+                                    <div key={idx} className="bg-white rounded-xl p-2 border border-emerald-100 shadow-sm flex flex-col items-center justify-between gap-2 group hover:shadow-md transition-all">
+                                        {isImg ? (
+                                            <div className="w-full h-24 rounded-lg overflow-hidden relative cursor-pointer group/img bg-gray-100" onClick={() => setLightboxImg(att)}>
+                                                <img src={att.data} alt={att.fileName} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                                    <Eye size={16} /> مشاهده
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="w-full h-24 rounded-lg bg-emerald-50 flex flex-col items-center justify-center text-emerald-700 p-2">
+                                                <Paperclip size={28} className="mb-1" />
+                                                <span className="text-[10px] font-bold text-center line-clamp-2" dir="ltr">{att.fileName}</span>
+                                            </div>
+                                        )}
+                                        <div className="w-full flex items-center justify-between gap-1 pt-1 border-t border-gray-100">
+                                            <span className="text-[10px] font-mono text-gray-600 truncate flex-1" dir="ltr" title={att.fileName}>{att.fileName}</span>
+                                            <a 
+                                                href={att.data} 
+                                                download={att.fileName || `Attachment_${idx + 1}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="p-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shrink-0"
+                                                title="دانلود فایل"
+                                            >
+                                                <FileDown size={12} />
+                                            </a>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className={`mt-auto pt-4 ${mode === 'CUSTOMER_INVOICE' || mode === 'PROFORMA' ? 'border-t-4 border-blue-900' : 'border-t-4 border-black'} grid ${mode === 'CUSTOMER_INVOICE' || mode === 'PROFORMA' ? 'grid-cols-5' : 'grid-cols-6'} gap-2 text-center items-end`}>
@@ -770,6 +815,25 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 </div>
             </div>
         </div>
+
+        {lightboxImg && (
+            <div className="fixed inset-0 z-[100000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-fade-in" onClick={() => setLightboxImg(null)}>
+                <div className="relative max-w-4xl w-full max-h-[85vh] flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between w-full mb-3 text-white">
+                        <span className="font-mono text-xs truncate max-w-md" dir="ltr">{lightboxImg.fileName}</span>
+                        <div className="flex items-center gap-2">
+                            <a href={lightboxImg.data} download={lightboxImg.fileName || 'Attachment'} className="bg-emerald-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-700 shadow-md">
+                                <FileDown size={14} /> دانلود فایل
+                            </a>
+                            <button onClick={() => setLightboxImg(null)} className="p-2 bg-white/20 hover:bg-white/30 rounded-xl text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+                    <img src={lightboxImg.data} alt="" className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl border-2 border-white/20" />
+                </div>
+            </div>
+        )}
     </div>
   );
 };
