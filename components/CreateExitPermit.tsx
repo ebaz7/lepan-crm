@@ -5,7 +5,7 @@ import { saveExitPermit, getSettings } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian } from '../constants';
 import { apiCall } from '../services/apiService';
 import { getUsers } from '../services/authService';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft, GitMerge, Users, X } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, Building2, User as UserIcon, Calendar, CheckSquare, ArrowLeft, GitMerge, Users, X, Paperclip } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import html2canvas from 'html2canvas';
 
@@ -33,6 +33,30 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
 
     const [showMergeModal, setShowMergeModal] = useState(false);
     const [searchTermLead, setSearchTermLead] = useState('');
+    const [attachments, setAttachments] = useState<{ fileName: string; data: string }[]>([]);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        files.forEach(file => {
+            if (file.size > 50 * 1024 * 1024) {
+                alert(`حجم فایل ${file.name} بیشتر از ۵۰ مگابایت است.`);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                if (evt.target?.result) {
+                    setAttachments(prev => [...prev, { fileName: file.name, data: evt.target!.result as string }]);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+    };
+
+    const removeAttachment = (index: number) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
 
     useEffect(() => {
         getSettings().then(s => {
@@ -199,6 +223,7 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                 plateNumber: driverInfo.plateNumber,
                 driverName: driverInfo.driverName,
                 description: driverInfo.description,
+                attachments: attachments,
                 price: items.reduce((acc, i) => acc + (Number(i.price) || 0), 0), // Kept for backwards compatibility or total
                 status: ExitPermitStatus.PENDING_CEO,
                 createdAt: Date.now()
@@ -432,6 +457,60 @@ const CreateExitPermit: React.FC<{ onSuccess: () => void, currentUser: User }> =
                             <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-xl p-2 text-sm glass-panel h-20 resize-none" placeholder="توضیحات..." value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
                         </div>
                     </div>
+                </div>
+
+                {/* Attachments & Documents Section */}
+                <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                            <Paperclip size={18} className="text-emerald-600"/>
+                            <span>ضمیمه تصاویر و مدارک (فاکتور، پیش‌فاکتور، قبض باسکول، عکس بار)</span>
+                        </div>
+                        <input 
+                            type="file" 
+                            multiple 
+                            accept="image/*,.pdf,.doc,.docx" 
+                            className="hidden" 
+                            ref={fileInputRef} 
+                            onChange={handleFileUpload} 
+                        />
+                        <button 
+                            type="button" 
+                            onClick={() => fileInputRef.current?.click()} 
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                        >
+                            <Paperclip size={16}/> افزودن فایل / تصویر
+                        </button>
+                    </div>
+
+                    {attachments.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
+                            {attachments.map((att, idx) => {
+                                const isImg = att.data?.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(att.fileName);
+                                return (
+                                    <div key={idx} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-emerald-200 text-xs shadow-sm">
+                                        <div className="flex items-center gap-2 truncate flex-1">
+                                            {isImg ? (
+                                                <img src={att.data} alt="" className="w-8 h-8 rounded object-cover border" />
+                                            ) : (
+                                                <Paperclip size={16} className="text-emerald-600 shrink-0" />
+                                            )}
+                                            <span className="truncate font-mono text-[11px]" dir="ltr">{att.fileName}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => removeAttachment(idx)} 
+                                            className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-lg shrink-0 mr-1 transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-[11px] text-gray-500 italic">هیچ فایلی ضمیمه نشده است (اختیاری)</p>
+                    )}
                 </div>
 
                 {/* Footer Action */}

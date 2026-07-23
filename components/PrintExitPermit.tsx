@@ -481,10 +481,10 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                 {permit.description && (<div className="space-y-1"><h3 className="font-black text-lg">توضیحات فاکتور</h3><div className={`border-2 ${mode === 'CUSTOMER_INVOICE' ? 'border-blue-900' : 'border-black'} rounded-xl p-3 glass-panel text-sm min-h-[40px]`}>{permit.description}</div></div>)}
 
                 {permit.attachments && permit.attachments.length > 0 && (
-                    <div className="space-y-2 no-print my-3">
+                    <div className="space-y-2 my-3 border-t border-b border-emerald-100 py-3">
                         <h3 className="font-black text-sm flex items-center gap-2 text-gray-800">
                             <Paperclip size={18} className="text-emerald-600" />
-                            <span>تصاویر و مدارک پیوست انتظامات ({permit.attachments.length} فایل)</span>
+                            <span>تصاویر و مدارک پیوست (قبض باسکول، عکس بار و اسناد) ({permit.attachments.length} فایل)</span>
                         </h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-emerald-50/40 p-3 rounded-2xl border-2 border-emerald-200">
                             {permit.attachments.map((att, idx) => {
@@ -494,7 +494,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                         {isImg ? (
                                             <div className="w-full h-24 rounded-lg overflow-hidden relative cursor-pointer group/img bg-gray-100" onClick={() => setLightboxImg(att)}>
                                                 <img src={att.data} alt={att.fileName} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
-                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1 no-print">
                                                     <Eye size={16} /> مشاهده
                                                 </div>
                                             </div>
@@ -511,7 +511,7 @@ export default function PrintExitPermit({ permit, onClose, onApprove, onReject, 
                                                 download={att.fileName || `Attachment_${idx + 1}`} 
                                                 target="_blank" 
                                                 rel="noopener noreferrer"
-                                                className="p-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shrink-0"
+                                                className="p-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shrink-0 no-print"
                                                 title="دانلود فایل"
                                             >
                                                 <FileDown size={12} />

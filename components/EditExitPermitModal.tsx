@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { ExitPermit, ExitPermitStatus, ExitPermitItem, ExitPermitDestination, UserRole } from '../types';
 import { editExitPermit } from '../services/storageService';
 import { generateUUID, getShamsiDateFromIso, jalaliToGregorian, getCurrentShamsiDate } from '../constants';
-import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Save, Loader2, Truck, Package, MapPin, Hash, Plus, Trash2, X, AlertTriangle, Paperclip } from 'lucide-react';
 import PrintExitPermit from './PrintExitPermit';
 import { getUsers } from '../services/authService';
 import { apiCall } from '../services/apiService';
@@ -25,6 +25,30 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
   const [items, setItems] = useState<ExitPermitItem[]>(permit.items && permit.items.length > 0 ? permit.items : [{ id: generateUUID(), goodsName: permit.goodsName || '', cartonCount: permit.cartonCount || 0, weight: permit.weight || 0 }]);
   const [destinations, setDestinations] = useState<ExitPermitDestination[]>(permit.destinations && permit.destinations.length > 0 ? permit.destinations : [{ id: generateUUID(), recipientName: permit.recipientName || '', address: permit.destinationAddress || '', phone: '' }]);
   const [driverInfo, setDriverInfo] = useState({ plateNumber: permit.plateNumber || '', driverName: permit.driverName || '', description: permit.description || '' });
+  const [attachments, setAttachments] = useState<{ fileName: string; data: string }[]>(permit.attachments || []);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      files.forEach(file => {
+          if (file.size > 50 * 1024 * 1024) {
+              alert(`حجم فایل ${file.name} بیشتر از ۵۰ مگابایت است.`);
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              if (evt.target?.result) {
+                  setAttachments(prev => [...prev, { fileName: file.name, data: evt.target!.result as string }]);
+              }
+          };
+          reader.readAsDataURL(file);
+      });
+      e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+      setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingPermits, setExistingPermits] = useState<ExitPermit[]>([]);
 
@@ -91,6 +115,7 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
           plateNumber: driverInfo.plateNumber,
           driverName: driverInfo.driverName,
           description: driverInfo.description,
+          attachments: attachments,
           
           // Reset Approval Process (Full Reset)
           status: ExitPermitStatus.PENDING_CEO,
@@ -236,6 +261,60 @@ const EditExitPermitModal: React.FC<EditExitPermitModalProps> = ({ permit, onClo
                     <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2"><Truck size={18}/> اطلاعات راننده (اختیاری)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold block mb-1">نام راننده</label><input className="w-full border rounded-lg p-2 text-sm" value={driverInfo.driverName} onChange={e => setDriverInfo({...driverInfo, driverName: e.target.value})} /></div><div><label className="text-xs font-bold block mb-1">شماره پلاک</label><input className="w-full border rounded-lg p-2 text-sm dir-ltr" placeholder="12 A 345 67" value={driverInfo.plateNumber} onChange={e => setDriverInfo({...driverInfo, plateNumber: e.target.value})} /></div></div>
                     <div><label className="text-xs font-bold block mb-1">توضیحات تکمیلی</label><textarea className="w-full border rounded-lg p-2 text-sm h-20 resize-none" value={driverInfo.description} onChange={e => setDriverInfo({...driverInfo, description: e.target.value})} /></div>
+                </div>
+
+                {/* Attachments Section */}
+                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 space-y-3 mt-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                            <Paperclip size={18} className="text-emerald-600"/>
+                            <span>ضمیمه تصاویر و مدارک (فاکتور، پیش‌فاکتور، قبض باسکول، عکس بار)</span>
+                        </div>
+                        <input 
+                            type="file" 
+                            multiple 
+                            accept="image/*,.pdf,.doc,.docx" 
+                            className="hidden" 
+                            ref={fileInputRef} 
+                            onChange={handleFileUpload} 
+                        />
+                        <button 
+                            type="button" 
+                            onClick={() => fileInputRef.current?.click()} 
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                        >
+                            <Paperclip size={16}/> افزودن فایل / تصویر
+                        </button>
+                    </div>
+
+                    {attachments.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
+                            {attachments.map((att, idx) => {
+                                const isImg = att.data?.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(att.fileName);
+                                return (
+                                    <div key={idx} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-emerald-200 text-xs shadow-sm">
+                                        <div className="flex items-center gap-2 truncate flex-1">
+                                            {isImg ? (
+                                                <img src={att.data} alt="" className="w-8 h-8 rounded object-cover border" />
+                                            ) : (
+                                                <Paperclip size={16} className="text-emerald-600 shrink-0" />
+                                            )}
+                                            <span className="truncate font-mono text-[11px]" dir="ltr">{att.fileName}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => removeAttachment(idx)} 
+                                            className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-lg shrink-0 mr-1 transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-[11px] text-gray-500 italic">هیچ فایلی ضمیمه نشده است</p>
+                    )}
                 </div>
                 <div className="flex gap-2 justify-end pt-4 border-t">
                     <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl border text-gray-700 hover:bg-gray-50 font-medium">انصراف</button>
