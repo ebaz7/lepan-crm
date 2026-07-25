@@ -126,8 +126,7 @@ const hasSayanReportsAccess = (user) => {
 };
 
 const getCustomerBalancesData = async (db) => {
-    let list = db.customerBalances || [];
-    if (list.length > 0) return list;
+    let list = [];
 
     if (db.settings?.sayanApiUrl) {
         try {
@@ -1341,14 +1340,46 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             saveDb(db);
             session.state = 'IDLE';
 
-            const rec = (db.customerBalances || []).find(b => b.accountCode === code);
+            const rawList = await getCustomerBalancesData(db);
+            const rec = rawList.find(b => b.accountCode === code);
             if (rec) {
                 const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
-                const successMsg = `✅ *ارتباط با حسابداری برقرار شد!*\n\n👤 *مشتری:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما:* ${balanceStr} ریال (${rec.type})\n📅 آخرین بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n💬 مانده حساب شما ذخیره شد و در پرسش‌های بعدی با زدن دکمه مربوطه مستقیماً نشان داده خواهد شد.`;
+                const successMsg = `✅ *ارتباط با حسابداری برقرار شد!*\n\n👤 *مشتری:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما (آنلاین سایان):* ${balanceStr} ریال (${rec.type})\n📅 آخرین بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n💬 مانده حساب شما ذخیره شد و در پرسش‌های بعدی با زدن دکمه مربوطه مستقیماً نشان داده خواهد شد.`;
                 return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
             } else {
-                const successMsg = `✅ *پیوند حساب برقرار شد!*\n🔢 کد حسابداری شما \`${code}\` با موفقیت در ربات ذخیره گردید.\n\n⚠️ اما در حال حاضر رکوردی با این کد در فایل مانده حساب‌های سیستم یافت نشد. به محض بارگذاری اطلاعات جدید توسط مدیر مالی، مانده حساب شما نمایش داده خواهد شد.`;
-                return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+                let name = 'مشتری سایان';
+                let balanceStr = '۰';
+                let type = 'تسویه شده';
+                let foundAny = false;
+                if (db.settings?.sayanApiUrl) {
+                    try {
+                        const sql = `
+                            SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
+                                   SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
+                            FROM ACT_TBL_007 t07
+                            LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
+                            WHERE t07.Field_005 = '${code}'
+                            GROUP BY t07.Field_005, t07.Field_006
+                        `;
+                        const res = await runSayanQuery(db, sql);
+                        if (res && res.length > 0) {
+                            name = res[0].name || name;
+                            const bal = Number(res[0].balance || 0);
+                            balanceStr = Math.abs(bal).toLocaleString('fa-IR');
+                            type = bal > 0 ? 'بدهکار' : (bal < 0 ? 'بستانکار' : 'تسویه شده');
+                            foundAny = true;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+                if (foundAny) {
+                    const successMsg = `✅ *ارتباط با حسابداری برقرار شد!*\n\n👤 *مشتری:* ${name}\n🔢 کد حسابداری: \`${code}\`\n\n💰 *مانده حساب شما (آنلاین سایان):* ${balanceStr} ریال (${type})\n💬 مانده حساب شما ذخیره شد و در پرسش‌های بعدی مستقیماً نشان داده خواهد شد.`;
+                    return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+                } else {
+                    const successMsg = `✅ *پیوند حساب برقرار شد!*\n🔢 کد حسابداری شما \`${code}\` با موفقیت در ربات ذخیره گردید.\n\n⚠️ اما در حال حاضر رکوردی با این کد در سرور حسابداری سایان یافت نشد. به محض برقراری اتصال یا تصحیح کد، مانده حساب شما نمایش داده خواهد شد.`;
+                    return sendFn(chatId, successMsg, { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'GUEST_MAIN' }]] } });
+                }
             }
         }
 
@@ -1387,7 +1418,9 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             if (!query) {
                 return sendFn(chatId, "⚠️ لطفا یک عبارت معتبر برای جستجو وارد کنید:");
             }
-            const balances = db.customerBalances || [];
+            
+            // Query Sayan live balances
+            const balances = await getCustomerBalancesData(db);
 
             const terms = query.split(/\s+/).filter(Boolean);
             let found = balances.filter(b => {
@@ -1398,25 +1431,31 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 });
             }).sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
 
-            // Fallback to Sayan ERP live query if local balances are empty or no match
+            // Fallback: If no match with non-zero balance, let's search Sayan for ANY matching customer (even with zero balance)
             if (found.length === 0 && db.settings?.sayanApiUrl) {
                 try {
                     const sql = `
-                        SELECT Field_005 as accountCode, Field_006 as name
-                        FROM ACT_TBL_007
-                        WHERE (Field_004 = '11' OR Field_004 = '31')
-                          AND (Field_005 LIKE '%${query}%' OR Field_006 LIKE N'%${query}%')
-                        ORDER BY Field_005
+                        SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
+                               SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
+                        FROM ACT_TBL_007 t07
+                        LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
+                        WHERE (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                          AND (t07.Field_005 LIKE '%${query}%' OR t07.Field_006 LIKE N'%${query}%')
+                        GROUP BY t07.Field_005, t07.Field_006
                     `;
                     const sayanCustomers = await runSayanQuery(db, sql);
                     if (sayanCustomers && sayanCustomers.length > 0) {
-                        found = sayanCustomers.map(sc => ({
-                            accountCode: sc.accountCode,
-                            name: sc.name || 'مشتری سایان',
-                            balance: 0,
-                            type: 'ثبت شده در سایان ERP',
-                            updatedAt: Date.now()
-                        }));
+                        found = sayanCustomers.map(sc => {
+                            const bal = Number(sc.balance || 0);
+                            return {
+                                accountCode: sc.accountCode,
+                                name: sc.name || 'مشتری سایان',
+                                balance: Math.abs(bal),
+                                type: bal > 0 ? 'بدهکار' : (bal < 0 ? 'بستانکار' : 'بی‌حساب / تسویه شده'),
+                                rawBalance: bal,
+                                updatedAt: Date.now()
+                            };
+                        });
                     }
                 } catch (err) {
                     console.error("Sayan customer search fallback error:", err);
@@ -2494,7 +2533,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             }
 
             if (code) {
-                const rec = (db.customerBalances || []).find(b => b.accountCode === code);
+                const rawList = await getCustomerBalancesData(db);
+                const rec = rawList.find(b => b.accountCode === code);
                 
                 // Fetch statements for this accountCode
                 const statements = db.customerStatements || [];
@@ -2510,23 +2550,46 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 if (rec) {
                     const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
                     
-                    // Show last upload Shamsi time if we have lastXlsxUploadAt
-                    let displayTime = 'نامشخص';
-                    if (db.lastXlsxUploadAt) {
-                        try {
-                            displayTime = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date(db.lastXlsxUploadAt));
-                        } catch(err) {
-                            displayTime = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
-                        }
-                    } else {
-                        displayTime = new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR');
-                    }
+                    const displayTime = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date(rec.updatedAt || Date.now()));
 
-                    const msg = `👤 *مشتری گرامی:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما:* ${balanceStr} ریال (${rec.type})\n📅 زمان دریافت گزارش سیستم: ${displayTime}\n\n💬 در صورت هرگونه مغایرت، لطفاً به پشتیبانی یا واحد مالی اطلاع دهید.`;
+                    const msg = `👤 *مشتری گرامی:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما (آنلاین سایان):* ${balanceStr} ریال (${rec.type})\n📅 زمان استعلام زنده: ${displayTime}\n\n💬 در صورت هرگونه مغایرت، لطفاً به پشتیبانی یا واحد مالی اطلاع دهید.`;
                     return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
                 } else {
-                    const msg = `⚠️ *توجه!*\nکد حسابداری شما \`${code}\` است، اما رکوردی با این کد در فایل تفسیری مانده حساب‌های سیستم ثبت نگردیده است.\n\n💬 لطفا به پشتیبانی پیام دهید تا موضوع بررسی شود.`;
-                    return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
+                    // Try to query Sayan directly for this specific customer in case they have zero balance
+                    let name = 'مشتری سایان';
+                    let balanceStr = '۰';
+                    let type = 'تسویه شده';
+                    let foundAny = false;
+                    if (db.settings?.sayanApiUrl) {
+                        try {
+                            const sql = `
+                                SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
+                                       SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
+                                FROM ACT_TBL_007 t07
+                                LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
+                                WHERE t07.Field_005 = '${code}'
+                                GROUP BY t07.Field_005, t07.Field_006
+                            `;
+                            const res = await runSayanQuery(db, sql);
+                            if (res && res.length > 0) {
+                                name = res[0].name || name;
+                                const bal = Number(res[0].balance || 0);
+                                balanceStr = Math.abs(bal).toLocaleString('fa-IR');
+                                type = bal > 0 ? 'بدهکار' : (bal < 0 ? 'بستانکار' : 'تسویه شده');
+                                foundAny = true;
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    }
+                    if (foundAny) {
+                        const displayTime = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tehran' }).format(new Date());
+                        const msg = `👤 *مشتری گرامی:* ${name}\n🔢 کد حسابداری: \`${code}\`\n\n💰 *مانده حساب شما (آنلاین سایان):* ${balanceStr} ریال (${type})\n📅 زمان استعلام زنده: ${displayTime}\n\n💬 در صورت هرگونه مغایرت، لطفاً به پشتیبانی یا واحد مالی اطلاع دهید.`;
+                        return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
+                    } else {
+                        const msg = `⚠️ *توجه!*\nکد حسابداری شما \`${code}\` است، اما رکوردی با این کد در سرور حسابداری سایان یافت نشد.\n\n💬 لطفا به پشتیبانی پیام دهید تا موضوع بررسی شود.`;
+                        return sendFn(userId, msg, { reply_markup: { inline_keyboard } });
+                    }
                 }
             } else {
                 session.state = 'GUEST_SUBMIT_ACCOUNT_CODE';
@@ -3297,7 +3360,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data.startsWith('SALES_BAL_MAKE_CONFIRMATION_')) {
         const code = data.replace('SALES_BAL_MAKE_CONFIRMATION_', '');
-        const rawList = db.customerBalances || [];
+        const rawList = await getCustomerBalancesData(db);
         const rec = rawList.find(b => b.accountCode === code);
         
         if (!rec) {

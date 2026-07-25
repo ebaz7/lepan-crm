@@ -368,6 +368,9 @@ export interface PurchaseRolePermissions {
   canView?: boolean;
   canCreate?: boolean;
   canApproveTechnical?: boolean;
+  canApproveShiftLeader?: boolean;
+  canApproveWarehouseKeeper?: boolean;
+  canApproveFactoryDecision?: boolean;
   canApproveFactory?: boolean;
   canApproveCEO?: boolean;
   canManageProformas?: boolean;
@@ -1095,7 +1098,9 @@ export interface MeetingMinutes {
 export enum PurchaseRequestStatus {
     PENDING_REPAIR_INSPECTION = 'در انتظار بررسی واحد نت/تعمیرات',
     PENDING_WAREHOUSE_CHECK = 'در انتظار بررسی موجودی انبار (سرشیفت)',
-    PENDING_TECHNICAL = 'در انتظار تایید فنی',
+    PENDING_TECHNICAL = 'در انتظار تایید فنی / ثبت درخواست فنی',
+    PENDING_SHIFT_LEADER = 'در انتظار تایید سرشیفت کارخانه',
+    PENDING_WAREHOUSE_KEEPER = 'در انتظار بررسی انباردار کارخانه',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
     PENDING_FACTORY_DECISION = 'در انتظار تصمیم مدیر کارخانه (تعیین مسیر خرید)',
     PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی (محل خرید)',

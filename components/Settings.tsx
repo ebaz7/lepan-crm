@@ -180,6 +180,8 @@ const Settings: React.FC<SettingsProps> = ({
   const [importingDocxFile, setImportingDocxFile] = useState(false);
   const docxImportInputRef = useRef<HTMLInputElement>(null);
 
+  const hasInitializedRef = useRef(false);
+
   const [settings, setSettings] = useState<SystemSettings>({
     appName: "سیستم من",
     currentTrackingNumber: 1000,
@@ -537,18 +539,21 @@ const Settings: React.FC<SettingsProps> = ({
 
   useEffect(() => {
     if (propSettings) {
-      // Normalize salesNotificationUsers if it's the old format (string[])
-      const normalizedSettings = { ...propSettings };
-      if (Array.isArray(normalizedSettings.salesNotificationUsers)) {
-        normalizedSettings.salesNotificationUsers =
-          normalizedSettings.salesNotificationUsers.map((u: any) => {
-            if (typeof u === "string") {
-              return { username: u, platforms: ["telegram", "bale"] };
-            }
-            return u;
-          });
+      if (!hasInitializedRef.current) {
+        // Normalize salesNotificationUsers if it's the old format (string[])
+        const normalizedSettings = { ...propSettings };
+        if (Array.isArray(normalizedSettings.salesNotificationUsers)) {
+          normalizedSettings.salesNotificationUsers =
+            normalizedSettings.salesNotificationUsers.map((u: any) => {
+              if (typeof u === "string") {
+                return { username: u, platforms: ["telegram", "bale"] };
+              }
+              return u;
+            });
+        }
+        setSettings(normalizedSettings);
+        hasInitializedRef.current = true;
       }
-      setSettings(normalizedSettings);
     } else {
       loadSettings();
     }

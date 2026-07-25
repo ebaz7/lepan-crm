@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, SystemSettings, WarehouseItem, WarehouseTransaction, WarehouseTransactionItem, UserRole } from '../types';
 import { getWarehouseItems, saveWarehouseItem, deleteWarehouseItem, getWarehouseTransactions, saveWarehouseTransaction, deleteWarehouseTransaction, updateWarehouseTransaction, getNextBijakNumber, updateWarehouseItem } from '../services/storageService';
 import { generateUUID, getCurrentShamsiDate, jalaliToGregorian, formatNumberString, deformatNumberString, formatDate, parsePersianDate, getShamsiDateFromIso } from '../constants';
-import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar, ShieldCheck, Users, Home, List, Navigation, Send, RefreshCw } from 'lucide-react';
+import { Package, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, FileText, BarChart3, Eye, Loader2, AlertTriangle, Settings, ArrowLeftRight, Search, FileClock, Printer, FileDown, Share2, LayoutGrid, Archive, Edit, Save, X, Container, CheckCircle, XCircle, RefreshCcw, FileSpreadsheet, WifiOff, Filter, Calendar, ShieldCheck, Users, Home, List, Navigation, Send, RefreshCw, Barcode, Download, Upload } from 'lucide-react';
 import PrintBijak from './PrintBijak';
 import PrintStockReport from './print/PrintStockReport'; 
 import WarehouseKardexReport from './reports/WarehouseKardexReport';
@@ -20,7 +20,7 @@ import { isInFinancialYear } from '../utils/dateUtils';
 interface Props { 
     currentUser: User; 
     settings?: SystemSettings; 
-    initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals' | 'dispatch_report';
+    initialTab?: 'dashboard' | 'items' | 'entry' | 'exit' | 'reports' | 'stock_report' | 'archive' | 'entry_archive' | 'approvals' | 'dispatch_report' | 'stocktake';
     financialYear?: string;
 }
 
@@ -203,7 +203,286 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
     // Reports State
     const [archiveFilterCompany, setArchiveFilterCompany] = useState('');
     const [reportSearch, setReportSearch] = useState('');
-    
+
+    // Barcode scanner & Excel Import/Export States
+    const [barcodeScanInput, setBarcodeScanInput] = useState('');
+    const [barcodeScanFeedback, setBarcodeScanFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+
+    // Stocktake States
+    const [stocktakeCompany, setStocktakeCompany] = useState('');
+    const [stocktakeCounted, setStocktakeCounted] = useState<Record<string, number>>({});
+    const [stocktakeSearch, setStocktakeSearch] = useState('');
+    const [stocktakeScanCode, setStocktakeScanCode] = useState('');
+    const [stocktakeFeedback, setStocktakeFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+
+    const handleBarcodeScan = (scannedCode: string, type: 'IN' | 'OUT') => {
+        if (!scannedCode) return;
+        const cleanCode = scannedCode.trim();
+        const foundItem = items.find(i => (i.code && i.code === cleanCode) || i.id === cleanCode || i.name === cleanCode);
+        if (!foundItem) {
+            setBarcodeScanFeedback({ message: `کالایی با بارکد یا کد "${cleanCode}" یافت نشد!`, isError: true });
+            setTimeout(() => setBarcodeScanFeedback(null), 4000);
+            return;
+        }
+
+        // Check if already in txItems
+        const existingIdx = txItems.findIndex(i => i.itemId === foundItem.id);
+        if (existingIdx > -1) {
+            const newItems = [...txItems];
+            newItems[existingIdx].quantity = (Number(newItems[existingIdx].quantity) || 0) + 1;
+            setTxItems(newItems);
+            setBarcodeScanFeedback({ message: `تعداد کالای "${foundItem.name}" افزایش یافت (تعداد جدید: ${newItems[existingIdx].quantity})`, isError: false });
+        } else {
+            // Check if the first row is empty
+            if (txItems.length === 1 && !txItems[0].itemId) {
+                const newItems = [...txItems];
+                newItems[0] = { itemId: foundItem.id, itemName: foundItem.name, quantity: 1, weight: 0, unitPrice: 0 };
+                setTxItems(newItems);
+            } else {
+                setTxItems([...txItems, { itemId: foundItem.id, itemName: foundItem.name, quantity: 1, weight: 0, unitPrice: 0 }]);
+            }
+            setBarcodeScanFeedback({ message: `کالای "${foundItem.name}" با موفقیت اضافه شد.`, isError: false });
+        }
+        setTimeout(() => setBarcodeScanFeedback(null), 4000);
+    };
+
+    const handleImportItemsExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const parsedRows = XLSX.utils.sheet_to_json(ws) as any[];
+
+                if (!parsedRows || parsedRows.length === 0) {
+                    alert('فایل اکسل خالی است یا قالب آن معتبر نیست.');
+                    return;
+                }
+
+                const newTxItems: Partial<WarehouseTransactionItem>[] = [];
+                for (const row of parsedRows) {
+                    const rowCode = String(row['کد کالا'] || row['بارکد'] || row['code'] || row['barcode'] || '').trim();
+                    const rowName = String(row['نام کالا'] || row['نام'] || row['name'] || '').trim();
+                    const rowQty = Number(row['تعداد'] || row['مقدار'] || row['quantity'] || row['qty'] || 1);
+                    const rowWeight = Number(row['وزن'] || row['weight'] || 0);
+                    const rowPrice = Number(row['قیمت'] || row['فی'] || row['unitPrice'] || row['price'] || 0);
+
+                    const item = items.find(i => (rowCode && i.code === rowCode) || (rowName && i.name === rowName));
+                    if (item) {
+                        newTxItems.push({
+                            itemId: item.id,
+                            itemName: item.name,
+                            quantity: rowQty,
+                            weight: rowWeight,
+                            unitPrice: rowPrice
+                        });
+                    }
+                }
+
+                if (newTxItems.length === 0) {
+                    alert('هیچ کالایی متناظر با اطلاعات اکسل در سیستم پیدا نشد. لطفاً مطمئن شوید کد کالا یا نام کالا با سیستم همخوانی دارد.');
+                } else {
+                    setTxItems(newTxItems);
+                    alert(`${newTxItems.length} ردیف کالا با موفقیت از فایل اکسل بارگذاری شد.`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('خطا در پردازش فایل اکسل.');
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleDownloadTemplateExcel = () => {
+        const sampleData = [
+            { 'کد کالا': '101', 'نام کالا': 'کارتن سایز ۱', 'تعداد': 100, 'وزن': 10, 'قیمت': 150000 },
+            { 'کد کالا': '102', 'نام کالا': 'رول نایلون حبابدار', 'تعداد': 5, 'وزن': 50, 'قیمت': 2400000 },
+        ];
+        const ws = XLSX.utils.json_to_sheet(sampleData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "اقلام انبار");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveBlobAndOpenFile(blob, "Sample_Warehouse_Items.xlsx");
+    };
+
+    const getSystemStockForCompany = (company: string, itemId: string) => {
+        let qty = 0;
+        allTransactions
+            .filter(tx => tx.company === company && tx.status !== 'REJECTED')
+            .forEach(tx => {
+                tx.items.forEach(txItem => {
+                    if (txItem.itemId === itemId) {
+                        if (tx.type === 'IN') qty += txItem.quantity;
+                        else qty -= txItem.quantity;
+                    }
+                });
+            });
+        return qty;
+    };
+
+    const handleStocktakeBarcodeScan = (scannedCode: string) => {
+        if (!scannedCode) return;
+        const cleanCode = scannedCode.trim();
+        const foundItem = items.find(i => (i.code && i.code === cleanCode) || i.id === cleanCode || i.name === cleanCode);
+        if (!foundItem) {
+            setStocktakeFeedback({ message: `کالایی با بارکد یا کد "${cleanCode}" یافت نشد!`, isError: true });
+            setTimeout(() => setStocktakeFeedback(null), 4000);
+            return;
+        }
+        setStocktakeCounted(prev => {
+            const current = prev[foundItem.id] || 0;
+            return { ...prev, [foundItem.id]: current + 1 };
+        });
+        setStocktakeFeedback({ message: `کالای "${foundItem.name}" اسکن شد (شمارش فعلی: ${(stocktakeCounted[foundItem.id] || 0) + 1})`, isError: false });
+        setTimeout(() => setStocktakeFeedback(null), 4000);
+    };
+
+    const handleImportStocktakeExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const parsedRows = XLSX.utils.sheet_to_json(ws) as any[];
+
+                if (!parsedRows || parsedRows.length === 0) {
+                    alert('فایل اکسل خالی است یا قالب آن معتبر نیست.');
+                    return;
+                }
+
+                const newCounted = { ...stocktakeCounted };
+                let count = 0;
+                for (const row of parsedRows) {
+                    const rowCode = String(row['کد کالا'] || row['بارکد'] || row['code'] || row['barcode'] || '').trim();
+                    const rowName = String(row['نام کالا'] || row['نام'] || row['name'] || '').trim();
+                    const rowQty = Number(row['تعداد شمارش شده'] || row['تعداد'] || row['مقدار'] || row['counted_qty'] || row['quantity'] || 0);
+
+                    const item = items.find(i => (rowCode && i.code === rowCode) || (rowName && i.name === rowName));
+                    if (item) {
+                        newCounted[item.id] = rowQty;
+                        count++;
+                    }
+                }
+
+                setStocktakeCounted(newCounted);
+                alert(`${count} قلم کالا با موفقیت از فایل شمارش انبارگردانی اکسل بارگذاری شد.`);
+            } catch (err) {
+                console.error(err);
+                alert('خطا در پردازش فایل اکسل.');
+            }
+        };
+        reader.readAsBinaryString(file);
+    };
+
+    const handleExportStocktakeExcel = () => {
+        if (!stocktakeCompany) return;
+        const reportData = items.map(i => {
+            const systemQty = getSystemStockForCompany(stocktakeCompany, i.id);
+            const countedQty = stocktakeCounted[i.id] || 0;
+            const diff = countedQty - systemQty;
+            return {
+                'کد کالا': i.code || '',
+                'نام کالا': i.name,
+                'واحد سنجش': i.unit,
+                'موجودی سیستم': systemQty,
+                'موجودی شمارش شده': countedQty,
+                'مغایرت': diff,
+                'وضعیت': diff === 0 ? 'منطبق' : (diff > 0 ? 'سرک (اضافی)' : 'کسری')
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(reportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "گزارش انبارگردانی");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveBlobAndOpenFile(blob, `Stocktake_${stocktakeCompany}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
+    const handleApplyStocktake = async () => {
+        if (!stocktakeCompany) { alert('لطفاً ابتدا شرکت مورد نظر را انتخاب کنید.'); return; }
+        if (!confirm(`آیا از اعمال مغایرت‌ها و به‌روزرسانی موجودی سیستم برای شرکت "${stocktakeCompany}" اطمینان دارید؟`)) return;
+
+        let surplusItems: WarehouseTransactionItem[] = [];
+        let deficitItems: WarehouseTransactionItem[] = [];
+
+        items.forEach(i => {
+            const systemQty = getSystemStockForCompany(stocktakeCompany, i.id);
+            const countedQty = stocktakeCounted[i.id] || 0;
+            const diff = countedQty - systemQty;
+
+            if (diff > 0) {
+                surplusItems.push({ itemId: i.id, itemName: i.name, quantity: diff, weight: 0, unitPrice: 0 });
+            } else if (diff < 0) {
+                deficitItems.push({ itemId: i.id, itemName: i.name, quantity: Math.abs(diff), weight: 0, unitPrice: 0 });
+            }
+        });
+
+        if (surplusItems.length === 0 && deficitItems.length === 0) {
+            alert('هیچ مغایرتی بین موجودی سیستمی و موجودی شمارش شده وجود ندارد. نیاز به ثبت سند اصلاحی نیست.');
+            return;
+        }
+
+        try {
+            if (surplusItems.length > 0) {
+                const txSurplus: WarehouseTransaction = {
+                    id: generateUUID(),
+                    type: 'IN',
+                    date: getIsoDate(),
+                    company: stocktakeCompany,
+                    number: 0,
+                    items: surplusItems,
+                    createdAt: Date.now(),
+                    createdBy: currentUser.fullName,
+                    proformaNumber: 'اصلاحیه انبارگردانی - سرک (اضافی)'
+                };
+                await saveWarehouseTransaction(txSurplus);
+            }
+
+            if (deficitItems.length > 0) {
+                let nextNum = 0;
+                try {
+                    const res = await apiCall<{ nextNumber: number }>(`/next-bijak-number?company=${encodeURIComponent(stocktakeCompany)}`);
+                    if (res && res.nextNumber) nextNum = res.nextNumber;
+                } catch (e) {}
+
+                const txDeficit: WarehouseTransaction = {
+                    id: generateUUID(),
+                    type: 'OUT',
+                    date: getIsoDate(),
+                    company: stocktakeCompany,
+                    number: nextNum,
+                    items: deficitItems,
+                    createdAt: Date.now(),
+                    createdBy: currentUser.fullName,
+                    destination: 'اصلاحیه انبارگردانی - کسری',
+                    status: 'APPROVED'
+                };
+                await saveWarehouseTransaction(txDeficit);
+            }
+
+            await loadData();
+            alert('عملیات انبارگردانی با موفقیت نهایی و اسناد تعدیل موجودی ثبت گردید.');
+            setStocktakeCompany('');
+            setStocktakeCounted({});
+            setActiveTab('stock_report');
+        } catch (e) {
+            console.error(e);
+            alert('خطا در ثبت اسناد اصلاحی انبارگردانی.');
+        }
+    };
+
     // Print Report State
     const [showPrintStockReport, setShowPrintStockReport] = useState(false); 
 
@@ -788,6 +1067,7 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                     { id: 'archive', label: 'بیجک‌ها', color: 'gray' },
                     { id: 'approvals', label: 'تاییدیه', color: 'orange' },
                     { id: 'reports', label: 'کاردکس', color: 'purple' },
+                    { id: 'stocktake', label: 'انبارگردانی', color: 'indigo' },
                     { id: 'dispatch_report', label: 'گزارش بیجک‌ها', color: 'red' },
                     { id: 'stock_report', label: 'موجودی', color: 'orange' }
                 ].map(tab => (
@@ -1057,6 +1337,54 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         </div>
 
                         <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-sm mb-10 overflow-hidden">
+                            {/* Barcode and Excel Row */}
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-3xl mb-6 border border-gray-100 dark:border-white/5">
+                                <div className="w-full md:w-1/2 flex items-center gap-2">
+                                    <Barcode className="text-emerald-600 shrink-0" size={24}/>
+                                    <input 
+                                        type="text" 
+                                        placeholder="اسکن سریع با بارکدخوان..." 
+                                        value={barcodeScanInput} 
+                                        onChange={e => setBarcodeScanInput(e.target.value)} 
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleBarcodeScan(barcodeScanInput, 'IN');
+                                                setBarcodeScanInput('');
+                                            }
+                                        }}
+                                        className="w-full bg-white dark:bg-gray-800 border-2 border-emerald-100 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-emerald-500"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <button 
+                                        type="button"
+                                        onClick={handleDownloadTemplateExcel}
+                                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/10 px-3 py-2 rounded-xl text-[10px] font-black flex items-center gap-1"
+                                    >
+                                        <Download size={14}/> دریافت نمونه اکسل
+                                    </button>
+                                    <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/10 px-3 py-2 rounded-xl text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                                        <Upload size={14}/> بارگذاری اقلام از اکسل
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx, .xls" 
+                                            className="hidden" 
+                                            onChange={e => {
+                                                handleImportItemsExcel(e);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
+                            {barcodeScanFeedback && (
+                                <div className={`p-3 rounded-2xl text-center mb-4 text-xs font-black ${barcodeScanFeedback.isError ? 'bg-red-50 text-red-600 border border-red-200 animate-pulse' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                                    {barcodeScanFeedback.message}
+                                </div>
+                            )}
+
                             <h4 className="text-xs font-black text-gray-400 mb-6 flex items-center gap-2"><List size={14}/> اقلام رسید</h4>
                             <div className="space-y-6">
                                 {txItems.map((row, idx) => (
@@ -1159,6 +1487,54 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                         </div>
 
                         <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-sm mb-12">
+                            {/* Barcode and Excel Row */}
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-3xl mb-6 border border-gray-100 dark:border-white/5">
+                                <div className="w-full md:w-1/2 flex items-center gap-2">
+                                    <Barcode className="text-rose-600 shrink-0" size={24}/>
+                                    <input 
+                                        type="text" 
+                                        placeholder="اسکن سریع با بارکدخوان..." 
+                                        value={barcodeScanInput} 
+                                        onChange={e => setBarcodeScanInput(e.target.value)} 
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleBarcodeScan(barcodeScanInput, 'OUT');
+                                                setBarcodeScanInput('');
+                                            }
+                                        }}
+                                        className="w-full bg-white dark:bg-gray-800 border-2 border-rose-100 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-rose-500"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <button 
+                                        type="button"
+                                        onClick={handleDownloadTemplateExcel}
+                                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/10 px-3 py-2 rounded-xl text-[10px] font-black flex items-center gap-1"
+                                    >
+                                        <Download size={14}/> دریافت نمونه اکسل
+                                    </button>
+                                    <label className="bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/10 px-3 py-2 rounded-xl text-[10px] font-black flex items-center gap-1 cursor-pointer">
+                                        <Upload size={14}/> بارگذاری اقلام از اکسل
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx, .xls" 
+                                            className="hidden" 
+                                            onChange={e => {
+                                                handleImportItemsExcel(e);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
+                            {barcodeScanFeedback && (
+                                <div className={`p-3 rounded-2xl text-center mb-4 text-xs font-black ${barcodeScanFeedback.isError ? 'bg-red-50 text-red-600 border border-red-200 animate-pulse' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
+                                    {barcodeScanFeedback.message}
+                                </div>
+                            )}
+
                             <h4 className="text-[10px] font-black text-gray-400 mb-5 flex items-center gap-2 uppercase tracking-[0.2em] px-4"><List size={14} className="text-rose-500"/> جزییات اقلام خروج</h4>
                             <div className="space-y-6">
                                 {txItems.map((row, idx) => (
@@ -1323,6 +1699,210 @@ const WarehouseModule: React.FC<Props> = ({ currentUser, settings, initialTab = 
                             companies={companyList} 
                             financialYear={financialYear}
                         />
+                    </div>
+                )}
+
+                {/* STOCKTAKE TAB */}
+                {activeTab === 'stocktake' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 pb-20 max-w-6xl mx-auto">
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-3xl border border-indigo-200 dark:border-indigo-800 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-100 dark:bg-indigo-800/30 rounded-full -translate-y-12 translate-x-12 blur-2xl"></div>
+                            <div>
+                                <h3 className="font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-2 relative z-10"><Barcode size={24}/> انبارگردانی اصولی با بارکدخوان</h3>
+                                <p className="text-xs font-bold text-indigo-600/70 mr-8 relative z-10">مقایسه موجودی شمارش شده انبار با موجودی سیستمی و صدور اسناد اصلاحی خودکار</p>
+                            </div>
+                            <div className="flex gap-2 relative z-10 w-full sm:w-auto">
+                                <select 
+                                    className="border-2 border-indigo-200 dark:border-indigo-800 rounded-xl p-2.5 bg-white dark:bg-gray-800 font-bold text-xs"
+                                    value={stocktakeCompany}
+                                    onChange={e => {
+                                        setStocktakeCompany(e.target.value);
+                                        setStocktakeCounted({});
+                                    }}
+                                >
+                                    <option value="">انتخاب شرکت برای انبارگردانی...</option>
+                                    {companyList.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        {stocktakeCompany ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Left Scanning and Controls Column */}
+                                <div className="lg:col-span-1 space-y-6">
+                                    <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2rem] border border-gray-200 dark:border-white/10 shadow-sm">
+                                        <h4 className="text-xs font-black text-indigo-600 mb-4 flex items-center gap-1.5"><Barcode size={18}/> اسکن بارکد کالاها</h4>
+                                        <div className="space-y-4">
+                                            <div className="relative">
+                                                <input 
+                                                    type="text"
+                                                    placeholder="بارکد کالا را اسکن کنید..."
+                                                    value={stocktakeScanCode}
+                                                    onChange={e => setStocktakeScanCode(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handleStocktakeBarcodeScan(stocktakeScanCode);
+                                                            setStocktakeScanCode('');
+                                                        }
+                                                    }}
+                                                    className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-indigo-100 rounded-2xl p-4 text-xs font-black outline-none focus:border-indigo-500 pl-10"
+                                                    autoFocus
+                                                />
+                                                <div className="absolute left-3 top-3.5 text-gray-400">
+                                                    <Barcode size={20}/>
+                                                </div>
+                                            </div>
+
+                                            {stocktakeFeedback && (
+                                                <div className={`p-3 rounded-xl text-center text-[11px] font-black ${stocktakeFeedback.isError ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                                                    {stocktakeFeedback.message}
+                                                </div>
+                                            )}
+
+                                            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-dashed border-indigo-100 dark:border-indigo-900">
+                                                <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 leading-relaxed">
+                                                    💡 برای انبارگردانی سریع، بارکدخوان خود را روی حالت Enter قرار دهید. با هر بار اسکن، یک واحد به تعداد شمارش شده کالا اضافه خواهد شد.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2rem] border border-gray-200 dark:border-white/10 shadow-sm space-y-3">
+                                        <h4 className="text-xs font-black text-gray-700 dark:text-gray-300 mb-2">عملیات گروهی انبارگردانی</h4>
+                                        
+                                        <label className="w-full py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl text-xs font-black text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                                            <Upload size={16}/> بارگذاری شمارش اکسل
+                                            <input 
+                                                type="file" 
+                                                accept=".xlsx, .xls" 
+                                                className="hidden" 
+                                                onChange={e => {
+                                                    handleImportStocktakeExcel(e);
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                        </label>
+
+                                        <button 
+                                            onClick={handleExportStocktakeExcel}
+                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-600/10"
+                                        >
+                                            <FileSpreadsheet size={16}/> خروجی مغایرت اکسل
+                                        </button>
+
+                                        <button 
+                                            onClick={handleApplyStocktake}
+                                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-600/20"
+                                        >
+                                            <CheckCircle size={16}/> ثبت نهایی و اعمال تعدیلات
+                                        </button>
+
+                                        <button 
+                                            onClick={() => {
+                                                if (confirm('آیا مایل به ریست کردن تمام تعداد شمارش شده هستید؟')) {
+                                                    setStocktakeCounted({});
+                                                }
+                                            }}
+                                            className="w-full py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-colors"
+                                        >
+                                            <Trash2 size={14}/> ریست شمارش‌ها
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Right Comparison Grid Column */}
+                                <div className="lg:col-span-2 space-y-4">
+                                    <div className="bg-white dark:bg-gray-900/40 p-5 rounded-[2rem] border border-gray-200 dark:border-white/10 shadow-sm h-full flex flex-col">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                                            <h4 className="text-sm font-black text-gray-800 dark:text-white flex items-center gap-1.5"><List size={18}/> جدول مقایسه و مغایرت‌گیری</h4>
+                                            <input 
+                                                type="text"
+                                                placeholder="جستجو در اقلام..."
+                                                value={stocktakeSearch}
+                                                onChange={e => setStocktakeSearch(e.target.value)}
+                                                className="bg-gray-50 dark:bg-gray-800 border rounded-xl px-3 py-1.5 text-xs font-bold outline-none"
+                                            />
+                                        </div>
+
+                                        <div className="overflow-x-auto flex-1 max-h-[500px] overflow-y-auto">
+                                            <table className="w-full text-xs text-center">
+                                                <thead className="bg-gray-100 dark:bg-black/30 text-gray-600 dark:text-gray-400 sticky top-0 z-10">
+                                                    <tr>
+                                                        <th className="p-3 text-right">کد / نام کالا</th>
+                                                        <th className="p-3">سیستم</th>
+                                                        <th className="p-3">شمارش دستی</th>
+                                                        <th className="p-3">مغایرت</th>
+                                                        <th className="p-3">وضعیت</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                                                    {items
+                                                        .filter(i => !stocktakeSearch || i.name.includes(stocktakeSearch) || (i.code && i.code.includes(stocktakeSearch)))
+                                                        .map(i => {
+                                                            const systemQty = getSystemStockForCompany(stocktakeCompany, i.id);
+                                                            const countedQty = stocktakeCounted[i.id] || 0;
+                                                            const diff = countedQty - systemQty;
+
+                                                            return (
+                                                                <tr key={i.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                                                                    <td className="p-3 text-right">
+                                                                        <div className="font-black text-gray-800 dark:text-gray-200 text-xs">{i.name}</div>
+                                                                        <div className="text-[10px] text-gray-400 font-mono mt-0.5">{i.code || 'فاقد کد'} • {i.unit}</div>
+                                                                    </td>
+                                                                    <td className="p-3 font-mono font-black text-blue-600 text-sm">
+                                                                        {formatNumberString(systemQty)}
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        <input 
+                                                                            type="number" 
+                                                                            value={countedQty || ''}
+                                                                            placeholder="0"
+                                                                            onChange={e => {
+                                                                                const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                                                setStocktakeCounted(prev => ({ ...prev, [i.id]: val }));
+                                                                            }}
+                                                                            className="w-20 border rounded-lg px-2 py-1 text-center font-mono font-black bg-white dark:bg-gray-800"
+                                                                        />
+                                                                    </td>
+                                                                    <td className={`p-3 font-mono font-black text-sm ${diff === 0 ? 'text-gray-500' : diff > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                        {diff > 0 ? `+${formatNumberString(diff)}` : formatNumberString(diff)}
+                                                                    </td>
+                                                                    <td className="p-3">
+                                                                        {diff === 0 ? (
+                                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-md font-bold text-[10px]">منطبق</span>
+                                                                        ) : diff > 0 ? (
+                                                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-md font-bold text-[10px]">سرک ({formatNumberString(diff)})</span>
+                                                                        ) : (
+                                                                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400 rounded-md font-bold text-[10px]">کسری ({formatNumberString(Math.abs(diff))})</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white dark:bg-gray-900/40 p-12 rounded-[2.5rem] border border-gray-200 dark:border-white/10 shadow-sm text-center">
+                                <Barcode className="mx-auto text-gray-300 dark:text-gray-600 mb-4 animate-pulse" size={48}/>
+                                <h4 className="font-black text-gray-700 dark:text-gray-300 mb-2">شروع فرایند انبارگردانی</h4>
+                                <p className="text-xs text-gray-400 max-w-md mx-auto mb-6">برای مقایسه موجودی واقعی انبار با موجودی ثبت شده در سیستم، ابتدا شرکت فرستنده یا مالک کالا را از منوی بالا انتخاب کنید.</p>
+                                <div className="inline-block">
+                                    <select 
+                                        className="border-2 border-indigo-100 rounded-2xl p-4 bg-white dark:bg-gray-800 font-bold text-sm"
+                                        value={stocktakeCompany}
+                                        onChange={e => setStocktakeCompany(e.target.value)}
+                                    >
+                                        <option value="">انتخاب شرکت...</option>
+                                        {companyList.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

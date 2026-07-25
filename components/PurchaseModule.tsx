@@ -216,7 +216,11 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 
 // --- BPMN WORKFLOW DIAGRAM COMPONENT ---
 const BpmnWorkflowDiagram: React.FC<{ currentStatus?: PurchaseRequestStatus; location?: string }> = ({ currentStatus, location }) => {
-    const isStepActive = (status: PurchaseRequestStatus) => currentStatus === status;
+    const isStepActive = (status: PurchaseRequestStatus) => {
+        if (currentStatus === status) return true;
+        if (status === PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER && currentStatus === PurchaseRequestStatus.PENDING_FACTORY) return true;
+        return false;
+    };
 
     // Grouping steps into logical phases to be extremely precise and compact
     const phases = [
@@ -224,7 +228,8 @@ const BpmnWorkflowDiagram: React.FC<{ currentStatus?: PurchaseRequestStatus; loc
             title: '۱. بررسی اولیه',
             steps: [
                 { status: PurchaseRequestStatus.PENDING_TECHNICAL, title: 'تایید فنی نت', role: 'واحد نت' },
-                { status: PurchaseRequestStatus.PENDING_FACTORY, title: 'موجودی انبار', role: 'انباردار/سرشیفت' },
+                { status: PurchaseRequestStatus.PENDING_SHIFT_LEADER, title: 'تایید سرشیفت', role: 'سرشیفت کارخانه' },
+                { status: PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER, title: 'بررسی موجودی', role: 'انباردار کارخانه' },
                 { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, title: 'تایید مسیر تامین', role: 'مدیر کارخانه' },
             ]
         },
@@ -335,8 +340,11 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
         
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
-            case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER);
+            case PurchaseRequestStatus.PENDING_SHIFT_LEADER: return hasPurchasePerm('canApproveShiftLeader');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER:
+            case PurchaseRequestStatus.PENDING_FACTORY:
+                return hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER);
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canApproveFactoryDecision') || hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER);
             
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
@@ -882,8 +890,9 @@ const ReturnModal = ({ onClose, onConfirm, currentStatus }: { onClose: () => voi
     const [targetStage, setTargetStage] = useState<PurchaseRequestStatus>(PurchaseRequestStatus.PENDING_TECHNICAL);
 
     const availableStages = [
-        { status: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'مرحله ۱: کارشناسی و نت کارخانه' },
-        { status: PurchaseRequestStatus.PENDING_FACTORY, label: 'مرحله ۲: استعلام موجودی انبار' },
+        { status: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'مرحله ۱: بررسی و تایید فنی نت' },
+        { status: PurchaseRequestStatus.PENDING_SHIFT_LEADER, label: 'مرحله ۱.۵: تایید سرشیفت کارخانه' },
+        { status: PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER, label: 'مرحله ۲: بررسی موجودی انباردار کارخانه' },
         { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'مرحله ۳: تصمیم‌گیری مسیر خرید' },
         { status: PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, label: 'مرحله استعلام / ثبت پروفرما' },
         { status: PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER, label: 'مرحله بررسی مدیر بازرگانی' },
@@ -1525,16 +1534,21 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
 
                         {/* Stage 1: Technical & Repair Inspection */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && (isAdmin || hasPurchasePerm('canApproveTechnical')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY, {}, 'تایید فنی و ارجاع به انبار')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 text-xs" disabled={actionLoading}>تایید فنی و ارسال به انبار کارخانه</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_SHIFT_LEADER, {}, 'تایید فنی و ارجاع به سرشیفت')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 text-xs" disabled={actionLoading}>تایید فنی و ارسال به سرشیفت کارخانه</button>
+                        )}
+
+                        {/* Stage 1.5: Shift Leader Approval */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_SHIFT_LEADER) && (isAdmin || hasPurchasePerm('canApproveShiftLeader')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER, {}, 'تایید سرشیفت و ارجاع به انباردار')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg transition-all hover:scale-105 text-xs" disabled={actionLoading}>تایید سرشیفت و ارسال به انباردار کارخانه</button>
                         )}
                         
                         {/* Stage 2: Warehouse Stock Check */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER)) && (
-                            <button onClick={() => setShowWarehouseCheckModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 text-xs shadow-lg" disabled={actionLoading}>بررسی موجودی انبار (سرشیفت / انباردار)</button>
+                        {(isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) || isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER)) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER)) && (
+                            <button onClick={() => setShowWarehouseCheckModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 text-xs shadow-lg" disabled={actionLoading}>بررسی موجودی انبار (انباردار کارخانه)</button>
                         )}
 
                         {/* Stage 3: Factory Manager Branch Selection */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER)) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactoryDecision')) && (
                             <button onClick={() => setShowFactoryBranchModal(true)} className="bg-amber-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-amber-100 text-xs hover:scale-105 transition-all" disabled={actionLoading}>تعیین و تایید مسیر تامین (مدیر کارخانه)</button>
                         )}
 
