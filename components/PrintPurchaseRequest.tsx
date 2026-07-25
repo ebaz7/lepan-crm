@@ -6,6 +6,27 @@ interface Props {
     request: PurchaseRequest;
 }
 
+const BarcodeSvg: React.FC<{ value: string }> = ({ value }) => {
+    const s = value || 'PR-0000';
+    const lines: boolean[] = [];
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        for (let j = 0; j < 8; j++) {
+            lines.push(((code >> j) & 1) === 1);
+        }
+    }
+    return (
+        <div className="flex flex-col items-center justify-center p-1 bg-white border border-black">
+            <div className="flex items-stretch h-6 px-1 gap-[1px] bg-white">
+                {lines.slice(0, 42).map((isBlack, idx) => (
+                    <div key={idx} className={`w-[2px] h-full ${isBlack ? 'bg-black' : 'bg-transparent'}`} />
+                ))}
+            </div>
+            <span className="text-[8px] font-mono tracking-widest font-bold mt-0.5 text-black uppercase">{s.slice(0, 16)}</span>
+        </div>
+    );
+};
+
 const PrintPurchaseRequest: React.FC<Props> = ({ request }) => {
     const itemsList = request.items && request.items.length > 0 ? request.items : [
         {
@@ -22,24 +43,22 @@ const PrintPurchaseRequest: React.FC<Props> = ({ request }) => {
     return (
         <div className="bg-white p-6 w-full h-full text-black print-only-section font-serif" dir="rtl" style={{ direction: 'rtl' }}>
             <div className="border-4 border-double border-black p-4 mb-4 flex justify-between items-center text-center bg-gray-50/50">
-                <div className="w-1/3 text-right">
+                <div className="w-1/3 text-right space-y-1">
                     <p className="text-[12px] font-bold">شماره درخواست: <span className="font-mono">{request.requestNumber}</span></p>
                     <p className="text-[12px] font-bold">تاریخ: {formatDate(request.date)}</p>
                     {request.repairRequestNumber && (
                         <p className="text-[11px] font-bold text-gray-700">کد درخواست تعمیر/نت: {request.repairRequestNumber}</p>
                     )}
                 </div>
-                <div className="w-1/3">
+                <div className="w-1/3 flex flex-col items-center">
                     <h2 className="text-xl font-black border-b-2 border-black inline-block pb-1">فرم درخواست خرید قطعه / کالا (BPMN)</h2>
                     <p className="text-[10px] font-bold mt-1">سامانه جامع تدارکات و بازرگانی کارخانه</p>
                 </div>
-                <div className="w-1/3 text-left flex flex-col items-end">
-                     <div className="border-2 border-black p-2 font-black text-xs inline-block mb-1">
+                <div className="w-1/3 text-left flex flex-col items-end gap-1">
+                    <BarcodeSvg value={`PR-${request.requestNumber}`} />
+                    <div className="border-2 border-black px-2 py-0.5 font-black text-xs inline-block">
                         فوریت: <span className={request.urgency === 'اضطراری' ? 'text-red-600 underline' : ''}>{request.urgency || 'عادی'}</span>
                     </div>
-                    {request.location && (
-                        <span className="text-[10px] font-bold border border-black px-2 py-0.5">مسیر: {request.location === 'Tehran' ? 'خرید از تهران' : 'خرید از زنجان/کارخانه'}</span>
-                    )}
                 </div>
             </div>
 

@@ -1236,8 +1236,19 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             let totals = { qty_61: 0, qty_67: 0, qty_79: 0, qty_73: 0, grandTotal: 0 };
             let wasteData: any = null;
 
+            const normalizeDate = (str: string) => {
+                if (!str) return '';
+                return String(str).trim()
+                    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+                    .replace(/-/g, '/');
+            };
+
+            const cleanDateFrom = normalizeDate(dateFrom);
+            const cleanDateTo = normalizeDate(dateTo) || cleanDateFrom;
+
             try {
-                const url = `/api/sayan/production-report?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
+                const url = `/api/sayan/production-report?dateFrom=${encodeURIComponent(cleanDateFrom)}&dateTo=${encodeURIComponent(cleanDateTo)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 if (data.success) {
@@ -1251,10 +1262,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
             // Direct sayan-proxy query fallback if backend endpoint returned no items or couldn't reach Sayan
             if (items.length === 0) {
-                const gregFrom = jalaliToGregorianStr(dateFrom);
-                const gregTo = jalaliToGregorianStr(dateTo);
-                const cleanDateFrom = dateFrom.replace(/-/g, '/');
-                const cleanDateTo = dateTo.replace(/-/g, '/');
+                const gregFrom = jalaliToGregorianStr(cleanDateFrom);
+                const gregTo = jalaliToGregorianStr(cleanDateTo);
 
                 const sql = `
                     SELECT 
@@ -1262,20 +1271,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t10.Field_008 as Date,
                         RTRIM(LTRIM(t10.Field_009)) as DocType,
                         t11.Field_005 as ItemCode,
-                        COALESCE(t22.Field_004, t11.Field_005) as ItemName,
+                        COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام') as ItemName,
                         t11.Field_006 as Quantity
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON (t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004) OR (t11.Field_004 = t10.Field_001)
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
                     WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
-                      AND (
-                           (t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.999Z')
-                        OR (t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo} 23:59:59')
-                        OR (t10.Field_008 >= '${cleanDateFrom}' AND t10.Field_008 <= '${cleanDateTo}')
-                        OR (LEFT(t10.Field_008, 10) >= '${gregFrom}' AND LEFT(t10.Field_008, 10) <= '${gregTo}')
-                        OR (LEFT(t10.Field_008, 10) >= '${cleanDateFrom}' AND LEFT(t10.Field_008, 10) <= '${cleanDateTo}')
-                      )
-                    ORDER BY COALESCE(t22.Field_004, t11.Field_005), t10.Field_008
+                      AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                      AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'
+                    ORDER BY COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
                 `;
                 
                 const rawRows = await runSayanQuery(sql);

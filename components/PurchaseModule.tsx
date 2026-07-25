@@ -28,6 +28,7 @@ import PrintPurchaseRequest from './PrintPurchaseRequest';
 import PrintPurchaseProforma from './PrintPurchaseProforma';
 import PrintWarehouseReceipt from './PrintWarehouseReceipt';
 import PrintPartDataSheet from './PrintPartDataSheet';
+import PrintPurchaseBarcode from './PrintPurchaseBarcode';
 import { generatePdf } from '../utils/pdfGenerator';
 import { getRolePermissions } from '../services/authService';
 
@@ -1239,7 +1240,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
     const [showTechnicalApprovalModal, setShowTechnicalApprovalModal] = useState(false);
     const [showPurchasingAgentModal, setShowPurchasingAgentModal] = useState(false);
     const [printingProforma, setPrintingProforma] = useState<PurchaseProforma | null>(null);
-    const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT'>('REQUEST');
+    const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT' | 'BARCODE'>('REQUEST');
 
     const handleAction = async (nextStatus: PurchaseRequestStatus, extra: any = {}, actionLabel?: string) => {
         setActionLoading(true);
@@ -1632,6 +1633,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                             </button>
                             <div className="absolute bottom-full mb-2 left-0 w-48 bg-white rounded-2xl shadow-2xl border border-gray-200 p-2 hidden group-hover:block animate-in slide-in-from-bottom-2 fade-in">
                                 <button onClick={() => { setPrintType('REQUEST'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ درخواست اولیه (A5)</button>
+                                <button onClick={() => { setPrintType('BARCODE'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1 text-indigo-700 font-black">چاپ برچسب بارکد (Barcode)</button>
                                 {request.proformas.find(p => p.isChosen) && (
                                     <button onClick={() => { setPrintType('PROFORMA'); setTimeout(() => window.print(), 300); }} className="w-full text-right p-2 hover:bg-gray-50 rounded-lg text-[10px] font-bold border-b mb-1">چاپ پیش‌فاکتور منتخب (A5)</button>
                                 )}
@@ -1647,6 +1649,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 <div className="print-render-wrapper opacity-0 pointer-events-none absolute -z-50 overflow-hidden h-0 w-0" aria-hidden="true">
                     <div id="print-purchase-request-section">
                         {printType === 'REQUEST' && <PrintPurchaseRequest request={request} />}
+                        {printType === 'BARCODE' && <PrintPurchaseBarcode request={request} />}
                         {printType === 'PROFORMA' && <PrintPurchaseProforma request={request} proforma={request.proformas.find(p => p.isChosen) || request.proformas[0]} />}
                         {printType === 'RECEIPT' && <PrintWarehouseReceipt request={request} />}
                     </div>

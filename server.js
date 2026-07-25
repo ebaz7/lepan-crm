@@ -20,7 +20,7 @@ import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
 import mammoth from 'mammoth';
 import { GoogleGenAI, Type } from '@google/genai';
-import jalaali from 'jalaali-js';
+import * as jalaali from 'jalaali-js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -1266,7 +1266,65 @@ app.get('/api/purchase-requests', (req, res) => res.json(getDb().purchaseRequest
 app.post('/api/purchase-requests', (req, res) => { 
     const db = getDb(); 
     if(!db.purchaseRequests) db.purchaseRequests=[]; 
-    db.purchaseRequests.unshift(req.body); 
+    const newReq = req.body;
+    db.purchaseRequests.unshift(newReq); 
+
+    // Kardex sync on creation if delivered directly from warehouse
+    if (newReq.status === 'تحویل شده از انبار (تکمیل بدون خرید)' || newReq.isDeliveredFromWarehouse) {
+        if (!db.partMasterData) db.partMasterData = [];
+        if (!db.partKardex) db.partKardex = [];
+        const items = newReq.items && newReq.items.length > 0 ? newReq.items : [{
+            partId: newReq.partId,
+            itemName: newReq.itemName,
+            quantity: newReq.quantity,
+            unit: newReq.unit,
+            specifications: newReq.specifications
+        }];
+        const outRef = `OUT-PR-${newReq.requestNumber}`;
+        const issueDate = newReq.date || getTehranDateString();
+
+        for (const item of items) {
+            let part = null;
+            if (item.partId) part = db.partMasterData.find(p => p.id === item.partId);
+            if (!part && item.itemName) part = db.partMasterData.find(p => p.name === item.itemName);
+            if (!part && item.itemName) {
+                part = {
+                    id: 'part_' + Math.random().toString(36).substr(2, 9),
+                    name: item.itemName,
+                    type: 'قطعات',
+                    category: 'سایر قطعات',
+                    subCategory: 'ایجاد خودکار از درخواست',
+                    dimensions: item.specifications || '',
+                    unit: item.unit || 'عدد',
+                    minStock: 0,
+                    currentStock: 0
+                };
+                db.partMasterData.push(part);
+                item.partId = part.id;
+            }
+            if (part) {
+                const isDup = db.partKardex.some(k => k.partId === part.id && k.referenceNumber === outRef && k.type === 'OUT');
+                if (!isDup) {
+                    const oldStock = Number(part.currentStock) || 0;
+                    const qty = Number(item.quantity) || 0;
+                    const newStock = Math.max(0, oldStock - qty);
+                    part.currentStock = newStock;
+                    db.partKardex.unshift({
+                        id: 'kardex_' + Math.random().toString(36).substr(2, 9),
+                        partId: part.id,
+                        date: issueDate,
+                        referenceNumber: outRef,
+                        type: 'OUT',
+                        quantity: qty,
+                        balance: newStock,
+                        unitPrice: Number(item.unitPrice) || 0,
+                        description: `خروجی کالا از انبار بابت درخواست خرید شماره ${newReq.requestNumber}`
+                    });
+                }
+            }
+        }
+    }
+
     saveDb(db); 
     notifyPurchaseRequestStep(req.body, null, null, null, db, 'ثبت درخواست خرید').catch(e => console.error("Purchase Notification POST:", e));
     res.json(db.purchaseRequests); 
@@ -1279,24 +1337,31 @@ app.put('/api/purchase-requests/:id', (req, res) => {
         const newReq = { ...db.purchaseRequests[idx], ...req.body };
         db.purchaseRequests[idx] = newReq;
 
-        const PENDING_FACTORY_FINAL_SIGN = 'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)';
-        if (newReq.status === PENDING_FACTORY_FINAL_SIGN && oldReq.status !== PENDING_FACTORY_FINAL_SIGN) {
-            if (!db.partMasterData) db.partMasterData = [];
-            if (!db.partKardex) db.partKardex = [];
+        if (!db.partMasterData) db.partMasterData = [];
+        if (!db.partKardex) db.partKardex = [];
 
-            const items = newReq.items || [];
+        const items = newReq.items && newReq.items.length > 0 ? newReq.items : [{
+            partId: newReq.partId,
+            itemName: newReq.itemName,
+            quantity: newReq.quantity,
+            unit: newReq.unit,
+            specifications: newReq.specifications
+        }];
+
+        // 1. Goods Receipt (IN kardex sync after warehouse receipt)
+        const isReceiptStatus = [
+            'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)',
+            'تکمیل و بایگانی شده'
+        ].includes(newReq.status) && Boolean(newReq.warehouseReceiptNumber);
+
+        if (isReceiptStatus && newReq.status !== 'رد شده / متوقف شده') {
             const receiptNo = newReq.warehouseReceiptNumber || `RI-${newReq.requestNumber}`;
-            const receiptDate = newReq.warehouseReceiptDate || new Date().toISOString().split('T')[0];
+            const receiptDate = newReq.warehouseReceiptDate || getTehranDateString();
 
             for (const item of items) {
                 let part = null;
-                if (item.partId) {
-                    part = db.partMasterData.find(p => p.id === item.partId);
-                }
-                if (!part && item.itemName) {
-                    part = db.partMasterData.find(p => p.name === item.itemName);
-                }
-
+                if (item.partId) part = db.partMasterData.find(p => p.id === item.partId);
+                if (!part && item.itemName) part = db.partMasterData.find(p => p.name === item.itemName);
                 if (!part && item.itemName) {
                     part = {
                         id: 'part_' + Math.random().toString(36).substr(2, 9),
@@ -1314,7 +1379,7 @@ app.put('/api/purchase-requests/:id', (req, res) => {
                 }
 
                 if (part) {
-                    const isDup = db.partKardex.some(k => k.partId === part.id && k.referenceNumber === receiptNo);
+                    const isDup = db.partKardex.some(k => k.partId === part.id && k.referenceNumber === receiptNo && k.type === 'IN');
                     if (!isDup) {
                         const oldStock = Number(part.currentStock) || 0;
                         const qty = Number(item.quantity) || 0;
@@ -1330,7 +1395,59 @@ app.put('/api/purchase-requests/:id', (req, res) => {
                             quantity: qty,
                             balance: newStock,
                             unitPrice: Number(item.unitPrice) || 0,
-                            description: `ورود کالا بابت درخواست خرید شماره ${newReq.requestNumber}`
+                            description: `ورود کالا بابت رسید انبار / درخواست خرید شماره ${newReq.requestNumber}`
+                        };
+                        db.partKardex.unshift(kardexEntry);
+                    }
+                }
+            }
+        }
+
+        // 2. Goods Withdrawal / Delivery from Warehouse (OUT kardex sync)
+        const isDeliveryStatus = newReq.status === 'تحویل شده از انبار (تکمیل بدون خرید)' || Boolean(newReq.isDeliveredFromWarehouse);
+
+        if (isDeliveryStatus) {
+            const outRef = `OUT-PR-${newReq.requestNumber}`;
+            const issueDate = newReq.warehouseReceiptDate || getTehranDateString();
+
+            for (const item of items) {
+                let part = null;
+                if (item.partId) part = db.partMasterData.find(p => p.id === item.partId);
+                if (!part && item.itemName) part = db.partMasterData.find(p => p.name === item.itemName);
+                if (!part && item.itemName) {
+                    part = {
+                        id: 'part_' + Math.random().toString(36).substr(2, 9),
+                        name: item.itemName,
+                        type: 'قطعات',
+                        category: 'سایر قطعات',
+                        subCategory: 'ورود خودکار از درخواست',
+                        dimensions: item.specifications || '',
+                        unit: item.unit || 'عدد',
+                        minStock: 0,
+                        currentStock: 0
+                    };
+                    db.partMasterData.push(part);
+                    item.partId = part.id;
+                }
+
+                if (part) {
+                    const isDup = db.partKardex.some(k => k.partId === part.id && k.referenceNumber === outRef && k.type === 'OUT');
+                    if (!isDup) {
+                        const oldStock = Number(part.currentStock) || 0;
+                        const qty = Number(item.quantity) || 0;
+                        const newStock = Math.max(0, oldStock - qty);
+                        part.currentStock = newStock;
+
+                        const kardexEntry = {
+                            id: 'kardex_' + Math.random().toString(36).substr(2, 9),
+                            partId: part.id,
+                            date: issueDate,
+                            referenceNumber: outRef,
+                            type: 'OUT',
+                            quantity: qty,
+                            balance: newStock,
+                            unitPrice: 0,
+                            description: `خروجی کالا از انبار بابت درخواست خرید شماره ${newReq.requestNumber}`
                         };
                         db.partKardex.unshift(kardexEntry);
                     }
@@ -2487,9 +2604,17 @@ app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
 });
 
 // --- SAYAN PRODUCTION REPORT ENDPOINTS ---
+const normalizeShamsiDate = (str) => {
+    if (!str) return '';
+    return String(str).trim()
+        .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+        .replace(/-/g, '/');
+};
+
 const parseJalaliStrToGregorian = (jalaliStr) => {
-    if (!jalaliStr) return null;
-    const clean = String(jalaliStr).trim().replace(/-/g, '/');
+    const clean = normalizeShamsiDate(jalaliStr);
+    if (!clean) return null;
     const parts = clean.split('/').map(p => parseInt(p, 10));
     if (parts.length !== 3 || parts.some(isNaN)) return null;
     try {
@@ -2531,8 +2656,11 @@ const executeSayanQuery = async (db, queryStr) => {
 app.get('/api/sayan/production-report', async (req, res) => {
     try {
         const db = getDb();
-        const dateFrom = req.query.dateFrom || '';
-        const dateTo = req.query.dateTo || dateFrom;
+        const rawFrom = req.query.dateFrom || '';
+        const rawTo = req.query.dateTo || rawFrom;
+
+        const dateFrom = normalizeShamsiDate(rawFrom);
+        const dateTo = normalizeShamsiDate(rawTo) || dateFrom;
 
         if (!dateFrom) {
             return res.status(400).json({ error: 'تاریخ ابتدا مشخص نشده است' });
@@ -2545,11 +2673,8 @@ app.get('/api/sayan/production-report', async (req, res) => {
             return res.status(400).json({ error: 'فرمت تاریخ شمسی وارد شده نامعتبر است (مثال: 1405/05/02)' });
         }
 
-        const gregFrom = `${gregFromDate}T00:00:00.000Z`;
-        const gregTo = `${gregToDate}T23:59:59.999Z`;
-
-        const cleanDateFrom = dateFrom.replace(/-/g, '/');
-        const cleanDateTo = dateTo.replace(/-/g, '/');
+        const cleanDateFrom = dateFrom;
+        const cleanDateTo = dateTo;
 
         const sql = `
             SELECT 
@@ -2557,20 +2682,15 @@ app.get('/api/sayan/production-report', async (req, res) => {
                 t10.Field_008 as Date,
                 RTRIM(LTRIM(t10.Field_009)) as DocType,
                 t11.Field_005 as ItemCode,
-                COALESCE(t22.Field_004, t11.Field_005) as ItemName,
+                COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام') as ItemName,
                 t11.Field_006 as Quantity
             FROM STR_TBL_010 t10
-            INNER JOIN STR_TBL_011 t11 ON (t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004) OR (t11.Field_004 = t10.Field_001)
+            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
             LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
             WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
-              AND (
-                   (t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}')
-                OR (t10.Field_008 >= '${gregFromDate}' AND t10.Field_008 <= '${gregToDate} 23:59:59')
-                OR (t10.Field_008 >= '${cleanDateFrom}' AND t10.Field_008 <= '${cleanDateTo}')
-                OR (LEFT(t10.Field_008, 10) >= '${gregFromDate}' AND LEFT(t10.Field_008, 10) <= '${gregToDate}')
-                OR (LEFT(t10.Field_008, 10) >= '${cleanDateFrom}' AND LEFT(t10.Field_008, 10) <= '${cleanDateTo}')
-              )
-            ORDER BY COALESCE(t22.Field_004, t11.Field_005), t10.Field_008
+              AND t10.Field_008 >= '${gregFromDate}T00:00:00.000Z'
+              AND t10.Field_008 <= '${gregToDate}T23:59:59.999Z'
+            ORDER BY COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
         `;
 
         const rawRows = await executeSayanQuery(db, sql);
