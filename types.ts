@@ -1097,12 +1097,14 @@ export enum PurchaseRequestStatus {
     PENDING_WAREHOUSE_CHECK = 'در انتظار بررسی موجودی انبار (سرشیفت)',
     PENDING_TECHNICAL = 'در انتظار تایید فنی',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
+    PENDING_FACTORY_DECISION = 'در انتظار تصمیم مدیر کارخانه (تعیین مسیر خرید)',
     PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی (محل خرید)',
     
     // Tehran Branch
     PENDING_TEHRAN_PURCHASING = 'در انتظار مسئول خرید تهران',
     PENDING_CEO_INITIAL = 'در انتظار تایید اولیه مدیرعامل (تهران)',
-    PENDING_TEHRAN_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (تهران)',
+    PENDING_TEHRAN_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (بازرگانی تهران)',
+    PENDING_COMMERCIAL_MANAGER = 'در انتظار بررسی و انتخاب مدیر بازرگانی',
     PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیرعامل)',
     
     // Factory/Zanjan Branch
@@ -1110,19 +1112,22 @@ export enum PurchaseRequestStatus {
     PENDING_FACTORY_PURCHASING = 'در انتظار مسئول خرید و نت (زنجان)',
     PENDING_FACTORY_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (زنجان/کارخانه)',
     PENDING_FACTORY_MANAGER_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیر کارخانه)',
+    PENDING_FACTORY_MANAGER_APPROVAL = 'در انتظار تایید سفارش (مدیر کارخانه)',
     PENDING_BUYER_EXECUTION = 'در انتظار انجام خرید توسط کارپرداز',
     
     // Common Arrival Flow
+    PENDING_TECHNICAL_APPROVAL = 'در انتظار تایید فنی و کنترل کیفیت',
+    PENDING_FACTORY_ENTRY_APPROVAL = 'در انتظار تایید ورود کالا (مدیر کارخانه)',
     PENDING_SECURITY_ENTRY = 'در انتظار ورود کالا (انتظامات)',
     PENDING_QC = 'در انتظار کنترل کیفی',
     PENDING_FACTORY_FINAL_APPROVE = 'در انتظار تایید نهایی مدیر کارخانه',
-    PENDING_WAREHOUSE_RECEIPT = 'در انتظار صدور رسید انبار',
+    PENDING_WAREHOUSE_RECEIPT = 'در انتظار شمارش و صدور رسید انبار',
     PENDING_FACTORY_FINAL_SIGN = 'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)',
     
     DELIVERED_FROM_WAREHOUSE = 'تحویل شده از انبار (تکمیل بدون خرید)',
     RETURNED_FOR_CORRECTION = 'عودت داده شده جهت اصلاح',
     COMPLETED = 'تکمیل و بایگانی شده',
-    REJECTED = 'رد شده'
+    REJECTED = 'رد شده / متوقف شده'
 }
 
 export interface PurchaseRequestItem {
@@ -1259,6 +1264,23 @@ export interface PurchaseRequest {
     serialNumber?: string;
     barcode?: string;
     itemCodeAssigned?: string;
+
+    // Warehouse Delivery (Direct exit from stock)
+    warehouseVoucherNumber?: string;
+    warehouseRecipient?: string;
+    warehouseKeeperName?: string;
+
+    // Technical Approval Form details
+    technicalReport?: string;
+    technicalBrandApproved?: boolean;
+    technicalQualityApproved?: boolean;
+    technicalMatchApproved?: boolean;
+
+    // Purchasing Agent (کارپرداز) execution details
+    buyerName?: string;
+    buyerVendorName?: string;
+    buyerPurchaseAmount?: number;
+    buyerInvoiceNumber?: string;
 
     location?: 'Tehran' | 'Factory' | 'Zanjan';
     rejectionReason?: string;

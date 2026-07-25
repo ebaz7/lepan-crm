@@ -6,7 +6,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: './', // بسیار مهم برای اندروید: مسیردهی نسبی
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
+    watch: {
+      ignored: ['**/android/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3001',
@@ -20,3 +26,4 @@ export default defineConfig({
     emptyOutDir: true,
   }
 })
+

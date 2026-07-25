@@ -543,24 +543,6 @@ function App() {
     const user = getCurrentUser(); 
     if (user) {
         setCurrentUser(user); 
-    } else {
-        // Auto-login strictly in the Cloud Run/AI Studio preview environment in the browser
-        const isDevEnv = !Capacitor.isNativePlatform() && (
-            window.location.hostname.includes('run.app') || 
-            window.location.hostname.includes('google.com')
-        );
-        if (isDevEnv) {
-            console.log("Auto-logging in as admin in sandbox/preview environment...");
-            const defaultAdmin: User = { 
-                id: '1', 
-                username: 'admin', 
-                fullName: 'مدیر سیستم (تست)', 
-                role: UserRole.ADMIN, 
-                roles: [UserRole.ADMIN],
-                canManageTrade: true 
-            };
-            setCurrentUser(defaultAdmin);
-        }
     }
     syncNativeShownNotifications().catch(console.error);
     syncServiceWorkerShownNotifications().catch(console.error);

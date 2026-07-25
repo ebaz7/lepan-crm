@@ -409,24 +409,34 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL);
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER);
             
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER:
                 return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
             
             case PurchaseRequestStatus.PENDING_CEO_INITIAL:
             case PurchaseRequestStatus.PENDING_CEO_SELECTION:
                 return isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO');
                 
+            case PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
-                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas') || isRole(UserRole.FACTORY_MANAGER)) && (r.location === 'Factory' || r.location === 'Zanjan');
                 
+            case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL:
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
+            case PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
                 return isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory');
+
+            case PurchaseRequestStatus.PENDING_BUYER_EXECUTION:
+                return isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas');
+
+            case PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL:
+                return hasPurchasePerm('canApproveTechnical');
             
             case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry');
             case PurchaseRequestStatus.PENDING_QC: return isRole(UserRole.QC) || hasPurchasePerm('canCheckQC');
@@ -934,6 +944,278 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     );
 };
 
+// --- SUBMODALS FOR NEW WORKFLOW STAGES ---
+
+const ReturnModal = ({ onClose, onConfirm, currentStatus }: { onClose: () => void, onConfirm: (prevStage: PurchaseRequestStatus, reason: string) => void, currentStatus: PurchaseRequestStatus }) => {
+    const [reason, setReason] = useState('');
+    const [targetStage, setTargetStage] = useState<PurchaseRequestStatus>(PurchaseRequestStatus.PENDING_TECHNICAL);
+
+    const availableStages = [
+        { status: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'مرحله ۱: کارشناسی و نت کارخانه' },
+        { status: PurchaseRequestStatus.PENDING_FACTORY, label: 'مرحله ۲: استعلام موجودی انبار' },
+        { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'مرحله ۳: تصمیم‌گیری مسیر خرید' },
+        { status: PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, label: 'مرحله استعلام / ثبت پروفرما' },
+        { status: PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER, label: 'مرحله بررسی مدیر بازرگانی' },
+        { status: PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL, label: 'مرحله دستور خرید مدیر کارخانه' },
+        { status: PurchaseRequestStatus.PENDING_BUYER_EXECUTION, label: 'مرحله اجرای خرید کارپرداز' },
+    ];
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-amber-600 border-b pb-4">
+                    <CornerUpLeft size={28} />
+                    <div>
+                        <h3 className="font-black text-xl text-gray-800">عودت درخواست جهت اصلاح</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">بازگشت به مرحله قبلی با ثبت دلایل فنی یا اداری</p>
+                    </div>
+                </div>
+                <div className="space-y-5">
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-2">مرحله مقصد جهت عودت:</label>
+                        <select className="w-full border rounded-xl p-3 text-xs font-bold bg-gray-50 outline-none focus:ring-2 focus:ring-amber-200" value={targetStage} onChange={e => setTargetStage(e.target.value as PurchaseRequestStatus)}>
+                            {availableStages.map(s => (
+                                <option key={s.status} value={s.status}>{s.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-2">علت و توضیحات عودت <span className="text-red-500">*</span>:</label>
+                        <textarea className="w-full border rounded-xl p-3 text-xs h-28 focus:ring-2 focus:ring-amber-200 outline-none" value={reason} onChange={e => setReason(e.target.value)} placeholder="علت بازگشت و اصلاحات لازم را بنویسید..." />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => { if(!reason.trim()) return alert('ثبت علت عودت الزامی است'); onConfirm(targetStage, reason); }} className="flex-1 bg-amber-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">تایید و عودت پرونده</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const RejectModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (reason: string) => void }) => {
+    const [reason, setReason] = useState('');
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-red-600 border-b pb-4">
+                    <AlertTriangle size={28} />
+                    <div>
+                        <h3 className="font-black text-xl text-gray-800">رد و توقف کلی فرآیند خرید</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">ثبت دلیل رد و خاتمه درخواست در سامانه</p>
+                    </div>
+                </div>
+                <div className="space-y-5">
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-2">علت رد درخواست <span className="text-red-500">*</span>:</label>
+                        <textarea className="w-full border rounded-xl p-3 text-xs h-32 focus:ring-2 focus:ring-red-200 outline-none" value={reason} onChange={e => setReason(e.target.value)} placeholder="دلایل عدم موافقت با این درخواست خرید را وارد کنید..." />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => { if(!reason.trim()) return alert('ثبت علت رد الزامی است'); onConfirm(reason); }} className="flex-1 bg-red-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">تایید و رد درخواست</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const WarehouseCheckModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (inStock: boolean, data: any) => void }) => {
+    const [inStock, setInStock] = useState(false);
+    const [exitNumber, setExitNumber] = useState('');
+    const [recipient, setRecipient] = useState('');
+    const [notes, setNotes] = useState('');
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-indigo-600 border-b pb-4">
+                    <Warehouse size={28} />
+                    <div>
+                        <h3 className="font-black text-lg text-gray-800">بررسی موجودی انبار توسط سرشیفت</h3>
+                        <p className="text-xs text-gray-500">بررسی امکان تحویل مستقیم کالا یا ارجاع جهت خرید</p>
+                    </div>
+                </div>
+                <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-2xl">
+                        <button onClick={() => setInStock(true)} className={`py-3 rounded-xl text-xs font-black transition-all ${inStock ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-600'}`}>
+                            تحویل مستقیم از انبار
+                        </button>
+                        <button onClick={() => setInStock(false)} className={`py-3 rounded-xl text-xs font-black transition-all ${!inStock ? 'bg-amber-600 text-white shadow-md' : 'text-gray-600'}`}>
+                            عدم موجودی (خرید)
+                        </button>
+                    </div>
+
+                    {inStock ? (
+                        <div className="space-y-3 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-600 block mb-1">شماره حواله خروج انبار:</label>
+                                <input className="w-full border rounded-xl p-2.5 text-xs font-bold" value={exitNumber} onChange={e => setExitNumber(e.target.value)} placeholder="مثلاً: OUT-1402/805" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-600 block mb-1">نام تحویل‌گیرنده:</label>
+                                <input className="w-full border rounded-xl p-2.5 text-xs font-bold" value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="نام واحد یا فرد تحویل گیرنده" />
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">ملاحظات انبارداری:</label>
+                            <textarea className="w-full border rounded-xl p-3 text-xs h-24 focus:ring-2 focus:ring-indigo-100 outline-none" value={notes} onChange={e => setNotes(e.target.value)} placeholder="توضیحات عدم وجود در انبار یا حداقل موجودی..." />
+                        </div>
+                    )}
+
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => onConfirm(inStock, { warehouseExitVoucherNumber: exitNumber, warehouseRecipient: recipient, warehouseNotes: notes })} className="flex-1 bg-indigo-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">ثبت و ادامه فرآیند</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const FactoryBranchModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (location: 'Tehran' | 'Factory', notes: string) => void }) => {
+    const [selectedBranch, setSelectedBranch] = useState<'Tehran' | 'Factory'>('Tehran');
+    const [notes, setNotes] = useState('');
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-amber-600 border-b pb-4">
+                    <GitFork size={28} />
+                    <div>
+                        <h3 className="font-black text-lg text-gray-800">تعیین مسیر تامین و خرید</h3>
+                        <p className="text-xs text-gray-500">انتخاب شاخه خرید از بازرگانی تهران یا تامین محلی کارخانه</p>
+                    </div>
+                </div>
+                <div className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div onClick={() => setSelectedBranch('Tehran')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedBranch === 'Tehran' ? 'border-sky-500 bg-sky-50 shadow-md ring-2 ring-sky-200' : 'border-gray-200 hover:border-sky-200'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="font-black text-xs text-sky-800">مسیر ۱: خرید از تهران</span>
+                                <span className="w-3 h-3 rounded-full bg-sky-500"></span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 leading-relaxed">ارسال پرونده به دفتر مرکزی تهران جهت استعلامات کلی و تایید مدیرعامل</p>
+                        </div>
+                        <div onClick={() => setSelectedBranch('Factory')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedBranch === 'Factory' ? 'border-teal-500 bg-teal-50 shadow-md ring-2 ring-teal-200' : 'border-gray-200 hover:border-teal-200'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="font-black text-xs text-teal-800">مسیر ۲: خرید کارخانه (زنجان)</span>
+                                <span className="w-3 h-3 rounded-full bg-teal-500"></span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 leading-relaxed">تامین سریع و خرید محلی قطعات توسط انبار و کارپرداز کارخانه زنجان</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">دستور و ملاحظات مدیر کارخانه:</label>
+                        <textarea className="w-full border rounded-xl p-3 text-xs h-24 focus:ring-2 focus:ring-amber-200 outline-none" value={notes} onChange={e => setNotes(e.target.value)} placeholder="توضیحات و نکات الزام‌آور خرید..." />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => onConfirm(selectedBranch, notes)} className="flex-1 bg-amber-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">تایید و ارجاع شاخه</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const TechnicalApprovalModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (data: any) => void }) => {
+    const [specsOk, setSpecsOk] = useState(true);
+    const [brandOk, setBrandOk] = useState(true);
+    const [equipmentOk, setEquipmentOk] = useState(true);
+    const [techReport, setTechReport] = useState('');
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-indigo-600 border-b pb-4">
+                    <Wrench size={28} />
+                    <div>
+                        <h3 className="font-black text-lg text-gray-800">تایید فنی و تطابق سفارش (QC/Net)</h3>
+                        <p className="text-xs text-gray-500">بررسی کارشناسی نمونه یا قطعه تحویلی قبل از ورود نهایی</p>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border">
+                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                            <input type="checkbox" checked={specsOk} onChange={e => setSpecsOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
+                            تطابق مشخصات فنی و ابعاد
+                        </label>
+                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                            <input type="checkbox" checked={brandOk} onChange={e => setBrandOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
+                            تایید برند و سازنده قطعه
+                        </label>
+                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                            <input type="checkbox" checked={equipmentOk} onChange={e => setEquipmentOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
+                            تطابق کامل با ماشین‌آلات هدف
+                        </label>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">گزارش کارشناسی واحد فنی / نت:</label>
+                        <textarea className="w-full border rounded-xl p-3 text-xs h-28 focus:ring-2 focus:ring-indigo-100 outline-none" value={techReport} onChange={e => setTechReport(e.target.value)} placeholder="نتایج تست، مرغوبیت و انطباق فنی..." />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => onConfirm({ technicalReport: techReport, specsApproved: specsOk, brandApproved: brandOk, equipmentMatchApproved: equipmentOk })} className="flex-1 bg-indigo-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">تایید کارشناسی فنی</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const PurchasingAgentModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (data: any) => void }) => {
+    const [vendor, setVendor] = useState('');
+    const [invoiceNum, setInvoiceNum] = useState('');
+    const [amount, setAmount] = useState<number>(0);
+    const [buyerName, setBuyerName] = useState('');
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-scale-in text-right dir-rtl">
+                <div className="flex items-center gap-3 mb-6 text-teal-600 border-b pb-4">
+                    <ShoppingCart size={28} />
+                    <div>
+                        <h3 className="font-black text-lg text-gray-800">ثبت فاکتور و خرید کارپرداز</h3>
+                        <p className="text-xs text-gray-500">ورود مشخصات فاکتور و صورت‌حساب خرید</p>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">نام فروشنده / تامین‌کننده:</label>
+                        <input className="w-full border rounded-xl p-3 text-xs font-bold" value={vendor} onChange={e => setVendor(e.target.value)} placeholder="نام فروشگاه یا شرکت تامین کننده" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">شماره فاکتور خرید:</label>
+                            <input className="w-full border rounded-xl p-3 text-xs font-bold" value={invoiceNum} onChange={e => setInvoiceNum(e.target.value)} placeholder="مثلاً: 1402/904" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">مامور خرید / کارپرداز:</label>
+                            <input className="w-full border rounded-xl p-3 text-xs font-bold" value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="نام کارپرداز" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">مبلغ کل فاکتور (ریال):</label>
+                        <input type="number" className="w-full border rounded-xl p-3 text-sm font-black text-indigo-600" value={amount} onChange={e => setAmount(+e.target.value)} />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={() => onConfirm({ vendorName: vendor, invoiceNumber: invoiceNum, totalPaidAmount: amount, purchasingAgentName: buyerName })} className="flex-1 bg-teal-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">ثبت فاکتور و ارجاع به ورود کالا</button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, parts }: { request: PurchaseRequest, onClose: () => void, currentUser: User, onSuccess: () => void, settings?: SystemSettings, parts: PartMasterData[] }) => {
     const [actionLoading, setActionLoading] = useState(false);
     const [pdfLoading, setPdfLoading] = useState(false);
@@ -942,6 +1224,12 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
     const [showQCModal, setShowQCModal] = useState(false);
     const [showWarehouseModal, setShowWarehouseModal] = useState(false);
     const [showAdminEditModal, setShowAdminEditModal] = useState(false);
+    const [showReturnModal, setShowReturnModal] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [showWarehouseCheckModal, setShowWarehouseCheckModal] = useState(false);
+    const [showFactoryBranchModal, setShowFactoryBranchModal] = useState(false);
+    const [showTechnicalApprovalModal, setShowTechnicalApprovalModal] = useState(false);
+    const [showPurchasingAgentModal, setShowPurchasingAgentModal] = useState(false);
     const [printingProforma, setPrintingProforma] = useState<PurchaseProforma | null>(null);
     const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT'>('REQUEST');
 
@@ -956,7 +1244,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 performedBy: currentUser.fullName,
                 role: currentUser.role,
                 timestamp: nowIso,
-                comment: extra.comment || extra.returnReason || ''
+                comment: extra.comment || extra.returnReason || extra.notes || extra.technicalReport || extra.qcDescription || ''
             };
 
             const updated = { 
@@ -1078,39 +1366,9 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                     />
                 )}
 
-
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50 no-scrollbar">
-                    {/* Workflow Progress */}
-                    <div className="flex justify-between items-center gap-2 no-scrollbar overflow-x-auto pb-6 border-b">
-                        {[
-                            { s: PurchaseRequestStatus.PENDING_TECHNICAL, label: 'فنی' },
-                            { s: PurchaseRequestStatus.PENDING_FACTORY, label: 'مدیر کارخانه' },
-                            { s: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, label: 'تصمیم بازرگانی' },
-                            { s: request.location === 'Tehran' ? PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING : PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, label: 'خرید' },
-                            { s: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, label: 'ورود' },
-                            { s: PurchaseRequestStatus.PENDING_QC, label: 'QC' },
-                            { s: PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, label: 'رسید انبار' },
-                            { s: PurchaseRequestStatus.COMPLETED, label: 'تکمیل' }
-                        ].map((step, idx) => {
-                            const stepsList = Object.values(PurchaseRequestStatus);
-                            const currentIndex = stepsList.indexOf(request.status);
-                            const stepIndex = stepsList.indexOf(step.s);
-                            const isActive = request.status === step.s;
-                            const isPast = currentIndex > stepIndex;
-
-                            return (
-                                <div key={idx} className="flex flex-col items-center gap-2 min-w-[80px]">
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black border-2 transition-all duration-500 ${
-                                        isActive ? 'bg-indigo-600 text-white border-indigo-700 ring-4 ring-indigo-100 scale-110 shadow-lg' :
-                                        isPast ? 'bg-green-500 text-white border-green-600' : 'bg-white text-gray-400 border-gray-100'
-                                    }`}>
-                                        {isPast ? <CheckCircle size={20}/> : idx + 1}
-                                    </div>
-                                    <span className={`text-[9px] font-black tracking-tight ${isActive ? 'text-indigo-700' : 'text-gray-500'}`}>{step.label}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    {/* BPMN Diagram Header */}
+                    <BpmnWorkflowDiagram currentStatus={request.status} location={request.location} />
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
@@ -1133,7 +1391,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                             <div className="glass-panel p-6 rounded-3xl border border-indigo-100 bg-white shadow-sm overflow-hidden relative">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-sm font-black text-gray-800 flex items-center gap-2"><FileText className="text-indigo-500" size={18}/> پیش‌فاکتورها و استعلام‌ها</h3>
-                                    {(isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) || isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)) && hasPurchasePerm('canManageProformas') && (
+                                    {(isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) || isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) || isCurrentStep(PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING)) && hasPurchasePerm('canManageProformas') && (
                                         <button onClick={() => setShowProformaModal(true)} className="text-xs font-black bg-indigo-600 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2"><Plus size={14}/> ثبت پیش‌فاکتور</button>
                                     )}
                                 </div>
@@ -1174,7 +1432,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                                                                 onClick={() => {
                                                                     if(confirm('آیا این پیش‌فاکتور را برای خرید تایید می‌کنید؟')) {
                                                                         const updated = request.proformas.map(x => ({ ...x, isChosen: x.id === p.id }));
-                                                                        handleAction(PurchaseRequestStatus.PENDING_SECURITY_ENTRY, { proformas: updated });
+                                                                        handleAction(PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL, { proformas: updated }, 'تایید و انتخاب تامین‌کننده');
                                                                     }
                                                                 }}
                                                                 className="px-3 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg shadow-sm"
@@ -1215,26 +1473,22 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                         {/* Sidebar Approvals */}
                         <div className="space-y-6">
                              <div className="glass-panel p-6 rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                                <h3 className="text-sm font-black text-gray-800 mb-6 border-b pb-3 border-gray-100 flex items-center gap-2"><ClipboardCheck className="text-indigo-500" size={18}/> تاریخچه و تاییدات</h3>
-                                <div className="space-y-6 relative before:absolute before:right-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
-                                    {[
-                                        { label: 'ثبت درخواست (انبار)', user: request.requester, date: request.date, done: true },
-                                        { label: 'تایید فنی کارخانه', user: request.approverTechnical, done: !!request.approverTechnical },
-                                        { label: 'تایید مدیر کارخانه (اولیه)', user: request.approverFactory, done: !!request.approverFactory },
-                                        { label: 'تصمیم بازرگانی', user: request.approverCommercial, detail: request.location === 'Tehran' ? 'دفتر تهران' : 'کارخانه', done: !!request.approverCommercial },
-                                        { label: 'تایید نهایی مدیرعامل/مدیرکارخانه', user: request.approverCeoSelection || request.approverFactorySelection, done: !!(request.approverCeoSelection || request.approverFactorySelection) },
-                                        { label: 'کنترل کیفی', user: request.approverQc, done: !!request.approverQc },
-                                        { label: 'رسید انبار', user: request.approverWarehouseReceipt, done: !!request.approverWarehouseReceipt },
-                                        { label: 'بایگانی نهایی', user: request.approverFactoryArchive, done: !!request.approverFactoryArchive }
-                                    ].map((step, idx) => (
+                                <h3 className="text-sm font-black text-gray-800 mb-6 border-b pb-3 border-gray-100 flex items-center gap-2"><ClipboardCheck className="text-indigo-500" size={18}/> تاریخچه و لاگ‌های سیستم</h3>
+                                <div className="space-y-6 relative before:absolute before:right-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100 max-h-96 overflow-y-auto pl-2 no-scrollbar">
+                                    {(request.auditLogs && request.auditLogs.length > 0 ? request.auditLogs : [
+                                        { stage: request.status, action: 'ثبت درخواست اولیه', performedBy: request.requester, role: 'انبار / متقاضی', timestamp: request.date }
+                                    ]).map((log: any, idx: number) => (
                                         <div key={idx} className="flex gap-4 relative pr-8">
-                                            <div className={`absolute right-0 w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-sm z-10 ${step.done ? 'bg-green-500' : 'bg-gray-200'}`}>
-                                                {step.done ? <CheckCircle size={14}/> : <div className="w-2 h-2 rounded-full bg-white"></div>}
+                                            <div className="absolute right-0 w-6 h-6 rounded-lg flex items-center justify-center text-white shadow-sm z-10 bg-indigo-600">
+                                                <CheckCircle size={14}/>
                                             </div>
-                                            <div className="flex-1">
-                                                <p className={`text-[10px] font-black ${step.done ? 'text-gray-800' : 'text-gray-400'}`}>{step.label}</p>
-                                                {step.user && <p className="text-[9px] text-gray-500 font-bold">{step.user}</p>}
-                                                {step.detail && <span className="text-[8px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded font-bold">{step.detail}</span>}
+                                            <div className="flex-1 bg-gray-50/80 p-3 rounded-2xl border border-gray-100">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <p className="text-[10px] font-black text-gray-800">{log.action}</p>
+                                                    <span className="text-[8px] font-mono text-gray-400">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                                </div>
+                                                <p className="text-[9px] text-indigo-600 font-bold">{log.performedBy} ({log.role})</p>
+                                                {log.comment && <p className="text-[9px] text-gray-600 mt-1 bg-white p-2 rounded-xl border border-dashed border-gray-200 italic">{log.comment}</p>}
                                             </div>
                                         </div>
                                     ))}
@@ -1256,106 +1510,103 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 {/* Actions Footer */}
                 <div className="p-6 border-t glass-panel flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/80">
                     <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                        {/* Status Based Actions */}
-                        {isAdmin && (
-                            <button 
-                                onClick={async () => { if(confirm('آیا از حذف این درخواست اطمینان دارید؟')) { await deletePurchaseRequest(request.id); onSuccess(); onClose(); } }} 
-                                className="bg-red-600 text-white px-4 py-3 rounded-2xl font-black shadow-lg hover:bg-red-700 transition-all flex items-center gap-2"
-                            >
-                                <Trash2 size={18}/> حذف نهایی
-                            </button>
+                        {/* Universal Return & Reject Buttons */}
+                        {request.status !== PurchaseRequestStatus.COMPLETED && request.status !== PurchaseRequestStatus.REJECTED && (
+                            <>
+                                <button onClick={() => setShowReturnModal(true)} className="bg-amber-500/10 text-amber-700 border border-amber-300 hover:bg-amber-500 hover:text-white px-4 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-1.5 shadow-sm" disabled={actionLoading}>
+                                    <CornerUpLeft size={16}/> عودت جهت اصلاح
+                                </button>
+                                <button onClick={() => setShowRejectModal(true)} className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white px-4 py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-1.5 shadow-sm" disabled={actionLoading}>
+                                    <XCircle size={16}/> رد / توقف فرآیند
+                                </button>
+                            </>
                         )}
 
-                        {isAdmin && (
-                            <button 
-                                onClick={() => setShowAdminEditModal(true)} 
-                                className="bg-amber-500 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-amber-600 transition-all flex items-center gap-2"
-                            >
-                                <Edit size={18}/> ویرایش مدیریتی
-                            </button>
-                        )}
-
+                        {/* Stage 1: Technical & Repair Inspection */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL) && (isAdmin || hasPurchasePerm('canApproveTechnical')) && (
-                            <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50" disabled={actionLoading}>تایید فنی و ارسال به مدیر</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.REJECTED)} className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-bold border border-red-100 transition-all hover:bg-red-100" disabled={actionLoading}>رد فنی</button>
-                            </>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY, {}, 'تایید فنی و ارجاع به انبار')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all hover:-translate-y-0.5 text-xs" disabled={actionLoading}>تایید فنی و ارسال به انبار کارخانه</button>
                         )}
                         
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105" disabled={actionLoading}>تایید مدیر کارخانه و ارسال به بازرگانی</button>
+                        {/* Stage 2: Warehouse Stock Check */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER)) && (
+                            <button onClick={() => setShowWarehouseCheckModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 text-xs shadow-lg" disabled={actionLoading}>بررسی موجودی انبار (سرشیفت / انباردار)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
-                            <>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING, { location: 'Tehran' })} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-blue-100" disabled={actionLoading}>خرید در تهران</button>
-                                <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, { location: 'Factory' })} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-teal-100" disabled={actionLoading}>خرید در کارخانه</button>
-                            </>
+                        {/* Stage 3: Factory Manager Branch Selection */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
+                            <button onClick={() => setShowFactoryBranchModal(true)} className="bg-amber-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-amber-100 text-xs hover:scale-105 transition-all" disabled={actionLoading}>تعیین مسیر تامین (خرید تهران vs کارخانه)</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_INITIAL)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت تایید استعلام (مدیرعامل)</button>
-                        )}
-
+                        {/* Tehran Branch: CEO Initial Approval */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید اولیه و اجازه ثبت پروفرما</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, {}, 'تایید اولیه و مجوز اخذ استعلام')} className="bg-sky-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>تایید اولیه استعلام و اجازه ثبت پروفرما</button>
                         )}
-                        
+
+                        {/* Tehran Branch: Proforma Entry */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || isRole(UserRole.COMMERCIAL)) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال لیست پروفرما جهت انتخاب توسط مدیرعامل</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER, {}, 'ارسال پروفرماها به مدیر بازرگانی')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs" disabled={actionLoading}>ارسال لیست پیش‌فاکتورها به مدیر بازرگانی</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PURCHASING) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>مجوز ثبت پروفرما توسط کارخانه</button>
+                        {/* Tehran Branch: Commercial Manager Selection */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION, {}, 'بررسی بازرگانی و ارسال به مدیرعامل')} className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>تایید مدیر بازرگانی و ارسال به مدیرعامل</button>
                         )}
 
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || isRole(UserRole.COMMERCIAL)) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>ارسال جهت انتخاب توسط مدیر کارخانه</button>
+                        {/* Zanjan Branch: Proposal & Purchasing */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL, {}, 'ارسال پیشنهاد خرید کارخانه به مدیر')} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>ارسال پیشنهاد خرید به مدیر کارخانه</button>
                         )}
 
+                        {/* Zanjan Branch: Factory Manager Approval */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_BUYER_EXECUTION, {}, 'دستور خرید و صدور سفارش کارخانه')} className="bg-teal-700 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>دستور خرید و ارجاع به کارپرداز</button>
+                        )}
+
+                        {/* Zanjan Branch: Purchasing Agent Execution */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_BUYER_EXECUTION) && (isAdmin || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas')) && (
+                            <button onClick={() => setShowPurchasingAgentModal(true)} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg hover:scale-105 transition-all">ثبت خرید کارپرداز و صدور فاکتور</button>
+                        )}
+
+                        {/* Common: Technical Specs Approval */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL) && (isAdmin || hasPurchasePerm('canApproveTechnical')) && (
+                            <button onClick={() => setShowTechnicalApprovalModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg hover:scale-105 transition-all">تایید فنی و تطابق سفارش (QC/Net)</button>
+                        )}
+
+                        {/* Common: Factory Manager Entry Approval */}
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_SECURITY_ENTRY, {}, 'صدور مجوز ورود کالا به کارخانه')} className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>مجوز ورود کالا به کارخانه</button>
+                        )}
+
+                        {/* Security Entry */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry')) && (
-                            <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
+                            <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl text-xs shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
                         )}
 
+                        {/* Quality Control (QC) */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || isRole(UserRole.QC) || hasPurchasePerm('canCheckQC')) && (
-                            <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105">بررسی و تایید کنترل کیفی (QC)</button>
+                            <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105 text-xs">بررسی و تایید کنترل کیفی (QC)</button>
                         )}
 
+                        {/* Factory Manager Final Approve */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, {}, 'تایید نهایی تحویل و ارسال به انبار')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
                         )}
 
+                        {/* Warehouse Receipt */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize')) && (
-                            <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all">صدور رسید انبار نهایی</button>
+                            <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all text-xs">صدور رسید انبار نهایی</button>
                         )}
 
+                        {/* Factory Manager Final Sign */}
                         {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
-                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED)} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black">امضا، تکمیل و بایگانی نهایی پرونده</button>
+                            <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED, {}, 'امضای الکترونیکی و بایگانی پرونده')} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black text-xs">امضا، تکمیل و بایگانی نهایی پرونده</button>
                         )}
 
                         {isCurrentStep(PurchaseRequestStatus.REJECTED) && (
-                            <span className="text-red-600 font-bold bg-red-50 px-4 py-2 rounded-xl border border-red-200 italic">این درخواست رد شده است</span>
+                            <span className="text-red-600 font-bold bg-red-50 px-4 py-2 rounded-xl border border-red-200 italic text-xs">این درخواست رد شده است</span>
                         )}
-
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length === 0 && (
-                            <div className="bg-blue-50 text-blue-700 px-6 py-3 rounded-2xl font-bold border border-blue-100 flex items-center gap-2">
-                                <FileText size={20}/>
-                                <span className="text-xs md:text-sm">لطفاً ابتدا حداقل یک پیش‌فاکتور در بخش بالا ثبت کنید</span>
-                            </div>
-                        )}
-
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_PROFORMA) && request.proformas.length === 0 && (
-                            <div className="bg-blue-50 text-blue-700 px-6 py-3 rounded-2xl font-bold border border-blue-100 flex items-center gap-2">
-                                <FileText size={20}/>
-                                <span className="text-xs md:text-sm">لطفاً ابتدا حداقل یک پیش‌فاکتور در بخش بالا ثبت کنید</span>
-                            </div>
-                        )}
-
-                        {(isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) || isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION)) && (
-                            <div className="bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-bold border border-amber-100 flex items-center gap-2 animate-pulse">
-                                <AlertCircle size={20}/>
-                                <span className="text-xs md:text-sm">لطفاً یکی از پیش‌فاکتورهای لیست بالا را تایید و انتخاب کنید</span>
-                            </div>
+                        {isCurrentStep(PurchaseRequestStatus.DELIVERED_FROM_WAREHOUSE) && (
+                            <span className="text-emerald-700 font-bold bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 italic text-xs">کالا مستقیماً از موجودی انبار تحویل گردید</span>
                         )}
                     </div>
 
@@ -1393,11 +1644,68 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 </div>
 
                 {/* Submodals */}
+                {showReturnModal && <ReturnModal 
+                    currentStatus={request.status}
+                    onClose={() => setShowReturnModal(false)}
+                    onConfirm={(stage: PurchaseRequestStatus, reason: string) => {
+                        handleAction(stage, { returnReason: reason }, 'عودت پرونده جهت اصلاح');
+                        setShowReturnModal(false);
+                    }}
+                />}
+
+                {showRejectModal && <RejectModal 
+                    onClose={() => setShowRejectModal(false)}
+                    onConfirm={(reason: string) => {
+                        handleAction(PurchaseRequestStatus.REJECTED, { rejectionReason: reason }, 'رد و توقف کلی فرآیند');
+                        setShowRejectModal(false);
+                    }}
+                />}
+
+                {showWarehouseCheckModal && <WarehouseCheckModal 
+                    onClose={() => setShowWarehouseCheckModal(false)}
+                    onConfirm={(inStock: boolean, data: any) => {
+                        if (inStock) {
+                            handleAction(PurchaseRequestStatus.DELIVERED_FROM_WAREHOUSE, data, 'تحویل مستقیم از انبار');
+                        } else {
+                            handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, data, 'عدم موجودی - ارسال به مدیر کارخانه جهت تصمیم مسیر');
+                        }
+                        setShowWarehouseCheckModal(false);
+                    }}
+                />}
+
+                {showFactoryBranchModal && <FactoryBranchModal 
+                    onClose={() => setShowFactoryBranchModal(false)}
+                    onConfirm={(location: 'Tehran' | 'Factory', notes: string) => {
+                        if (location === 'Tehran') {
+                            handleAction(PurchaseRequestStatus.PENDING_CEO_INITIAL, { location: 'Tehran', factoryNotes: notes }, 'تعیین مسیر خرید از تهران');
+                        } else {
+                            handleAction(PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING, { location: 'Factory', factoryNotes: notes }, 'تعیین مسیر خرید از کارخانه زنجان');
+                        }
+                        setShowFactoryBranchModal(false);
+                    }}
+                />}
+
+                {showTechnicalApprovalModal && <TechnicalApprovalModal 
+                    onClose={() => setShowTechnicalApprovalModal(false)}
+                    onConfirm={(data: any) => {
+                        handleAction(PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL, data, 'تایید فنی و تطابق کالا');
+                        setShowTechnicalApprovalModal(false);
+                    }}
+                />}
+
+                {showPurchasingAgentModal && <PurchasingAgentModal 
+                    onClose={() => setShowPurchasingAgentModal(false)}
+                    onConfirm={(data: any) => {
+                        handleAction(PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL, data, 'ثبت فاکتور توسط کارپرداز');
+                        setShowPurchasingAgentModal(false);
+                    }}
+                />}
+
                 {showProformaModal && <ProfessionalProformaModal 
                     request={request} 
                     onClose={() => setShowProformaModal(false)}
                     onSuccess={(updatedProformas: any) => {
-                        handleAction(request.status, { proformas: updatedProformas });
+                        handleAction(request.status, { proformas: updatedProformas }, 'ثبت پیش‌فاکتور جدید');
                         setShowProformaModal(false);
                     }}
                     currentUser={currentUser}
@@ -1405,17 +1713,17 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
 
                 {showSecurityModal && <SecurityEntryModal 
                     onClose={() => setShowSecurityModal(false)}
-                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_QC, data)}
+                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_QC, data, 'ثبت ورود انتظامات')}
                 />}
                 
                 {showQCModal && <QCApprovalModal 
                     onClose={() => setShowQCModal(false)}
-                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE, data)}
+                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE, data, 'گزارش و تایید کیفی QC')}
                 />}
 
                 {showWarehouseModal && <WarehouseReceiptModal 
                    onClose={() => setShowWarehouseModal(false)}
-                   onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, data)}
+                   onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, data, 'صدور رسید انبار')}
                 />}
             </div>
         </div>,

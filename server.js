@@ -3150,20 +3150,26 @@ if (fs.existsSync(DIST_DIR)) {
     app.get('/', (req, res) => res.send(`<h1>Frontend Not Built</h1>`));
 }
 
-app.listen(PORT, '0.0.0.0', async () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on ${PORT}`);
-    const db = getDb(); // Initial load to memory
-    if(db.settings?.telegramBotToken) {
-        const tgModule = await safeImport('./backend/telegram.js');
-        if(tgModule) tgModule.initTelegram(db.settings.telegramBotToken);
-    }
-    if(db.settings?.baleBotToken) {
-        const baleModule = await safeImport('./backend/bale.js');
-        if(baleModule) baleModule.initBaleBot(db.settings.baleBotToken);
-    }
-    const waAuthPath = path.join(ROOT_DIR, 'wauth');
-    if (fs.existsSync(waAuthPath)) {
-        const waModule = await safeImport('./backend/whatsapp.js');
-        if (waModule) waModule.initWhatsApp(waAuthPath);
-    }
+    setTimeout(async () => {
+        try {
+            const db = getDb(); // Initial load to memory
+            if(db.settings?.telegramBotToken) {
+                const tgModule = await safeImport('./backend/telegram.js');
+                if(tgModule) tgModule.initTelegram(db.settings.telegramBotToken);
+            }
+            if(db.settings?.baleBotToken) {
+                const baleModule = await safeImport('./backend/bale.js');
+                if(baleModule) baleModule.initBaleBot(db.settings.baleBotToken);
+            }
+            const waAuthPath = path.join(ROOT_DIR, 'wauth');
+            if (fs.existsSync(waAuthPath) && process.env.DISABLE_WHATSAPP_DEV !== 'true') {
+                const waModule = await safeImport('./backend/whatsapp.js');
+                if (waModule) waModule.initWhatsApp(waAuthPath);
+            }
+        } catch (err) {
+            console.error("Background services initialization error:", err);
+        }
+    }, 1000);
 });
