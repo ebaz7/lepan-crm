@@ -2548,20 +2548,29 @@ app.get('/api/sayan/production-report', async (req, res) => {
         const gregFrom = `${gregFromDate}T00:00:00.000Z`;
         const gregTo = `${gregToDate}T23:59:59.999Z`;
 
+        const cleanDateFrom = dateFrom.replace(/-/g, '/');
+        const cleanDateTo = dateTo.replace(/-/g, '/');
+
         const sql = `
             SELECT 
                 t10.Field_001 as DocId,
                 t10.Field_008 as Date,
-                t10.Field_009 as DocType,
+                RTRIM(LTRIM(t10.Field_009)) as DocType,
                 t11.Field_005 as ItemCode,
                 COALESCE(t22.Field_004, t11.Field_005) as ItemName,
                 t11.Field_006 as Quantity
             FROM STR_TBL_010 t10
-            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
+            INNER JOIN STR_TBL_011 t11 ON (t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004) OR (t11.Field_004 = t10.Field_001)
             LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
-            WHERE t10.Field_009 IN ('61', '67', '79', '73')
-              AND t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}'
-            ORDER BY t22.Field_004, t10.Field_008
+            WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
+              AND (
+                   (t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}')
+                OR (t10.Field_008 >= '${gregFromDate}' AND t10.Field_008 <= '${gregToDate} 23:59:59')
+                OR (t10.Field_008 >= '${cleanDateFrom}' AND t10.Field_008 <= '${cleanDateTo}')
+                OR (LEFT(t10.Field_008, 10) >= '${gregFromDate}' AND LEFT(t10.Field_008, 10) <= '${gregToDate}')
+                OR (LEFT(t10.Field_008, 10) >= '${cleanDateFrom}' AND LEFT(t10.Field_008, 10) <= '${cleanDateTo}')
+              )
+            ORDER BY COALESCE(t22.Field_004, t11.Field_005), t10.Field_008
         `;
 
         const rawRows = await executeSayanQuery(db, sql);

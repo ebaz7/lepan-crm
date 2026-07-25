@@ -1232,15 +1232,95 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const fetchProduction = async () => {
         setIsLoading(true);
         try {
-            const url = `/api/sayan/production-report?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            if (data.success) {
-                setProdLiveItems(data.items || []);
-                setProdLiveTotals(data.totals || { qty_61: 0, qty_67: 0, qty_79: 0, qty_73: 0, grandTotal: 0 });
-                setProdWaste(data.waste || { waste_61: 0, waste_67: 0, waste_79: 0, waste_73: 0, totalWaste: 0, pct_61: 0, pct_67: 0, pct_79: 0, pct_73: 0, totalPct: 0, details: '' });
-            } else {
-                toast.error(data.error || 'خطا در دریافت آمار تولید زنده از سایان');
+            let items: any[] = [];
+            let totals = { qty_61: 0, qty_67: 0, qty_79: 0, qty_73: 0, grandTotal: 0 };
+            let wasteData: any = null;
+
+            try {
+                const url = `/api/sayan/production-report?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.success) {
+                    items = data.items || [];
+                    totals = data.totals || totals;
+                    wasteData = data.waste;
+                }
+            } catch (err) {
+                console.warn("Backend production-report endpoint warning, falling back to direct sayan-proxy:", err);
+            }
+
+            // Direct sayan-proxy query fallback if backend endpoint returned no items or couldn't reach Sayan
+            if (items.length === 0) {
+                const gregFrom = jalaliToGregorianStr(dateFrom);
+                const gregTo = jalaliToGregorianStr(dateTo);
+                const cleanDateFrom = dateFrom.replace(/-/g, '/');
+                const cleanDateTo = dateTo.replace(/-/g, '/');
+
+                const sql = `
+                    SELECT 
+                        t10.Field_001 as DocId,
+                        t10.Field_008 as Date,
+                        RTRIM(LTRIM(t10.Field_009)) as DocType,
+                        t11.Field_005 as ItemCode,
+                        COALESCE(t22.Field_004, t11.Field_005) as ItemName,
+                        t11.Field_006 as Quantity
+                    FROM STR_TBL_010 t10
+                    INNER JOIN STR_TBL_011 t11 ON (t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004) OR (t11.Field_004 = t10.Field_001)
+                    LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
+                    WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
+                      AND (
+                           (t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.999Z')
+                        OR (t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo} 23:59:59')
+                        OR (t10.Field_008 >= '${cleanDateFrom}' AND t10.Field_008 <= '${cleanDateTo}')
+                        OR (LEFT(t10.Field_008, 10) >= '${gregFrom}' AND LEFT(t10.Field_008, 10) <= '${gregTo}')
+                        OR (LEFT(t10.Field_008, 10) >= '${cleanDateFrom}' AND LEFT(t10.Field_008, 10) <= '${cleanDateTo}')
+                      )
+                    ORDER BY COALESCE(t22.Field_004, t11.Field_005), t10.Field_008
+                `;
+                
+                const rawRows = await runSayanQuery(sql);
+                const itemsMap = new Map();
+                let q61 = 0, q67 = 0, q79 = 0, q73 = 0;
+
+                rawRows.forEach((r: any) => {
+                    const rawName = (r.ItemName || r.ItemCode || 'کالای بدون نام').trim();
+                    const qty = parseFloat(r.Quantity || 0);
+                    const docType = String(r.DocType).trim();
+
+                    if (!itemsMap.has(rawName)) {
+                        itemsMap.set(rawName, {
+                            name: rawName,
+                            unit: 'کیلوگرم',
+                            qty_61: 0,
+                            qty_67: 0,
+                            qty_79: 0,
+                            qty_73: 0,
+                            total: 0
+                        });
+                    }
+
+                    const item = itemsMap.get(rawName);
+                    if (docType === '61') { item.qty_61 += qty; q61 += qty; }
+                    else if (docType === '67') { item.qty_67 += qty; q67 += qty; }
+                    else if (docType === '79') { item.qty_79 += qty; q79 += qty; }
+                    else if (docType === '73') { item.qty_73 += qty; q73 += qty; }
+                    item.total += qty;
+                });
+
+                items = Array.from(itemsMap.values());
+                totals = {
+                    qty_61: q61,
+                    qty_67: q67,
+                    qty_79: q79,
+                    qty_73: q73,
+                    grandTotal: q61 + q67 + q79 + q73
+                };
+            }
+
+            setProdLiveItems(items);
+            setProdLiveTotals(totals);
+            if (wasteData) {
+                setProdWaste(wasteData);
             }
         } catch (e: any) {
             console.error("fetchProduction Error:", e);
