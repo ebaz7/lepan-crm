@@ -1185,6 +1185,82 @@ app.get('/api/part-kardex/:partId', (req, res) => {
     res.json(kardex);
 });
 
+app.post('/api/part-kardex/transaction', (req, res) => {
+    const db = getDb();
+    const { partId, type, quantity, referenceNumber, unitPrice, description, date } = req.body;
+
+    if (!db.partMasterData) db.partMasterData = [];
+    if (!db.partKardex) db.partKardex = [];
+
+    const part = db.partMasterData.find(p => p.id === partId);
+    if (!part) {
+        return res.status(404).json({ error: 'Part not found' });
+    }
+
+    const qty = Number(quantity);
+    const oldStock = Number(part.currentStock) || 0;
+    const newStock = type === 'IN' ? oldStock + qty : oldStock - qty;
+
+    part.currentStock = newStock;
+
+    const kardexEntry = {
+        id: 'kardex_' + Math.random().toString(36).substr(2, 9),
+        partId: part.id,
+        date: date || new Date().toISOString().split('T')[0],
+        referenceNumber: referenceNumber || (type === 'IN' ? 'MANUAL-IN' : 'MANUAL-OUT'),
+        type,
+        quantity: qty,
+        balance: newStock,
+        unitPrice: Number(unitPrice) || 0,
+        description: description || (type === 'IN' ? 'ورود دستی کالا' : 'خروج دستی کالا')
+    };
+
+    db.partKardex.unshift(kardexEntry);
+    saveDb(db);
+
+    res.json({ part, kardex: db.partKardex.filter(k => k.partId === partId), parts: db.partMasterData });
+});
+
+app.post('/api/part-kardex/stocktake', (req, res) => {
+    const db = getDb();
+    const { items, date, description } = req.body;
+
+    if (!db.partMasterData) db.partMasterData = [];
+    if (!db.partKardex) db.partKardex = [];
+
+    const shamsiDate = date || new Date().toISOString().split('T')[0];
+    const auditRef = `AUDIT-${shamsiDate.replace(/\//g, '-')}-${Math.floor(100 + Math.random() * 900)}`;
+
+    for (const item of items) {
+        const part = db.partMasterData.find(p => p.id === item.partId);
+        if (part) {
+            const countedQty = Number(item.countedQty);
+            const systemQty = Number(part.currentStock) || 0;
+            const diff = countedQty - systemQty;
+
+            if (diff !== 0) {
+                part.currentStock = countedQty;
+
+                const kardexEntry = {
+                    id: 'kardex_' + Math.random().toString(36).substr(2, 9),
+                    partId: part.id,
+                    date: shamsiDate,
+                    referenceNumber: auditRef,
+                    type: diff > 0 ? 'IN' : 'OUT',
+                    quantity: Math.abs(diff),
+                    balance: countedQty,
+                    unitPrice: 0,
+                    description: `اصلاح مغایرت انبارگردانی - ${description || 'ثبت سیستمی'}`
+                };
+                db.partKardex.unshift(kardexEntry);
+            }
+        }
+    }
+
+    saveDb(db);
+    res.json({ success: true, parts: db.partMasterData });
+});
+
 app.get('/api/purchase-requests', (req, res) => res.json(getDb().purchaseRequests || []));
 app.post('/api/purchase-requests', (req, res) => { 
     const db = getDb(); 
@@ -1199,7 +1275,68 @@ app.put('/api/purchase-requests/:id', (req, res) => {
     const idx = (db.purchaseRequests||[]).findIndex(r => r.id === req.params.id); 
     if(idx > -1) { 
         const oldReq = db.purchaseRequests[idx];
-        db.purchaseRequests[idx] = { ...db.purchaseRequests[idx], ...req.body }; 
+        const newReq = { ...db.purchaseRequests[idx], ...req.body };
+        db.purchaseRequests[idx] = newReq;
+
+        const PENDING_FACTORY_FINAL_SIGN = 'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)';
+        if (newReq.status === PENDING_FACTORY_FINAL_SIGN && oldReq.status !== PENDING_FACTORY_FINAL_SIGN) {
+            if (!db.partMasterData) db.partMasterData = [];
+            if (!db.partKardex) db.partKardex = [];
+
+            const items = newReq.items || [];
+            const receiptNo = newReq.warehouseReceiptNumber || `RI-${newReq.requestNumber}`;
+            const receiptDate = newReq.warehouseReceiptDate || new Date().toISOString().split('T')[0];
+
+            for (const item of items) {
+                let part = null;
+                if (item.partId) {
+                    part = db.partMasterData.find(p => p.id === item.partId);
+                }
+                if (!part && item.itemName) {
+                    part = db.partMasterData.find(p => p.name === item.itemName);
+                }
+
+                if (!part && item.itemName) {
+                    part = {
+                        id: 'part_' + Math.random().toString(36).substr(2, 9),
+                        name: item.itemName,
+                        type: 'قطعات',
+                        category: 'سایر قطعات',
+                        subCategory: 'ورود خودکار از خرید',
+                        dimensions: item.specifications || '',
+                        unit: item.unit || 'عدد',
+                        minStock: 0,
+                        currentStock: 0
+                    };
+                    db.partMasterData.push(part);
+                    item.partId = part.id;
+                }
+
+                if (part) {
+                    const isDup = db.partKardex.some(k => k.partId === part.id && k.referenceNumber === receiptNo);
+                    if (!isDup) {
+                        const oldStock = Number(part.currentStock) || 0;
+                        const qty = Number(item.quantity) || 0;
+                        const newStock = oldStock + qty;
+                        part.currentStock = newStock;
+
+                        const kardexEntry = {
+                            id: 'kardex_' + Math.random().toString(36).substr(2, 9),
+                            partId: part.id,
+                            date: receiptDate,
+                            referenceNumber: receiptNo,
+                            type: 'IN',
+                            quantity: qty,
+                            balance: newStock,
+                            unitPrice: Number(item.unitPrice) || 0,
+                            description: `ورود کالا بابت درخواست خرید شماره ${newReq.requestNumber}`
+                        };
+                        db.partKardex.unshift(kardexEntry);
+                    }
+                }
+            }
+        }
+
         saveDb(db); 
         if (req.body.status !== oldReq.status) {
             notifyPurchaseRequestStep(db.purchaseRequests[idx], null, null, null, db, req.body.status + ' (تغییر وضعیت)').catch(e => console.error("Purchase Notification PUT:", e));

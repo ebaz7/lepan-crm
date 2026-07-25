@@ -12,6 +12,21 @@ const PrintPartDataSheet: React.FC<{ part: PartMasterData }> = ({ part }) => {
                     <h1 className="text-2xl font-black mb-1">شناسنامه کالا / قطعه (Data Sheet)</h1>
                     <p className="text-xs font-bold text-gray-600 tracking-widest uppercase">M.S.G Industrial Group - Technical Specification</p>
                 </div>
+                {/* Barcode inside Printed Card */}
+                <div className="flex flex-col items-center bg-white border border-black p-1.5 ml-4">
+                    <div className="flex items-stretch h-8 bg-white px-1 gap-[1px]">
+                        {Array.from({ length: 40 }).map((_, idx) => {
+                            const isBlack = ((part.id.charCodeAt(idx % part.id.length) || 0) >> (idx % 8)) & 1;
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`w-[2px] h-full ${isBlack ? 'bg-black' : 'bg-transparent'}`} 
+                                />
+                            );
+                        })}
+                    </div>
+                    <span className="text-[8px] font-mono tracking-wider font-bold mt-1 text-black uppercase">{part.id.slice(0, 16).toUpperCase()}</span>
+                </div>
                 <div className="w-24 h-24 border-2 border-black flex items-center justify-center bg-white p-1">
                     {part.image ? (
                         <img src={part.image} className="max-w-full max-h-full object-contain" alt="part" referrerPolicy="no-referrer" />

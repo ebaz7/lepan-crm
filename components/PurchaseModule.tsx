@@ -18,7 +18,8 @@ import {
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
     Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle, X,
-    GitFork, Clock, CornerUpLeft, UserCheck, FileCode, AlertTriangle, Check, ExternalLink, Paperclip, Wrench
+    GitFork, Clock, CornerUpLeft, UserCheck, FileCode, AlertTriangle, Check, ExternalLink, Paperclip, Wrench,
+    FileSpreadsheet, Container, ArrowDownCircle, ArrowUpCircle
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
@@ -196,6 +197,7 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                         setSelectedPart={setSelectedPartKardex}
                         kardexEntries={kardexEntries}
                         loadKardex={loadKardex}
+                        onPartUpdate={loadParts}
                    />
                 )}
             </div>
@@ -216,152 +218,77 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
 const BpmnWorkflowDiagram: React.FC<{ currentStatus?: PurchaseRequestStatus; location?: string }> = ({ currentStatus, location }) => {
     const isStepActive = (status: PurchaseRequestStatus) => currentStatus === status;
 
-    const tehranSteps = [
-        { status: PurchaseRequestStatus.PENDING_CEO_INITIAL, title: 'تایید اولیه استعلام', role: 'مدیرعامل', desc: 'بررسی ضرورت تامین و اجازه استعلام' },
-        { status: PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, title: 'ثبت استعلام / پیش‌فاکتور', role: 'واحد بازرگانی تهران', desc: 'اخذ حداقل ۳ پیش‌فاکتور رقابتی' },
-        { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, title: 'بررسی و پیشنهاد تامین‌کننده', role: 'مدیر بازرگانی', desc: 'مقایسه قیمت، کیفیت و شرایط پرداخت' },
-        { status: PurchaseRequestStatus.PENDING_CEO_SELECTION, title: 'تایید نهایی و مالی', role: 'مدیرعامل', desc: 'انتخاب تامین‌کننده و تخصیص بودجه' },
-    ];
-
-    const zanjanSteps = [
-        { status: PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING, title: 'پیشنهاد خرید کارخانه/زنجان', role: 'انبار و نت کارخانه', desc: 'بررسی تامین‌کنندگان محلی استان' },
-        { status: PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, title: 'دستور خرید و صدور سفارش', role: 'مدیر کارخانه', desc: 'تخصیص اعتبار خرید کارخانه' },
-        { status: PurchaseRequestStatus.PENDING_BUYER_EXECUTION, title: 'اجرای خرید و صدور فاکتور', role: 'کارپرداز / مامور خرید', desc: 'خرید کالا، دریافت فاکتور رسمی و بارنامه' },
-        { status: PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION, title: 'تایید نهایی خرید کارخانه', role: 'مدیر کارخانه', desc: 'کنترل فاکتور و تایید ارسال به کارخانه' },
-    ];
-
-    const commonSteps = [
-        { status: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, title: 'ورود کالا به کارخانه', role: 'انتظامات / نگهبانی', desc: 'ثبت پلاک خودرو، راننده، وزن و شماره بارنامه' },
-        { status: PurchaseRequestStatus.PENDING_QC, title: 'تایید فنی و QC', role: 'واحد نت / کنترل کیفی', desc: 'بازرسی فنی کالا و انطباق با سفارش' },
-        { status: PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, title: 'رسید انبار قطعات', role: 'انباردار قطعات', desc: 'تخصیص کد کالا، بارکد، سریال و جانمایی قفسه' },
-        { status: PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, title: 'امضا و بایگانی پرونده', role: 'مدیر کارخانه', desc: 'تکمیل نهایی، امضای اسناد و بایگانی سیستمی' },
+    // Grouping steps into logical phases to be extremely precise and compact
+    const phases = [
+        {
+            title: '۱. بررسی اولیه',
+            steps: [
+                { status: PurchaseRequestStatus.PENDING_TECHNICAL, title: 'تایید فنی نت', role: 'واحد نت' },
+                { status: PurchaseRequestStatus.PENDING_FACTORY, title: 'موجودی انبار', role: 'انباردار/سرشیفت' },
+                { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, title: 'تایید مسیر تامین', role: 'مدیر کارخانه' },
+            ]
+        },
+        {
+            title: location === 'Tehran' ? '۲. شعبه تهران (بازرگانی مرکزی)' : '۲. تامین محلی (زنجان/کارخانه)',
+            isBranch: true,
+            steps: location === 'Tehran' ? [
+                { status: PurchaseRequestStatus.PENDING_CEO_INITIAL, title: 'مجوز استعلام', role: 'مدیرعامل' },
+                { status: PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, title: 'ثبت پروفرما', role: 'بازرگانی تهران' },
+                { status: PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER, title: 'بررسی بازرگانی', role: 'مدیر بازرگانی' },
+                { status: PurchaseRequestStatus.PENDING_CEO_SELECTION, title: 'انتخاب نهایی', role: 'مدیرعامل' },
+            ] : [
+                { status: PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING, title: 'پیشنهاد خرید', role: 'خرید زنجان' },
+                { status: PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL, title: 'دستور خرید', role: 'مدیر کارخانه' },
+                { status: PurchaseRequestStatus.PENDING_BUYER_EXECUTION, title: 'اجرای خرید', role: 'کارپرداز' },
+            ]
+        },
+        {
+            title: '۳. تحویل و ثبت نهایی کارخانه',
+            steps: [
+                { status: PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL, title: 'تایید فنی و کیفی', role: 'نت / QC' },
+                { status: PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL, title: 'تایید ورود', role: 'مدیر کارخانه' },
+                { status: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, title: 'ورود انتظامات', role: 'انتظامات' },
+                { status: PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, title: 'رسید انبار', role: 'انباردار' },
+                { status: PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, title: 'تایید نهایی و امضا', role: 'مدیر کارخانه' },
+                { status: PurchaseRequestStatus.COMPLETED, title: 'بایگانی شده', role: 'سیستم' },
+            ]
+        }
     ];
 
     return (
-        <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border border-slate-800 space-y-6 text-right dir-rtl">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-2">
-                <div>
-                    <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
-                        <GitFork className="text-amber-400" size={20} />
-                        دیاگرام فرآیند استاندارد درخواست خرید (BPMN Workflow)
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">مدل دو شاخه‌ای خرید از تهران و خرید از کارخانه/زنجان با کنترل انبار و انتظامات</p>
+        <div className="bg-white text-gray-800 p-4 rounded-2xl border border-gray-200 shadow-sm text-right dir-rtl">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-3">
+                <div className="flex items-center gap-2">
+                    <GitFork className="text-indigo-600" size={14} />
+                    <span className="text-xs font-black text-gray-800">رهگیری الکترونیک فرآیند خرید (BPMN Workflow Tracker)</span>
                 </div>
                 {currentStatus && (
-                    <div className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2">
-                        <Clock size={14} className="animate-spin text-amber-400" />
-                        وضعیت جاری: <span className="font-sans font-black">{currentStatus}</span>
-                    </div>
+                    <span className="bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full text-[9px] font-black">
+                        مرحله فعلی: {currentStatus}
+                    </span>
                 )}
             </div>
 
-            {/* Stage 1: Initiation */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_TECHNICAL) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۱</span>
-                        <Wrench size={18} className={isStepActive(PurchaseRequestStatus.PENDING_TECHNICAL) ? 'text-amber-400' : 'text-slate-400'} />
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-100">بررسی اولیه و کارشناسی نت</h4>
-                    <p className="text-[10px] text-slate-400 mt-1">ارزیابی فنی خرابی/نیاز توسط واحد نگهداری و تعمیرات</p>
-                    <div className="mt-3 text-[9px] font-black text-indigo-400 bg-indigo-950/60 p-1.5 rounded-lg border border-indigo-900/50">مسئول: کارشناس فنی / مدیر نت</div>
-                </div>
-
-                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_FACTORY) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۲</span>
-                        <Warehouse size={18} className={isStepActive(PurchaseRequestStatus.PENDING_FACTORY) ? 'text-amber-400' : 'text-slate-400'} />
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-100">استعلام موجودی و تصمیم انبار</h4>
-                    <p className="text-[10px] text-slate-400 mt-1">بررسی موجودی در تمام انبارها؛ تحویل مستقیم یا تایید خرید</p>
-                    <div className="mt-3 text-[9px] font-black text-emerald-400 bg-emerald-950/60 p-1.5 rounded-lg border border-emerald-900/50">مسئول: سرشیفت / مسئول انبار قطعات</div>
-                </div>
-
-                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۳</span>
-                        <GitFork size={18} className={isStepActive(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) ? 'text-amber-400' : 'text-slate-400'} />
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-100">تصمیم‌گیری مسیر خرید</h4>
-                    <p className="text-[10px] text-slate-400 mt-1">تعیین اولویت تامین (خرید از تهران vs خرید از زنجان/کارخانه)</p>
-                    <div className="mt-3 text-[9px] font-black text-amber-400 bg-amber-950/60 p-1.5 rounded-lg border border-amber-900/50">مسئول: مدیر کارخانه / بازرگانی</div>
-                </div>
-            </div>
-
-            {/* Split Branches */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-                {/* Branch A: Tehran */}
-                <div className={`p-5 rounded-3xl border ${location === 'Tehran' || tehranSteps.some(s => isStepActive(s.status)) ? 'border-sky-500/60 bg-sky-950/20 ring-1 ring-sky-500/30' : 'border-slate-800 bg-slate-900/40'}`}>
-                    <div className="flex items-center justify-between mb-4 border-b border-sky-900/50 pb-2">
-                        <span className="text-xs font-black text-sky-400 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping"></span>
-                            مسیر ۱: خرید از تهران (بازرگانی مرکزی)
-                        </span>
-                        <span className="text-[9px] bg-sky-900/60 text-sky-200 px-2.5 py-0.5 rounded-full font-mono">Tehran Path</span>
-                    </div>
-                    <div className="space-y-3">
-                        {tehranSteps.map((step, idx) => {
-                            const active = isStepActive(step.status);
-                            return (
-                                <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-sky-500/20 border-sky-400 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
-                                    <div className="flex justify-between items-center">
-                                        <h5 className="font-bold text-xs">{step.title}</h5>
-                                        <span className="text-[9px] font-black bg-sky-900/80 text-sky-300 px-2 py-0.5 rounded">{step.role}</span>
+                {phases.map((phase, pIdx) => (
+                    <div key={pIdx} className="space-y-2 bg-gray-50/50 p-2.5 rounded-xl border border-gray-100">
+                        <span className="text-[9px] font-black text-indigo-600 block border-b pb-1 border-gray-200">{phase.title}</span>
+                        <div className="space-y-1.5">
+                            {phase.steps.map((step, sIdx) => {
+                                const active = isStepActive(step.status);
+                                return (
+                                    <div key={sIdx} className={`p-1.5 rounded-lg border flex items-center justify-between transition-all ${active ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm scale-[1.01]' : 'bg-white border-gray-100'}`}>
+                                        <div className="flex items-center gap-1">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-white animate-ping' : 'bg-gray-300'}`}></span>
+                                            <span className="text-[10px] font-bold">{step.title}</span>
+                                        </div>
+                                        <span className={`text-[8px] px-1 py-0.2 rounded font-black ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>{step.role}</span>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 mt-1">{step.desc}</p>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-
-                {/* Branch B: Zanjan / Factory */}
-                <div className={`p-5 rounded-3xl border ${location === 'Factory' || location === 'Zanjan' || zanjanSteps.some(s => isStepActive(s.status)) ? 'border-teal-500/60 bg-teal-950/20 ring-1 ring-teal-500/30' : 'border-slate-800 bg-slate-900/40'}`}>
-                    <div className="flex items-center justify-between mb-4 border-b border-teal-900/50 pb-2">
-                        <span className="text-xs font-black text-teal-400 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping"></span>
-                            مسیر ۲: خرید محلی / کارخانه (زنجان)
-                        </span>
-                        <span className="text-[9px] bg-teal-900/60 text-teal-200 px-2.5 py-0.5 rounded-full font-mono">Factory/Zanjan Path</span>
-                    </div>
-                    <div className="space-y-3">
-                        {zanjanSteps.map((step, idx) => {
-                            const active = isStepActive(step.status);
-                            return (
-                                <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-teal-500/20 border-teal-400 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
-                                    <div className="flex justify-between items-center">
-                                        <h5 className="font-bold text-xs">{step.title}</h5>
-                                        <span className="text-[9px] font-black bg-teal-900/80 text-teal-300 px-2 py-0.5 rounded">{step.role}</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 mt-1">{step.desc}</p>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-
-            {/* Stage 3: Intake, QC & Fulfillment */}
-            <div className="border-t border-slate-800 pt-4">
-                <h4 className="text-xs font-bold text-slate-400 mb-3 flex items-center gap-2">
-                    <CheckCircle className="text-emerald-400" size={16} />
-                    مراحل مشترک تحویل، ورود به کارخانه، QC و ثبت انبار
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {commonSteps.map((step, idx) => {
-                        const active = isStepActive(step.status);
-                        return (
-                            <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[9px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام {idx + 4}</span>
-                                    <span className="text-[8px] font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded">{step.role}</span>
-                                </div>
-                                <h5 className="font-bold text-xs text-slate-100">{step.title}</h5>
-                                <p className="text-[9px] text-slate-400 mt-1">{step.desc}</p>
-                            </div>
-                        );
-                    })}
-                </div>
+                ))}
             </div>
         </div>
     );
@@ -656,7 +583,11 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
     const [installationLocation, setInstallationLocation] = useState('');
     const [breakdownDescription, setBreakdownDescription] = useState('');
     const [purchaseReason, setPurchaseReason] = useState('');
-    const [repairRequestNumber, setRepairRequestNumber] = useState('');
+    const [repairRequestNumber, setRepairRequestNumber] = useState(() => {
+        const shamsi = getCurrentShamsiDate();
+        const randomNum = Math.floor(100 + Math.random() * 900);
+        return `REPAIR-${shamsi.year}/${randomNum}`;
+    });
 
     const [items, setItems] = useState<PurchaseRequestItem[]>([
         { id: generateUUID(), itemName: '', itemCode: '', suggestedBrand: '', quantity: 1, unit: 'عدد', specifications: '' }
@@ -831,8 +762,8 @@ const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => 
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-700 block mb-1">شماره درخواست تعمیر (نت)</label>
-                            <input className="w-full border rounded-xl p-2.5 text-xs font-mono bg-gray-50" value={repairRequestNumber} onChange={e => setRepairRequestNumber(e.target.value)} placeholder="مثلاً: REPAIR-1402/98" />
+                            <label className="text-xs font-bold text-gray-700 block mb-1">شماره درخواست تعمیر (تولید خودکار)</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-mono font-bold bg-gray-100 cursor-not-allowed text-gray-500" value={repairRequestNumber} readOnly />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-700 block mb-1">شرح خرابی / علت نیاز</label>
@@ -1025,7 +956,11 @@ const RejectModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (
 
 const WarehouseCheckModal = ({ onClose, onConfirm }: { onClose: () => void, onConfirm: (inStock: boolean, data: any) => void }) => {
     const [inStock, setInStock] = useState(false);
-    const [exitNumber, setExitNumber] = useState('');
+    const [exitNumber, setExitNumber] = useState(() => {
+        const shamsi = getCurrentShamsiDate();
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        return `OUT-${shamsi.year}/${randomNum}`;
+    });
     const [recipient, setRecipient] = useState('');
     const [notes, setNotes] = useState('');
 
@@ -1052,8 +987,8 @@ const WarehouseCheckModal = ({ onClose, onConfirm }: { onClose: () => void, onCo
                     {inStock ? (
                         <div className="space-y-3 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
                             <div>
-                                <label className="text-[10px] font-bold text-gray-600 block mb-1">شماره حواله خروج انبار:</label>
-                                <input className="w-full border rounded-xl p-2.5 text-xs font-bold" value={exitNumber} onChange={e => setExitNumber(e.target.value)} placeholder="مثلاً: OUT-1402/805" />
+                                <label className="text-[10px] font-bold text-gray-600 block mb-1">شماره حواله خروج انبار (تولید خودکار):</label>
+                                <input className="w-full border rounded-xl p-2.5 text-xs font-mono font-bold bg-gray-100 cursor-not-allowed text-gray-500" value={exitNumber} readOnly />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-gray-600 block mb-1">نام تحویل‌گیرنده:</label>
@@ -1129,39 +1064,103 @@ const TechnicalApprovalModal = ({ onClose, onConfirm }: { onClose: () => void, o
     const [brandOk, setBrandOk] = useState(true);
     const [equipmentOk, setEquipmentOk] = useState(true);
     const [techReport, setTechReport] = useState('');
+    
+    // Quality Control Fields
+    const [qcStatus, setQcStatus] = useState<'تایید' | 'مشروط' | 'رد'>('تایید');
+    const [qcNotes, setQcNotes] = useState('');
+    const [inspectorName, setInspectorName] = useState('');
 
     return createPortal(
         <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-scale-in text-right dir-rtl">
+            <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl animate-scale-in text-right dir-rtl">
                 <div className="flex items-center gap-3 mb-6 text-indigo-600 border-b pb-4">
                     <Wrench size={28} />
                     <div>
-                        <h3 className="font-black text-lg text-gray-800">تایید فنی و تطابق سفارش (QC/Net)</h3>
-                        <p className="text-xs text-gray-500">بررسی کارشناسی نمونه یا قطعه تحویلی قبل از ورود نهایی</p>
+                        <h3 className="font-black text-lg text-gray-800">فرم یکپارچه تایید فنی و کنترل کیفی (QC/Net)</h3>
+                        <p className="text-xs text-gray-500">بررسی همزمان تطابق فنی، کنترل کیفی و سلامت فیزیکی قطعات</p>
                     </div>
                 </div>
-                <div className="space-y-4">
-                    <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border">
-                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
-                            <input type="checkbox" checked={specsOk} onChange={e => setSpecsOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
-                            تطابق مشخصات فنی و ابعاد
-                        </label>
-                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
-                            <input type="checkbox" checked={brandOk} onChange={e => setBrandOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
-                            تایید برند و سازنده قطعه
-                        </label>
-                        <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
-                            <input type="checkbox" checked={equipmentOk} onChange={e => setEquipmentOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600" />
-                            تطابق کامل با ماشین‌آلات هدف
-                        </label>
-                    </div>
+                <div className="space-y-6">
+                    {/* Section 1: Technical specs Check */}
                     <div>
-                        <label className="text-xs font-bold text-gray-700 block mb-1">گزارش کارشناسی واحد فنی / نت:</label>
-                        <textarea className="w-full border rounded-xl p-3 text-xs h-28 focus:ring-2 focus:ring-indigo-100 outline-none" value={techReport} onChange={e => setTechReport(e.target.value)} placeholder="نتایج تست، مرغوبیت و انطباق فنی..." />
+                        <h4 className="text-xs font-black text-indigo-600 mb-2.5 flex items-center gap-1.5 border-r-4 border-indigo-500 pr-2">۱. تایید مشخصات فنی و تطابق سفارش</h4>
+                        <div className="space-y-2 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                            <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={specsOk} onChange={e => setSpecsOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-300" />
+                                تطابق مشخصات فنی، ابعاد، گام، رزوه و شفت قطعه
+                            </label>
+                            <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={brandOk} onChange={e => setBrandOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-300" />
+                                تایید اصالت برند، کاتالوگ و گواهی مبدا سازنده
+                            </label>
+                            <label className="flex items-center gap-3 text-xs font-bold text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={equipmentOk} onChange={e => setEquipmentOk(e.target.checked)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-300" />
+                                تست و تطابق کامل با ماشین‌آلات هدف و خطوط تولید
+                            </label>
+                        </div>
                     </div>
+
+                    {/* Section 2: QC Check */}
+                    <div>
+                        <h4 className="text-xs font-black text-emerald-600 mb-2.5 flex items-center gap-1.5 border-r-4 border-emerald-500 pr-2">۲. ارزیابی کنترل کیفی و بازرسی فیزیکی</h4>
+                        <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-100 space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-gray-700 block mb-1">نتیجه بازرسی کیفی:</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setQcStatus('تایید')} 
+                                        className={`py-2 text-xs font-black rounded-xl border transition-all ${qcStatus === 'تایید' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        تایید کامل کیفی
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setQcStatus('مشروط')} 
+                                        className={`py-2 text-xs font-black rounded-xl border transition-all ${qcStatus === 'مشروط' ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        تایید مشروط / اصلاحی
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setQcStatus('رد')} 
+                                        className={`py-2 text-xs font-black rounded-xl border transition-all ${qcStatus === 'رد' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        مردود / عودت کالا
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="text-xs font-bold text-gray-700 block mb-1">نام بازرس یا تایید کننده کیفی:</label>
+                                <input className="w-full border rounded-xl p-2.5 text-xs font-black text-gray-800 outline-none focus:ring-2 focus:ring-emerald-200" value={inspectorName} onChange={e => setInspectorName(e.target.value)} placeholder="مثلاً: مهندس احمدی" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section 3: Technical report Text area */}
+                    <div>
+                        <label className="text-xs font-black text-gray-700 block mb-1">گزارش کارشناسی نهایی واحد فنی و QC:</label>
+                        <textarea className="w-full border rounded-xl p-3 text-xs h-24 focus:ring-2 focus:ring-indigo-100 outline-none" value={techReport} onChange={e => setTechReport(e.target.value)} placeholder="نتایج دقیق تست فیزیکی، مرغوبیت، ابعاد اندازه‌گیری شده و انحرافات احتمالی..." />
+                    </div>
+
+                    {/* Submit and Close Buttons */}
                     <div className="flex gap-3 pt-2">
-                        <button onClick={() => onConfirm({ technicalReport: techReport, specsApproved: specsOk, brandApproved: brandOk, equipmentMatchApproved: equipmentOk })} className="flex-1 bg-indigo-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">تایید کارشناسی فنی</button>
-                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl">انصراف</button>
+                        <button 
+                            onClick={() => onConfirm({ 
+                                technicalReport: techReport, 
+                                specsApproved: specsOk, 
+                                brandApproved: brandOk, 
+                                equipmentMatchApproved: equipmentOk,
+                                qcResult: qcStatus,
+                                qcDescription: qcNotes || techReport,
+                                qcInspector: inspectorName
+                            })} 
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-xs"
+                        >
+                            تایید نهایی فرم و ارجاع به مدیر کارخانه
+                        </button>
+                        <button onClick={onClose} className="px-6 bg-gray-100 text-gray-600 font-bold text-xs rounded-2xl hover:bg-gray-200 transition">انصراف</button>
                     </div>
                 </div>
             </div>
@@ -1367,9 +1366,6 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                 )}
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50 no-scrollbar">
-                    {/* BPMN Diagram Header */}
-                    <BpmnWorkflowDiagram currentStatus={request.status} location={request.location} />
-
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             {/* Core Info */}
@@ -1505,6 +1501,11 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                              )}
                         </div>
                     </div>
+
+                    {/* Compact BPMN tracker placed at the bottom of the request info */}
+                    <div className="pt-4 border-t border-gray-100">
+                        <BpmnWorkflowDiagram currentStatus={request.status} location={request.location} />
+                    </div>
                 </div>
 
                 {/* Actions Footer */}
@@ -1533,8 +1534,8 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                         )}
 
                         {/* Stage 3: Factory Manager Branch Selection */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
-                            <button onClick={() => setShowFactoryBranchModal(true)} className="bg-amber-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-amber-100 text-xs hover:scale-105 transition-all" disabled={actionLoading}>تعیین مسیر تامین (خرید تهران vs کارخانه)</button>
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER)) && (
+                            <button onClick={() => setShowFactoryBranchModal(true)} className="bg-amber-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-amber-100 text-xs hover:scale-105 transition-all" disabled={actionLoading}>تعیین و تایید مسیر تامین (مدیر کارخانه)</button>
                         )}
 
                         {/* Tehran Branch: CEO Initial Approval */}
@@ -1713,7 +1714,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
 
                 {showSecurityModal && <SecurityEntryModal 
                     onClose={() => setShowSecurityModal(false)}
-                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_QC, data, 'ثبت ورود انتظامات')}
+                    onConfirm={(data: any) => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, data, 'ثبت ورود انتظامات')}
                 />}
                 
                 {showQCModal && <QCApprovalModal 
@@ -1876,26 +1877,29 @@ const QCApprovalModal = ({ onClose, onConfirm }: any) => {
 };
 
 const WarehouseReceiptModal = ({ onClose, onConfirm }: any) => {
-    const [num, setNum] = useState('');
     const shamsi = getCurrentShamsiDate();
+    const [num, setNum] = useState(() => {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        return `RI-${shamsi.year}/${randomNum}`;
+    });
     const [date, setDate] = useState(`${shamsi.year}/${shamsi.month}/${shamsi.day}`);
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/50 backdrop-blur-sm text-right dir-rtl">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-scale-in">
                 <h3 className="font-black text-xl mb-6 text-gray-800 flex items-center gap-2"><Warehouse className="text-indigo-600"/> صدور رسید انبار</h3>
                 <div className="space-y-6">
                     <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-2">شماره رسید انبار (سیستمی یا اسنادی)</label>
-                        <input className="w-full border rounded-xl p-4 text-sm font-black focus:ring-2 focus:ring-indigo-100 outline-none" value={num} onChange={e=>setNum(e.target.value)} placeholder="مثلاً: RI-1402/100" />
+                        <label className="text-xs font-bold text-gray-500 block mb-2">شماره رسید انبار (تولید خودکار)</label>
+                        <input className="w-full border rounded-xl p-4 text-sm font-mono font-black bg-gray-100 cursor-not-allowed text-gray-500" value={num} readOnly />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 block mb-2">تاریخ رسید</label>
                         <input className="w-full border rounded-xl p-4 text-sm font-black text-center" value={date} onChange={e=>setDate(e.target.value)} />
                     </div>
                     <div className="flex gap-3 pt-4">
-                        <button onClick={() => onConfirm({ warehouseReceiptNumber: num, warehouseReceiptDate: date })} className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">صدور و تایید نهایی رسید</button>
-                        <button onClick={onClose} className="px-6 bg-white border border-gray-300 text-gray-500 font-bold rounded-2xl">انصراف</button>
+                        <button onClick={() => onConfirm({ warehouseReceiptNumber: num, warehouseReceiptDate: date })} className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all text-xs">صدور و تایید نهایی رسید</button>
+                        <button onClick={onClose} className="px-6 bg-white border border-gray-300 text-gray-500 font-bold rounded-2xl text-xs">انصراف</button>
                     </div>
                 </div>
             </div>
@@ -2339,26 +2343,348 @@ const PartModal = ({ onClose, onSuccess, initialData, parts }: any) => {
     );
 };
 
-// --- KARDEX TAB ---
-const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKardex }: any) => {
+// Barcode Generator Component (SVG-based Code 128 / stripes)
+const BarcodeVisual = ({ value }: { value: string }) => {
+    const s = value || 'PART-9999';
+    const lines: boolean[] = [];
+    
+    // Deterministic visual stripes generation based on characters ASCII
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        for (let j = 0; j < 8; j++) {
+            lines.push(((code >> j) & 1) === 1);
+        }
+    }
+    
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex items-stretch h-10 bg-white px-1 gap-[1px]">
+                {lines.slice(0, 50).map((isBlack, idx) => (
+                    <div 
+                        key={idx} 
+                        className={`w-[2px] h-full ${isBlack ? 'bg-black' : 'bg-gray-100'}`} 
+                    />
+                ))}
+            </div>
+            <span className="text-[10px] font-mono tracking-widest text-gray-400 font-bold mt-1.5 uppercase select-all">{s.slice(0, 16).toUpperCase()}</span>
+        </div>
+    );
+};
+
+// --- KARDEX TAB ---
+const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKardex, onPartUpdate }: any) => {
+    const getShamsiString = (shamsi: any = getCurrentShamsiDate()) => {
+        if (!shamsi) return '';
+        return `${shamsi.year}/${String(shamsi.month).padStart(2, '0')}/${String(shamsi.day).padStart(2, '0')}`;
+    };
+
+    // Manual Transaction Form State
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [manualType, setManualType] = useState<'IN' | 'OUT'>('IN');
+    const [manualPartId, setManualPartId] = useState('');
+    const [manualQty, setManualQty] = useState<number>(1);
+    const [manualPrice, setManualPrice] = useState<number>(0);
+    const [manualRef, setManualRef] = useState('');
+    const [manualDesc, setManualDesc] = useState('');
+    const [manualDate, setManualDate] = useState(getShamsiString());
+    const [actionLoading, setActionLoading] = useState(false);
+
+    // Stocktaking (انبارگردانی) State
+    const [isStocktaking, setIsStocktaking] = useState(false);
+    const [stocktakeItems, setStocktakeItems] = useState<any[]>([]);
+    const [stocktakeDate, setStocktakeDate] = useState(getShamsiString());
+    const [stocktakeDesc, setStocktakeDesc] = useState('انبارگردانی میان‌دوره');
+    const [scanBuffer, setScanBuffer] = useState('');
+    const [filterDiscrepancy, setFilterDiscrepancy] = useState(false);
+
+    // Global barcode listener/quick action state
+    const [generalScanInput, setGeneralScanInput] = useState('');
+    const [scanMessage, setScanMessage] = useState('');
+
+    useEffect(() => {
+        if (selectedPart?.id) {
+            setManualPartId(selectedPart.id);
+        }
+    }, [selectedPart]);
+
+    // Handle Manual IN / OUT Submission
+    const handleManualTransactionSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!manualPartId) return alert('لطفاً قطعه را انتخاب کنید.');
+        if (manualQty <= 0) return alert('تعداد وارد شده باید بزرگتر از صفر باشد.');
+
+        setActionLoading(true);
+        try {
+            const response = await fetch('/api/part-kardex/transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    partId: manualPartId,
+                    type: manualType,
+                    quantity: manualQty,
+                    referenceNumber: manualRef || (manualType === 'IN' ? 'MANUAL-IN' : 'MANUAL-OUT'),
+                    unitPrice: manualPrice,
+                    description: manualDesc,
+                    date: manualDate
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to register transaction');
+            const resData = await response.json();
+            
+            alert('تراکنش با موفقیت ثبت و کاردکس قطعه بروزرسانی شد.');
+            setShowManualModal(false);
+            setManualQty(1);
+            setManualPrice(0);
+            setManualRef('');
+            setManualDesc('');
+            
+            // Reload master parts and select part again
+            if (onPartUpdate) await onPartUpdate();
+            
+            const reselected = parts.find((p: any) => p.id === manualPartId);
+            if (reselected) {
+                setSelectedPart(reselected);
+                loadKardex(manualPartId);
+            }
+        } catch (err) {
+            alert('خطا در ثبت تراکنش');
+            console.error(err);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Excel Export for Single Kardex
+    const exportKardexToExcel = () => {
+        if (!selectedPart) return;
+        try {
+            const excelData = kardexEntries.map((k: any) => ({
+                'کالا': selectedPart.name,
+                'تاریخ': k.date,
+                'مرجع': k.referenceNumber,
+                'نوع تراکنش': k.type === 'IN' ? 'ورود' : 'خروج',
+                'مقدار': k.quantity,
+                'موجودی مانده': k.balance,
+                'قیمت واحد': k.unitPrice || 0,
+                'توضیحات': k.description
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'کاردکس');
+            XLSX.writeFile(wb, `Kardex_${selectedPart.name.replace(/\s+/g, '_')}.xlsx`);
+        } catch (e) {
+            alert('خطا در خروجی اکسل');
+        }
+    };
+
+    // Excel Export for All Parts Inventory List
+    const exportInventoryToExcel = () => {
+        try {
+            const excelData = parts.map((p: any) => ({
+                'شناسه قطعه': p.id,
+                'کد کالا': p.code || p.id.slice(0, 8),
+                'نام کالا': p.name,
+                'نوع': p.type || 'قطعات',
+                'گروه': p.category,
+                'زیرگروه': p.subCategory || '-',
+                'ابعاد / مشخصات': p.dimensions || '-',
+                'واحد سنجش': p.unit || 'عدد',
+                'موجودی فعلی': p.currentStock || 0,
+                'حداقل موجودی': p.minStock || 0,
+                'وضعیت سفارش‌دهی': (p.currentStock || 0) <= (p.minStock || 0) ? 'نیاز به خرید فوری' : 'نرمال'
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'موجودی انبار قطعات');
+            XLSX.writeFile(wb, `Inventory_Report_${getShamsiString().replace(/\//g, '-')}.xlsx`);
+        } catch (e) {
+            alert('خطا در خروجی اکسل کل قطعات');
+        }
+    };
+
+    // Hardware Scanner simulation input search
+    const handleBarcodeSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const code = generalScanInput.trim();
+        if (!code) return;
+
+        // Try matching part by exact ID or short ID or code or barcode
+        const found = parts.find((p: any) => 
+            p.id.toLowerCase() === code.toLowerCase() || 
+            p.id.split('_')[1]?.toLowerCase() === code.toLowerCase() ||
+            p.code?.toLowerCase() === code.toLowerCase() ||
+            p.name.toLowerCase().includes(code.toLowerCase())
+        );
+
+        if (found) {
+            setSelectedPart(found);
+            loadKardex(found.id);
+            setScanMessage(`قطعه پیدا شد: ${found.name}`);
+            setTimeout(() => setScanMessage(''), 4000);
+        } else {
+            setScanMessage('❌ قطعه‌ای با این کد یا بارکد یافت نشد.');
+            setTimeout(() => setScanMessage(''), 4000);
+        }
+        setGeneralScanInput('');
+    };
+
+    // Periodic Stocktaking Setup
+    const handleStartStocktaking = () => {
+        const initItems = parts.map((p: any) => ({
+            partId: p.id,
+            name: p.name,
+            category: p.category,
+            systemQty: p.currentStock || 0,
+            countedQty: p.currentStock || 0, // default starts at current stock
+            unit: p.unit || 'عدد'
+        }));
+        setStocktakeItems(initItems);
+        setIsStocktaking(true);
+    };
+
+    // Increments count by scanning in Stocktaking
+    const handleStocktakeBarcodeSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const code = scanBuffer.trim();
+        if (!code) return;
+
+        const partIdx = stocktakeItems.findIndex((it: any) => 
+            it.partId.toLowerCase() === code.toLowerCase() || 
+            it.partId.split('_')[1]?.toLowerCase() === code.toLowerCase() ||
+            it.name.toLowerCase().includes(code.toLowerCase())
+        );
+
+        if (partIdx > -1) {
+            const newItems = [...stocktakeItems];
+            newItems[partIdx].countedQty += 1; // scanned, increment by 1!
+            setStocktakeItems(newItems);
+            setScanMessage(`تعداد ${newItems[partIdx].name} افزایش یافت.`);
+            setTimeout(() => setScanMessage(''), 3000);
+        } else {
+            setScanMessage('⚠️ بارکد در انبارگردانی یافت نشد.');
+            setTimeout(() => setScanMessage(''), 3000);
+        }
+        setScanBuffer('');
+    };
+
+    // Save Stocktaking Results
+    const handleSaveStocktaking = async () => {
+        if (!confirm('آیا مطمئن هستید که می‌خواهید نتایج انبارگردانی را نهایی و موجودی سیستم را اصلاح کنید؟')) return;
+
+        setActionLoading(true);
+        try {
+            const response = await fetch('/api/part-kardex/stocktake', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: stocktakeItems.map(it => ({ partId: it.partId, countedQty: it.countedQty })),
+                    date: stocktakeDate,
+                    description: stocktakeDesc
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to commit stocktaking');
+            
+            alert('انبارگردانی اصولی با موفقیت پایان یافت. مغایرت‌ها اصلاح و در کاردکس ثبت گردید.');
+            setIsStocktaking(false);
+            if (onPartUpdate) await onPartUpdate();
+            
+            // Reload selected part if any
+            if (selectedPart) {
+                loadKardex(selectedPart.id);
+            }
+        } catch (err) {
+            alert('خطا در نهایی‌سازی انبارگردانی');
+            console.error(err);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const displayedStocktakeItems = filterDiscrepancy 
+        ? stocktakeItems.filter(it => it.countedQty !== it.systemQty)
+        : stocktakeItems;
+
+    return (
+        <div className="space-y-6 text-right dir-rtl">
+            {/* Header / Setup Box */}
             <div className="glass-panel p-6 rounded-3xl border-2 border-indigo-100 shadow-sm bg-white">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
                             <History size={28} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-gray-800">کاردکس موجودی قطعات</h2>
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Stock Movement Ledger</p>
+                            <h2 className="text-xl font-black text-gray-800">سامانه کاردکس و انبارگردانی بارکدی قطعات</h2>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Dynamic Spare Parts Kardex & Cycle Counting</p>
                         </div>
                     </div>
                     
-                    <div className="w-full md:w-64">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">انتخاب قطعه</label>
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                        <button 
+                            onClick={exportInventoryToExcel} 
+                            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all"
+                        >
+                            <FileSpreadsheet size={16}/> خروجی اکسل کل انبار
+                        </button>
+                        <button 
+                            onClick={() => { setManualType('IN'); setShowManualModal(true); }} 
+                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all"
+                        >
+                            <Plus size={16}/> ثبت ورود دستی
+                        </button>
+                        <button 
+                            onClick={() => { setManualType('OUT'); setShowManualModal(true); }} 
+                            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all"
+                        >
+                            <Trash2 size={16}/> ثبت خروج دستی
+                        </button>
+                        {!isStocktaking ? (
+                            <button 
+                                onClick={handleStartStocktaking} 
+                                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all"
+                            >
+                                <CheckCircle size={16}/> شروع انبارگردانی دوره‌ای
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => setIsStocktaking(false)} 
+                                className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all"
+                            >
+                                <X size={16}/> لغو انبارگردانی
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <hr className="my-5 border-gray-100" />
+
+                {/* Barcode Lookup & Fast Scan Input */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <form onSubmit={handleBarcodeSearchSubmit} className="space-y-1">
+                        <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">خوانش و شبیه‌ساز بارکدخوان (USB Scanner/Manual Lookup)</label>
+                        <div className="relative">
+                            <input 
+                                className="w-full border-2 border-indigo-100 rounded-2xl p-3 pr-10 text-xs font-bold outline-none focus:border-indigo-500 bg-indigo-50/20" 
+                                placeholder="بارکد کالا را اسکن کنید یا شناسه/نام آن را وارد کرده و Enter بزنید..." 
+                                value={generalScanInput} 
+                                onChange={e => setGeneralScanInput(e.target.value)} 
+                            />
+                            <Search className="absolute right-3 top-3.5 text-indigo-400" size={16}/>
+                        </div>
+                        {scanMessage && (
+                            <p className="text-[10px] font-black text-emerald-600 animate-pulse mt-1">{scanMessage}</p>
+                        )}
+                    </form>
+
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">انتخاب سنتی قطعه جهت کاردکس</label>
                         <select 
-                            className="w-full border-2 border-gray-100 rounded-2xl p-3 text-sm font-bold bg-white focus:border-indigo-400 outline-none"
+                            className="w-full border-2 border-gray-100 rounded-2xl p-3 text-xs font-black bg-white focus:border-indigo-400 outline-none text-gray-800"
                             value={selectedPart?.id || ''} 
                             onChange={e => { 
                                 const p = parts.find((x: any) => x.id === e.target.value); 
@@ -2366,61 +2692,217 @@ const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKa
                                 if(p) loadKardex(p.id);
                             }}
                         >
-                            <option value="">-- انتخاب کنید --</option>
-                            {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            <option value="">-- برای نمایش گردش موجودی کالا را انتخاب کنید --</option>
+                            {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name} (موجودی: {p.currentStock} {p.unit})</option>)}
                         </select>
                     </div>
                 </div>
             </div>
 
+            {/* IF STOCKTAKING MODULE IS ACTIVE */}
+            {isStocktaking && (
+                <div className="glass-panel p-6 rounded-3xl border-2 border-amber-200 shadow-xl bg-gradient-to-r from-amber-50/20 to-white animate-fade-in space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-amber-100 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shadow-inner">
+                                <CheckCircle size={22} />
+                            </div>
+                            <div>
+                                <h3 className="font-black text-gray-800 text-base">بخش مدیریت و مغایرت‌گیری انبارگردانی اصولی</h3>
+                                <p className="text-[10px] text-gray-500 font-bold">موجود به صورت لحظه‌ای با امکان ثبت شمارش با بارکدخوان</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                            <form onSubmit={handleStocktakeBarcodeSubmit} className="relative w-full md:w-64">
+                                <input 
+                                    className="w-full border-2 border-amber-300 rounded-xl py-2 px-3 pr-8 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-200" 
+                                    placeholder="برای شمارش بارکد اسکن کنید..."
+                                    value={scanBuffer}
+                                    onChange={e => setScanBuffer(e.target.value)}
+                                    autoFocus
+                                />
+                                <Container className="absolute right-2 top-2.5 text-amber-500" size={14} />
+                            </form>
+                            <button 
+                                onClick={handleSaveStocktaking} 
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-amber-100 transition"
+                            >
+                                ثبت نهایی و اصلاح مغایرت‌ها
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black text-gray-400 block mb-1">عنوان دوره انبارگردانی:</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold" value={stocktakeDesc} onChange={e => setStocktakeDesc(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-gray-400 block mb-1">تاریخ انبارگردانی:</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold text-center" value={stocktakeDate} onChange={e => setStocktakeDate(e.target.value)} />
+                        </div>
+                        <div className="flex items-end pb-1.5">
+                            <label className="flex items-center gap-2.5 text-xs font-black text-amber-800 bg-amber-50 border border-amber-100 rounded-xl p-2.5 cursor-pointer w-full select-none justify-center">
+                                <input type="checkbox" checked={filterDiscrepancy} onChange={e => setFilterDiscrepancy(e.target.checked)} className="w-4 h-4 rounded text-amber-600" />
+                                فقط نمایش اقلام دارای مغایرت انبارداری
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="border rounded-2xl overflow-hidden bg-white max-h-[450px] overflow-y-auto">
+                        <table className="w-full text-right">
+                            <thead>
+                                <tr className="bg-amber-50/50 border-b border-amber-100 text-gray-700">
+                                    <th className="p-3 text-xs font-black">ردیف</th>
+                                    <th className="p-3 text-xs font-black">نام کالا / قطعه</th>
+                                    <th className="p-3 text-xs font-black">گروه کالا</th>
+                                    <th className="p-3 text-xs font-black text-center">موجودی سیستمی (دفتر)</th>
+                                    <th className="p-3 text-xs font-black text-center">تعداد شمارش شده (انبار)</th>
+                                    <th className="p-3 text-xs font-black text-center">مغایرت</th>
+                                    <th className="p-3 text-xs font-black text-center">عملیات دستی</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y text-xs font-bold text-gray-800">
+                                {displayedStocktakeItems.length === 0 ? (
+                                    <tr><td colSpan={7} className="text-center py-12 text-gray-400">موردی یافت نشد.</td></tr>
+                                ) : (
+                                    displayedStocktakeItems.map((it, idx) => {
+                                        const diff = it.countedQty - it.systemQty;
+                                        return (
+                                            <tr key={it.partId} className={`hover:bg-amber-50/20 ${diff !== 0 ? 'bg-red-50/30' : ''}`}>
+                                                <td className="p-3 text-gray-400 font-mono">{idx + 1}</td>
+                                                <td className="p-3 font-black">{it.name}</td>
+                                                <td className="p-3 text-gray-500">{it.category}</td>
+                                                <td className="p-3 text-center font-mono text-gray-600">{it.systemQty} {it.unit}</td>
+                                                <td className="p-3 text-center">
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-20 text-center font-mono font-black border-2 border-gray-200 rounded-lg p-1 focus:border-amber-500 outline-none text-indigo-700" 
+                                                        value={it.countedQty} 
+                                                        onChange={e => {
+                                                            const newItems = [...stocktakeItems];
+                                                            const targetIdx = newItems.findIndex(x => x.partId === it.partId);
+                                                            newItems[targetIdx].countedQty = Number(e.target.value) || 0;
+                                                            setStocktakeItems(newItems);
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {diff === 0 ? (
+                                                        <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded font-black text-[10px]">بدون مغایرت</span>
+                                                    ) : (
+                                                        <span className={`px-2 py-1 rounded font-black text-[10px] ${diff > 0 ? 'text-green-700 bg-green-50' : 'text-rose-700 bg-rose-50'}`}>
+                                                            {diff > 0 ? `+${diff}` : diff}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newItems = [...stocktakeItems];
+                                                            const targetIdx = newItems.findIndex(x => x.partId === it.partId);
+                                                            newItems[targetIdx].countedQty += 1;
+                                                            setStocktakeItems(newItems);
+                                                        }}
+                                                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded p-1 text-[10px] px-2.5 transition"
+                                                    >
+                                                        شمارش +۱
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* MAIN KARDEX TRANSACTIONS REPORT */}
             {selectedPart ? (
                 <div className="animate-fade-in space-y-4">
+                    {/* Part Details & Visual Barcode Header */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div className="lg:col-span-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white p-6 rounded-3xl shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div>
+                                <span className="text-[10px] font-black tracking-widest text-indigo-200 bg-indigo-800/50 px-3 py-1 rounded-full uppercase">اطلاعات کاتالوگ قطعه</span>
+                                <h3 className="text-2xl font-black mt-3">{selectedPart.name}</h3>
+                                <p className="text-xs text-indigo-100 font-bold mt-1.5 flex gap-4">
+                                    <span>دسته: {selectedPart.category}</span>
+                                    {selectedPart.subCategory && <span>زیرگروه: {selectedPart.subCategory}</span>}
+                                    <span>مشخصات: {selectedPart.dimensions || 'فاقد ابعاد ثبت شده'}</span>
+                                </p>
+                            </div>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={exportKardexToExcel}
+                                    className="bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl px-4 py-2.5 text-xs font-black transition flex items-center gap-1.5"
+                                >
+                                    <FileSpreadsheet size={16}/> خروجی اکسل کاردکس
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Barcode Display */}
+                        <div className="bg-white p-4 rounded-3xl border shadow-sm flex flex-col items-center justify-center">
+                            <span className="text-[9px] font-black text-gray-400 mb-1.5">بارکد سازمانی کالا (جهت انبارگردانی و خروج)</span>
+                            <BarcodeVisual value={selectedPart.id} />
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="glass-panel p-4 rounded-2xl bg-white border border-gray-100 flex flex-col items-center justify-center text-center">
-                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">موجودی فعلی</span>
+                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">موجودی فعلی (سیستم)</span>
                             <span className="text-2xl font-black text-indigo-600">{selectedPart.currentStock}</span>
                             <span className="text-[10px] font-bold text-indigo-400">{selectedPart.unit}</span>
                         </div>
                         <div className="glass-panel p-4 rounded-2xl bg-white border border-gray-100 flex flex-col items-center justify-center text-center">
-                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">کل ورودی</span>
+                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">کل ورودی به انبار</span>
                             <span className="text-2xl font-black text-green-600">
                                 {kardexEntries.filter((k: any) => k.type === 'IN').reduce((a: any, b: any) => a + b.quantity, 0)}
                             </span>
                         </div>
                         <div className="glass-panel p-4 rounded-2xl bg-white border border-gray-100 flex flex-col items-center justify-center text-center">
-                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">کل خروجی</span>
+                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">کل خروجی از انبار</span>
                             <span className="text-2xl font-black text-red-500">
                                 {kardexEntries.filter((k: any) => k.type === 'OUT').reduce((a: any, b: any) => a + b.quantity, 0)}
                             </span>
                         </div>
+                        <div className="glass-panel p-4 rounded-2xl bg-white border border-gray-100 flex flex-col items-center justify-center text-center">
+                            <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">آستانه سفارش دهی</span>
+                            <span className="text-2xl font-black text-amber-600">{selectedPart.minStock || 0}</span>
+                            <span className="text-[9px] font-black text-red-500">
+                                {(selectedPart.currentStock || 0) <= (selectedPart.minStock || 0) ? '⚠️ نیاز به خرید فوری' : 'کافی'}
+                            </span>
+                        </div>
                     </div>
 
+                    {/* Ledgers table */}
                     <div className="glass-panel rounded-3xl border border-gray-200 overflow-hidden bg-white shadow-sm">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100">
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">کالا / قطعه</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">تاریخ</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">شماره مرجع</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">نوع</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">تعداد</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">فی/قیمت واحد</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-center">مانده</th>
-                                        <th className="py-4 px-6 text-sm font-black text-gray-500 text-right">توضیحات</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-right">تاریخ</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-right">شماره سند / مرجع</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-center">نوع تراکنش</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-center">مقدار</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-center">فی/قیمت واحد (ریال)</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-center">مانده انبار</th>
+                                        <th className="py-4 px-6 text-xs font-black text-gray-500 text-right">توضیحات تراکنش</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {kardexEntries.length === 0 ? (
-                                        <tr><td colSpan={8} className="py-20 text-center text-gray-400 italic">تراکنشی یافت نشد.</td></tr>
+                                        <tr><td colSpan={7} className="py-20 text-center text-gray-400 italic font-bold">تراکنشی یافت نشد.</td></tr>
                                     ) : (
                                         kardexEntries.map((k: any) => (
                                             <tr key={k.id} className="border-b border-gray-50 hover:bg-indigo-50/20 transition-colors">
-                                                <td className="py-4 px-6 text-xs font-black text-gray-800">{selectedPart?.name}</td>
                                                 <td className="py-4 px-6 text-xs font-bold text-gray-600">{formatDate(k.date)}</td>
                                                 <td className="py-4 px-6 text-xs font-mono font-bold text-gray-400">#{k.referenceNumber}</td>
                                                 <td className="py-4 px-6 text-center">
-                                                    <span className={`text-[9px] px-3 py-1 rounded-full font-black ${k.type === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    <span className={`text-[9px] px-3 py-1 rounded-full font-black ${k.type === 'IN' ? 'bg-green-100 text-green-700 font-black' : 'bg-red-100 text-red-700 font-black'}`}>
                                                         {k.type === 'IN' ? 'ورود' : 'خروج'}
                                                     </span>
                                                 </td>
@@ -2437,9 +2919,69 @@ const KardexTab = ({ parts, selectedPart, setSelectedPart, kardexEntries, loadKa
                     </div>
                 </div>
             ) : (
-                <div className="py-40 flex flex-col items-center justify-center text-gray-300">
-                    <History size={64} className="mb-4 opacity-20" />
-                    <p className="font-bold">لطفاً برای مشاهده گردش موجودی، یک قطعه انتخاب کنید.</p>
+                <div className="py-32 flex flex-col items-center justify-center text-gray-300 bg-white border border-gray-100 rounded-3xl">
+                    <History size={64} className="mb-4 opacity-25 text-indigo-400 animate-pulse" />
+                    <p className="font-bold text-gray-500 text-sm">لطفاً برای مشاهده گردش موجودی، یک قطعه انتخاب کنید یا بارکد آن را اسکن کنید.</p>
+                </div>
+            )}
+
+            {/* MANUAL TRANSACTION DIALOG */}
+            {showManualModal && (
+                <div className="fixed inset-0 z-[100000008] flex items-start pt-16 md:pt-24 pb-32 overflow-y-auto overflow-x-hidden justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-scale-in text-right">
+                        <div className="flex justify-between items-center mb-6 border-b pb-4">
+                            <h3 className="font-black text-lg text-gray-800 flex items-center gap-2">
+                                {manualType === 'IN' ? <ArrowDownCircle className="text-green-600"/> : <ArrowUpCircle className="text-rose-600"/>}
+                                {manualType === 'IN' ? 'ثبت ورود دستی قطعه به انبار' : 'ثبت خروج دستی قطعه از انبار'}
+                            </h3>
+                            <button onClick={() => setShowManualModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={22}/></button>
+                        </div>
+                        <form onSubmit={handleManualTransactionSubmit} className="space-y-4">
+                            <div>
+                                <label className="text-xs font-black text-gray-700 block mb-1">قطعه هدف:</label>
+                                <select 
+                                    className="w-full border rounded-xl p-3 text-xs font-bold" 
+                                    value={manualPartId} 
+                                    onChange={e => setManualPartId(e.target.value)}
+                                    required
+                                >
+                                    <option value="">-- انتخاب کالا --</option>
+                                    {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name} (موجودی: {p.currentStock})</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-black text-gray-700 block mb-1">تعداد/مقدار:</label>
+                                    <input type="number" min="1" className="w-full border rounded-xl p-3 text-xs font-black text-center" value={manualQty} onChange={e => setManualQty(Number(e.target.value))} required />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-gray-700 block mb-1">قیمت واحد (ریال):</label>
+                                    <input type="number" min="0" className="w-full border rounded-xl p-3 text-xs font-black text-center" value={manualPrice} onChange={e => setManualPrice(Number(e.target.value))} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-black text-gray-700 block mb-1">شماره سند/مرجع:</label>
+                                    <input className="w-full border rounded-xl p-3 text-xs font-bold text-center" value={manualRef} onChange={e => setManualRef(e.target.value)} placeholder="مثلاً: RI-1402-12" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-gray-700 block mb-1">تاریخ تراکنش:</label>
+                                    <input className="w-full border rounded-xl p-3 text-xs font-bold text-center" value={manualDate} onChange={e => setManualDate(e.target.value)} required />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-black text-gray-700 block mb-1">توضیحات تراکنش:</label>
+                                <textarea className="w-full border rounded-xl p-2.5 text-xs h-20" value={manualDesc} onChange={e => setManualDesc(e.target.value)} placeholder="دلیل خروج یا ورود کالا، نام تحویل گیرنده یا حواله مصرف..." required />
+                            </div>
+                            <button 
+                                type="submit" 
+                                disabled={actionLoading} 
+                                className={`w-full text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition ${manualType === 'IN' ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-100'}`}
+                            >
+                                {actionLoading ? <Loader2 className="animate-spin mx-auto"/> : 'ثبت قطعی تراکنش'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
