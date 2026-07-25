@@ -1549,6 +1549,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         <span className="truncate">فروش و تحلیل مقایسه‌ای</span>
                     </button>
                 )}
+                {isProductionAllowed && (
+                    <button 
+                        onClick={() => setActiveTab('production')} 
+                        className={`flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-5 rounded-md text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'production' ? 'bg-white shadow text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    >
+                        <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">آمار کل تولید و ضایعات</span>
+                    </button>
+                )}
                 {isChequesAllowed && (
                     <button 
                         onClick={() => setActiveTab('cheques')} 
