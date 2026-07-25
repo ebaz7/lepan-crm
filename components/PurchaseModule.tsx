@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     PurchaseRequest, PurchaseRequestStatus, User, UserRole, 
-    SystemSettings, PurchaseProforma, PartMasterData, PartKardex 
+    SystemSettings, PurchaseProforma, PartMasterData, PartKardex,
+    PurchaseRequestItem, PurchaseAttachment, PurchaseAuditLog 
 } from '../types';
 import { 
     getPurchaseRequests, savePurchaseRequest, updatePurchaseRequest, 
@@ -16,7 +17,8 @@ import {
     CheckCircle, XCircle, FileText, Package, Truck, 
     ShieldCheck, ClipboardCheck, Warehouse, History, 
     Image as ImageIcon, MoreVertical, Loader2, ArrowRight,
-    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle, X
+    Ruler, Layers, Tag, Upload, Info, FileUp, UploadCloud, Settings, Printer, FileDown, AlertCircle, X,
+    GitFork, Clock, CornerUpLeft, UserCheck, FileCode, AlertTriangle, Check, ExternalLink, Paperclip, Wrench
 } from 'lucide-react';
 import { formatDate, formatCurrency, generateUUID, getCurrentShamsiDate } from '../constants';
 import useIsMobile from '../hooks/useIsMobile';
@@ -206,6 +208,161 @@ const PurchaseModule: React.FC<{ currentUser: User, settings?: SystemSettings, i
                     className="hidden"
                 />
             )}
+        </div>
+    );
+};
+
+// --- BPMN WORKFLOW DIAGRAM COMPONENT ---
+const BpmnWorkflowDiagram: React.FC<{ currentStatus?: PurchaseRequestStatus; location?: string }> = ({ currentStatus, location }) => {
+    const isStepActive = (status: PurchaseRequestStatus) => currentStatus === status;
+
+    const tehranSteps = [
+        { status: PurchaseRequestStatus.PENDING_CEO_INITIAL, title: 'تایید اولیه استعلام', role: 'مدیرعامل', desc: 'بررسی ضرورت تامین و اجازه استعلام' },
+        { status: PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, title: 'ثبت استعلام / پیش‌فاکتور', role: 'واحد بازرگانی تهران', desc: 'اخذ حداقل ۳ پیش‌فاکتور رقابتی' },
+        { status: PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION, title: 'بررسی و پیشنهاد تامین‌کننده', role: 'مدیر بازرگانی', desc: 'مقایسه قیمت، کیفیت و شرایط پرداخت' },
+        { status: PurchaseRequestStatus.PENDING_CEO_SELECTION, title: 'تایید نهایی و مالی', role: 'مدیرعامل', desc: 'انتخاب تامین‌کننده و تخصیص بودجه' },
+    ];
+
+    const zanjanSteps = [
+        { status: PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING, title: 'پیشنهاد خرید کارخانه/زنجان', role: 'انبار و نت کارخانه', desc: 'بررسی تامین‌کنندگان محلی استان' },
+        { status: PurchaseRequestStatus.PENDING_FACTORY_PURCHASING, title: 'دستور خرید و صدور سفارش', role: 'مدیر کارخانه', desc: 'تخصیص اعتبار خرید کارخانه' },
+        { status: PurchaseRequestStatus.PENDING_BUYER_EXECUTION, title: 'اجرای خرید و صدور فاکتور', role: 'کارپرداز / مامور خرید', desc: 'خرید کالا، دریافت فاکتور رسمی و بارنامه' },
+        { status: PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION, title: 'تایید نهایی خرید کارخانه', role: 'مدیر کارخانه', desc: 'کنترل فاکتور و تایید ارسال به کارخانه' },
+    ];
+
+    const commonSteps = [
+        { status: PurchaseRequestStatus.PENDING_SECURITY_ENTRY, title: 'ورود کالا به کارخانه', role: 'انتظامات / نگهبانی', desc: 'ثبت پلاک خودرو، راننده، وزن و شماره بارنامه' },
+        { status: PurchaseRequestStatus.PENDING_QC, title: 'تایید فنی و QC', role: 'واحد نت / کنترل کیفی', desc: 'بازرسی فنی کالا و انطباق با سفارش' },
+        { status: PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, title: 'رسید انبار قطعات', role: 'انباردار قطعات', desc: 'تخصیص کد کالا، بارکد، سریال و جانمایی قفسه' },
+        { status: PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN, title: 'امضا و بایگانی پرونده', role: 'مدیر کارخانه', desc: 'تکمیل نهایی، امضای اسناد و بایگانی سیستمی' },
+    ];
+
+    return (
+        <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border border-slate-800 space-y-6 text-right dir-rtl">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-2">
+                <div>
+                    <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
+                        <GitFork className="text-amber-400" size={20} />
+                        دیاگرام فرآیند استاندارد درخواست خرید (BPMN Workflow)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">مدل دو شاخه‌ای خرید از تهران و خرید از کارخانه/زنجان با کنترل انبار و انتظامات</p>
+                </div>
+                {currentStatus && (
+                    <div className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2">
+                        <Clock size={14} className="animate-spin text-amber-400" />
+                        وضعیت جاری: <span className="font-sans font-black">{currentStatus}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Stage 1: Initiation */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_TECHNICAL) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۱</span>
+                        <Wrench size={18} className={isStepActive(PurchaseRequestStatus.PENDING_TECHNICAL) ? 'text-amber-400' : 'text-slate-400'} />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-100">بررسی اولیه و کارشناسی نت</h4>
+                    <p className="text-[10px] text-slate-400 mt-1">ارزیابی فنی خرابی/نیاز توسط واحد نگهداری و تعمیرات</p>
+                    <div className="mt-3 text-[9px] font-black text-indigo-400 bg-indigo-950/60 p-1.5 rounded-lg border border-indigo-900/50">مسئول: کارشناس فنی / مدیر نت</div>
+                </div>
+
+                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_FACTORY) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۲</span>
+                        <Warehouse size={18} className={isStepActive(PurchaseRequestStatus.PENDING_FACTORY) ? 'text-amber-400' : 'text-slate-400'} />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-100">استعلام موجودی و تصمیم انبار</h4>
+                    <p className="text-[10px] text-slate-400 mt-1">بررسی موجودی در تمام انبارها؛ تحویل مستقیم یا تایید خرید</p>
+                    <div className="mt-3 text-[9px] font-black text-emerald-400 bg-emerald-950/60 p-1.5 rounded-lg border border-emerald-900/50">مسئول: سرشیفت / مسئول انبار قطعات</div>
+                </div>
+
+                <div className={`p-4 rounded-2xl border transition-all ${isStepActive(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/50 shadow-lg shadow-amber-500/20' : 'bg-slate-800/80 border-slate-700'}`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام ۳</span>
+                        <GitFork size={18} className={isStepActive(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) ? 'text-amber-400' : 'text-slate-400'} />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-100">تصمیم‌گیری مسیر خرید</h4>
+                    <p className="text-[10px] text-slate-400 mt-1">تعیین اولویت تامین (خرید از تهران vs خرید از زنجان/کارخانه)</p>
+                    <div className="mt-3 text-[9px] font-black text-amber-400 bg-amber-950/60 p-1.5 rounded-lg border border-amber-900/50">مسئول: مدیر کارخانه / بازرگانی</div>
+                </div>
+            </div>
+
+            {/* Split Branches */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                {/* Branch A: Tehran */}
+                <div className={`p-5 rounded-3xl border ${location === 'Tehran' || tehranSteps.some(s => isStepActive(s.status)) ? 'border-sky-500/60 bg-sky-950/20 ring-1 ring-sky-500/30' : 'border-slate-800 bg-slate-900/40'}`}>
+                    <div className="flex items-center justify-between mb-4 border-b border-sky-900/50 pb-2">
+                        <span className="text-xs font-black text-sky-400 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping"></span>
+                            مسیر ۱: خرید از تهران (بازرگانی مرکزی)
+                        </span>
+                        <span className="text-[9px] bg-sky-900/60 text-sky-200 px-2.5 py-0.5 rounded-full font-mono">Tehran Path</span>
+                    </div>
+                    <div className="space-y-3">
+                        {tehranSteps.map((step, idx) => {
+                            const active = isStepActive(step.status);
+                            return (
+                                <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-sky-500/20 border-sky-400 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
+                                    <div className="flex justify-between items-center">
+                                        <h5 className="font-bold text-xs">{step.title}</h5>
+                                        <span className="text-[9px] font-black bg-sky-900/80 text-sky-300 px-2 py-0.5 rounded">{step.role}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">{step.desc}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Branch B: Zanjan / Factory */}
+                <div className={`p-5 rounded-3xl border ${location === 'Factory' || location === 'Zanjan' || zanjanSteps.some(s => isStepActive(s.status)) ? 'border-teal-500/60 bg-teal-950/20 ring-1 ring-teal-500/30' : 'border-slate-800 bg-slate-900/40'}`}>
+                    <div className="flex items-center justify-between mb-4 border-b border-teal-900/50 pb-2">
+                        <span className="text-xs font-black text-teal-400 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping"></span>
+                            مسیر ۲: خرید محلی / کارخانه (زنجان)
+                        </span>
+                        <span className="text-[9px] bg-teal-900/60 text-teal-200 px-2.5 py-0.5 rounded-full font-mono">Factory/Zanjan Path</span>
+                    </div>
+                    <div className="space-y-3">
+                        {zanjanSteps.map((step, idx) => {
+                            const active = isStepActive(step.status);
+                            return (
+                                <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-teal-500/20 border-teal-400 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
+                                    <div className="flex justify-between items-center">
+                                        <h5 className="font-bold text-xs">{step.title}</h5>
+                                        <span className="text-[9px] font-black bg-teal-900/80 text-teal-300 px-2 py-0.5 rounded">{step.role}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">{step.desc}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Stage 3: Intake, QC & Fulfillment */}
+            <div className="border-t border-slate-800 pt-4">
+                <h4 className="text-xs font-bold text-slate-400 mb-3 flex items-center gap-2">
+                    <CheckCircle className="text-emerald-400" size={16} />
+                    مراحل مشترک تحویل، ورود به کارخانه، QC و ثبت انبار
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {commonSteps.map((step, idx) => {
+                        const active = isStepActive(step.status);
+                        return (
+                            <div key={idx} className={`p-3 rounded-2xl border transition-all ${active ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/50 shadow-lg text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300'}`}>
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[9px] font-bold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">گام {idx + 4}</span>
+                                    <span className="text-[8px] font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded">{step.role}</span>
+                                </div>
+                                <h5 className="font-bold text-xs text-slate-100">{step.title}</h5>
+                                <p className="text-[9px] text-slate-400 mt-1">{step.desc}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };
@@ -483,79 +640,293 @@ const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseReq
 // --- MODALS ---
 const CreateRequestModal = ({ onClose, currentUser, onSuccess, parts }: any) => {
     const [loading, setLoading] = useState(false);
-    const [selectedPartId, setSelectedPartId] = useState('');
-    const [quantity, setQuantity] = useState(1);
-    const [description, setDescription] = useState('');
+    const [requestingUnit, setRequestingUnit] = useState('واحد نت و فنی');
+    const [urgency, setUrgency] = useState<'عادی' | 'فوری' | 'اضطراری'>('عادی');
+    const [machinery, setMachinery] = useState('');
+    const [installationLocation, setInstallationLocation] = useState('');
+    const [breakdownDescription, setBreakdownDescription] = useState('');
+    const [purchaseReason, setPurchaseReason] = useState('');
+    const [repairRequestNumber, setRepairRequestNumber] = useState('');
+
+    const [items, setItems] = useState<PurchaseRequestItem[]>([
+        { id: generateUUID(), itemName: '', itemCode: '', suggestedBrand: '', quantity: 1, unit: 'عدد', specifications: '' }
+    ]);
+
+    const [attachments, setAttachments] = useState<PurchaseAttachment[]>([]);
+    const [uploading, setUploading] = useState(false);
+
+    const handleAddItemRow = () => {
+        setItems([...items, { id: generateUUID(), itemName: '', itemCode: '', suggestedBrand: '', quantity: 1, unit: 'عدد', specifications: '' }]);
+    };
+
+    const handleRemoveItemRow = (id: string) => {
+        if (items.length <= 1) return;
+        setItems(items.filter(it => it.id !== id));
+    };
+
+    const handleItemChange = (id: string, field: keyof PurchaseRequestItem, value: any) => {
+        setItems(items.map(it => it.id === id ? { ...it, [field]: value } : it));
+    };
+
+    const handleSelectPart = (id: string, partId: string) => {
+        const p = parts.find((pt: any) => pt.id === partId);
+        if (!p) return;
+        setItems(items.map(it => it.id === id ? {
+            ...it,
+            partId: p.id,
+            itemName: p.name,
+            itemCode: p.code || p.id.slice(0, 8),
+            unit: p.unit || 'عدد',
+            specifications: p.dimensions || ''
+        } : it));
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        try {
+            const newAtts: PurchaseAttachment[] = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileType = file.name.endsWith('.pdf') ? 'PDF' :
+                                file.name.endsWith('.xlsx') || file.name.endsWith('.xls') ? 'EXCEL' :
+                                file.type.startsWith('image/') ? 'IMAGE' : 'WORD';
+                
+                const url = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                newAtts.push({
+                    id: generateUUID(),
+                    fileName: file.name,
+                    fileType,
+                    fileUrl: url,
+                    uploadedAt: new Date().toISOString(),
+                    uploadedBy: currentUser.fullName
+                });
+            }
+            setAttachments([...attachments, ...newAtts]);
+        } catch (err) {
+            alert('خطا در بارگذاری فایل');
+            console.error(err);
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedPartId) return alert('کالا را انتخاب کنید');
-        const part = parts.find((p: any) => p.id === selectedPartId);
-        if (!part) return;
+        const validItems = items.filter(it => it.itemName.trim().length > 0);
+        if (validItems.length === 0) return alert('لطفاً حداقل یک کالا یا قطعه با نام مشخص وارد کنید');
 
         setLoading(true);
         try {
             const nextNum = await getNextPurchaseRequestNumber();
+            const nowIso = new Date().toISOString();
+
+            const primaryItem = validItems[0];
+            const newAuditLog: PurchaseAuditLog = {
+                id: generateUUID(),
+                stage: PurchaseRequestStatus.PENDING_TECHNICAL,
+                action: 'ثبت اولیه درخواست خرید',
+                performedBy: currentUser.fullName,
+                role: currentUser.role,
+                timestamp: nowIso,
+                comment: `ثبت درخواست با ${validItems.length} قلم کالا (${urgency})`
+            };
+
             const newRequest: PurchaseRequest = {
                 id: generateUUID(),
                 requestNumber: nextNum,
-                date: new Date().toISOString().split('T')[0],
+                date: nowIso.split('T')[0],
                 requester: currentUser.fullName,
-                itemName: part.name,
-                category: part.category,
-                subCategory: part.subCategory,
-                dimensions: part.dimensions,
-                specifications: description,
-                image: part.image,
-                pdfAttachment: part.pdfAttachment,
-                quantity: quantity,
-                unit: part.unit,
+                requestingUnit,
+                urgency,
+                machinery,
+                installationLocation,
+                breakdownDescription,
+                purchaseReason,
+                repairRequestNumber,
+                
+                itemName: validItems.length === 1 ? primaryItem.itemName : `${primaryItem.itemName} (+${validItems.length - 1} قلم دیگر)`,
+                category: 'قطعات و ماشین‌آلات',
+                quantity: primaryItem.quantity,
+                unit: primaryItem.unit,
+                specifications: primaryItem.specifications || breakdownDescription,
+                
+                items: validItems,
+                attachments,
+                auditLogs: [newAuditLog],
+
                 status: PurchaseRequestStatus.PENDING_TECHNICAL,
                 proformas: [],
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             };
+
             await savePurchaseRequest(newRequest);
             onSuccess();
             onClose();
-        } catch (e) { alert('خطا در ثبت'); }
-        finally { setLoading(false); }
+        } catch (e) { 
+            alert('خطا در ثبت درخواست خرید'); 
+            console.error(e);
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[100000000] flex items-start justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto pt-16 md:pt-20">
-            <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 animate-scale-in relative shadow-2xl border-4 border-indigo-500/20 mb-10">
-                <div className="flex justify-between items-center mb-8">
+        <div className="fixed inset-0 z-[100000000] flex items-start justify-center p-2 md:p-6 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto pt-12 md:pt-16 dir-rtl">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-5xl p-6 md:p-8 animate-scale-in relative shadow-2xl border-4 border-indigo-500/20 mb-10 text-right">
+                <div className="flex justify-between items-center mb-6 border-b pb-4">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                            <Plus size={28} />
+                            <ShoppingCart size={28} />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black text-gray-800">ایجاد درخواست جدید</h2>
-                            <p className="text-[10px] text-gray-400 font-bold">فرم ثبت سفارش خرید کالا و خدمات</p>
+                            <h2 className="text-xl md:text-2xl font-black text-gray-800">ثبت فرم مهندسی درخواست خرید (ERP BPMN)</h2>
+                            <p className="text-xs text-gray-400 font-bold">ماژول خریدهای صنعتی، قطعات یدکی و ماشین‌آلات کارخانه</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-all bg-gray-50"><XCircle size={32}/></button>
+                    <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-2xl transition-all bg-gray-100"><X size={24}/></button>
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">انتخاب کالا از لیست</label>
-                        <select className="w-full border rounded-xl p-3 text-sm" value={selectedPartId} onChange={e => setSelectedPartId(e.target.value)}>
-                            <option value="">-- انتخاب کنید --</option>
-                            {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
-                        </select>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">واحد درخواست‌کننده</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold bg-white" value={requestingUnit} onChange={e => setRequestingUnit(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">درجه فوریت تامین</label>
+                            <select className="w-full border rounded-xl p-2.5 text-xs font-black bg-white" value={urgency} onChange={e => setUrgency(e.target.value as any)}>
+                                <option value="عادی">🟢 عادی (روتین)</option>
+                                <option value="فوری">🟡 فوری (تامین سریع)</option>
+                                <option value="اضطراری">🔴 اضطراری (توقف خط)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">دستگاه / ماشین‌آلات مربوطه</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold bg-white" value={machinery} onChange={e => setMachinery(e.target.value)} placeholder="مثلاً: پرس اکستروژن ۳۰۰۰ تن" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">محل نصب / مصرف</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold bg-white" value={installationLocation} onChange={e => setInstallationLocation(e.target.value)} placeholder="مثلاً: خط انودایز / کارگاه ۲" />
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">تعداد مورد نیاز</label>
-                        <input type="number" className="w-full border rounded-xl p-3 text-sm font-bold" value={quantity} onChange={e => setQuantity(+e.target.value)} />
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">شماره درخواست تعمیر (نت)</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-mono bg-gray-50" value={repairRequestNumber} onChange={e => setRepairRequestNumber(e.target.value)} placeholder="مثلاً: REPAIR-1402/98" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">شرح خرابی / علت نیاز</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold bg-white" value={breakdownDescription} onChange={e => setBreakdownDescription(e.target.value)} placeholder="مثلاً: شکستگی بلبرینگ شفت اصلی" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-700 block mb-1">توجیه لزوم خرید</label>
+                            <input className="w-full border rounded-xl p-2.5 text-xs font-bold bg-white" value={purchaseReason} onChange={e => setPurchaseReason(e.target.value)} placeholder="عدم وجود در انبار و خطر توقف تولید" />
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">توضیحات، مشخصات خاص یا اظهارنامه</label>
-                        <textarea className="w-full border rounded-xl p-3 text-sm h-24" value={description} onChange={e => setDescription(e.target.value)} placeholder="کشور سازنده، شماره کوتاژ (در صورت وجود)، ویژگی‌های فنی..."/>
+
+                    <div className="border border-gray-200 rounded-3xl overflow-hidden shadow-sm bg-white">
+                        <div className="bg-gradient-to-r from-gray-800 to-indigo-900 text-white p-3 px-4 flex justify-between items-center">
+                            <span className="text-xs font-black flex items-center gap-2"><Package size={16}/> جدول اقلام درخواستی (تعدد اقلام)</span>
+                            <button type="button" onClick={handleAddItemRow} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-md flex items-center gap-1.5 transition-all">
+                                <Plus size={14}/> افزودن ردیف کالا
+                            </button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-right dir-rtl">
+                                <thead className="bg-gray-100 border-b text-gray-600 font-bold">
+                                    <tr>
+                                        <th className="p-2.5 w-10 text-center">#</th>
+                                        <th className="p-2.5 min-w-[180px]">انتخاب از انبار یا نام کالا</th>
+                                        <th className="p-2.5 w-28">کد فنی کالا</th>
+                                        <th className="p-2.5 w-28">برند / سازنده پیشنهاد</th>
+                                        <th className="p-2.5 w-20 text-center">تعداد</th>
+                                        <th className="p-2.5 w-24">واحد</th>
+                                        <th className="p-2.5">مشخصات فنی و نقشه</th>
+                                        <th className="p-2.5 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {items.map((it, index) => (
+                                        <tr key={it.id} className="hover:bg-gray-50/80">
+                                            <td className="p-2 text-center font-mono font-bold text-gray-400">{index + 1}</td>
+                                            <td className="p-2">
+                                                <div className="space-y-1">
+                                                    {parts && parts.length > 0 && (
+                                                        <select className="w-full border rounded-lg p-1.5 text-[10px] text-gray-500 bg-gray-50" onChange={e => handleSelectPart(it.id, e.target.value)}>
+                                                            <option value="">-- انتخاب از کاتالوگ انبار (اختیاری) --</option>
+                                                            {parts.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
+                                                        </select>
+                                                    )}
+                                                    <input className="w-full border rounded-lg p-2 text-xs font-black text-gray-800" value={it.itemName} onChange={e => handleItemChange(it.id, 'itemName', e.target.value)} placeholder="نام دقیق کالا / قطعه" required />
+                                                </div>
+                                            </td>
+                                            <td className="p-2"><input className="w-full border rounded-lg p-2 text-xs font-mono" value={it.itemCode || ''} onChange={e => handleItemChange(it.id, 'itemCode', e.target.value)} placeholder="PN-1002" /></td>
+                                            <td className="p-2"><input className="w-full border rounded-lg p-2 text-xs" value={it.suggestedBrand || ''} onChange={e => handleItemChange(it.id, 'suggestedBrand', e.target.value)} placeholder="مثلاً: SKF, Siemens" /></td>
+                                            <td className="p-2"><input type="number" min="1" className="w-full border rounded-lg p-2 text-xs text-center font-black text-indigo-700" value={it.quantity} onChange={e => handleItemChange(it.id, 'quantity', +e.target.value)} required /></td>
+                                            <td className="p-2">
+                                                <select className="w-full border rounded-lg p-2 text-xs font-bold" value={it.unit} onChange={e => handleItemChange(it.id, 'unit', e.target.value)}>
+                                                    <option value="عدد">عدد</option>
+                                                    <option value="کیلوگرم">کیلوگرم</option>
+                                                    <option value="متر">متر</option>
+                                                    <option value="دستگاه">دستگاه</option>
+                                                    <option value="پک/بسته">پک/بسته</option>
+                                                    <option value="لیتر">لیتر</option>
+                                                    <option value="شاخه">شاخه</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-2"><input className="w-full border rounded-lg p-2 text-xs" value={it.specifications || ''} onChange={e => handleItemChange(it.id, 'specifications', e.target.value)} placeholder="ابعاد، ولتاژ، استاندارد و..." /></td>
+                                            <td className="p-2 text-center">
+                                                {items.length > 1 && (
+                                                    <button type="button" onClick={() => handleRemoveItemRow(it.id)} className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50"><Trash2 size={16}/></button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <button disabled={loading} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 transition-all active:scale-95">
-                        {loading ? <Loader2 className="animate-spin"/> : <ClipboardCheck/>} ثبت درخواست خرید
-                    </button>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-gray-800 flex items-center gap-2"><Paperclip size={16}/> پیوست مدارک فنی، نقشه، کاتالوگ یا عکس خرابی (PDF/Word/Excel/عکس)</span>
+                            <label className="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5">
+                                <UploadCloud size={16}/> آپلود فایل
+                                <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                            </label>
+                        </div>
+                        {attachments.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-2">
+                                {attachments.map(att => (
+                                    <div key={att.id} className="p-2 bg-white rounded-xl border border-gray-200 flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <FileText size={16} className="text-indigo-500 shrink-0" />
+                                            <span className="font-bold text-gray-700 truncate">{att.fileName}</span>
+                                        </div>
+                                        <button type="button" onClick={() => setAttachments(attachments.filter(a => a.id !== att.id))} className="text-red-500 hover:bg-red-50 p-1 rounded-lg"><X size={14}/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button type="button" onClick={onClose} className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-2xl text-xs transition-all">انصراف</button>
+                        <button type="submit" disabled={loading || uploading} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl text-xs shadow-xl shadow-indigo-100 transition-all flex items-center gap-2">
+                            {loading ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
+                            ثبت و ارسال به کارشناس فنی کارخانه
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>,
@@ -574,10 +945,27 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
     const [printingProforma, setPrintingProforma] = useState<PurchaseProforma | null>(null);
     const [printType, setPrintType] = useState<'REQUEST' | 'PROFORMA' | 'RECEIPT'>('REQUEST');
 
-    const handleAction = async (nextStatus: PurchaseRequestStatus, extra: any = {}) => {
+    const handleAction = async (nextStatus: PurchaseRequestStatus, extra: any = {}, actionLabel?: string) => {
         setActionLoading(true);
         try {
-            const updated = { ...request, status: nextStatus, updatedAt: Date.now(), ...extra };
+            const nowIso = new Date().toISOString();
+            const newAuditLog: PurchaseAuditLog = {
+                id: generateUUID(),
+                stage: nextStatus,
+                action: actionLabel || extra.actionName || `انتقال به مرحله ${nextStatus}`,
+                performedBy: currentUser.fullName,
+                role: currentUser.role,
+                timestamp: nowIso,
+                comment: extra.comment || extra.returnReason || ''
+            };
+
+            const updated = { 
+                ...request, 
+                status: nextStatus, 
+                updatedAt: Date.now(), 
+                auditLogs: [...(request.auditLogs || []), newAuditLog],
+                ...extra 
+            };
             
             // Approval Trails logic
             if (nextStatus === PurchaseRequestStatus.PENDING_FACTORY) updated.approverTechnical = currentUser.fullName;

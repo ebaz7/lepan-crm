@@ -1093,6 +1093,8 @@ export interface MeetingMinutes {
 }
 
 export enum PurchaseRequestStatus {
+    PENDING_REPAIR_INSPECTION = 'در انتظار بررسی واحد نت/تعمیرات',
+    PENDING_WAREHOUSE_CHECK = 'در انتظار بررسی موجودی انبار (سرشیفت)',
     PENDING_TECHNICAL = 'در انتظار تایید فنی',
     PENDING_FACTORY = 'در انتظار مدیر کارخانه',
     PENDING_COMMERCIAL_DECISION = 'در انتظار تصمیم بازرگانی (محل خرید)',
@@ -1103,10 +1105,12 @@ export enum PurchaseRequestStatus {
     PENDING_TEHRAN_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (تهران)',
     PENDING_CEO_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیرعامل)',
     
-    // Factory Branch
-    PENDING_FACTORY_PURCHASING = 'در انتظار مسئول خرید کارخانه',
-    PENDING_FACTORY_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (کارخانه)',
+    // Factory/Zanjan Branch
+    PENDING_ZANJAN_PURCHASING = 'در انتظار مسئول خرید و نت (زنجان)',
+    PENDING_FACTORY_PURCHASING = 'در انتظار مسئول خرید و نت (زنجان)',
+    PENDING_FACTORY_PROFORMA = 'در انتظار ثبت پیش‌فاکتور (زنجان/کارخانه)',
     PENDING_FACTORY_MANAGER_SELECTION = 'در انتظار انتخاب پیش‌فاکتور (مدیر کارخانه)',
+    PENDING_BUYER_EXECUTION = 'در انتظار انجام خرید توسط کارپرداز',
     
     // Common Arrival Flow
     PENDING_SECURITY_ENTRY = 'در انتظار ورود کالا (انتظامات)',
@@ -1115,8 +1119,50 @@ export enum PurchaseRequestStatus {
     PENDING_WAREHOUSE_RECEIPT = 'در انتظار صدور رسید انبار',
     PENDING_FACTORY_FINAL_SIGN = 'در انتظار امضا و بایگانی نهایی (مدیر کارخانه)',
     
+    DELIVERED_FROM_WAREHOUSE = 'تحویل شده از انبار (تکمیل بدون خرید)',
+    RETURNED_FOR_CORRECTION = 'عودت داده شده جهت اصلاح',
     COMPLETED = 'تکمیل و بایگانی شده',
     REJECTED = 'رد شده'
+}
+
+export interface PurchaseRequestItem {
+    id: string;
+    itemCode?: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    suggestedBrand?: string;
+    specifications?: string;
+    remarks?: string;
+    warehouseStock?: number;
+    isAvailableInWarehouse?: boolean;
+    partId?: string;
+}
+
+export interface PurchaseAttachment {
+    id: string;
+    fileName: string;
+    fileType?: string; // 'pdf' | 'word' | 'excel' | 'image' | 'other'
+    fileUrl?: string;
+    url?: string;
+    uploadedBy?: string;
+    uploadedAt?: number | string;
+    stepName?: string;
+}
+
+export interface PurchaseAuditLog {
+    id: string;
+    stage?: string;
+    stepName?: string;
+    action: string;
+    actionLabel?: string;
+    performedBy: string;
+    role?: string;
+    userRole?: string;
+    timestamp: number | string;
+    comment?: string;
+    signatureUrl?: string;
+    durationMinutes?: number;
 }
 
 export interface PurchaseProformaItem {
@@ -1138,9 +1184,11 @@ export interface PurchaseProforma {
     totalAmount: number;
     taxAmount?: number;
     discountAmount?: number;
-    attachments: { fileName: string, url: string }[];
+    attachments: PurchaseAttachment[];
     isChosen?: boolean;
     registeredBy?: string;
+    deliveryTime?: string; // مدت زمان تحویل
+    paymentConditions?: string; // شرایط پرداخت
 }
 
 export interface PurchaseRequest {
@@ -1148,6 +1196,15 @@ export interface PurchaseRequest {
     requestNumber: string;
     date: string;
     requester: string;
+    requestingUnit?: string; // واحد درخواست‌کننده
+    machinery?: string; // دستگاه یا ماشین‌آلات
+    installationLocation?: string; // محل نصب
+    urgency?: 'عادی' | 'فوری' | 'اضطراری'; // درجه فوریت
+    breakdownDescription?: string; // شرح خرابی
+    purchaseReason?: string; // علت درخواست خرید
+    repairRequestNumber?: string; // شماره فرم درخواست تعمیر/گزارش خرابی نت
+    
+    // Main Item or Multi-items list
     itemName: string;
     category?: string;
     subCategory?: string;
@@ -1157,38 +1214,55 @@ export interface PurchaseRequest {
     pdfAttachment?: string;
     quantity: number;
     unit: string;
+    items?: PurchaseRequestItem[]; // Multiple items in single request
+    attachments?: PurchaseAttachment[]; // General attachments (PDF, Word, Excel, images)
+    auditLogs?: PurchaseAuditLog[]; // Complete step history & time tracking
+    
     status: PurchaseRequestStatus;
     proformas: PurchaseProforma[];
     
     // Approval trails
+    approverRepair?: string;
+    approverWarehouseCheck?: string;
     approverTechnical?: string;
     approverFactory?: string;
     approverCommercial?: string;
     approverCeoInitial?: string;
     approverCeoSelection?: string;
     approverFactorySelection?: string;
+    approverBuyer?: string;
     approverQc?: string;
     approverFactoryFinal?: string;
     approverWarehouseReceipt?: string;
     approverFactoryArchive?: string;
     
-    // Entry data from security
+    // Entry data from security (انتظامات)
     entryQuantity?: number;
     entryWeight?: number;
     entryDate?: string;
     entryTime?: string;
     entryRegistrant?: string;
+    driverName?: string;
+    driverPhone?: string;
+    plateNumber?: string;
+    waybillNumber?: string; // شماره بارنامه
+    transportInfo?: string;
     
     // QC details
     qcResult?: 'تایید' | 'مشروط' | 'رد';
     qcDescription?: string;
 
-    // Warehouse Receipt details
+    // Warehouse Receipt details & Stock intake
     warehouseReceiptNumber?: string;
     warehouseReceiptDate?: string;
+    warehouseLocationSlot?: string; // محل نگهداری در انبار
+    serialNumber?: string;
+    barcode?: string;
+    itemCodeAssigned?: string;
 
-    location?: 'Tehran' | 'Factory';
+    location?: 'Tehran' | 'Factory' | 'Zanjan';
     rejectionReason?: string;
+    returnReason?: string;
     createdAt: number;
     updatedAt: number;
 }

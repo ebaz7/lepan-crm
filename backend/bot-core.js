@@ -121,9 +121,46 @@ const runSayanQuery = async (db, queryStr) => {
 
 const hasSayanReportsAccess = (user) => {
     if (!user) return false;
-    if (['admin', 'financial', 'ceo', 'manager'].includes(user.role)) return true;
-    if (user.canViewSayanReports === true || user.canViewAccountingReports === true) return true;
-    return false;
+    if (user.canViewSayanReports === false) return false;
+    return true;
+};
+
+const getCustomerBalancesData = async (db) => {
+    let list = db.customerBalances || [];
+    if (list.length > 0) return list;
+
+    if (db.settings?.sayanApiUrl) {
+        try {
+            const sql = `
+                SELECT 
+                    t07.Field_005 as accountCode,
+                    t07.Field_006 as name,
+                    SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
+                FROM ACT_TBL_007 t07
+                LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
+                WHERE (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                GROUP BY t07.Field_005, t07.Field_006
+                HAVING SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) <> 0
+            `;
+            const sayanRows = await runSayanQuery(db, sql);
+            if (sayanRows && sayanRows.length > 0) {
+                list = sayanRows.map(r => {
+                    const bal = Number(r.balance || 0);
+                    return {
+                        accountCode: r.accountCode,
+                        name: r.name || 'مشتری سایان',
+                        balance: Math.abs(bal),
+                        type: bal > 0 ? 'بدهکار' : 'بستانکار',
+                        rawBalance: bal,
+                        updatedAt: Date.now()
+                    };
+                });
+            }
+        } catch (err) {
+            console.error("Failed to query live Sayan balances:", err);
+        }
+    }
+    return list;
 };
 
 const getTehranOffsetDateString = (offsetDays = 0) => {
@@ -323,8 +360,6 @@ const KEYBOARDS = {
             [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت محصولات', callback_data: 'SALES_LIST_ALL' }],
-            [{ text: '🏢 گزارشات مالی و ERP سایان', callback_data: 'SAYAN_REPORTS_MENU' }],
-            [{ text: '💰 گزارشات مالی عمومی', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '📢 ارسال پیام گروهی به مشتریان', callback_data: 'SALES_BROADCAST' }],
             [{ text: '🛒 ورود به بخش مشتریان', callback_data: 'GUEST_MAIN' }],
             [{ text: '🏢 ارسال اطلاعات شرکت به مشتری', callback_data: 'ACT_SEND_CO_INFO' }],
@@ -370,15 +405,15 @@ const KEYBOARDS = {
         inline_keyboard: [
             [{ text: '📊 خلاصه وضعیت امور جاری', callback_data: 'RPT_DAILY' }],
             [{ text: '🗓 عملکرد ماه جاری سیستم', callback_data: 'RPT_MONTHLY' }],
-            [{ text: '🏢 گزارشات حسابداری و ERP سایان', callback_data: 'SAYAN_REPORTS_MENU' }],
+            [{ text: '🏢 گزارشات حسابداری و ERP سایان (مانده، آویزان و فروش)', callback_data: 'SAYAN_REPORTS_MENU' }],
             [{ text: '⏳ وضعیت کارتابل‌ها (پاسخ‌نشده)', callback_data: 'RPT_PENDING' }],
-            [{ text: '💰 گزارشات مالی عمومی', callback_data: 'SALES_FIN_REPORTS' }],
             [{ text: '🔙 بازگشت', callback_data: 'MENU_MAIN' }]
         ] 
     },
     SAYAN_REPORTS: {
         inline_keyboard: [
             [{ text: '💳 استعلام و مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
+            [{ text: '📜 گزارش اسناد و چک‌های آویزان (PDF)', callback_data: 'BOT_SAYAN_PENDING_DOCS' }],
             [{ text: '🧾 فاکتور فروش روزانه سایان (PDF)', callback_data: 'BOT_SAYAN_DAILY_SALES' }],
             [{ text: '⚖️ مقایسه تحلیل فروش دو بازه (PDF)', callback_data: 'BOT_SAYAN_COMPARE_SALES' }],
             [{ text: '🔴 دانلود لیست بدهکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS' }, { text: '📊 اکسل بدهکاران', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' }],
@@ -2719,7 +2754,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     // --- NAVIGATION ---
-    if (data.startsWith('MENU_') || data === 'SALES_FIN_REPORTS') {
+    if (data.startsWith('MENU_') || data === 'SALES_FIN_REPORTS' || data === 'SAYAN_REPORTS_MENU') {
         if (isGroup) return; // Silent in groups
         session.state = 'IDLE';
         if (data === 'MENU_MAIN') return sendFn(chatId, "🏠 منوی اصلی:", { reply_markup: KEYBOARDS.MAIN });
@@ -2741,21 +2776,12 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             return sendFn(chatId, "🛒 مدیریت فروش:", { reply_markup: KEYBOARDS.SALES });
         }
         
-        if (data === 'SALES_FIN_REPORTS') {
-            const inline_keyboard = [
-                [{ text: '💰 استعلام مانده مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
-                [{ text: '🏢 لیست بدهکاری/بستانکاری کلی', callback_data: 'RPT_BALANCES_SUMMARY' }],
-                [{ text: '🔙 بازگشت', callback_data: session.lastFinMenu || 'MENU_MAIN' }]
-            ];
-            return sendFn(chatId, "💰 گزارشات مالی:", { reply_markup: { inline_keyboard } });
-        }
-        
         if (data === 'MENU_REPORTS') {
             session.lastFinMenu = 'MENU_REPORTS';
             return sendFn(chatId, "📊 گزارشات مدیریتی:", { reply_markup: KEYBOARDS.REPORTS });
         }
 
-        if (data === 'SAYAN_REPORTS_MENU') {
+        if (data === 'SAYAN_REPORTS_MENU' || data === 'SALES_FIN_REPORTS') {
             if (!hasSayanReportsAccess(user)) {
                 return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی و ERP سایان را ندارید.");
             }
@@ -3142,7 +3168,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS' || data === 'SALES_BAL_DOWNLOAD_CREDITORS') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS';
-        const rawList = db.customerBalances || [];
+        const rawList = await getCustomerBalancesData(db);
         const filtered = rawList
             .filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار')
             .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
@@ -3175,7 +3201,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' || data === 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX') {
         const isDebtors = data === 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX';
-        const rawList = db.customerBalances || [];
+        const rawList = await getCustomerBalancesData(db);
         const filtered = rawList
             .filter(b => isDebtors ? b.type === 'بدهکار' : b.type === 'بستانکار')
             .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
@@ -3207,7 +3233,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data.startsWith('SALES_BAL_VIEW_')) {
         const code = data.replace('SALES_BAL_VIEW_', '');
-        const rawList = db.customerBalances || [];
+        const rawList = await getCustomerBalancesData(db);
         const rec = rawList.find(b => b.accountCode === code);
         
         if (!rec) {
@@ -3348,6 +3374,99 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     // --- MANAGEMENT REPORTS HANDLERS ---
+    if (data === 'BOT_SAYAN_PENDING_DOCS') {
+        if (!hasSayanReportsAccess(user)) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات سایان در ربات را ندارید.");
+        }
+
+        await sendFn(chatId, "⏳ در حال استعلام و استخراج اسناد و چک‌های آویزان از سرور سایان... لطفا شکیبا باشید.");
+
+        try {
+            let rows = [];
+            if (db.settings?.sayanApiUrl) {
+                try {
+                    const sql = `
+                        SELECT 
+                            Field_001 as Id,
+                            Field_005 as ChequeNo,
+                            Field_006 as DueDate,
+                            Field_009 as BankName,
+                            Field_011 as DrawerName,
+                            Field_013 as Amount,
+                            Field_015 as StatusDesc
+                        FROM BUR_TBL_012
+                        ORDER BY Field_006 ASC
+                    `;
+                    rows = await runSayanQuery(db, sql);
+                } catch (err) {
+                    console.error("Sayan query error for pending docs:", err);
+                }
+            }
+
+            let totalAmt = 0;
+            let tableRows = [];
+
+            if (rows && rows.length > 0) {
+                tableRows = rows.map((r, idx) => {
+                    const amt = parseFloat(r.Amount || 0);
+                    totalAmt += amt;
+                    return [
+                        (idx + 1).toLocaleString('fa-IR'),
+                        r.ChequeNo || String(r.Id || '-'),
+                        r.DueDate || '-',
+                        r.DrawerName || 'نامشخص',
+                        r.BankName || '-',
+                        amt.toLocaleString('fa-IR'),
+                        r.StatusDesc || 'آویزان / در جریان'
+                    ];
+                });
+            } else {
+                // Fallback to local cheque receipts or pending records
+                const localCheques = db.chequeReceipts || [];
+                tableRows = localCheques.map((c, idx) => {
+                    const amt = parseFloat(c.amount || 0);
+                    totalAmt += amt;
+                    return [
+                        (idx + 1).toLocaleString('fa-IR'),
+                        c.chequeNumber || '-',
+                        c.dueDate || '-',
+                        c.payerName || '-',
+                        c.bankName || '-',
+                        amt.toLocaleString('fa-IR'),
+                        'آویزان / نزد صندوق'
+                    ];
+                });
+            }
+
+            if (tableRows.length === 0) {
+                return sendFn(chatId, "⚠️ هیچ سند یا چک آویزانی در سیستم یافت نشد.", {
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SAYAN_REPORTS_MENU' }]] }
+                });
+            }
+
+            tableRows.push([
+                'جمع کل',
+                '-',
+                '-',
+                '-',
+                '-',
+                totalAmt.toLocaleString('fa-IR'),
+                '-'
+            ]);
+
+            const title = `گزارش اسناد و چک‌های آویزان سایان ERP - ${toShamsiFull(new Date())}`;
+            const columns = ["ردیف", "شماره چک / سند", "سررسید / تاریخ", "صادرکننده / طرف حساب", "بانک / شعبه", "مبلغ (ریال)", "وضعیت سند / چک"];
+            const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
+            const filename = `Sayan_Pending_Docs_${getTehranDateString()}.pdf`;
+
+            await sendDocFn(chatId, pdfBuffer, filename, `📜 *گزارش رسمی اسناد و چک‌های آویزان سایان ERP*\n\n📊 تعداد ردیف‌ها: ${(tableRows.length - 1).toLocaleString('fa-IR')}\n💰 مجموع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`);
+        } catch (err) {
+            console.error("Bot Pending Docs Error:", err);
+            sendFn(chatId, `❌ خطا در استعلام اسناد آویزان: ${err.message}`);
+        }
+        return;
+    }
+
     if (data === 'BOT_SAYAN_DAILY_SALES') {
         if (!hasSayanReportsAccess(user)) {
             return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی سایان در ربات را ندارید. لطفاً از طریق پنل مدیریت دسترسی خود را فعال کنید.");
