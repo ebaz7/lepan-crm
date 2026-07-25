@@ -17,6 +17,8 @@ import {
     Percent,
     X,
     RefreshCw,
+    Save,
+    Send,
     ChevronDown,
     ChevronUp
 } from 'lucide-react';
