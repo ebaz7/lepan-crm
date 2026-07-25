@@ -20,6 +20,7 @@ import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
 import mammoth from 'mammoth';
 import { GoogleGenAI, Type } from '@google/genai';
+import jalaali from 'jalaali-js';
 
 const getDb = dbManager.getDb;
 const saveDb = dbManager.saveDb;
@@ -2482,6 +2483,275 @@ app.get('/api/customer-balances/reports/creditors/pdf', async (req, res) => {
     } catch (e) {
         console.error("Creditors PDF Export Error:", e);
         res.status(500).send("Error generating PDF: " + e.message);
+    }
+});
+
+// --- SAYAN PRODUCTION REPORT ENDPOINTS ---
+const parseJalaliStrToGregorian = (jalaliStr) => {
+    if (!jalaliStr) return null;
+    const clean = String(jalaliStr).trim().replace(/-/g, '/');
+    const parts = clean.split('/').map(p => parseInt(p, 10));
+    if (parts.length !== 3 || parts.some(isNaN)) return null;
+    try {
+        const g = jalaali.toGregorian(parts[0], parts[1], parts[2]);
+        const y = g.gy;
+        const m = String(g.gm).padStart(2, '0');
+        const d = String(g.gd).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    } catch (e) {
+        return null;
+    }
+};
+
+const executeSayanQuery = async (db, queryStr) => {
+    const settings = db.settings || {};
+    const serverSayanBaseUrl = settings.sayanApiUrl || process.env.SAYAN_API_URL;
+    const serverSayanApiKey = settings.sayanApiKey || process.env.SAYAN_API_KEY;
+    if (!serverSayanBaseUrl || !serverSayanApiKey) {
+        throw new Error('تنظیمات آدرس API و کلید امنیتی سایان در بخش تنظیمات سیستم وارد نشده است.');
+    }
+    const finalUrl = `${serverSayanBaseUrl.replace(/\/$/, '')}/query`;
+    const response = await fetch(finalUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${serverSayanApiKey}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: queryStr })
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'خطا در برقراری ارتباط با دیتابیس سایان ERP');
+    }
+    const data = await response.json();
+    return data.data || [];
+};
+
+app.get('/api/sayan/production-report', async (req, res) => {
+    try {
+        const db = getDb();
+        const dateFrom = req.query.dateFrom || '';
+        const dateTo = req.query.dateTo || dateFrom;
+
+        if (!dateFrom) {
+            return res.status(400).json({ error: 'تاریخ ابتدا مشخص نشده است' });
+        }
+
+        const gregFromDate = parseJalaliStrToGregorian(dateFrom);
+        const gregToDate = parseJalaliStrToGregorian(dateTo);
+
+        if (!gregFromDate || !gregToDate) {
+            return res.status(400).json({ error: 'فرمت تاریخ شمسی وارد شده نامعتبر است (مثال: 1405/05/02)' });
+        }
+
+        const gregFrom = `${gregFromDate}T00:00:00.000Z`;
+        const gregTo = `${gregToDate}T23:59:59.999Z`;
+
+        const sql = `
+            SELECT 
+                t10.Field_001 as DocId,
+                t10.Field_008 as Date,
+                t10.Field_009 as DocType,
+                t11.Field_005 as ItemCode,
+                COALESCE(t22.Field_004, t11.Field_005) as ItemName,
+                t11.Field_006 as Quantity
+            FROM STR_TBL_010 t10
+            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
+            LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
+            WHERE t10.Field_009 IN ('61', '67', '79', '73')
+              AND t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}'
+            ORDER BY t22.Field_004, t10.Field_008
+        `;
+
+        const rawRows = await executeSayanQuery(db, sql);
+
+        const itemsMap = new Map();
+        let qty_61 = 0, qty_67 = 0, qty_79 = 0, qty_73 = 0;
+
+        rawRows.forEach(r => {
+            const rawName = (r.ItemName || r.ItemCode || 'کالای بدون نام').trim();
+            const qty = parseFloat(r.Quantity || 0);
+            const docType = String(r.DocType).trim();
+
+            if (!itemsMap.has(rawName)) {
+                itemsMap.set(rawName, {
+                    name: rawName,
+                    unit: 'کیلوگرم',
+                    qty_61: 0,
+                    qty_67: 0,
+                    qty_79: 0,
+                    qty_73: 0,
+                    total: 0
+                });
+            }
+
+            const item = itemsMap.get(rawName);
+            if (docType === '61') { item.qty_61 += qty; qty_61 += qty; }
+            else if (docType === '67') { item.qty_67 += qty; qty_67 += qty; }
+            else if (docType === '79') { item.qty_79 += qty; qty_79 += qty; }
+            else if (docType === '73') { item.qty_73 += qty; qty_73 += qty; }
+            item.total += qty;
+        });
+
+        const items = Array.from(itemsMap.values());
+        const grandTotal = qty_61 + qty_67 + qty_79 + qty_73;
+
+        const key = `${dateFrom}_${dateTo}`;
+        db.productionReportWastes = db.productionReportWastes || {};
+        const storedWaste = db.productionReportWastes[key] || {
+            waste_61: 0,
+            waste_67: 0,
+            waste_79: 0,
+            waste_73: 0,
+            details: ''
+        };
+
+        const waste_61 = parseFloat(storedWaste.waste_61 || 0);
+        const waste_67 = parseFloat(storedWaste.waste_67 || 0);
+        const waste_79 = parseFloat(storedWaste.waste_79 || 0);
+        const waste_73 = parseFloat(storedWaste.waste_73 || 0);
+        const totalWaste = waste_61 + waste_67 + waste_79 + waste_73;
+
+        const pct_61 = qty_61 > 0 ? (waste_61 / qty_61) * 100 : 0;
+        const pct_67 = qty_67 > 0 ? (waste_67 / qty_67) * 100 : 0;
+        const pct_79 = qty_79 > 0 ? (waste_79 / qty_79) * 100 : 0;
+        const pct_73 = qty_73 > 0 ? (waste_73 / qty_73) * 100 : 0;
+        const totalPct = grandTotal > 0 ? (totalWaste / grandTotal) * 100 : 0;
+
+        res.json({
+            success: true,
+            dateFrom,
+            dateTo,
+            items,
+            totals: {
+                qty_61,
+                qty_67,
+                qty_79,
+                qty_73,
+                grandTotal
+            },
+            waste: {
+                waste_61,
+                waste_67,
+                waste_79,
+                waste_73,
+                totalWaste,
+                pct_61,
+                pct_67,
+                pct_79,
+                pct_73,
+                totalPct,
+                details: storedWaste.details || ''
+            }
+        });
+    } catch (e) {
+        console.error("Sayan Production Report Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/sayan/production-report/save-waste', (req, res) => {
+    try {
+        const db = getDb();
+        const { dateFrom, dateTo, waste_61, waste_67, waste_79, waste_73, details } = req.body;
+        if (!dateFrom || !dateTo) {
+            return res.status(400).json({ error: 'تاریخ ابتدا و انتها الزامی است' });
+        }
+        const key = `${dateFrom}_${dateTo}`;
+        db.productionReportWastes = db.productionReportWastes || {};
+        db.productionReportWastes[key] = {
+            waste_61: parseFloat(waste_61 || 0),
+            waste_67: parseFloat(waste_67 || 0),
+            waste_79: parseFloat(waste_79 || 0),
+            waste_73: parseFloat(waste_73 || 0),
+            details: String(details || '').trim(),
+            updatedAt: new Date().toISOString()
+        };
+        saveDb(db);
+        res.json({ success: true, message: 'اطلاعات ضایعات تولید با موفقیت ثبت گردید.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/sayan/production-report/send-bot', async (req, res) => {
+    try {
+        const db = getDb();
+        const { dateFrom, dateTo, items, totals, waste } = req.body;
+
+        if (!dateFrom || !totals || !waste) {
+            return res.status(400).json({ error: 'اطلاعات گزارش کامل نیست' });
+        }
+
+        const title = `گزارش آمار کل تولید و ضایعات (${dateFrom})`;
+        const pdfBuffer = await Renderer.generateProductionReportPDF(title, dateFrom, dateTo, items, totals, waste);
+
+        const caption = `📊 *گزارش تولید و ضایعات (زنده سایان ERP)*\n` +
+            `📅 *از تاریخ:* ${dateFrom}  *تا تاریخ:* ${dateTo}\n\n` +
+            `🏭 *آمار کل تولید:*
+` +
+            `🔹 سند ۶۱ (POY): ${totals.qty_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
+            `🔹 سند ۶۷ (DTY): ${totals.qty_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
+            `🔹 سند ۷۹ (کش): ${totals.qty_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
+            `🔹 سند ۷۳ (اسپاندکس): ${totals.qty_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
+            `✨ *جمع کل تولید:* ${totals.grandTotal.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n\n` +
+            `♻️ *جزئیات ضایعات:*
+` +
+            `🔸 ضایعات POY: ${waste.waste_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_61.toFixed(2)}%)\n` +
+            `🔸 ضایعات DTY: ${waste.waste_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_67.toFixed(2)}%)\n` +
+            `🔸 ضایعات کش: ${waste.waste_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_79.toFixed(2)}%)\n` +
+            `🔸 ضایعات اسپاندکس: ${waste.waste_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_73.toFixed(2)}%)\n` +
+            `💥 *جمع ضایعات:* ${waste.totalWaste.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.totalPct.toFixed(2)}%)\n` +
+            (waste.details ? `\n📝 *توضیحات ضایعات:*\n${waste.details}\n` : '') +
+            `\n📎 فایل PDF کامل گزارش تولید به پیوست می‌باشد.`;
+
+        const filename = `Production_Report_${dateFrom.replace(/[\/\\]/g, '-')}.pdf`;
+        const settings = db.settings || {};
+        
+        // Collect target chat/group IDs
+        const targetIds = [];
+        if (settings.telegramChatId) targetIds.push({ platform: 'telegram', id: settings.telegramChatId });
+        if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
+        if (settings.factoryGroupId) targetIds.push({ platform: 'telegram', id: settings.factoryGroupId });
+        if (settings.accountingGroupId) targetIds.push({ platform: 'telegram', id: settings.accountingGroupId });
+        
+        // Add any subscribed groups from db
+        if (db.groups && Array.isArray(db.groups)) {
+            db.groups.forEach(g => {
+                if (g.chatId) targetIds.push({ platform: g.platform || 'telegram', id: g.chatId });
+            });
+        }
+
+        const uniqueTargets = Array.from(new Set(targetIds.map(t => `${t.platform}:${t.id}`)))
+            .map(u => targetIds.find(t => `${t.platform}:${t.id}` === u));
+
+        if (uniqueTargets.length === 0) {
+            return res.status(400).json({ error: 'هیچ شناسه گروه یا چت باتی در تنظیمات سیستم یافت نشد.' });
+        }
+
+        let sentCount = 0;
+        for (const target of uniqueTargets) {
+            try {
+                if (target.platform === 'telegram') {
+                    await telegram.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                } else if (target.platform === 'bale') {
+                    await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                }
+            } catch (err) {
+                console.error(`[Send Production Report] Failed for ${target.platform}:${target.id}:`, err.message);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `گزارش با موفقیت به ${sentCount} گروه / چت در بات‌ها ارسال شد.`
+        });
+    } catch (e) {
+        console.error("Send Production Report Bot Error:", e);
+        res.status(500).json({ error: e.message });
     }
 });
 

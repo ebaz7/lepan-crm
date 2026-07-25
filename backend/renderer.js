@@ -1792,3 +1792,141 @@ export const generateSecretariatLetterDoc = async (
 
   return docxBuffer;
 };
+
+// 5. Production & Waste Report PDF
+export const generateProductionReportPDF = async (
+  title,
+  dateFrom,
+  dateTo,
+  items = [],
+  totals = { qty_61: 0, qty_67: 0, qty_79: 0, qty_73: 0, grandTotal: 0 },
+  waste = { waste_61: 0, waste_67: 0, waste_79: 0, waste_73: 0, totalWaste: 0, pct_61: 0, pct_67: 0, pct_79: 0, pct_73: 0, totalPct: 0, details: '' }
+) => {
+  try {
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+
+    const rowsHtml = items.map((item, idx) => `
+      <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}; font-size: 9.5pt;">
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center;">${item.unit || 'کیلوگرم'}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #1e293b;">${item.name}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center;">${item.qty_61 > 0 ? item.qty_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center;">${item.qty_67 > 0 ? item.qty_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center;">${item.qty_79 > 0 ? item.qty_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center;">${item.qty_73 > 0 ? item.qty_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+        <td style="padding: 6px 8px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: #0f172a; background-color: #f1f5f9;">${item.total > 0 ? item.total.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="fa">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Tahoma', 'IRANSans', sans-serif; margin: 0; padding: 10px; color: #0f172a; direction: rtl; }
+            .header-table { width: 100%; margin-bottom: 12px; border-collapse: collapse; }
+            .header-box { border: 1px solid #94a3b8; padding: 6px 12px; border-radius: 4px; font-size: 9pt; background: #f8fafc; }
+            .title { font-size: 15pt; font-weight: 800; text-align: center; color: #1e3a8a; }
+            .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9.5pt; }
+            .report-table th, .report-table td { border: 1px solid #64748b; padding: 6px 8px; text-align: center; }
+            .report-table th { background-color: #e2e8f0; color: #0f172a; font-weight: 800; }
+            .summary-row { background-color: #f1f5f9; font-weight: bold; }
+            .waste-row { background-color: #fef2f2; font-weight: bold; color: #991b1b; }
+            .pct-row { background-color: #fff7ed; font-weight: bold; color: #c2410c; }
+            .waste-notes { margin-top: 15px; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #fafafa; font-size: 9.5pt; }
+        </style>
+    </head>
+    <body>
+        <table class="header-table">
+            <tr>
+                <td style="width: 28%;">
+                    <div class="header-box">
+                        <div><strong>از تاریخ:</strong> ${dateFrom}</div>
+                        <div><strong>تا تاریخ:</strong> ${dateTo}</div>
+                    </div>
+                </td>
+                <td style="width: 44%;" class="title">
+                    ${title || 'گزارش آمار کل تولید و ضایعات (سایان ERP)'}
+                </td>
+                <td style="width: 28%; text-align: left;">
+                    <div style="font-size: 8.5pt; color: #64748b;">
+                        تاریخ استعلام: ${dateFrom}
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th colspan="2" style="background: #cbd5e1;">کالاها</th>
+                    <th colspan="5" style="background: #93c5fd;">عملیات</th>
+                </tr>
+                <tr>
+                    <th style="width: 8%;">واحد</th>
+                    <th style="width: 32%;">کالا</th>
+                    <th style="width: 12%;">61 سند تولید کارت POY</th>
+                    <th style="width: 12%;">67 سند تولید کارت DTY</th>
+                    <th style="width: 12%;">79 سند تولید کارت کش</th>
+                    <th style="width: 12%;">73 سند تولید کارت اسپاندکس</th>
+                    <th style="width: 12%;">جمع</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml || '<tr><td colspan="7">هیچ موردی ثبت نشده است.</td></tr>'}
+            </tbody>
+            <tfoot>
+                <tr class="summary-row">
+                    <td colspan="2" style="text-align: right; font-weight: bold; padding-right: 12px; background: #e2e8f0;">جمع تولید</td>
+                    <td>${totals.qty_61 ? totals.qty_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td>${totals.qty_67 ? totals.qty_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td>${totals.qty_79 ? totals.qty_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td>${totals.qty_73 ? totals.qty_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+                    <td style="background: #cbd5e1; font-size: 10.5pt;">${totals.grandTotal ? totals.grandTotal.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}</td>
+                </tr>
+                <tr class="waste-row">
+                    <td colspan="2" style="text-align: right; font-weight: bold; padding-right: 12px;">ضایعات (کیلوگرم)</td>
+                    <td>${waste.waste_61 ? waste.waste_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</td>
+                    <td>${waste.waste_67 ? waste.waste_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</td>
+                    <td>${waste.waste_79 ? waste.waste_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</td>
+                    <td>${waste.waste_73 ? waste.waste_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</td>
+                    <td style="background: #fca5a5;">${waste.totalWaste ? waste.totalWaste.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</td>
+                </tr>
+                <tr class="pct-row">
+                    <td colspan="2" style="text-align: right; font-weight: bold; padding-right: 12px;">درصد ضایعات</td>
+                    <td>${waste.pct_61 ? waste.pct_61.toFixed(2) : '0.00'}%</td>
+                    <td>${waste.pct_67 ? waste.pct_67.toFixed(2) : '0.00'}%</td>
+                    <td>${waste.pct_79 ? waste.pct_79.toFixed(2) : '0.00'}%</td>
+                    <td>${waste.pct_73 ? waste.pct_73.toFixed(2) : '0.00'}%</td>
+                    <td style="background: #fdba74;">${waste.totalPct ? waste.totalPct.toFixed(2) : '0.00'}%</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        ${waste.details ? `
+            <div class="waste-notes">
+                <strong>📝 جزئیات و توضیحات ضایعات:</strong>
+                <div style="margin-top: 5px; white-space: pre-wrap; color: #334155;">${waste.details}</div>
+            </div>
+        ` : ''}
+    </body>
+    </html>
+    `;
+
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({
+      format: 'A4',
+      landscape: true,
+      printBackground: true,
+      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+    });
+    await page.close();
+    return pdf;
+  } catch (e) {
+    console.error("Generate Production Report PDF Error:", e);
+    throw e;
+  }
+};
+
