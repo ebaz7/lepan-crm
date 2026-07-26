@@ -589,27 +589,26 @@ const Settings: React.FC<SettingsProps> = ({
         }
         
         // Ensure companies and companyNames arrays exist and are in sync
-        if (!Array.isArray(normalizedSettings.companies)) {
-          normalizedSettings.companies = [];
+        if (!Array.isArray(normalizedSettings.companies) || normalizedSettings.companies.length === 0) {
+          normalizedSettings.companies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
         }
-        if (!Array.isArray(normalizedSettings.companyNames)) {
-          normalizedSettings.companyNames = [];
+        if (!Array.isArray(normalizedSettings.companyNames) || normalizedSettings.companyNames.length === 0) {
+          normalizedSettings.companyNames = normalizedSettings.companies.map((c: any) => c.name);
         }
-        if (
-          normalizedSettings.companyNames.length > 0 &&
-          normalizedSettings.companies.length === 0
-        ) {
-          normalizedSettings.companies = normalizedSettings.companyNames.map((name: string) => ({
-            id: generateUUID(),
-            name,
-            showInWarehouse: true,
-            banks: [],
-          }));
+        if (!Array.isArray(normalizedSettings.fiscalYears) || normalizedSettings.fiscalYears.length === 0) {
+          normalizedSettings.fiscalYears = [
+            { id: "fy_1402", label: "1402", isClosed: false, createdAt: Date.now() },
+            { id: "fy_1403", label: "1403", isClosed: false, createdAt: Date.now() },
+            { id: "fy_1404", label: "1404", isClosed: false, createdAt: Date.now() },
+            { id: "fy_1405", label: "1405", isClosed: false, createdAt: Date.now() },
+          ];
+          normalizedSettings.activeFiscalYearId = "fy_1404";
         }
 
         setSettings(normalizedSettings);
         hasInitializedRef.current = true;
       }
+      loadSettings();
     } else {
       loadSettings();
     }
@@ -628,22 +627,25 @@ const Settings: React.FC<SettingsProps> = ({
       safeData.companies = safeData.companies || [];
       safeData.operatingBankNames = safeData.operatingBankNames || [];
       safeData.insuranceCompanies = safeData.insuranceCompanies || [];
-      if (
-        safeData.companyNames?.length > 0 &&
-        safeData.companies.length === 0
-      ) {
-        safeData.companies = safeData.companyNames.map((name) => ({
-          id: generateUUID(),
-          name,
-          showInWarehouse: true,
-          banks: [],
-        }));
+      if (!Array.isArray(safeData.companies) || safeData.companies.length === 0) {
+        safeData.companies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
+      }
+      if (!Array.isArray(safeData.companyNames) || safeData.companyNames.length === 0) {
+        safeData.companyNames = safeData.companies.map((c: any) => c.name);
       }
       if (!safeData.warehouseSequences) safeData.warehouseSequences = {};
       if (!safeData.companyNotifications) safeData.companyNotifications = {};
       if (!safeData.customRoles) safeData.customRoles = [];
       if (!safeData.printTemplates) safeData.printTemplates = [];
-      if (!safeData.fiscalYears) safeData.fiscalYears = [];
+      if (!Array.isArray(safeData.fiscalYears) || safeData.fiscalYears.length === 0) {
+        safeData.fiscalYears = [
+          { id: "fy_1402", label: "1402", isClosed: false, createdAt: Date.now() },
+          { id: "fy_1403", label: "1403", isClosed: false, createdAt: Date.now() },
+          { id: "fy_1404", label: "1404", isClosed: false, createdAt: Date.now() },
+          { id: "fy_1405", label: "1405", isClosed: false, createdAt: Date.now() },
+        ];
+        safeData.activeFiscalYearId = "fy_1404";
+      }
       if (!safeData.rolePermissions) safeData.rolePermissions = {}; // Ensure defined
 
       setSettings(safeData);

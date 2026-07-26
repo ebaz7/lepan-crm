@@ -2,10 +2,24 @@
 import https from 'https';
 import FormData from 'form-data';
 import * as BotCore from './bot-core.js';
+import { getDb } from './db-manager.js';
 
 let pollingActive = false;
 let lastOffset = 0;
 let botToken = null;
+
+const ensureBaleActive = () => {
+    if (!botToken) {
+        try {
+            const token = getDb()?.settings?.baleBotToken;
+            if (token) {
+                initBaleBot(token);
+            }
+        } catch (e) {
+            console.error("Auto init Bale failed:", e.message);
+        }
+    }
+};
 
 const callApi = (method, data, isMultipart = false) => {
     return new Promise((resolve, reject) => {
@@ -168,24 +182,29 @@ const poll = async () => {
 };
 
 export const sendBotMessage = (chatId, text, opts) => {
+    ensureBaleActive();
     return callApi('sendMessage', { chat_id: chatId, text: text, ...opts });
 };
 
 export const sendBotPhoto = (chatId, buffer, caption, opts) => {
+    ensureBaleActive();
+    const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
     const form = new FormData();
     form.append('chat_id', chatId);
     const filename = (opts && opts.filename) ? opts.filename : 'image.png';
     form.append('photo', buffer, { filename });
-    form.append('caption', caption);
+    form.append('caption', safeCaption || '');
     if (opts && opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
     return callApi('sendPhoto', form, true);
 };
 
 export const sendBotDocument = (chatId, buffer, name, caption) => {
+    ensureBaleActive();
+    const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
     const form = new FormData();
     form.append('chat_id', chatId);
     form.append('document', buffer, { filename: name || 'document.pdf' });
-    form.append('caption', caption || '');
+    form.append('caption', safeCaption || '');
     return callApi('sendDocument', form, true);
 };
 

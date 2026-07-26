@@ -1,10 +1,24 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 import * as BotCore from './bot-core.js';
+import { getDb } from './db-manager.js';
 
 let bot = null;
 
 let currentToken = null;
+
+const ensureBotActive = async () => {
+    if (!bot) {
+        try {
+            const token = getDb()?.settings?.telegramBotToken;
+            if (token) {
+                await initTelegram(token);
+            }
+        } catch (e) {
+            console.error("Auto init Telegram failed:", e.message);
+        }
+    }
+};
 
 export const initTelegram = async (token) => {
     if (!token) {
@@ -107,23 +121,29 @@ export const initTelegram = async (token) => {
     } catch (e) { console.error("Telegram Init Error", e); }
 };
 
-export const sendBotMessage = (chatId, text, opts) => {
-    if (!bot) return Promise.reject("Bot not initialized");
+export const sendBotMessage = async (chatId, text, opts) => {
+    await ensureBotActive();
+    if (!bot) return Promise.reject("Bot Telegram not initialized");
     return bot.sendMessage(chatId, text, opts);
 };
 
-export const sendBotPhoto = (chatId, buffer, caption, opts) => {
-    if (!bot) return Promise.reject("Bot not initialized");
+export const sendBotPhoto = async (chatId, buffer, caption, opts) => {
+    await ensureBotActive();
+    if (!bot) return Promise.reject("Bot Telegram not initialized");
+    const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
     const fileOptions = { filename: opts?.filename || 'image.png', contentType: opts?.contentType || 'image/png' };
-    return bot.sendPhoto(chatId, buffer, { caption, ...opts }, fileOptions);
+    return bot.sendPhoto(chatId, buffer, { caption: safeCaption, ...opts }, fileOptions);
 };
 
-export const sendBotDocument = (chatId, buffer, name, caption) => {
-    if (!bot) return Promise.reject("Bot not initialized");
-    return bot.sendDocument(chatId, buffer, { caption }, { filename: name });
+export const sendBotDocument = async (chatId, buffer, name, caption) => {
+    await ensureBotActive();
+    if (!bot) return Promise.reject("Bot Telegram not initialized");
+    const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
+    return bot.sendDocument(chatId, buffer, { caption: safeCaption }, { filename: name });
 };
 
-export const deleteBotMessage = (chatId, messageId) => {
-    if (!bot) return Promise.reject("Bot not initialized");
+export const deleteBotMessage = async (chatId, messageId) => {
+    await ensureBotActive();
+    if (!bot) return Promise.reject("Bot Telegram not initialized");
     return bot.deleteMessage(chatId, messageId).catch(e => console.error("TG delete error:", e.message));
 };

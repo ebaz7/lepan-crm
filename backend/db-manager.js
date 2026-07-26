@@ -58,6 +58,27 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.sayanApiKey = "";
                 }
 
+                // Ensure companies and fiscalYears exist in settings
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.companies) || MEMORY_DB_CACHE.settings.companies.length === 0) {
+                    MEMORY_DB_CACHE.settings.companies = [
+                        { id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }
+                    ];
+                }
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.companyNames) || MEMORY_DB_CACHE.settings.companyNames.length === 0) {
+                    MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
+                }
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
+                    MEMORY_DB_CACHE.settings.fiscalYears = [
+                        { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },
+                        { id: 'fy_1403', label: '1403', isClosed: false, companySequences: {}, createdAt: Date.now() },
+                        { id: 'fy_1404', label: '1404', isClosed: false, companySequences: {}, createdAt: Date.now() },
+                        { id: 'fy_1405', label: '1405', isClosed: false, companySequences: {}, createdAt: Date.now() }
+                    ];
+                }
+                if (!MEMORY_DB_CACHE.settings.activeFiscalYearId) {
+                    MEMORY_DB_CACHE.settings.activeFiscalYearId = 'fy_1404';
+                }
+
                 // Ensure arrays exist
                 const arrays = ['users', 'botSubscribers', 'orders', 'exitPermits', 'warehouseTransactions', 'subscriptions', 'messages', 'groups', 'tasks', 'tradeRecords', 'notes', 'customerBalances', 'customerChatCodes', 'chequeReceipts'];
                 arrays.forEach(arr => {

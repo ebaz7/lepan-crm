@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import xlsx from 'xlsx';
+import jalaali from 'jalaali-js';
 import * as Renderer from './renderer.js';
 import * as dbManager from './db-manager.js';
 import * as utils from './utils.js';
@@ -16,6 +17,52 @@ const findNextGapNumber = utils.findNextGapNumber;
 const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
 const getTehranDateString = utils.getTehranDateString;
+
+export const convertJalaliToGregorianStr = (jalaliStr) => {
+    if (!jalaliStr) return '';
+    try {
+        const clean = jalaliStr.toString().trim()
+            .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+            .replace(/[٠-٩]/g, d => '٠١٢٣۴۵۶۷۸۹'.indexOf(d).toString());
+        const parts = clean.split('/');
+        if (parts.length !== 3) return jalaliStr;
+        const jy = parseInt(parts[0], 10);
+        const jm = parseInt(parts[1], 10);
+        const jd = parseInt(parts[2], 10);
+        if (isNaN(jy) || isNaN(jm) || isNaN(jd)) return jalaliStr;
+        const g = jalaali.toGregorian(jy, jm, jd);
+        return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+    } catch {
+        return jalaliStr;
+    }
+};
+
+export const getDefaultSayanDateRange = (db) => {
+    let dateFrom = db?.settings?.sayanDefaultDateFrom;
+    let dateTo = db?.settings?.sayanDefaultDateTo;
+
+    if (!dateFrom || !dateTo) {
+        let activeYearLabel = '1404';
+        if (db?.settings?.fiscalYears && Array.isArray(db.settings.fiscalYears)) {
+            const activeFy = db.settings.fiscalYears.find(f => f.id === db.settings.activeFiscalYearId);
+            if (activeFy && activeFy.label) {
+                const cleanedLabel = activeFy.label.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString());
+                if (cleanedLabel) activeYearLabel = cleanedLabel;
+            }
+        }
+        
+        const now = new Date();
+        const jToday = jalaali.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        
+        if (!dateFrom) {
+            dateFrom = `${activeYearLabel}/01/01`;
+        }
+        if (!dateTo) {
+            dateTo = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
+        }
+    }
+    return { dateFrom, dateTo };
+};
 
 const getRolePermissions = (userRole, settings, userObject) => {
     if (userRole === 'admin') {
@@ -196,21 +243,54 @@ export const getCustomerBalancesData = async (db) => {
             `;
             const tafsilis = await runSayanQuery(db, tafsiliSql);
 
-            // 2. Fetch Traz
-            const trazSql = `
-                SELECT 
-                    t24.Field_010 as TafsiliRaw,
-                    SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
-                    SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
-                FROM ACT_TBL_024 t24
-                WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
-                  AND t24.Field_010 NOT LIKE '%-12%'
-                  AND t24.Field_010 NOT LIKE '%-13%'
-                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
-                  AND t24.Field_003 <> '9'
-                GROUP BY t24.Field_010
-            `;
-            const rawRows = await runSayanQuery(db, trazSql);
+            // 2. Determine default date range from software settings / active fiscal year
+            const { dateFrom, dateTo } = getDefaultSayanDateRange(db);
+            const gregFrom = convertJalaliToGregorianStr(dateFrom);
+            const gregTo = convertJalaliToGregorianStr(dateTo);
+
+            // 3. Fetch Traz using transactional tables ACT_TBL_009 & ACT_TBL_008 (matching software AccountingReports.tsx)
+            let rawRows = [];
+            if (gregFrom && gregTo) {
+                const trazSql = `
+                    SELECT 
+                        t9.Field_015 as TafsiliRaw,
+                        SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_009 t9
+                    LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
+                    WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
+                      AND t9.Field_015 NOT LIKE '%-12%'
+                      AND t9.Field_015 NOT LIKE '%-13%'
+                      AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117') 
+                      AND t9.Field_005 <> '9'
+                      AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                      AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                    GROUP BY t9.Field_015
+                `;
+                try {
+                    rawRows = await runSayanQuery(db, trazSql);
+                } catch (err2) {
+                    console.warn("Query on ACT_TBL_009 failed, falling back to ACT_TBL_024:", err2.message);
+                }
+            }
+
+            if (!rawRows || rawRows.length === 0) {
+                // Fallback to summary table ACT_TBL_024 if ACT_TBL_009 returns empty or fails
+                const fallbackSql = `
+                    SELECT 
+                        t24.Field_010 as TafsiliRaw,
+                        SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_024 t24
+                    WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                      AND t24.Field_010 NOT LIKE '%-12%'
+                      AND t24.Field_010 NOT LIKE '%-13%'
+                      AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                      AND t24.Field_003 <> '9'
+                    GROUP BY t24.Field_010
+                `;
+                rawRows = await runSayanQuery(db, fallbackSql);
+            }
 
             // Helper to parse TafsiliRaw
             const parseTafsiliRaw = (raw) => {
@@ -229,7 +309,7 @@ export const getCustomerBalancesData = async (db) => {
                 return { moein: '', code: '' };
             };
 
-            // 3. Map and group
+            // 4. Map and group
             const groupedMap = new Map();
             rawRows.forEach((row) => {
                 const parsed = parseTafsiliRaw(row.TafsiliRaw);
@@ -1470,21 +1550,47 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 let foundAny = false;
                 if (db.settings?.sayanApiUrl) {
                     try {
-                        const sql = `
-                            SELECT 
-                                t07.Field_005 as accountCode,
-                                t07.Field_006 as name,
-                                SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
-                            FROM ACT_TBL_024 t24
-                            INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
-                            WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
-                              AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
-                              AND t24.Field_010 NOT LIKE '%-12%'
-                              AND t24.Field_010 NOT LIKE '%-13%'
-                              AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
-                              AND t24.Field_003 <> '9'
-                            GROUP BY t07.Field_005, t07.Field_006
-                        `;
+                        const { dateFrom, dateTo } = getDefaultSayanDateRange(db);
+                        const gregFrom = convertJalaliToGregorianStr(dateFrom);
+                        const gregTo = convertJalaliToGregorianStr(dateTo);
+                        
+                        let sql = ``;
+                        if (gregFrom && gregTo) {
+                            sql = `
+                                SELECT 
+                                    t07.Field_005 as accountCode,
+                                    t07.Field_006 as name,
+                                    SUM(CAST(t9.Field_009 AS FLOAT)) - SUM(CAST(t9.Field_010 AS FLOAT)) as balance
+                                FROM ACT_TBL_009 t9
+                                LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
+                                INNER JOIN ACT_TBL_007 t07 ON t9.Field_015 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                                WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                                  AND (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
+                                  AND t9.Field_015 NOT LIKE '%-12%'
+                                  AND t9.Field_015 NOT LIKE '%-13%'
+                                  AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                                  AND t9.Field_005 <> '9'
+                                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                                GROUP BY t07.Field_005, t07.Field_006
+                            `;
+                        } else {
+                            sql = `
+                                SELECT 
+                                    t07.Field_005 as accountCode,
+                                    t07.Field_006 as name,
+                                    SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
+                                FROM ACT_TBL_024 t24
+                                INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                                WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                                  AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                                  AND t24.Field_010 NOT LIKE '%-12%'
+                                  AND t24.Field_010 NOT LIKE '%-13%'
+                                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                                  AND t24.Field_003 <> '9'
+                                GROUP BY t07.Field_005, t07.Field_006
+                            `;
+                        }
                         const res = await runSayanQuery(db, sql);
                         if (res && res.length > 0) {
                             name = res[0].name || name;
@@ -2693,21 +2799,47 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     let foundAny = false;
                     if (db.settings?.sayanApiUrl) {
                         try {
-                            const sql = `
-                                SELECT 
-                                    t07.Field_005 as accountCode,
-                                    t07.Field_006 as name,
-                                    SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
-                                FROM ACT_TBL_024 t24
-                                INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
-                                WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
-                                  AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
-                                  AND t24.Field_010 NOT LIKE '%-12%'
-                                  AND t24.Field_010 NOT LIKE '%-13%'
-                                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
-                                  AND t24.Field_003 <> '9'
-                                GROUP BY t07.Field_005, t07.Field_006
-                            `;
+                            const { dateFrom, dateTo } = getDefaultSayanDateRange(db);
+                            const gregFrom = convertJalaliToGregorianStr(dateFrom);
+                            const gregTo = convertJalaliToGregorianStr(dateTo);
+
+                            let sql = ``;
+                            if (gregFrom && gregTo) {
+                                sql = `
+                                    SELECT 
+                                        t07.Field_005 as accountCode,
+                                        t07.Field_006 as name,
+                                        SUM(CAST(t9.Field_009 AS FLOAT)) - SUM(CAST(t9.Field_010 AS FLOAT)) as balance
+                                    FROM ACT_TBL_009 t9
+                                    LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
+                                    INNER JOIN ACT_TBL_007 t07 ON t9.Field_015 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                                    WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                                      AND (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
+                                      AND t9.Field_015 NOT LIKE '%-12%'
+                                      AND t9.Field_015 NOT LIKE '%-13%'
+                                      AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                                      AND t9.Field_005 <> '9'
+                                      AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                                      AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                                    GROUP BY t07.Field_005, t07.Field_006
+                                `;
+                            } else {
+                                sql = `
+                                    SELECT 
+                                        t07.Field_005 as accountCode,
+                                        t07.Field_006 as name,
+                                        SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
+                                    FROM ACT_TBL_024 t24
+                                    INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                                    WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                                      AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                                      AND t24.Field_010 NOT LIKE '%-12%'
+                                      AND t24.Field_010 NOT LIKE '%-13%'
+                                      AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                                      AND t24.Field_003 <> '9'
+                                    GROUP BY t07.Field_005, t07.Field_006
+                                `;
+                            }
                             const res = await runSayanQuery(db, sql);
                             if (res && res.length > 0) {
                                 name = res[0].name || name;
