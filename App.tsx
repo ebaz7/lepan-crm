@@ -735,6 +735,16 @@ function App() {
                 if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
                 if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
                 if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
+
+                if (settingsData.companyNames.length > 0 && settingsData.companies.length === 0) {
+                    settingsData.companies = settingsData.companyNames.map((name: string) => ({
+                        id: Math.random().toString(36).substring(2, 11),
+                        name,
+                        showInWarehouse: true,
+                        banks: []
+                    }));
+                }
+
                 setSettings(settingsData);
                 
                 // Sync financial year state from server settings

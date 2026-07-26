@@ -419,38 +419,47 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     const salesRows = await executeSayanQuery(db, sql);
     if (salesRows.length > 0) {
         const title = `گزارش رسمی فروش روزانه سایان - مورخ ${shamsiDate} (${labelSuffix})`;
-        const columns = ['ردیف', 'شماره فاکتور', 'مشتری', 'نام کالا', 'گروه کالا', 'مقدار (کیلوگرم)', 'مبلغ کل (ریال)'];
+        const columns = ['ردیف', 'گروه کالا', 'نام کالا / محصول', 'جمع وزنی (ک‌گ)', 'جمع ریالی (ریال)'];
         
+        const groupedMap = new Map();
         let totalQty = 0;
         let totalAmt = 0;
         
-        const tableRows = salesRows.map((row, idx) => {
-            const qty = parseFloat(row.Quantity || 0);
-            const amt = parseFloat(row.Amount || 0);
+        salesRows.forEach(inv => {
+            const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
+            const qty = parseFloat(inv.Quantity || 0);
+            const amt = parseFloat(inv.Amount || 0);
             totalQty += qty;
             totalAmt += amt;
             
-            const customerName = row.CustomerName || (() => {
-                const notes = row.Notes || '';
-                const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
-                return match ? match[1].trim() : notes;
-            })() || 'نامعلوم';
-            
+            if (groupedMap.has(key)) {
+                const existing = groupedMap.get(key);
+                existing.totalQty += qty;
+                existing.totalAmt += amt;
+            } else {
+                groupedMap.set(key, {
+                    itemName: inv.ItemName || 'کالای بدون نام',
+                    groupName: inv.GroupName || 'سایر گروه‌ها',
+                    totalQty: qty,
+                    totalAmt: amt
+                });
+            }
+        });
+        
+        const groupedRows = Array.from(groupedMap.values());
+        
+        const tableRows = groupedRows.map((row, idx) => {
             return [
                 (idx + 1).toLocaleString('fa-IR'),
-                (row.InvoiceNum || row.DocId || '-').toLocaleString('fa-IR'),
-                customerName,
-                row.ItemName || 'کالای بدون نام',
-                row.GroupName || 'بدون گروه',
-                qty.toLocaleString('fa-IR'),
-                amt.toLocaleString('fa-IR')
+                row.groupName,
+                row.itemName,
+                row.totalQty.toLocaleString('fa-IR'),
+                row.totalAmt.toLocaleString('fa-IR')
             ];
         });
         
         tableRows.push([
             'جمع کل',
-            '-',
-            '-',
             '-',
             '-',
             totalQty.toLocaleString('fa-IR'),
@@ -459,14 +468,16 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         
         const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
         const filename = `Sayan_Daily_Sales_${gregDate}_${labelSuffix === 'دیروز' ? 'Yesterday' : 'Today'}.pdf`;
-        const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد ردیف‌های فروش: ${salesRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
+        const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد اقلام فروخته شده: ${groupedRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
 
         for (const tgt of salesTargets) {
             try {
+                const cleanId = utils.sanitizeGroupId(tgt.id);
+                if (!cleanId) continue;
                 if (tgt.platform === 'telegram') {
-                    await telegram.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                    await telegram.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                 } else if (tgt.platform === 'bale') {
-                    await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                    await bale.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                 }
             } catch (e) {
                 console.error(`[Manual/Auto Sales Report] Failed to send to ${tgt.platform} group ${tgt.id}:`, e.message);
@@ -477,10 +488,12 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
         for (const tgt of salesTargets) {
             try {
+                const cleanId = utils.sanitizeGroupId(tgt.id);
+                if (!cleanId) continue;
                 if (tgt.platform === 'telegram') {
-                    await telegram.sendBotMessage(tgt.id, emptyMsg);
+                    await telegram.sendBotMessage(cleanId, emptyMsg);
                 } else if (tgt.platform === 'bale') {
-                    await bale.sendBotMessage(tgt.id, emptyMsg);
+                    await bale.sendBotMessage(cleanId, emptyMsg);
                 }
             } catch (e) {
                 console.error(`[Manual/Auto Sales Report] Failed to send empty msg to ${tgt.platform} group ${tgt.id}:`, e.message);
@@ -610,10 +623,12 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
 
                 for (const tgt of prodTargets) {
                     try {
+                        const cleanId = utils.sanitizeGroupId(tgt.id);
+                        if (!cleanId) continue;
                         if (tgt.platform === 'telegram') {
-                            await telegram.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                            await telegram.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                         } else if (tgt.platform === 'bale') {
-                            await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                            await bale.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                         }
                     } catch (e) {
                         console.error(`[Cron 19:00] Failed to send production PDF to ${tgt.platform} group ${tgt.id}:`, e.message);
@@ -2642,6 +2657,11 @@ app.post('/api/settings', (req, res) => {
     if (newSettings.botMeetingMinutesWhatsAppId) newSettings.botMeetingMinutesWhatsAppId = utils.sanitizeGroupId(newSettings.botMeetingMinutesWhatsAppId);
     if (newSettings.botMeetingMinutesSecondGroupIdWhatsApp) newSettings.botMeetingMinutesSecondGroupIdWhatsApp = utils.sanitizeGroupId(newSettings.botMeetingMinutesSecondGroupIdWhatsApp);
 
+    if (newSettings.dailySalesTelegramGroupId) newSettings.dailySalesTelegramGroupId = utils.sanitizeGroupId(newSettings.dailySalesTelegramGroupId);
+    if (newSettings.dailySalesBaleGroupId) newSettings.dailySalesBaleGroupId = utils.sanitizeGroupId(newSettings.dailySalesBaleGroupId);
+    if (newSettings.productionTelegramGroupId) newSettings.productionTelegramGroupId = utils.sanitizeGroupId(newSettings.productionTelegramGroupId);
+    if (newSettings.productionBaleGroupId) newSettings.productionBaleGroupId = utils.sanitizeGroupId(newSettings.productionBaleGroupId);
+
     const oldSettings = db.settings || {};
     db.settings = { ...db.settings, ...newSettings }; 
     saveDb(db); 
@@ -3058,20 +3078,50 @@ app.get('/api/sayan/production-report', async (req, res) => {
 
         const key = `${dateFrom}_${dateTo}`;
         db.productionReportWastes = db.productionReportWastes || {};
-        const storedWaste = db.productionReportWastes[key] || {
-            waste_61: 0,
-            waste_67: 0,
-            waste_79: 0,
-            waste_73: 0,
-            details: ''
-        };
+        db.productionWasteArchive = db.productionWasteArchive || [];
 
-        const waste_61 = parseFloat(storedWaste.waste_61 || 0);
-        const waste_67 = parseFloat(storedWaste.waste_67 || 0);
-        const waste_79 = parseFloat(storedWaste.waste_79 || 0);
-        const waste_73 = parseFloat(storedWaste.waste_73 || 0);
+        let waste_61 = 0;
+        let waste_67 = 0;
+        let waste_79 = 0;
+        let waste_73 = 0;
+        let detailsList = [];
+        let foundInArchive = false;
+
+        const matchingEntries = db.productionWasteArchive.filter(entry => {
+            return entry.dateFrom >= dateFrom && entry.dateTo <= dateTo;
+        });
+
+        if (matchingEntries.length > 0) {
+            foundInArchive = true;
+            matchingEntries.forEach(entry => {
+                waste_61 += parseFloat(entry.waste_61 || 0);
+                waste_67 += parseFloat(entry.waste_67 || 0);
+                waste_79 += parseFloat(entry.waste_79 || 0);
+                waste_73 += parseFloat(entry.waste_73 || 0);
+                if (entry.details && entry.details.trim()) {
+                    detailsList.push(`[${entry.dateFrom}]: ${entry.details}`);
+                }
+            });
+        }
+
+        if (!foundInArchive) {
+            const storedWaste = db.productionReportWastes[key] || {
+                waste_61: 0,
+                waste_67: 0,
+                waste_79: 0,
+                waste_73: 0,
+                details: ''
+            };
+            waste_61 = parseFloat(storedWaste.waste_61 || 0);
+            waste_67 = parseFloat(storedWaste.waste_67 || 0);
+            waste_79 = parseFloat(storedWaste.waste_79 || 0);
+            waste_73 = parseFloat(storedWaste.waste_73 || 0);
+            if (storedWaste.details && storedWaste.details.trim()) {
+                detailsList.push(storedWaste.details);
+            }
+        }
+
         const totalWaste = waste_61 + waste_67 + waste_79 + waste_73;
-
         const pct_61 = qty_61 > 0 ? (waste_61 / qty_61) * 100 : 0;
         const pct_67 = qty_67 > 0 ? (waste_67 / qty_67) * 100 : 0;
         const pct_79 = qty_79 > 0 ? (waste_79 / qty_79) * 100 : 0;
@@ -3101,7 +3151,7 @@ app.get('/api/sayan/production-report', async (req, res) => {
                 pct_79,
                 pct_73,
                 totalPct,
-                details: storedWaste.details || ''
+                details: detailsList.join(' | ') || ''
             }
         });
     } catch (e) {
@@ -3113,7 +3163,7 @@ app.get('/api/sayan/production-report', async (req, res) => {
 app.post('/api/sayan/production-report/save-waste', (req, res) => {
     try {
         const db = getDb();
-        const { dateFrom, dateTo, waste_61, waste_67, waste_79, waste_73, details } = req.body;
+        const { dateFrom, dateTo, waste_61, waste_67, waste_79, waste_73, details, totals, items } = req.body;
         if (!dateFrom || !dateTo) {
             return res.status(400).json({ error: 'تاریخ ابتدا و انتها الزامی است' });
         }
@@ -3127,8 +3177,63 @@ app.post('/api/sayan/production-report/save-waste', (req, res) => {
             details: String(details || '').trim(),
             updatedAt: new Date().toISOString()
         };
+
+        // Archive and persist history
+        db.productionWasteArchive = db.productionWasteArchive || [];
+        const existingIdx = db.productionWasteArchive.findIndex(entry => entry.dateFrom === dateFrom && entry.dateTo === dateTo);
+        const w_61 = parseFloat(waste_61 || 0);
+        const w_67 = parseFloat(waste_67 || 0);
+        const w_79 = parseFloat(waste_79 || 0);
+        const w_73 = parseFloat(waste_73 || 0);
+        const totalW = w_61 + w_67 + w_79 + w_73;
+
+        const archiveEntry = {
+            id: existingIdx !== -1 ? db.productionWasteArchive[existingIdx].id : 'pwa_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            dateFrom,
+            dateTo,
+            waste_61: w_61,
+            waste_67: w_67,
+            waste_79: w_79,
+            waste_73: w_73,
+            totalWaste: totalW,
+            details: String(details || '').trim(),
+            totals: totals || null,
+            items: items || null,
+            updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx !== -1) {
+            db.productionWasteArchive[existingIdx] = archiveEntry;
+        } else {
+            db.productionWasteArchive.push(archiveEntry);
+        }
+
         saveDb(db);
-        res.json({ success: true, message: 'اطلاعات ضایعات تولید با موفقیت ثبت گردید.' });
+        res.json({ success: true, message: 'اطلاعات ضایعات و آمار کل تولید با موفقیت در بایگانی ثبت گردید.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/sayan/production-report/archive', (req, res) => {
+    try {
+        const db = getDb();
+        db.productionWasteArchive = db.productionWasteArchive || [];
+        // Sort by dateFrom descending
+        const sorted = [...db.productionWasteArchive].sort((a, b) => b.dateFrom.localeCompare(a.dateFrom));
+        res.json({ success: true, archive: sorted });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/sayan/production-report/archive/:id', (req, res) => {
+    try {
+        const db = getDb();
+        db.productionWasteArchive = db.productionWasteArchive || [];
+        db.productionWasteArchive = db.productionWasteArchive.filter(entry => entry.id !== req.params.id);
+        saveDb(db);
+        res.json({ success: true, message: 'رکورد بایگانی با موفقیت حذف گردید.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -3177,11 +3282,13 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         let sentCount = 0;
         for (const target of uniqueTargets) {
             try {
+                const cleanId = utils.sanitizeGroupId(target.id);
+                if (!cleanId) continue;
                 if (target.platform === 'telegram') {
-                    await telegram.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    await telegram.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                     sentCount++;
                 } else if (target.platform === 'bale') {
-                    await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    await bale.sendBotDocument(cleanId, pdfBuffer, filename, caption);
                     sentCount++;
                 }
             } catch (err) {

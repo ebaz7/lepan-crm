@@ -3718,38 +3718,47 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             }
             
             const title = `گزارش رسمی فروش روزانه سایان - مورخ ${toShamsiFull(new Date())}`;
-            const columns = ['ردیف', 'شماره فاکتور', 'مشتری', 'نام کالا', 'گروه کالا', 'مقدار (کیلوگرم)', 'مبلغ کل (ریال)'];
+            const columns = ['ردیف', 'گروه کالا', 'نام کالا / محصول', 'جمع وزنی (ک‌گ)', 'جمع ریالی (ریال)'];
             
+            const groupedMap = new Map();
             let totalQty = 0;
             let totalAmt = 0;
             
-            const tableRows = salesRows.map((row, idx) => {
-                const qty = parseFloat(row.Quantity || 0);
-                const amt = parseFloat(row.Amount || 0);
+            salesRows.forEach(inv => {
+                const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
+                const qty = parseFloat(inv.Quantity || 0);
+                const amt = parseFloat(inv.Amount || 0);
                 totalQty += qty;
                 totalAmt += amt;
                 
-                const customerName = row.CustomerName || (() => {
-                    const notes = row.Notes || '';
-                    const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
-                    return match ? match[1].trim() : notes;
-                })() || 'نامعلوم';
-                
+                if (groupedMap.has(key)) {
+                    const existing = groupedMap.get(key);
+                    existing.totalQty += qty;
+                    existing.totalAmt += amt;
+                } else {
+                    groupedMap.set(key, {
+                        itemName: inv.ItemName || 'کالای بدون نام',
+                        groupName: inv.GroupName || 'سایر گروه‌ها',
+                        totalQty: qty,
+                        totalAmt: amt
+                    });
+                }
+            });
+            
+            const groupedRows = Array.from(groupedMap.values());
+            
+            const tableRows = groupedRows.map((row, idx) => {
                 return [
                     (idx + 1).toLocaleString('fa-IR'),
-                    (row.InvoiceNum || row.DocId || '-').toLocaleString('fa-IR'),
-                    customerName,
-                    row.ItemName || 'کالای بدون نام',
-                    row.GroupName || 'بدون گروه',
-                    qty.toLocaleString('fa-IR'),
-                    amt.toLocaleString('fa-IR')
+                    row.groupName,
+                    row.itemName,
+                    row.totalQty.toLocaleString('fa-IR'),
+                    row.totalAmt.toLocaleString('fa-IR')
                 ];
             });
             
             tableRows.push([
                 'جمع کل',
-                '-',
-                '-',
                 '-',
                 '-',
                 totalQty.toLocaleString('fa-IR'),
@@ -3759,7 +3768,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
             const filename = `Sayan_Daily_Sales_${todayStr}.pdf`;
             
-            await sendDocFn(chatId, pdfBuffer, filename, ` Sayan ERP 🧾 ${title}\n تعداد ردیف‌های فروش: ${salesRows.length}\n مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`);
+            await sendDocFn(chatId, pdfBuffer, filename, `Sayan ERP 🧾 ${title}\n تعداد اقلام فروخته شده: ${groupedRows.length}\n مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`);
         } catch (err) {
             console.error("Bot Daily Sales Error:", err);
             sendFn(chatId, `❌ خطا در تهیه گزارش فروش سایان: ${err.message}`);

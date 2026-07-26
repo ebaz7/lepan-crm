@@ -587,6 +587,26 @@ const Settings: React.FC<SettingsProps> = ({
               return u;
             });
         }
+        
+        // Ensure companies and companyNames arrays exist and are in sync
+        if (!Array.isArray(normalizedSettings.companies)) {
+          normalizedSettings.companies = [];
+        }
+        if (!Array.isArray(normalizedSettings.companyNames)) {
+          normalizedSettings.companyNames = [];
+        }
+        if (
+          normalizedSettings.companyNames.length > 0 &&
+          normalizedSettings.companies.length === 0
+        ) {
+          normalizedSettings.companies = normalizedSettings.companyNames.map((name: string) => ({
+            id: generateUUID(),
+            name,
+            showInWarehouse: true,
+            banks: [],
+          }));
+        }
+
         setSettings(normalizedSettings);
         hasInitializedRef.current = true;
       }
@@ -3847,33 +3867,6 @@ const Settings: React.FC<SettingsProps> = ({
                         </div>
                       </div>
 
-                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3 mt-2">
-                        <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                          <Send size={16} className="text-amber-700" />
-                          <span>ارسال دستی آمار فروش به گروه‌ها</span>
-                        </div>
-                        <p className="text-xs text-amber-800 leading-relaxed">
-                          در صورت نیاز به ارسال مجدد یا خارج از برنامه گزارش، می‌توانید آمار فروش امروز یا دیروز را به طور دستی به گروه‌های بالا ارسال کنید.
-                        </p>
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          <button
-                            type="button"
-                            disabled={sendingManualSalesToday || sendingManualSalesYesterday}
-                            onClick={() => handleSendManualSales('today')}
-                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {sendingManualSalesToday ? 'در حال ارسال امروز...' : '🚀 ارسال دستی آمار امروز'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={sendingManualSalesToday || sendingManualSalesYesterday}
-                            onClick={() => handleSendManualSales('yesterday')}
-                            className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-3 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {sendingManualSalesYesterday ? 'در حال ارسال دیروز...' : '🕒 ارسال دستی آمار دیروز'}
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="border-t pt-4 mt-4 space-y-4">

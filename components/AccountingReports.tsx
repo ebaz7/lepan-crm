@@ -20,7 +20,9 @@ import {
     Save,
     Send,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Archive,
+    Trash2
 } from 'lucide-react';
 import * as jalaali from 'jalaali-js';
 import { 
@@ -92,12 +94,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [salesDateToB, setSalesDateToB] = useState('');
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
+    const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
 
     // --- TAB 4: PRODUCTION STATE ---
     const [prodLiveItems, setProdLiveItems] = useState<any[]>([]);
     const [prodLiveTotals, setProdLiveTotals] = useState<any>({ qty_61: 0, qty_67: 0, qty_79: 0, qty_73: 0, grandTotal: 0 });
     const [prodWaste, setProdWaste] = useState<any>({ waste_61: 0, waste_67: 0, waste_79: 0, waste_73: 0, totalWaste: 0, pct_61: 0, pct_67: 0, pct_79: 0, pct_73: 0, totalPct: 0, details: '' });
     const [isSavingWaste, setIsSavingWaste] = useState(false);
+    const [prodArchive, setProdArchive] = useState<any[]>([]);
+    const [isFetchingArchive, setIsFetchingArchive] = useState(false);
+    const [archiveSearch, setArchiveSearch] = useState('');
     const [isSendingBot, setIsSendingBot] = useState(false);
     const [productionData, setProductionData] = useState<any[]>([]);
     const [prodGrouping, setProdGrouping] = useState<'group' | 'item' | 'date'>('group');
@@ -179,7 +185,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         fetchTafsilis();
     }, []);
 
-    const applyQuickDate = (mode: 'today' | 'month' | 'quarter' | 'default') => {
+    const applyQuickDate = (mode: 'today' | 'yesterday' | 'month' | 'quarter' | 'default') => {
         const today = new Date();
         const jToday = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
         
@@ -188,6 +194,14 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             setDateFrom(dateStr);
             setDateTo(dateStr);
             toast.success(`بازه زمانی به امروز (${dateStr}) تغییر یافت.`);
+        } else if (mode === 'yesterday') {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const jYest = jalaali.toJalaali(yesterday.getFullYear(), yesterday.getMonth() + 1, yesterday.getDate());
+            const dateStr = `${jYest.jy}/${String(jYest.jm).padStart(2, '0')}/${String(jYest.jd).padStart(2, '0')}`;
+            setDateFrom(dateStr);
+            setDateTo(dateStr);
+            toast.success(`بازه زمانی به دیروز (${dateStr}) تغییر یافت.`);
         } else if (mode === 'month') {
             const startStr = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/01`;
             let endDay = '30';
@@ -967,6 +981,29 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         return salesData.filter(row => formatDateToJalali(row.Date) === targetDate);
     };
 
+    const handleSendSalesBotReport = async (targetDate: 'today' | 'yesterday') => {
+        const label = targetDate === 'today' ? 'امروز' : 'دیروز';
+        if (!confirm(`آیا از ارسال گزارش فروش ${label} به گروه‌های تلگرام / بله اطمینان دارید؟`)) return;
+        setIsSendingSalesBot(true);
+        try {
+            const res = await fetch('/api/sayan/sales-report/send-manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetDate })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(data.message || `گزارش فروش ${label} با موفقیت ارسال شد.`);
+            } else {
+                toast.error(data.error || 'خطا در ارسال گزارش فروش.');
+            }
+        } catch (e: any) {
+            toast.error("خطا در ارسال گزارش: " + e.message);
+        } finally {
+            setIsSendingSalesBot(false);
+        }
+    };
+
     const handlePrintTodaySales = () => {
         const todayInvs = getTodayInvoices();
         const activeDate = dateTo || formatDateToJalali(new Date().toISOString());
@@ -1449,6 +1486,39 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         });
     };
 
+    const fetchProdArchive = async () => {
+        setIsFetchingArchive(true);
+        try {
+            const res = await fetch('/api/sayan/production-report/archive');
+            const data = await res.json();
+            if (data.success) {
+                setProdArchive(data.archive || []);
+            }
+        } catch (e) {
+            console.error("Error fetching archive:", e);
+        } finally {
+            setIsFetchingArchive(false);
+        }
+    };
+
+    const handleDeleteArchiveEntry = async (id: string) => {
+        if (!confirm('آیا از حذف این رکورد بایگانی اطمینان دارید؟')) return;
+        try {
+            const res = await fetch(`/api/sayan/production-report/archive/${id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success('رکورد بایگانی با موفقیت حذف شد.');
+                fetchProdArchive();
+            } else {
+                toast.error(data.error || 'خطا در حذف رکورد بایگانی.');
+            }
+        } catch (e: any) {
+            toast.error('خطا در حذف رکورد: ' + e.message);
+        }
+    };
+
     const handleSaveWaste = async () => {
         setIsSavingWaste(true);
         try {
@@ -1462,12 +1532,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     waste_67: prodWaste.waste_67,
                     waste_79: prodWaste.waste_79,
                     waste_73: prodWaste.waste_73,
-                    details: prodWaste.details
+                    details: prodWaste.details,
+                    totals: prodLiveTotals,
+                    items: prodLiveItems
                 })
             });
             const data = await res.json();
             if (data.success) {
-                toast.success(data.message || 'اطلاعات ضایعات با موفقیت ذخیره شد.');
+                toast.success(data.message || 'اطلاعات ضایعات و آمار کل تولید با موفقیت در بایگانی ثبت شد.');
+                fetchProdArchive();
             } else {
                 toast.error(data.error || 'خطا در ثبت ضایعات.');
             }
@@ -1476,6 +1549,29 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         } finally {
             setIsSavingWaste(false);
         }
+    };
+
+    const getFilteredArchive = () => {
+        if (!archiveSearch.trim()) return prodArchive;
+        const q = archiveSearch.toLowerCase().trim();
+        return prodArchive.filter(entry => {
+            const dateMatch = entry.dateFrom.includes(q) || entry.dateTo.includes(q);
+            const detailsMatch = entry.details && entry.details.toLowerCase().includes(q);
+            
+            let itemsMatch = false;
+            if (entry.items && Array.isArray(entry.items)) {
+                itemsMatch = entry.items.some((item: any) => 
+                    item.name && item.name.toLowerCase().includes(q)
+                );
+            }
+            return dateMatch || detailsMatch || itemsMatch;
+        });
+    };
+
+    const handleLoadArchiveDate = (entry: any) => {
+        setDateFrom(entry.dateFrom);
+        setDateTo(entry.dateTo);
+        toast.success(`بازه زمانی گزارش به ${entry.dateFrom} تا ${entry.dateTo} تغییر یافت. در حال بازخوانی اطلاعات...`);
     };
 
     const handleSendBotReport = async () => {
@@ -1721,6 +1817,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             fetchSalesData();
         } else if (activeTab === 'production') {
             fetchProduction();
+            fetchProdArchive();
         } else if (activeTab === 'cheques') {
             fetchCheques();
         }
@@ -1782,6 +1879,13 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             امروز
                         </button>
                         <button
+                            onClick={() => applyQuickDate('yesterday')}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] sm:text-xs px-2 py-1 font-semibold transition-colors cursor-pointer"
+                            title="تنظیم بازه روی دیروز"
+                        >
+                            دیروز
+                        </button>
+                        <button
                             onClick={() => applyQuickDate('month')}
                             className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] sm:text-xs px-2 py-1 font-semibold transition-colors cursor-pointer"
                             title="تنظیم بازه روی کل ماه جاری"
@@ -1816,7 +1920,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         onClick={() => {
                             if (activeTab === 'traz') fetchTraz();
                             if (activeTab === 'sales') fetchSalesData();
-                            if (activeTab === 'production') fetchProduction();
+                            if (activeTab === 'production') { fetchProduction(); fetchProdArchive(); }
                             if (activeTab === 'cheques') fetchCheques();
                         }}
                         className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1.5 font-semibold flex items-center gap-1 transition-colors cursor-pointer mr-auto lg:mr-0 mt-1 sm:mt-0"
@@ -2250,6 +2354,25 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 >
                                     <Printer className="w-3.5 h-3.5" />
                                     <span>فرم چاپی فروش دوره‌ای (PDF)</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => handleSendSalesBotReport('today')}
+                                    disabled={isSendingSalesBot}
+                                    className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال دستی آمار و گزارش فروش امروز به کانال‌ها و گروه‌های بله و تلگرام"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>{isSendingSalesBot ? 'در حال ارسال امروز...' : 'ارسال دستی فروش امروز به بات'}</span>
+                                </button>
+                                <button 
+                                    onClick={() => handleSendSalesBotReport('yesterday')}
+                                    disabled={isSendingSalesBot}
+                                    className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال دستی آمار و گزارش فروش دیروز به کانال‌ها و گروه‌های بله و تلگرام"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>{isSendingSalesBot ? 'در حال ارسال دیروز...' : 'ارسال دستی فروش دیروز به بات'}</span>
                                 </button>
 
                                 <div className="flex bg-slate-150 p-1 rounded-lg border border-slate-200 select-none">
@@ -2997,9 +3120,111 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-md flex items-center gap-1 transition-all disabled:opacity-50"
                                 >
                                     <Save className="h-3.5 w-3.5" />
-                                    ذخیره توضیحات ضایعات
+                                    ذخیره و ثبت در بایگانی ضایعات
                                 </button>
                             </div>
+                        </div>
+
+                        {/* 4.5 PRODUCTION WASTE ARCHIVE SECTION */}
+                        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-6 space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                                <div>
+                                    <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                                        <Archive className="h-5 w-5 text-blue-600" />
+                                        بایگانی و گزارشات ضایعات ثبت‌شده
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                        آرشیو کامل آمار تولید، جزئیات ضایعات و درصد خطای روزانه ثبت شده با قابلیت جستجو و گزارش‌گیری
+                                    </p>
+                                </div>
+                                <div className="w-full sm:w-72 relative">
+                                    <input
+                                        type="text"
+                                        placeholder="جستجو در تاریخ، توضیحات یا کالاها..."
+                                        value={archiveSearch}
+                                        onChange={(e) => setArchiveSearch(e.target.value)}
+                                        className="w-full p-2 pr-8 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800"
+                                    />
+                                    <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                </div>
+                            </div>
+
+                            {isFetchingArchive ? (
+                                <div className="py-8 text-center text-slate-400 text-xs">
+                                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-600 mb-1" />
+                                    <span>در حال بارگذاری اطلاعات آرشیو...</span>
+                                </div>
+                            ) : getFilteredArchive().length === 0 ? (
+                                <div className="py-8 text-center text-slate-400 text-xs font-medium">
+                                    هیچ رکوردی در بایگانی ضایعات یافت نشد. با پر کردن مقادیر فوق و ذخیره آن، اولین رکورد را ایجاد نمایید.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                    <table className="w-full text-center text-xs border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                                                <th className="p-3 text-right">تاریخ گزارش</th>
+                                                <th className="p-3">کل تولید (kg)</th>
+                                                <th className="p-3 text-rose-800">کل ضایعات (kg)</th>
+                                                <th className="p-3 text-amber-800">درصد ضایعات (%)</th>
+                                                <th className="p-3">تفکیک ضایعات ۶۱ / ۶۷ / ۷۹ / ۷۳</th>
+                                                <th className="p-3 text-right max-w-xs truncate">توضیحات / علل ضایعات</th>
+                                                <th className="p-3 w-36">عملیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                                            {getFilteredArchive().map((entry: any) => {
+                                                const totalProd = entry.totals?.grandTotal || 
+                                                    (parseFloat(entry.totals?.qty_61 || 0) + 
+                                                     parseFloat(entry.totals?.qty_67 || 0) + 
+                                                     parseFloat(entry.totals?.qty_79 || 0) + 
+                                                     parseFloat(entry.totals?.qty_73 || 0)) || 0;
+                                                
+                                                const wastePct = totalProd > 0 ? (entry.totalWaste / totalProd) * 100 : 0;
+                                                
+                                                return (
+                                                    <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
+                                                        <td className="p-3 text-right font-bold text-slate-900 font-mono">
+                                                            {entry.dateFrom === entry.dateTo ? entry.dateFrom : `${entry.dateFrom} تا ${entry.dateTo}`}
+                                                        </td>
+                                                        <td className="p-3 font-mono font-bold">
+                                                            {totalProd > 0 ? totalProd.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '-'}
+                                                        </td>
+                                                        <td className="p-3 font-mono font-bold text-rose-700">
+                                                            {entry.totalWaste > 0 ? entry.totalWaste.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '-'}
+                                                        </td>
+                                                        <td className="p-3 font-mono font-black text-amber-700">
+                                                            {wastePct > 0 ? `${wastePct.toFixed(2)}%` : '۰.۰۰%'}
+                                                        </td>
+                                                        <td className="p-3 font-mono text-slate-500 text-[11px]">
+                                                            {(entry.waste_61 || 0).toLocaleString('fa-IR')} / {(entry.waste_67 || 0).toLocaleString('fa-IR')} / {(entry.waste_79 || 0).toLocaleString('fa-IR')} / {(entry.waste_73 || 0).toLocaleString('fa-IR')}
+                                                        </td>
+                                                        <td className="p-3 text-right max-w-xs truncate text-[11px] text-slate-600" title={entry.details}>
+                                                            {entry.details || '---'}
+                                                        </td>
+                                                        <td className="p-3 flex items-center justify-center gap-1.5">
+                                                            <button
+                                                                onClick={() => handleLoadArchiveDate(entry)}
+                                                                className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded font-bold text-[10px] transition-colors cursor-pointer"
+                                                                title="بارگذاری تاریخ این سند تولید و ضایعات"
+                                                            >
+                                                                بازخوانی روز
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteArchiveEntry(entry.id)}
+                                                                className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                                                title="حذف سند"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
