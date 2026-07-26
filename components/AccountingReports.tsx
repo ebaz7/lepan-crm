@@ -823,7 +823,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         }
     };
 
-    // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly)
+    // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly, and Selected Range)
     const getSalesOverviewStats = () => {
         const stats = {
             todayAmt: 0,
@@ -833,7 +833,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             quarterAmt: 0,
             quarterQty: 0,
             yearAmt: 0,
-            yearQty: 0
+            yearQty: 0,
+            rangeAmt: 0,
+            rangeQty: 0
         };
 
         const now = new Date();
@@ -849,6 +851,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             // If the user says it's showing less, it could be we need to sum up invoice totals from another field,
             // or simply the query is missing some invoice types.
             const amt = parseFloat(row.Amount || 0);
+
+            // Add to selected range totals
+            stats.rangeAmt += amt;
+            stats.rangeQty += qty;
             
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
 
@@ -2190,7 +2196,14 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         )}
 
                         {/* Top-level overviews for Period A */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <div className="bg-blue-50/80 rounded-xl p-4 border border-blue-200 shadow-sm col-span-2 md:col-span-1">
+                                <div className="text-blue-700 font-bold text-[10px]">فروش بازه انتخاب‌شده</div>
+                                <div className="text-lg font-black text-blue-900 mt-2 font-mono">
+                                    {formatMoney(stats.rangeAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-blue-600 font-semibold mt-1">وزن: {stats.rangeQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
+                            </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                                 <div className="text-slate-500 font-semibold text-[10px]">فروش امروز</div>
                                 <div className="text-lg font-black text-slate-800 mt-2 font-mono">

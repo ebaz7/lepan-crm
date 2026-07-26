@@ -199,6 +199,10 @@ export const getCustomerBalancesData = async (db) => {
             console.error("Failed to query live Sayan balances:", err);
         }
     }
+
+    if (list.length === 0) {
+        return db.customerBalances || [];
+    }
     return list;
 };
 
@@ -3598,7 +3602,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 FROM STR_TBL_010 t10
                 INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                           AND t11.Field_003 = t10.Field_004
-                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                 LEFT JOIN (
                     SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
@@ -3610,7 +3614,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 WHERE t10.Field_009 IN ('3', '12', '23')
                   AND t11.Field_036 = t10.Field_009
                   AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
-                  AND t10.Field_008 = '${todayStr}'
+                  AND (t10.Field_008 = '${todayStr}' OR t10.Field_008 LIKE '${todayStr}%' OR t10.Field_008 BETWEEN '${todayStr}T00:00:00.000Z' AND '${todayStr}T23:59:59.999Z')
                 ORDER BY t10.Field_008 DESC
             `;
             
