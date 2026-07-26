@@ -403,8 +403,8 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         throw new Error('گروهی برای ارسال گزارش فروش (تلگرام یا بله) در تنظیمات سیستم ثبت نشده است.');
     }
 
-    // Fetch sales data from Sayan ERP
-    const sql = `
+    // Fetch sales and returns data from Sayan ERP
+    const salesSql = `
         SELECT 
             t10.Field_005 as DocId,
             t10.Field_006 as InvoiceNum,
@@ -436,45 +436,123 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         ORDER BY t10.Field_008 DESC
     `;
 
-    const salesRows = await executeSayanQuery(db, sql);
-    if (salesRows.length > 0) {
-        const title = `گزارش رسمی فروش روزانه سایان - مورخ ${shamsiDate} (${labelSuffix})`;
-        const columns = ['ردیف', 'گروه کالا', 'نام کالا / محصول', 'جمع وزنی (ک‌گ)', 'جمع ریالی (ریال)'];
+    const returnsSql = `
+        SELECT 
+            t10.Field_005 as DocId,
+            t10.Field_006 as InvoiceNum,
+            t10.Field_008 as Date,
+            t10.Field_029 as Notes,
+            t11.Field_005 as ItemCode,
+            t22.Field_004 as ItemName,
+            t11.Field_006 as Quantity,
+            t11.Field_031 as ItemNotes,
+            t11.Field_007 as Amount,
+            t_group.GroupName,
+            t07.Field_006 as CustomerName
+        FROM STR_TBL_010 t10
+        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                                  AND t11.Field_003 = t10.Field_004
+        LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
+        LEFT JOIN (
+            SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+            FROM IND_TBL_021 t21_sub
+            LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+            LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+            GROUP BY t21_sub.Field_004
+        ) t_group ON t11.Field_005 = t_group.ItemCode
+        LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+        WHERE t10.Field_009 IN ('4', '13', '14', '24')
+          AND t11.Field_036 = t10.Field_009
+          AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+          AND (t10.Field_008 = '${gregDate}' OR t10.Field_008 LIKE '${gregDate}%' OR t10.Field_008 BETWEEN '${gregDate}T00:00:00.000Z' AND '${gregDate}T23:59:59.999Z')
+        ORDER BY t10.Field_008 DESC
+    `;
+
+    const [salesRows, returnsRows] = await Promise.all([
+        executeSayanQuery(db, salesSql),
+        executeSayanQuery(db, returnsSql).catch(err => {
+            console.warn("Returns query warning:", err.message);
+            return [];
+        })
+    ]);
+
+    if ((salesRows && salesRows.length > 0) || (returnsRows && returnsRows.length > 0)) {
+        const title = `گزارش رسمی فروش و مرجوعی روزانه سایان - مورخ ${shamsiDate} (${labelSuffix})`;
+        const columns = ['ردیف', 'گروه کالا', 'نام کالا / محصول', 'وزن فروش (ک‌گ)', 'وزن مرجوعی (ک‌گ)', 'وزن خالص (ک‌گ)', 'مبلغ فروش (ریال)', 'مبلغ مرجوعی (ریال)', 'خالص مبلغ (ریال)', 'فی میانگین (ریال)'];
         
         const groupedMap = new Map();
-        let totalQty = 0;
-        let totalAmt = 0;
+        let totalSalesQty = 0;
+        let totalSalesAmt = 0;
+        let totalReturnQty = 0;
+        let totalReturnAmt = 0;
         
         salesRows.forEach(inv => {
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
             const amt = parseFloat(inv.Amount || 0);
-            totalQty += qty;
-            totalAmt += amt;
+            totalSalesQty += qty;
+            totalSalesAmt += amt;
             
             if (groupedMap.has(key)) {
                 const existing = groupedMap.get(key);
-                existing.totalQty += qty;
-                existing.totalAmt += amt;
+                existing.salesQty += qty;
+                existing.salesAmt += amt;
             } else {
                 groupedMap.set(key, {
                     itemName: inv.ItemName || 'کالای بدون نام',
                     groupName: inv.GroupName || 'سایر گروه‌ها',
-                    totalQty: qty,
-                    totalAmt: amt
+                    salesQty: qty,
+                    salesAmt: amt,
+                    returnQty: 0,
+                    returnAmt: 0
+                });
+            }
+        });
+
+        returnsRows.forEach(ret => {
+            const key = `${ret.GroupName || ''}_${ret.ItemName || ''}`;
+            const qty = parseFloat(ret.Quantity || 0);
+            const amt = parseFloat(ret.Amount || 0);
+            totalReturnQty += qty;
+            totalReturnAmt += amt;
+
+            if (groupedMap.has(key)) {
+                const existing = groupedMap.get(key);
+                existing.returnQty += qty;
+                existing.returnAmt += amt;
+            } else {
+                groupedMap.set(key, {
+                    itemName: ret.ItemName || 'کالای بدون نام',
+                    groupName: ret.GroupName || 'سایر گروه‌ها',
+                    salesQty: 0,
+                    salesAmt: 0,
+                    returnQty: qty,
+                    returnAmt: amt
                 });
             }
         });
         
         const groupedRows = Array.from(groupedMap.values());
+        const totalNetQty = totalSalesQty - totalReturnQty;
+        const totalNetAmt = totalSalesAmt - totalReturnAmt;
+        const totalAvgFee = totalNetQty !== 0 ? Math.round(totalNetAmt / totalNetQty) : 0;
         
         const tableRows = groupedRows.map((row, idx) => {
+            const netQty = row.salesQty - row.returnQty;
+            const netAmt = row.salesAmt - row.returnAmt;
+            const avgFee = netQty !== 0 ? Math.round(netAmt / netQty) : 0;
+
             return [
                 (idx + 1).toLocaleString('fa-IR'),
                 row.groupName,
                 row.itemName,
-                row.totalQty.toLocaleString('fa-IR'),
-                row.totalAmt.toLocaleString('fa-IR')
+                row.salesQty.toLocaleString('fa-IR'),
+                row.returnQty.toLocaleString('fa-IR'),
+                netQty.toLocaleString('fa-IR'),
+                row.salesAmt.toLocaleString('fa-IR'),
+                row.returnAmt.toLocaleString('fa-IR'),
+                netAmt.toLocaleString('fa-IR'),
+                avgFee.toLocaleString('fa-IR')
             ];
         });
         
@@ -482,13 +560,18 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             'جمع کل',
             '-',
             '-',
-            totalQty.toLocaleString('fa-IR'),
-            totalAmt.toLocaleString('fa-IR')
+            totalSalesQty.toLocaleString('fa-IR'),
+            totalReturnQty.toLocaleString('fa-IR'),
+            totalNetQty.toLocaleString('fa-IR'),
+            totalSalesAmt.toLocaleString('fa-IR'),
+            totalReturnAmt.toLocaleString('fa-IR'),
+            totalNetAmt.toLocaleString('fa-IR'),
+            totalAvgFee.toLocaleString('fa-IR')
         ]);
         
         const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
         const filename = `Sayan_Daily_Sales_${gregDate}_${labelSuffix === 'دیروز' ? 'Yesterday' : 'Today'}.pdf`;
-        const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد اقلام فروخته شده: ${groupedRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
+        const caption = `📊 *گزارش فروش و مرجوعی روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🛍️ *فروش ناخالص:* ${totalSalesQty.toLocaleString('fa-IR')} ک‌گ | ${totalSalesAmt.toLocaleString('fa-IR')} ریال\n🔄 *مرجوعی:* ${totalReturnQty.toLocaleString('fa-IR')} ک‌گ | ${totalReturnAmt.toLocaleString('fa-IR')} ریال\n⚖️ *خالص فروش:* ${totalNetQty.toLocaleString('fa-IR')} ک‌گ | ${totalNetAmt.toLocaleString('fa-IR')} ریال\n💵 *فی میانگین کل:* ${totalAvgFee.toLocaleString('fa-IR')} ریال/کیلوگرم`;
 
         let successfulSends = 0;
         for (const tgt of uniqueSalesTargets) {
@@ -507,7 +590,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         if (successfulSends === 0) {
             throw new Error('ارسال گزارش فروش بایت خطا در اتصال یا تنظیمات پیام‌رسان‌ها ناموفق بود.');
         }
-        return { count: salesRows.length, totalQty, totalAmt, sent: true, successfulSends };
+        return { count: salesRows.length + returnsRows.length, totalQty: totalNetQty, totalAmt: totalNetAmt, sent: true, successfulSends };
     } else {
         const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
         let successfulSends = 0;

@@ -84,16 +84,21 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [modalTafsiliCode, setModalTafsiliCode] = useState('');
     const [modalTafsiliName, setModalTafsiliName] = useState('');
 
-    // --- TAB 3: SALES STATE ---
+    // --- TAB 3: SALES & RETURNS STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
+    const [returnsData, setReturnsData] = useState<any[]>([]);
     const [salesViewMode, setSalesViewMode] = useState<'today' | 'range'>('today');
+    const [salesTabSubMode, setSalesTabSubMode] = useState<'summary' | 'invoices' | 'returns'>('summary');
     const [compareMode, setCompareMode] = useState(false);
     const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
-    // Period B for sales comparison
+    const [expandedReturnId, setExpandedReturnId] = useState<string | null>(null);
+    // Period B for sales & returns comparison
     const [salesDateFromB, setSalesDateFromB] = useState('');
     const [salesDateToB, setSalesDateToB] = useState('');
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
+    const [compareReturnsDataA, setCompareReturnsDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
+    const [compareReturnsDataB, setCompareReturnsDataB] = useState<any[]>([]);
     const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
 
     // --- TAB 4: PRODUCTION STATE ---
@@ -839,7 +844,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 ? `AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'` 
                 : '';
 
-            // Fetch Period A
+            // Fetch Period A - Sales (فروش)
             const sqlA = `
                 SELECT 
                     t10.Field_001 as DocId,
@@ -856,7 +861,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 FROM STR_TBL_010 t10
                 INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                           AND t11.Field_003 = t10.Field_004
-                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                 LEFT JOIN (
                     SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
@@ -871,13 +876,58 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
-            const dataA = await runSayanQuery(sqlA);
+
+            // Fetch Period A - Returns (مرجوعی)
+            const sqlReturnsA = `
+                SELECT 
+                    t10.Field_001 as DocId,
+                    t10.Field_006 as InvoiceNum,
+                    t10.Field_008 as Date,
+                    t10.Field_029 as Notes,
+                    t11.Field_005 as ItemCode,
+                    t22.Field_004 as ItemName,
+                    t11.Field_006 as Quantity,
+                    t11.Field_031 as ItemNotes,
+                    t11.Field_007 as Amount,
+                    t_group.GroupName,
+                    t07.Field_006 as CustomerName
+                FROM STR_TBL_010 t10
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                                          AND t11.Field_003 = t10.Field_004
+                LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
+                LEFT JOIN (
+                    SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                    FROM IND_TBL_021 t21_sub
+                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                    GROUP BY t21_sub.Field_004
+                ) t_group ON t11.Field_005 = t_group.ItemCode
+                LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                WHERE t10.Field_009 IN ('4', '13', '14', '24')
+                  AND t11.Field_036 = t10.Field_009
+                  AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+                  ${dateFilter}
+                ORDER BY t10.Field_008 DESC
+            `;
+
+            const [dataA, returnsA] = await Promise.all([
+                runSayanQuery(sqlA),
+                runSayanQuery(sqlReturnsA).catch(() => [])
+            ]);
+
             const processedA = dataA.map((row: any) => ({
                 ...row,
                 Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
             }));
+            const processedReturnsA = returnsA.map((row: any) => ({
+                ...row,
+                Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
+            }));
+
             setSalesData(processedA);
+            setReturnsData(processedReturnsA);
             setCompareSalesDataA(processedA);
+            setCompareReturnsDataA(processedReturnsA);
 
             // Fetch Period B for comparison if active
             if (compareMode && salesDateFromB && salesDateToB) {
@@ -904,7 +954,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                               AND t11.Field_003 = t10.Field_004
-                    LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                    LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN (
                         SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                         FROM IND_TBL_021 t21_sub
@@ -919,33 +969,73 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
-                const dataB = await runSayanQuery(sqlB);
+
+                const sqlReturnsB = `
+                    SELECT 
+                        t10.Field_001 as DocId,
+                        t10.Field_006 as InvoiceNum,
+                        t10.Field_008 as Date,
+                        t10.Field_029 as Notes,
+                        t11.Field_005 as ItemCode,
+                        t22.Field_004 as ItemName,
+                        t11.Field_006 as Quantity,
+                        t11.Field_031 as ItemNotes,
+                        t11.Field_007 as Amount,
+                        t_group.GroupName,
+                        t07.Field_006 as CustomerName
+                    FROM STR_TBL_010 t10
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                                              AND t11.Field_003 = t10.Field_004
+                    LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
+                    LEFT JOIN (
+                        SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                        FROM IND_TBL_021 t21_sub
+                        LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                        LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                        GROUP BY t21_sub.Field_004
+                    ) t_group ON t11.Field_005 = t_group.ItemCode
+                    LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                    WHERE t10.Field_009 IN ('4', '13', '14', '24')
+                      AND t11.Field_036 = t10.Field_009
+                      AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+                      ${dateFilterB}
+                    ORDER BY t10.Field_008 DESC
+                `;
+
+                const [dataB, returnsB] = await Promise.all([
+                    runSayanQuery(sqlB),
+                    runSayanQuery(sqlReturnsB).catch(() => [])
+                ]);
+
                 const processedB = dataB.map((row: any) => ({
                     ...row,
                     Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
                 }));
+                const processedReturnsB = returnsB.map((row: any) => ({
+                    ...row,
+                    Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
+                }));
+
                 setCompareSalesDataB(processedB);
+                setCompareReturnsDataB(processedReturnsB);
             }
         } catch (err: any) {
-            toast.error(`خطا در واکشی اطلاعات فروش: ${err.message}`);
+            toast.error(`خطا در واکشی اطلاعات فروش و مرجوعی: ${err.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly, and Selected Range)
+    // Calculate sales overviews for Period A (Sales, Returns, Net Sales, Average Fee)
     const getSalesOverviewStats = () => {
         const stats = {
-            todayAmt: 0,
-            todayQty: 0,
-            monthAmt: 0,
-            monthQty: 0,
-            quarterAmt: 0,
-            quarterQty: 0,
-            yearAmt: 0,
-            yearQty: 0,
-            rangeAmt: 0,
-            rangeQty: 0
+            todaySalesAmt: 0, todaySalesQty: 0, todayReturnAmt: 0, todayReturnQty: 0, todayNetAmt: 0, todayNetQty: 0, todayAvgFee: 0,
+            monthSalesAmt: 0, monthSalesQty: 0, monthReturnAmt: 0, monthReturnQty: 0, monthNetAmt: 0, monthNetQty: 0, monthAvgFee: 0,
+            quarterSalesAmt: 0, quarterSalesQty: 0, quarterReturnAmt: 0, quarterReturnQty: 0, quarterNetAmt: 0, quarterNetQty: 0, quarterAvgFee: 0,
+            yearSalesAmt: 0, yearSalesQty: 0, yearReturnAmt: 0, yearReturnQty: 0, yearNetAmt: 0, yearNetQty: 0, yearAvgFee: 0,
+            rangeSalesAmt: 0, rangeSalesQty: 0, rangeReturnAmt: 0, rangeReturnQty: 0, rangeNetAmt: 0, rangeNetQty: 0, rangeAvgFee: 0,
+            // Legacy fallbacks
+            todayAmt: 0, todayQty: 0, monthAmt: 0, monthQty: 0, quarterAmt: 0, quarterQty: 0, yearAmt: 0, yearQty: 0, rangeAmt: 0, rangeQty: 0
         };
 
         const now = new Date();
@@ -954,46 +1044,101 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         salesData.forEach(row => {
             const date = new Date(row.Date);
             const qty = parseFloat(row.Quantity || 0);
-            
-            // Fix: Sayan might return a unit price or pre-calculated amount. 
-            // We use parseFloat and if it's unusually small relative to qty, it might need multiplication,
-            // but we'll stick to summing up the raw amount provided by the query.
-            // If the user says it's showing less, it could be we need to sum up invoice totals from another field,
-            // or simply the query is missing some invoice types.
             const amt = parseFloat(row.Amount || 0);
 
-            // Add to selected range totals
-            stats.rangeAmt += amt;
-            stats.rangeQty += qty;
+            stats.rangeSalesAmt += amt;
+            stats.rangeSalesQty += qty;
             
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
 
-            // Yearly (Current Persian Year)
             if (jRow.jy === jNow.jy) {
-                stats.yearAmt += amt;
-                stats.yearQty += qty;
+                stats.yearSalesAmt += amt;
+                stats.yearSalesQty += qty;
 
-                // Monthly (Current Persian Month)
                 if (jRow.jm === jNow.jm) {
-                    stats.monthAmt += amt;
-                    stats.monthQty += qty;
+                    stats.monthSalesAmt += amt;
+                    stats.monthSalesQty += qty;
 
-                    // Daily (Current Persian Day)
                     if (jRow.jd === jNow.jd) {
-                        stats.todayAmt += amt;
-                        stats.todayQty += qty;
+                        stats.todaySalesAmt += amt;
+                        stats.todaySalesQty += qty;
                     }
                 }
 
-                // Quarterly
                 const rowQuarter = Math.ceil(jRow.jm / 3);
                 const nowQuarter = Math.ceil(jNow.jm / 3);
                 if (rowQuarter === nowQuarter) {
-                    stats.quarterAmt += amt;
-                    stats.quarterQty += qty;
+                    stats.quarterSalesAmt += amt;
+                    stats.quarterSalesQty += qty;
                 }
             }
         });
+
+        returnsData.forEach(row => {
+            const date = new Date(row.Date);
+            const qty = parseFloat(row.Quantity || 0);
+            const amt = parseFloat(row.Amount || 0);
+
+            stats.rangeReturnAmt += amt;
+            stats.rangeReturnQty += qty;
+            
+            const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
+
+            if (jRow.jy === jNow.jy) {
+                stats.yearReturnAmt += amt;
+                stats.yearReturnQty += qty;
+
+                if (jRow.jm === jNow.jm) {
+                    stats.monthReturnAmt += amt;
+                    stats.monthReturnQty += qty;
+
+                    if (jRow.jd === jNow.jd) {
+                        stats.todayReturnAmt += amt;
+                        stats.todayReturnQty += qty;
+                    }
+                }
+
+                const rowQuarter = Math.ceil(jRow.jm / 3);
+                const nowQuarter = Math.ceil(jNow.jm / 3);
+                if (rowQuarter === nowQuarter) {
+                    stats.quarterReturnAmt += amt;
+                    stats.quarterReturnQty += qty;
+                }
+            }
+        });
+
+        // Compute Net Values & Average Fee (Net Amt / Net Qty)
+        stats.rangeNetAmt = stats.rangeSalesAmt - stats.rangeReturnAmt;
+        stats.rangeNetQty = stats.rangeSalesQty - stats.rangeReturnQty;
+        stats.rangeAvgFee = stats.rangeNetQty !== 0 ? Math.round(stats.rangeNetAmt / stats.rangeNetQty) : 0;
+
+        stats.todayNetAmt = stats.todaySalesAmt - stats.todayReturnAmt;
+        stats.todayNetQty = stats.todaySalesQty - stats.todayReturnQty;
+        stats.todayAvgFee = stats.todayNetQty !== 0 ? Math.round(stats.todayNetAmt / stats.todayNetQty) : 0;
+
+        stats.monthNetAmt = stats.monthSalesAmt - stats.monthReturnAmt;
+        stats.monthNetQty = stats.monthSalesQty - stats.monthReturnQty;
+        stats.monthAvgFee = stats.monthNetQty !== 0 ? Math.round(stats.monthNetAmt / stats.monthNetQty) : 0;
+
+        stats.quarterNetAmt = stats.quarterSalesAmt - stats.quarterReturnAmt;
+        stats.quarterNetQty = stats.quarterSalesQty - stats.quarterReturnQty;
+        stats.quarterAvgFee = stats.quarterNetQty !== 0 ? Math.round(stats.quarterNetAmt / stats.quarterNetQty) : 0;
+
+        stats.yearNetAmt = stats.yearSalesAmt - stats.yearReturnAmt;
+        stats.yearNetQty = stats.yearSalesQty - stats.yearReturnQty;
+        stats.yearAvgFee = stats.yearNetQty !== 0 ? Math.round(stats.yearNetAmt / stats.yearNetQty) : 0;
+
+        // Legacy compatibility
+        stats.rangeAmt = stats.rangeNetAmt;
+        stats.rangeQty = stats.rangeNetQty;
+        stats.todayAmt = stats.todayNetAmt;
+        stats.todayQty = stats.todayNetQty;
+        stats.monthAmt = stats.monthNetAmt;
+        stats.monthQty = stats.monthNetQty;
+        stats.quarterAmt = stats.quarterNetAmt;
+        stats.quarterQty = stats.quarterNetQty;
+        stats.yearAmt = stats.yearNetAmt;
+        stats.yearQty = stats.yearNetQty;
 
         return stats;
     };
@@ -1009,9 +1154,20 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         return salesData.filter(row => formatDateToJalali(row.Date) === targetDate);
     };
 
+    const getTodayReturns = () => {
+        const targetDate = dateTo || (() => {
+            const today = new Date();
+            const iranToday = new Date(today.getTime() + (3.5 * 60 * 60 * 1000));
+            const jToday = jalaali.toJalaali(iranToday.getUTCFullYear(), iranToday.getUTCMonth() + 1, iranToday.getUTCDate());
+            return `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
+        })();
+        
+        return returnsData.filter(row => formatDateToJalali(row.Date) === targetDate);
+    };
+
     const handleSendSalesBotReport = async (targetDate: 'today' | 'yesterday') => {
         const label = targetDate === 'today' ? 'امروز' : 'دیروز';
-        if (!confirm(`آیا از ارسال گزارش فروش ${label} به گروه‌های تلگرام / بله اطمینان دارید؟`)) return;
+        if (!confirm(`آیا از ارسال گزارش فروش و مرجوعی ${label} به گروه‌های تلگرام / بله اطمینان دارید؟`)) return;
         setIsSendingSalesBot(true);
         try {
             const res = await fetch('/api/sayan/sales-report/send-manual', {
@@ -1034,11 +1190,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
     const handlePrintTodaySales = () => {
         const todayInvs = getTodayInvoices();
+        const todayRets = getTodayReturns();
         const activeDate = dateTo || formatDateToJalali(new Date().toISOString());
-        const title = `گزارش رسمی فروش روزانه (${activeDate})`;
+        const title = `گزارش رسمی فروش و مرجوعی روزانه (${activeDate})`;
 
-        // Group todayInvs by GroupName and ItemName (summing weights and amounts)
-        const groupedMap = new Map<string, { itemName: string; groupName: string; totalQty: number; totalAmt: number }>();
+        const groupedMap = new Map<string, { itemName: string; groupName: string; salesQty: number; salesAmt: number; returnQty: number; returnAmt: number }>();
+        
         todayInvs.forEach(inv => {
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
@@ -1046,20 +1203,53 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             
             if (groupedMap.has(key)) {
                 const existing = groupedMap.get(key)!;
-                existing.totalQty += qty;
-                existing.totalAmt += amt;
+                existing.salesQty += qty;
+                existing.salesAmt += amt;
             } else {
                 groupedMap.set(key, {
                     itemName: inv.ItemName || 'کالای بدون نام',
                     groupName: inv.GroupName || 'سایر گروه‌ها',
-                    totalQty: qty,
-                    totalAmt: amt
+                    salesQty: qty,
+                    salesAmt: amt,
+                    returnQty: 0,
+                    returnAmt: 0
+                });
+            }
+        });
+
+        todayRets.forEach(ret => {
+            const key = `${ret.GroupName || ''}_${ret.ItemName || ''}`;
+            const qty = parseFloat(ret.Quantity || 0);
+            const amt = parseFloat(ret.Amount || 0);
+
+            if (groupedMap.has(key)) {
+                const existing = groupedMap.get(key)!;
+                existing.returnQty += qty;
+                existing.returnAmt += amt;
+            } else {
+                groupedMap.set(key, {
+                    itemName: ret.ItemName || 'کالای بدون نام',
+                    groupName: ret.GroupName || 'سایر گروه‌ها',
+                    salesQty: 0,
+                    salesAmt: 0,
+                    returnQty: qty,
+                    returnAmt: amt
                 });
             }
         });
         
         const groupedRows = Array.from(groupedMap.values());
         const totalUniqueInvs = new Set(todayInvs.map(inv => inv.InvoiceNum || inv.DocId)).size;
+        const totalUniqueRets = new Set(todayRets.map(ret => ret.InvoiceNum || ret.DocId)).size;
+
+        const sumSalesQty = todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Quantity || 0), 0);
+        const sumSalesAmt = todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Amount || 0), 0);
+        const sumReturnQty = todayRets.reduce((sum, ret) => sum + parseFloat(ret.Quantity || 0), 0);
+        const sumReturnAmt = todayRets.reduce((sum, ret) => sum + parseFloat(ret.Amount || 0), 0);
+
+        const sumNetQty = sumSalesQty - sumReturnQty;
+        const sumNetAmt = sumSalesAmt - sumReturnAmt;
+        const overallAvgFee = sumNetQty !== 0 ? Math.round(sumNetAmt / sumNetQty) : 0;
 
         const docHtml = `
             <html dir="rtl" lang="fa">
@@ -1071,12 +1261,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
                     .header h1 { margin: 0; font-size: 22px; color: #0f172a; font-weight: bold; }
                     .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
-                    .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
-                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
-                    .stat-card h3 { margin: 0 0 8px 0; font-size: 11px; color: #64748b; font-weight: bold; }
-                    .stat-card p { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
+                    .stats-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; }
+                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center; }
+                    .stat-card h3 { margin: 0 0 6px 0; font-size: 11px; color: #64748b; font-weight: bold; }
+                    .stat-card p { margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
                     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 12px 14px; text-align: right; font-size: 12px; line-height: 1.6; }
+                    th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; font-size: 11px; line-height: 1.5; }
                     th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
                     tr:nth-child(even) { background-color: #f8fafc; }
                     .total { font-weight: bold; background: #e2e8f0 !important; }
@@ -1093,7 +1283,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 <div class="header">
                     <div>
                         <h1>${title}</h1>
-                        <p>سیستم یکپارچه گزارشات فروش سایان ERP</p>
+                        <p>سیستم یکپارچه گزارشات فروش و مرجوعی سایان ERP</p>
                     </div>
                     <div style="text-align: left;">
                         <p>تاریخ فاکتورها: ${activeDate}</p>
@@ -1103,48 +1293,72 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
                 <div class="stats-container">
                     <div class="stat-card">
-                        <h3>تعداد فاکتورها</h3>
-                        <p>${totalUniqueInvs} فاکتور</p>
+                        <h3>فاکتورها و مرجوعی‌ها</h3>
+                        <p>${totalUniqueInvs} فروش | ${totalUniqueRets} مرجوعی</p>
                     </div>
                     <div class="stat-card">
-                        <h3>مجموع وزن فروش</h3>
-                        <p>${todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Quantity || 0), 0).toFixed(1)} کیلوگرم</p>
+                        <h3>وزن فروش / مرجوعی / خالص</h3>
+                        <p>${sumSalesQty.toFixed(1)} / ${sumReturnQty.toFixed(1)} / <strong>${sumNetQty.toFixed(1)} ک‌گ</strong></p>
                     </div>
                     <div class="stat-card">
-                        <h3>مبلغ کل فروش</h3>
-                        <p>${formatMoney(todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Amount || 0), 0))} ریال</p>
+                        <h3>مبلغ خالص فروش</h3>
+                        <p>${formatMoney(sumNetAmt)} ریال</p>
+                    </div>
+                    <div class="stat-card" style="background-color: #f0fdf4; border-color: #bbf7d0;">
+                        <h3 style="color: #166534;">فی میانگین کل (ریال/کیلوگرم)</h3>
+                        <p style="color: #15803d;">${formatMoney(overallAvgFee)} ریال</p>
                     </div>
                 </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 50px; text-align: center;">ردیف</th>
-                            <th style="width: 150px;">گروه کالا</th>
+                            <th style="width: 40px; text-align: center;">ردیف</th>
+                            <th style="width: 120px;">گروه کالا</th>
                             <th>نام کالا / محصول</th>
-                            <th style="width: 120px; text-align: center;">جمع وزنی (ک‌گ)</th>
-                            <th style="width: 180px; text-align: left;">جمع ریالی (ریال)</th>
+                            <th style="width: 90px; text-align: center;">فروش (ک‌گ)</th>
+                            <th style="width: 90px; text-align: center; color: #dc2626;">مرجوعی (ک‌گ)</th>
+                            <th style="width: 90px; text-align: center;">خالص (ک‌گ)</th>
+                            <th style="width: 120px; text-align: left;">فروش (ریال)</th>
+                            <th style="width: 120px; text-align: left; color: #dc2626;">مرجوعی (ریال)</th>
+                            <th style="width: 130px; text-align: left;">خالص فروش (ریال)</th>
+                            <th style="width: 120px; text-align: left; color: #15803d;">فی میانگین (ریال)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${groupedRows.length > 0 ? groupedRows.map((row, idx) => `
+                        ${groupedRows.length > 0 ? groupedRows.map((row, idx) => {
+                            const netQty = row.salesQty - row.returnQty;
+                            const netAmt = row.salesAmt - row.returnAmt;
+                            const avgFee = netQty !== 0 ? Math.round(netAmt / netQty) : 0;
+                            return `
+                                <tr>
+                                    <td style="text-align: center;">${idx + 1}</td>
+                                    <td>${row.groupName}</td>
+                                    <td style="font-weight: bold;">${row.itemName}</td>
+                                    <td style="text-align: center; font-family: monospace;">${row.salesQty.toFixed(1)}</td>
+                                    <td style="text-align: center; font-family: monospace; color: #dc2626;">${row.returnQty > 0 ? row.returnQty.toFixed(1) : '-'}</td>
+                                    <td style="text-align: center; font-family: monospace; font-weight: bold;">${netQty.toFixed(1)}</td>
+                                    <td style="text-align: left; font-family: monospace;">${formatMoney(row.salesAmt)}</td>
+                                    <td style="text-align: left; font-family: monospace; color: #dc2626;">${row.returnAmt > 0 ? formatMoney(row.returnAmt) : '-'}</td>
+                                    <td style="text-align: left; font-family: monospace; font-weight: 800; color: #0284c7;">${formatMoney(netAmt)}</td>
+                                    <td style="text-align: left; font-family: monospace; font-weight: 800; color: #15803d;">${avgFee > 0 ? formatMoney(avgFee) : '-'}</td>
+                                </tr>
+                            `;
+                        }).join('') : `
                             <tr>
-                                <td style="text-align: center;">${idx + 1}</td>
-                                <td>${row.groupName}</td>
-                                <td style="font-weight: bold;">${row.itemName}</td>
-                                <td style="text-align: center; font-family: monospace; font-weight: bold;">${row.totalQty.toFixed(1)}</td>
-                                <td style="text-align: left; font-family: monospace; font-weight: 800;">${formatMoney(row.totalAmt)}</td>
-                            </tr>
-                        `).join('') : `
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">هیچ فاکتور فروشی برای این روز ثبت نشده است.</td>
+                                <td colspan="10" style="text-align: center; padding: 40px; color: #64748b;">هیچ فاکتور فروش یا مرجوعی برای این تاریخ ثبت نشده است.</td>
                             </tr>
                         `}
                         ${groupedRows.length > 0 ? `
                         <tr class="total">
-                            <td colspan="3" style="text-align: left;">جمع کل فاکتورها:</td>
-                            <td style="text-align: center; font-family: monospace;">${groupedRows.reduce((sum, r) => sum + r.totalQty, 0).toFixed(1)}</td>
-                            <td style="text-align: left; font-family: monospace;">${formatMoney(groupedRows.reduce((sum, r) => sum + r.totalAmt, 0))}</td>
+                            <td colspan="3" style="text-align: left;">جمع کل فاکتورها و مرجوعی‌ها:</td>
+                            <td style="text-align: center; font-family: monospace;">${sumSalesQty.toFixed(1)}</td>
+                            <td style="text-align: center; font-family: monospace; color: #dc2626;">${sumReturnQty.toFixed(1)}</td>
+                            <td style="text-align: center; font-family: monospace; font-weight: bold;">${sumNetQty.toFixed(1)}</td>
+                            <td style="text-align: left; font-family: monospace;">${formatMoney(sumSalesAmt)}</td>
+                            <td style="text-align: left; font-family: monospace; color: #dc2626;">${formatMoney(sumReturnAmt)}</td>
+                            <td style="text-align: left; font-family: monospace; font-weight: bold; color: #0284c7;">${formatMoney(sumNetAmt)}</td>
+                            <td style="text-align: left; font-family: monospace; font-weight: bold; color: #15803d;">${formatMoney(overallAvgFee)}</td>
                         </tr>
                         ` : ''}
                     </tbody>
@@ -1166,7 +1380,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 </div>
 
                 <div class="footer">
-                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
+                    <p>گزارش رسمی فروش و مرجوعی صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
                 </div>
             </body>
             </html>
@@ -2472,47 +2686,250 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             </div>
                         )}
 
-                        {/* Top-level overviews for Period A */}
+                        {/* Top-level overviews for Period A (Net Sales, Returns, Average Fee) */}
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                             <div className="bg-blue-50/80 rounded-xl p-4 border border-blue-200 shadow-sm col-span-2 md:col-span-1">
-                                <div className="text-blue-700 font-bold text-[10px]">فروش بازه انتخاب‌شده</div>
-                                <div className="text-lg font-black text-blue-900 mt-2 font-mono">
-                                    {formatMoney(stats.rangeAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-blue-700 font-bold text-[10px]">خالص فروش بازه (Net)</div>
+                                <div className="text-lg font-black text-blue-900 mt-1 font-mono">
+                                    {formatMoney(stats.rangeNetAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
-                                <div className="text-[10px] text-blue-600 font-semibold mt-1">وزن: {stats.rangeQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
+                                <div className="text-[10px] text-blue-600 font-semibold mt-1">وزن خالص: {stats.rangeNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
+                                <div className="text-[10px] text-emerald-700 font-extrabold mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                                    فی میانگین: {formatMoney(stats.rangeAvgFee)} ریال/ک‌گ
+                                </div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امروز</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.todayAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-slate-500 font-semibold text-[10px]">امروز (خالص)</div>
+                                <div className="text-lg font-black text-slate-800 mt-1 font-mono">
+                                    {formatMoney(stats.todayNetAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.todayQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-[10px] text-slate-500 mt-1 font-medium">وزن: {stats.todayNetQty.toFixed(1)} ک‌گ</div>
+                                <div className="text-[10px] text-slate-600 font-bold mt-1">فی: {formatMoney(stats.todayAvgFee)} ریال</div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش این ماه</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.monthAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-slate-500 font-semibold text-[10px]">این ماه (خالص)</div>
+                                <div className="text-lg font-black text-slate-800 mt-1 font-mono">
+                                    {formatMoney(stats.monthNetAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.monthQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-[10px] text-slate-500 mt-1 font-medium">وزن: {stats.monthNetQty.toFixed(1)} ک‌گ</div>
+                                <div className="text-[10px] text-slate-600 font-bold mt-1">فی: {formatMoney(stats.monthAvgFee)} ریال</div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش فصل جاری</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.quarterAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-slate-500 font-semibold text-[10px]">فصل جاری (خالص)</div>
+                                <div className="text-lg font-black text-slate-800 mt-1 font-mono">
+                                    {formatMoney(stats.quarterNetAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.quarterQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-[10px] text-slate-500 mt-1 font-medium">وزن: {stats.quarterNetQty.toFixed(1)} ک‌گ</div>
+                                <div className="text-[10px] text-slate-600 font-bold mt-1">فی: {formatMoney(stats.quarterAvgFee)} ریال</div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امسال</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.yearAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-slate-500 font-semibold text-[10px]">امسال (خالص)</div>
+                                <div className="text-lg font-black text-slate-800 mt-1 font-mono">
+                                    {formatMoney(stats.yearNetAmt)} <span className="text-[10px] font-bold">ریال</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.yearQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-[10px] text-slate-500 mt-1 font-medium">وزن: {stats.yearNetQty.toFixed(1)} ک‌گ</div>
+                                <div className="text-[10px] text-slate-600 font-bold mt-1">فی: {formatMoney(stats.yearAvgFee)} ریال</div>
                             </div>
                         </div>
 
-                        {/* Today's Invoices Table */}
-                        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
+                        {/* Sub-tab Selection */}
+                        <div className="flex border-b border-slate-200 mt-6 gap-2 select-none">
+                            <button
+                                onClick={() => setSalesTabSubMode('summary')}
+                                className={`pb-3 px-4 text-xs font-extrabold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    salesTabSubMode === 'summary'
+                                        ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span>۱. جدول گزارش نهایی کالاها و فی میانگین</span>
+                            </button>
+                            <button
+                                onClick={() => setSalesTabSubMode('invoices')}
+                                className={`pb-3 px-4 text-xs font-extrabold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    salesTabSubMode === 'invoices'
+                                        ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                <span>۲. فاکتورهای فروش ({salesViewMode === 'today' ? getTodayInvoices().length : salesData.length} سطر)</span>
+                            </button>
+                            <button
+                                onClick={() => setSalesTabSubMode('returns')}
+                                className={`pb-3 px-4 text-xs font-extrabold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    salesTabSubMode === 'returns'
+                                        ? 'border-rose-600 text-rose-700 bg-rose-50/50 rounded-t-lg'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                <span>۳. مرجوعی‌های فروش ({salesViewMode === 'today' ? getTodayReturns().length : returnsData.length} سطر)</span>
+                            </button>
+                        </div>
+
+                        {/* SUB-TAB 1: PRODUCT SUMMARY & AVERAGE FEE TABLE */}
+                        {salesTabSubMode === 'summary' && (
+                            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-6 animate-fadeIn mt-4">
+                                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                    <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                                        <span>گزارش نهایی کالاها، کسر مرجوعی و فی میانگین</span>
+                                        <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-mono font-semibold">
+                                            {salesViewMode === 'today' ? 'امروز' : 'بازه انتخابی'}
+                                        </span>
+                                    </h3>
+                                    <button 
+                                        onClick={handlePrintTodaySales}
+                                        className="text-[11px] font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Printer className="w-3.5 h-3.5" />
+                                        <span>چاپ رسمی این جدول</span>
+                                    </button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-right text-xs">
+                                        <thead>
+                                            <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                                <th className="p-3 font-bold w-12 text-center">ردیف</th>
+                                                <th className="p-3 font-bold">گروه کالا</th>
+                                                <th className="p-3 font-bold">نام کالا / محصول</th>
+                                                <th className="p-3 font-bold text-center bg-blue-50/60">وزن فروش (ک‌گ)</th>
+                                                <th className="p-3 font-bold text-center bg-rose-50/60 text-rose-700">وزن مرجوعی (ک‌گ)</th>
+                                                <th className="p-3 font-bold text-center bg-emerald-50/60 text-emerald-800">وزن خالص (ک‌گ)</th>
+                                                <th className="p-3 font-bold text-left bg-blue-50/60">مبلغ فروش (ریال)</th>
+                                                <th className="p-3 font-bold text-left bg-rose-50/60 text-rose-700">مبلغ مرجوعی (ریال)</th>
+                                                <th className="p-3 font-bold text-left bg-emerald-50/60 text-emerald-800">خالص فروش (ریال)</th>
+                                                <th className="p-3 font-bold text-left bg-amber-50 text-amber-900 border-r border-amber-200 font-mono">فی میانگین (ریال/ک‌گ)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {(() => {
+                                                const currentSales = salesViewMode === 'today' ? getTodayInvoices() : salesData;
+                                                const currentReturns = salesViewMode === 'today' ? getTodayReturns() : returnsData;
+
+                                                const groupMap = new Map<string, {
+                                                    groupName: string;
+                                                    itemName: string;
+                                                    salesQty: number;
+                                                    salesAmt: number;
+                                                    returnQty: number;
+                                                    returnAmt: number;
+                                                }>();
+
+                                                currentSales.forEach(inv => {
+                                                    const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
+                                                    const qty = parseFloat(inv.Quantity || 0);
+                                                    const amt = parseFloat(inv.Amount || 0);
+
+                                                    if (groupMap.has(key)) {
+                                                        const existing = groupMap.get(key)!;
+                                                        existing.salesQty += qty;
+                                                        existing.salesAmt += amt;
+                                                    } else {
+                                                        groupMap.set(key, {
+                                                            groupName: inv.GroupName || 'سایر گروه‌ها',
+                                                            itemName: inv.ItemName || 'کالای بدون نام',
+                                                            salesQty: qty,
+                                                            salesAmt: amt,
+                                                            returnQty: 0,
+                                                            returnAmt: 0
+                                                        });
+                                                    }
+                                                });
+
+                                                currentReturns.forEach(ret => {
+                                                    const key = `${ret.GroupName || ''}_${ret.ItemName || ''}`;
+                                                    const qty = parseFloat(ret.Quantity || 0);
+                                                    const amt = parseFloat(ret.Amount || 0);
+
+                                                    if (groupMap.has(key)) {
+                                                        const existing = groupMap.get(key)!;
+                                                        existing.returnQty += qty;
+                                                        existing.returnAmt += amt;
+                                                    } else {
+                                                        groupMap.set(key, {
+                                                            groupName: ret.GroupName || 'سایر گروه‌ها',
+                                                            itemName: ret.ItemName || 'کالای بدون نام',
+                                                            salesQty: 0,
+                                                            salesAmt: 0,
+                                                            returnQty: qty,
+                                                            returnAmt: amt
+                                                        });
+                                                    }
+                                                });
+
+                                                const rows = Array.from(groupMap.values());
+
+                                                if (rows.length === 0) {
+                                                    return (
+                                                        <tr>
+                                                            <td colSpan={10} className="p-8 text-center text-slate-400">هیچ داده فروشی یا مرجوعی برای این بازه یافت نشد.</td>
+                                                        </tr>
+                                                    );
+                                                }
+
+                                                let totSalesQty = 0, totSalesAmt = 0, totRetQty = 0, totRetAmt = 0;
+
+                                                const renderedRows = rows.map((row, idx) => {
+                                                    const netQty = row.salesQty - row.returnQty;
+                                                    const netAmt = row.salesAmt - row.returnAmt;
+                                                    const avgFee = netQty !== 0 ? Math.round(netAmt / netQty) : 0;
+
+                                                    totSalesQty += row.salesQty;
+                                                    totSalesAmt += row.salesAmt;
+                                                    totRetQty += row.returnQty;
+                                                    totRetAmt += row.returnAmt;
+
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                            <td className="p-3 text-slate-600 font-medium">{row.groupName}</td>
+                                                            <td className="p-3 font-extrabold text-slate-800">{row.itemName}</td>
+                                                            <td className="p-3 text-center font-mono font-bold text-blue-700 bg-blue-50/20">{row.salesQty.toFixed(1)}</td>
+                                                            <td className="p-3 text-center font-mono font-bold text-rose-600 bg-rose-50/20">{row.returnQty > 0 ? row.returnQty.toFixed(1) : '-'}</td>
+                                                            <td className="p-3 text-center font-mono font-black text-emerald-800 bg-emerald-50/20">{netQty.toFixed(1)}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-blue-700 bg-blue-50/20">{formatMoney(row.salesAmt)}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-rose-600 bg-rose-50/20">{row.returnAmt > 0 ? formatMoney(row.returnAmt) : '-'}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-emerald-800 bg-emerald-50/20">{formatMoney(netAmt)}</td>
+                                                            <td className="p-3 text-left font-mono font-extrabold text-amber-900 bg-amber-50/50 border-r border-amber-200">
+                                                                {avgFee > 0 ? formatMoney(avgFee) : '-'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                });
+
+                                                const totNetQty = totSalesQty - totRetQty;
+                                                const totNetAmt = totSalesAmt - totRetAmt;
+                                                const grandAvgFee = totNetQty !== 0 ? Math.round(totNetAmt / totNetQty) : 0;
+
+                                                return (
+                                                    <>
+                                                        {renderedRows}
+                                                        <tr className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-900">
+                                                            <td colSpan={3} className="p-3 text-left">جمع کل نهایی:</td>
+                                                            <td className="p-3 text-center font-mono text-blue-800">{totSalesQty.toFixed(1)}</td>
+                                                            <td className="p-3 text-center font-mono text-rose-700">{totRetQty.toFixed(1)}</td>
+                                                            <td className="p-3 text-center font-mono text-emerald-900">{totNetQty.toFixed(1)}</td>
+                                                            <td className="p-3 text-left font-mono text-blue-800">{formatMoney(totSalesAmt)}</td>
+                                                            <td className="p-3 text-left font-mono text-rose-700">{formatMoney(totRetAmt)}</td>
+                                                            <td className="p-3 text-left font-mono text-emerald-900 text-sm">{formatMoney(totNetAmt)}</td>
+                                                            <td className="p-3 text-left font-mono text-amber-950 bg-amber-200/60 text-sm border-r border-amber-300">
+                                                                {formatMoney(grandAvgFee)}
+                                                            </td>
+                                                        </tr>
+                                                    </>
+                                                );
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SUB-TAB 2: SALES INVOICES */}
+                        {salesTabSubMode === 'invoices' && (
+                            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
                             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-slate-800">
                                     {salesViewMode === 'range' ? 'لیست فاکتورهای فروش طبق بازه' : 'لیست فاکتورهای فروش روز'} ({
@@ -2690,6 +3107,185 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 </table>
                             </div>
                         </div>
+
+                        )}
+
+                        {/* SUB-TAB 3: SALES RETURNS */}
+                        {salesTabSubMode === 'returns' && (
+                            <div className="bg-white border border-rose-200 rounded-xl shadow-sm overflow-hidden mb-6 animate-fadeIn mt-4">
+                                <div className="px-4 py-3 border-b border-rose-100 bg-rose-50/50 flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-rose-800 flex items-center gap-2">
+                                        <span>لیست برگه/فاکتورهای مرجوعی فروش</span>
+                                        <span className="text-[10px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded font-mono font-semibold">
+                                            {salesViewMode === 'today' ? 'امروز' : 'بازه انتخابی'}
+                                        </span>
+                                    </h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-right text-xs">
+                                        <thead>
+                                            <tr className="bg-rose-50/80 text-rose-900 border-b border-rose-200">
+                                                <th className="p-3 font-semibold w-12 text-center">ردیف</th>
+                                                <th className="p-3 font-semibold">شماره برگه مرجوعی</th>
+                                                <th className="p-3 font-semibold">نام مشتری</th>
+                                                <th className="p-3 font-semibold text-center">تعداد اقلام</th>
+                                                <th className="p-3 font-semibold text-center">مجموع وزن مرجوعی (ک‌گ)</th>
+                                                <th className="p-3 font-semibold text-left">مبلغ کل مرجوعی (ریال)</th>
+                                                <th className="p-3 font-semibold text-center w-24">جزئیات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-rose-100/60">
+                                            {(() => {
+                                                const displayedReturns = salesViewMode === 'today' ? getTodayReturns() : returnsData;
+                                                const returnsMap = new Map<string, {
+                                                    docId: string;
+                                                    invoiceNum: string;
+                                                    date: string;
+                                                    customerName: string;
+                                                    notes: string;
+                                                    totalAmount: number;
+                                                    totalQuantity: number;
+                                                    items: {
+                                                        itemName: string;
+                                                        itemCode: string;
+                                                        groupName: string;
+                                                        quantity: number;
+                                                        amount: number;
+                                                        itemNotes: string;
+                                                    }[];
+                                                }>();
+
+                                                displayedReturns.forEach(row => {
+                                                    const key = row.InvoiceNum || row.DocId;
+                                                    if (!key) return;
+
+                                                    const itemAmt = parseFloat(row.Amount || 0);
+                                                    const itemQty = parseFloat(row.Quantity || 0);
+                                                    const customerName = row.CustomerName || (() => {
+                                                        const notes = row.Notes || '';
+                                                        const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
+                                                        return match ? match[1].trim() : notes;
+                                                    })() || 'نامعلوم';
+
+                                                    if (returnsMap.has(key)) {
+                                                        const existing = returnsMap.get(key)!;
+                                                        existing.totalAmount += itemAmt;
+                                                        existing.totalQuantity += itemQty;
+                                                        existing.items.push({
+                                                            itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
+                                                            itemCode: row.ItemCode || '',
+                                                            groupName: row.GroupName || '',
+                                                            quantity: itemQty,
+                                                            amount: itemAmt,
+                                                            itemNotes: row.ItemNotes || ''
+                                                        });
+                                                    } else {
+                                                        returnsMap.set(key, {
+                                                            docId: row.DocId,
+                                                            invoiceNum: row.InvoiceNum || row.DocId,
+                                                            date: row.Date,
+                                                            customerName: customerName,
+                                                            notes: row.Notes || '',
+                                                            totalAmount: itemAmt,
+                                                            totalQuantity: itemQty,
+                                                            items: [{
+                                                                itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
+                                                                itemCode: row.ItemCode || '',
+                                                                groupName: row.GroupName || '',
+                                                                quantity: itemQty,
+                                                                amount: itemAmt,
+                                                                itemNotes: row.ItemNotes || ''
+                                                            }]
+                                                        });
+                                                    }
+                                                });
+
+                                                const groupedList = Array.from(returnsMap.values());
+
+                                                if (groupedList.length === 0) {
+                                                    return (
+                                                        <tr>
+                                                            <td colSpan={7} className="p-8 text-center text-rose-400 text-sm">هیچ اقلام یا فاکتور مرجوعی برای این تاریخ ثبت نشده است.</td>
+                                                        </tr>
+                                                    );
+                                                }
+
+                                                return groupedList.map((ret, idx) => {
+                                                    const isExpanded = expandedReturnId === ret.invoiceNum;
+                                                    return (
+                                                        <React.Fragment key={ret.invoiceNum}>
+                                                            <tr 
+                                                                onClick={() => setExpandedReturnId(isExpanded ? null : ret.invoiceNum)}
+                                                                className="hover:bg-rose-50/50 transition-colors cursor-pointer"
+                                                            >
+                                                                <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                                <td className="p-3 font-mono font-bold text-rose-700">{ret.invoiceNum}</td>
+                                                                <td className="p-3 font-bold text-slate-800">{ret.customerName}</td>
+                                                                <td className="p-3 text-center font-mono font-semibold text-slate-500">{ret.items.length} کالا</td>
+                                                                <td className="p-3 text-center font-mono font-bold text-rose-700">{ret.totalQuantity.toFixed(1)}</td>
+                                                                <td className="p-3 text-left font-mono font-black text-rose-700">{formatMoney(ret.totalAmount)}</td>
+                                                                <td className="p-3 text-center">
+                                                                    <button className="inline-flex items-center gap-1 text-xs text-rose-600 hover:text-rose-800 font-semibold focus:outline-none">
+                                                                        <span>{isExpanded ? 'بستن' : 'مشاهده'}</span>
+                                                                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                            {isExpanded && (
+                                                                <tr className="bg-rose-50/30">
+                                                                    <td colSpan={7} className="p-4 bg-rose-50/20">
+                                                                        <div className="border border-rose-200 rounded-lg bg-white p-3 shadow-inner">
+                                                                            <div className="text-[11px] font-bold text-rose-800 mb-2 pb-1 border-b border-rose-100 flex justify-between">
+                                                                                <span>جزئیات اقلام مرجوعی برگه {ret.invoiceNum}</span>
+                                                                                {ret.notes && (
+                                                                                    <span className="text-slate-400 font-mono text-[10px]">توضیحات: {ret.notes}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <table className="w-full text-right text-[11px]">
+                                                                                <thead>
+                                                                                    <tr className="text-rose-900 border-b border-rose-100">
+                                                                                        <th className="py-2 px-3 font-semibold text-center w-12">#</th>
+                                                                                        <th className="py-2 px-3 font-semibold">گروه کالا</th>
+                                                                                        <th className="py-2 px-3 font-semibold">شرح کالا</th>
+                                                                                        <th className="py-2 px-3 font-semibold text-center">وزن مرجوعی</th>
+                                                                                        <th className="py-2 px-3 font-semibold text-left font-mono">فی واحد (ریال)</th>
+                                                                                        <th className="py-2 px-3 font-semibold text-left font-mono">مبلغ مرجوعی (ریال)</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-slate-50">
+                                                                                    {ret.items.map((item, rIdx) => {
+                                                                                        const fee = item.quantity > 0 ? Math.round(item.amount / item.quantity) : 0;
+                                                                                        return (
+                                                                                            <tr key={rIdx}>
+                                                                                                <td className="py-2 px-3 text-center text-slate-400 font-mono">{rIdx + 1}</td>
+                                                                                                <td className="py-2 px-3 text-slate-500">{item.groupName || '-'}</td>
+                                                                                                <td className="py-2 px-3 font-medium text-slate-800">
+                                                                                                    {item.itemName}
+                                                                                                    {item.itemNotes && (
+                                                                                                        <span className="block text-[9px] text-slate-400 mt-0.5">{item.itemNotes}</span>
+                                                                                                    )}
+                                                                                                </td>
+                                                                                                <td className="py-2 px-3 text-center font-mono font-bold text-rose-600">{item.quantity.toFixed(1)}</td>
+                                                                                                <td className="py-2 px-3 text-left font-mono font-bold text-slate-500">{fee > 0 ? formatMoney(fee) : '-'}</td>
+                                                                                                <td className="py-2 px-3 text-left font-mono font-bold text-rose-700">{formatMoney(item.amount)}</td>
+                                                                                            </tr>
+                                                                                        );
+                                                                                    })}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                });
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Render Recharts Visual Comparison */}
                         {compareMode && chartData.length > 0 && (
