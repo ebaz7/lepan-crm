@@ -16,6 +16,7 @@ const findNextGapNumber = utils.findNextGapNumber;
 const sanitizeGroupId = utils.sanitizeGroupId;
 const generateUUID = utils.generateUUID;
 const getTehranDateString = utils.getTehranDateString;
+const jalaliToGregorianStr = utils.jalaliToGregorianStr;
 
 const getRolePermissions = (userRole, settings, userObject) => {
     if (userRole === 'admin') {
@@ -184,6 +185,10 @@ export const getCustomerBalancesData = async (db) => {
 
     if (db.settings?.sayanApiUrl) {
         try {
+            // Check for default date range configured in software settings (Sayan reports)
+            const dateFrom = db.settings.sayanDateFrom;
+            const dateTo = db.settings.sayanDateTo;
+
             // 1. Fetch Tafsilis
             const tafsiliSql = `
                 SELECT DISTINCT 
@@ -197,19 +202,45 @@ export const getCustomerBalancesData = async (db) => {
             const tafsilis = await runSayanQuery(db, tafsiliSql);
 
             // 2. Fetch Traz
-            const trazSql = `
-                SELECT 
-                    t24.Field_010 as TafsiliRaw,
-                    SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
-                    SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
-                FROM ACT_TBL_024 t24
-                WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
-                  AND t24.Field_010 NOT LIKE '%-12%'
-                  AND t24.Field_010 NOT LIKE '%-13%'
-                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
-                  AND t24.Field_003 <> '9'
-                GROUP BY t24.Field_010
-            `;
+            let trazSql = '';
+            if (dateFrom || dateTo) {
+                const gregFrom = dateFrom ? jalaliToGregorianStr(dateFrom) : null;
+                const gregTo = dateTo ? jalaliToGregorianStr(dateTo) : null;
+
+                const dateConditions = [];
+                if (gregFrom) dateConditions.push(`t8.Field_008 >= '${gregFrom}T00:00:00.000Z'`);
+                if (gregTo) dateConditions.push(`t8.Field_008 <= '${gregTo}T23:59:59.000Z'`);
+
+                trazSql = `
+                    SELECT 
+                        t9.Field_015 as TafsiliRaw,
+                        SUM(CAST(t9.Field_009 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t9.Field_010 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_009 t9
+                    LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
+                    WHERE (t9.Field_015 LIKE '11%' OR t9.Field_015 LIKE '%-11%' OR t9.Field_015 LIKE '31%' OR t9.Field_015 LIKE '%-31%') 
+                      AND t9.Field_015 NOT LIKE '%-12%'
+                      AND t9.Field_015 NOT LIKE '%-13%'
+                      AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117') 
+                      AND t9.Field_005 <> '9'
+                      ${dateConditions.length > 0 ? 'AND ' + dateConditions.join(' AND ') : ''}
+                    GROUP BY t9.Field_015
+                `;
+            } else {
+                trazSql = `
+                    SELECT 
+                        t24.Field_010 as TafsiliRaw,
+                        SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
+                        SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
+                    FROM ACT_TBL_024 t24
+                    WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                      AND t24.Field_010 NOT LIKE '%-12%'
+                      AND t24.Field_010 NOT LIKE '%-13%'
+                      AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                      AND t24.Field_003 <> '9'
+                    GROUP BY t24.Field_010
+                `;
+            }
             const rawRows = await runSayanQuery(db, trazSql);
 
             // Helper to parse TafsiliRaw

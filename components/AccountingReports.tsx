@@ -38,6 +38,7 @@ import {
     Line
 } from 'recharts';
 import { getRolePermissions } from '../services/authService';
+import { saveSettings } from '../services/storageService';
 import { UserRole } from '../types';
 
 export default function AccountingReports({ currentUser, settings }: { currentUser?: any, settings?: any }) {
@@ -167,8 +168,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         // Since active year is 1404, we default to 1404/01/01 as start date and today as end date
         const activeYear = jToday.jy === 1405 ? 1404 : jToday.jy;
         
-        const savedFrom = localStorage.getItem('sayan_default_date_from');
-        const savedTo = localStorage.getItem('sayan_default_date_to');
+        const savedFrom = settings?.sayanDateFrom || localStorage.getItem('sayan_default_date_from');
+        const savedTo = settings?.sayanDateTo || localStorage.getItem('sayan_default_date_to');
         
         const initialFrom = savedFrom || `${activeYear}/01/01`;
         const initialTo = savedTo || `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
@@ -183,7 +184,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         setSalesDateToB(endPrev);
 
         fetchTafsilis();
-    }, []);
+    }, [settings?.sayanDateFrom, settings?.sayanDateTo]);
 
     const applyQuickDate = (mode: 'today' | 'yesterday' | 'month' | 'quarter' | 'default') => {
         const today = new Date();
@@ -247,14 +248,22 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         }
     };
 
-    const saveCurrentAsDefaultDate = () => {
+    const saveCurrentAsDefaultDate = async () => {
         if (!dateFrom || !dateTo) {
             toast.error('بازه معتبری برای ذخیره پیش‌فرض وجود ندارد.');
             return;
         }
         localStorage.setItem('sayan_default_date_from', dateFrom);
         localStorage.setItem('sayan_default_date_to', dateTo);
-        toast.success(`بازه ${dateFrom} تا ${dateTo} با موفقیت به عنوان پیش‌فرض ثبت گردید.`);
+        if (settings) {
+            const updated = {
+                ...settings,
+                sayanDateFrom: dateFrom,
+                sayanDateTo: dateTo
+            };
+            await saveSettings(updated);
+        }
+        toast.success(`بازه ${dateFrom} تا ${dateTo} با موفقیت به عنوان پیش‌فرض در تنظیمات سیستم ثبت گردید.`);
     };
 
     const formatMoney = (val: number) => new Intl.NumberFormat('fa-IR').format(Math.round(Math.abs(val)));

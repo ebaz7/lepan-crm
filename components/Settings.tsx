@@ -6034,6 +6034,48 @@ const Settings: React.FC<SettingsProps> = ({
                           اضافه می‌شود.
                         </p>
                       </div>
+
+                      {/* Default Sayan Report Date Range Settings */}
+                      <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl space-y-3">
+                        <label className="text-xs font-black text-indigo-700 dark:text-indigo-400 block">
+                          📅 بازه زمانی پیش‌فرض گزارشات سایان و دریافت مانده مشتریان ربات
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <span className="text-[11px] font-bold text-gray-500 block mb-1">از تاریخ (شمسی):</span>
+                            <input
+                              type="text"
+                              placeholder="1404/01/01"
+                              className="w-full border border-gray-200 rounded-lg p-2.5 text-sm dir-ltr text-center font-mono focus:ring-2 ring-indigo-500 outline-none"
+                              value={settings.sayanDateFrom || ""}
+                              onChange={(e) =>
+                                setSettings({
+                                  ...settings,
+                                  sayanDateFrom: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold text-gray-500 block mb-1">تا تاریخ (شمسی):</span>
+                            <input
+                              type="text"
+                              placeholder="1404/12/29"
+                              className="w-full border border-gray-200 rounded-lg p-2.5 text-sm dir-ltr text-center font-mono focus:ring-2 ring-indigo-500 outline-none"
+                              value={settings.sayanDateTo || ""}
+                              onChange={(e) =>
+                                setSettings({
+                                  ...settings,
+                                  sayanDateTo: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-500 leading-relaxed">
+                          * ربات و گزارشات سایان، مانده بدهکاران/بستانکاران را بر اساس این تاریخ محاسبه و دریافت می‌کنند.
+                        </p>
+                      </div>
                     </div>
                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 flex gap-3 items-start">
                       <div className="glass-panel p-2 rounded-lg text-indigo-600 shadow-sm">

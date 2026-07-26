@@ -106,7 +106,9 @@ export const FiscalYearManager: React.FC<{
         setEditingYearId(yearId);
         
         const configMap: Record<string, { pay: string, exit: string, bijak: string, cheque: string }> = {};
-        const companies = currentSettings.companies || [];
+        const companies = currentSettings.companies && currentSettings.companies.length > 0 
+            ? currentSettings.companies 
+            : (currentSettings.companyNames || []).map((name, i) => ({ id: `comp_${i}`, name, showInWarehouse: true, banks: [] }));
         
         // GLOBAL DEFAULTS (Current System State)
         // If year config is missing, we suggest the current system numbers + 1 or existing
@@ -281,7 +283,10 @@ export const FiscalYearManager: React.FC<{
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {settings.companies?.map(c => {
+                                {(settings.companies && settings.companies.length > 0
+                                    ? settings.companies
+                                    : (settings.companyNames || []).map((name, i) => ({ id: `comp_${i}`, name, showInWarehouse: true, banks: [] }))
+                                ).map(c => {
                                     const conf = companyConfig[c.name] || { pay: '1', exit: '1', bijak: '1', cheque: '1' };
                                     return (
                                         <tr key={c.id} className="hover:bg-indigo-50/30">

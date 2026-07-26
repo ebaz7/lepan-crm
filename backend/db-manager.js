@@ -58,14 +58,20 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.sayanApiKey = "";
                 }
 
-                // Ensure companies and fiscalYears exist in settings
-                if (!Array.isArray(MEMORY_DB_CACHE.settings.companies) || MEMORY_DB_CACHE.settings.companies.length === 0) {
+                // Ensure companies and companyNames exist and are synchronized
+                if (Array.isArray(MEMORY_DB_CACHE.settings.companyNames) && MEMORY_DB_CACHE.settings.companyNames.length > 0) {
+                    if (!Array.isArray(MEMORY_DB_CACHE.settings.companies) || MEMORY_DB_CACHE.settings.companies.length === 0) {
+                        MEMORY_DB_CACHE.settings.companies = MEMORY_DB_CACHE.settings.companyNames.map((name, i) => ({
+                            id: `comp_${i}`, name, showInWarehouse: true, banks: []
+                        }));
+                    }
+                } else if (Array.isArray(MEMORY_DB_CACHE.settings.companies) && MEMORY_DB_CACHE.settings.companies.length > 0) {
+                    MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
+                } else {
                     MEMORY_DB_CACHE.settings.companies = [
                         { id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }
                     ];
-                }
-                if (!Array.isArray(MEMORY_DB_CACHE.settings.companyNames) || MEMORY_DB_CACHE.settings.companyNames.length === 0) {
-                    MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
+                    MEMORY_DB_CACHE.settings.companyNames = ['شرکت اصلی'];
                 }
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [

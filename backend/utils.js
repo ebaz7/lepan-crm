@@ -1,4 +1,25 @@
 
+import jalaali from 'jalaali-js';
+
+export const jalaliToGregorianStr = (jalaliStr) => {
+    if (!jalaliStr) return '';
+    try {
+        let clean = String(jalaliStr).trim()
+            .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+            .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+        const parts = clean.split('/');
+        if (parts.length !== 3) return jalaliStr;
+        const jy = parseInt(parts[0], 10);
+        const jm = parseInt(parts[1], 10);
+        const jd = parseInt(parts[2], 10);
+        if (isNaN(jy) || isNaN(jm) || isNaN(jd)) return jalaliStr;
+        const g = jalaali.toGregorian(jy, jm, jd);
+        return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+    } catch {
+        return jalaliStr;
+    }
+};
+
 export const getTehranDateString = (inputDate) => {
     try {
         const dObj = inputDate || new Date();
