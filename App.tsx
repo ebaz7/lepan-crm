@@ -711,10 +711,11 @@ function App() {
         
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) {
+            if (!Array.isArray(cachedSettings.fiscalYears)) cachedSettings.fiscalYears = [];
             setSettings(cachedSettings);
-            if (cachedSettings.activeFiscalYearId && cachedSettings.fiscalYears) {
-                const activeYear = cachedSettings.fiscalYears.find(y => y.id === cachedSettings.activeFiscalYearId);
-                if (activeYear) setFinancialYearState(activeYear.label);
+            if (cachedSettings.activeFiscalYearId && Array.isArray(cachedSettings.fiscalYears)) {
+                const activeYear = cachedSettings.fiscalYears.find(y => y && y.id === cachedSettings.activeFiscalYearId);
+                if (activeYear && activeYear.label) setFinancialYearState(activeYear.label);
             }
         }
         if (cachedMessages.length > 0) {
