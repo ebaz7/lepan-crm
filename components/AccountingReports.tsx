@@ -1275,7 +1275,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t11.Field_006 as Quantity
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
-                    LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
+                    LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
                       AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z'
                       AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'
@@ -1415,6 +1415,87 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         } finally {
             setIsSendingBot(false);
         }
+    };
+
+    const handleExportExcel = () => {
+        if (!prodLiveItems || prodLiveItems.length === 0) {
+            toast.error("اطلاعاتی برای خروجی اکسل وجود ندارد.");
+            return;
+        }
+
+        const headers = [
+            "کالا",
+            "واحد",
+            "سند ۶۱ (POY)",
+            "سند ۶۷ (DTY)",
+            "سند ۷۹ (کش)",
+            "سند ۷۳ (اسپاندکس)",
+            "جمع کل"
+        ];
+
+        const rows = [headers.join(",")];
+
+        prodLiveItems.forEach((item: any) => {
+            const row = [
+                `"${item.name.replace(/"/g, '""')}"`,
+                `"${(item.unit || "کیلوگرم").replace(/"/g, '""')}"`,
+                item.qty_61 || 0,
+                item.qty_67 || 0,
+                item.qty_79 || 0,
+                item.qty_73 || 0,
+                item.total || 0
+            ];
+            rows.push(row.join(","));
+        });
+
+        // Add blank row
+        rows.push("");
+
+        // Add Totals row
+        const totalRow = [
+            `"جمع کل تولید"`,
+            `"کیلوگرم"`,
+            prodLiveTotals.qty_61 || 0,
+            prodLiveTotals.qty_67 || 0,
+            prodLiveTotals.qty_79 || 0,
+            prodLiveTotals.qty_73 || 0,
+            prodLiveTotals.grandTotal || 0
+        ];
+        rows.push(totalRow.join(","));
+
+        // Add Waste row
+        const wasteRow = [
+            `"ضایعات (ورود دستی)"`,
+            `"کیلوگرم"`,
+            prodWaste.waste_61 || 0,
+            prodWaste.waste_67 || 0,
+            prodWaste.waste_79 || 0,
+            prodWaste.waste_73 || 0,
+            prodWaste.totalWaste || 0
+        ];
+        rows.push(wasteRow.join(","));
+
+        // Add Waste Pct row
+        const pctRow = [
+            `"درصد ضایعات"`,
+            `"درصد"`,
+            (prodWaste.pct_61 || 0).toFixed(2) + "%",
+            (prodWaste.pct_67 || 0).toFixed(2) + "%",
+            (prodWaste.pct_79 || 0).toFixed(2) + "%",
+            (prodWaste.pct_73 || 0).toFixed(2) + "%",
+            (prodWaste.totalPct || 0).toFixed(2) + "%"
+        ];
+        rows.push(pctRow.join(","));
+
+        const bom = "\uFEFF"; 
+        const blob = new Blob([bom + rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Production_Report_${dateFrom.replace(/[\/\\]/g, '-')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("فایل اکسل (CSV) با موفقیت دانلود شد.");
     };
 
     // Aggregate production by selection
@@ -2586,6 +2667,14 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 >
                                     <Printer className="h-4 w-4" />
                                     چاپ / PDF
+                                </button>
+
+                                <button
+                                    onClick={handleExportExcel}
+                                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    خروجی اکسل
                                 </button>
 
                                 <button

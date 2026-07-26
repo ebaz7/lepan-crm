@@ -2701,7 +2701,7 @@ app.get('/api/sayan/production-report', async (req, res) => {
                 t11.Field_006 as Quantity
             FROM STR_TBL_010 t10
             INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
-            LEFT JOIN IND_TBL_022 t22 ON t22.Field_005 = t11.Field_005
+            LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
             WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
               AND t10.Field_008 >= '${gregFromDate}T00:00:00.000Z'
               AND t10.Field_008 <= '${gregToDate}T23:59:59.999Z'
