@@ -3766,6 +3766,90 @@ const Settings: React.FC<SettingsProps> = ({
                       />
                     </div>
 
+                    <div className="border-t pt-4 mt-4 space-y-4">
+                      <h4 className="font-bold text-sm text-blue-800">
+                        📊 تنظیمات ارسال خودکار آمار فروش روزانه (ساعت ۷ غروب)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold text-gray-600 block mb-1">
+                            شناسه گروه تلگرام آمار فروش
+                          </label>
+                          <input
+                            type="text"
+                            value={settings.dailySalesTelegramGroupId || ""}
+                            onChange={(e) =>
+                              setSettings({
+                                ...settings,
+                                dailySalesTelegramGroupId: e.target.value,
+                              })
+                            }
+                            className="w-full border rounded-lg p-2 text-xs dir-ltr"
+                            placeholder="-100..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-600 block mb-1">
+                            شناسه گروه بله آمار فروش
+                          </label>
+                          <input
+                            type="text"
+                            value={settings.dailySalesBaleGroupId || ""}
+                            onChange={(e) =>
+                              setSettings({
+                                ...settings,
+                                dailySalesBaleGroupId: e.target.value,
+                              })
+                            }
+                            className="w-full border rounded-lg p-2 text-xs dir-ltr"
+                            placeholder="ID..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 mt-4 space-y-4">
+                      <h4 className="font-bold text-sm text-indigo-800">
+                        ⚙️ تنظیمات گروه مخصوص ارسال آمار تولید
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold text-gray-600 block mb-1">
+                            شناسه گروه تلگرام آمار تولید
+                          </label>
+                          <input
+                            type="text"
+                            value={settings.productionTelegramGroupId || ""}
+                            onChange={(e) =>
+                              setSettings({
+                                ...settings,
+                                productionTelegramGroupId: e.target.value,
+                              })
+                            }
+                            className="w-full border rounded-lg p-2 text-xs dir-ltr"
+                            placeholder="-100..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-600 block mb-1">
+                            شناسه گروه بله آمار تولید
+                          </label>
+                          <input
+                            type="text"
+                            value={settings.productionBaleGroupId || ""}
+                            onChange={(e) =>
+                              setSettings({
+                                ...settings,
+                                productionBaleGroupId: e.target.value,
+                              })
+                            }
+                            className="w-full border rounded-lg p-2 text-xs dir-ltr"
+                            placeholder="ID..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
                       <h4 className="font-bold text-sm text-gray-700">
                         ارتباط با مشتری و مدیریت پیام‌های فروش

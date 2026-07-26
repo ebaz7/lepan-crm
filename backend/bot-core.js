@@ -165,36 +165,108 @@ export const getSayanReportsKeyboard = (user) => {
     return { inline_keyboard: buttons };
 };
 
+export const matchAccountCode = (bCode, inputCode) => {
+    if (!bCode || !inputCode) return false;
+    const bc = String(bCode).trim().toLowerCase();
+    const ic = String(inputCode).trim().toLowerCase();
+    if (bc === ic) return true;
+    
+    // Compare without leading zeros
+    const bcNoZeros = bc.replace(/^0+/, '');
+    const icNoZeros = ic.replace(/^0+/, '');
+    if (bcNoZeros && icNoZeros && bcNoZeros === icNoZeros) return true;
+    
+    return false;
+};
+
 export const getCustomerBalancesData = async (db) => {
     let list = [];
 
     if (db.settings?.sayanApiUrl) {
         try {
-            const sql = `
-                SELECT 
-                    t07.Field_005 as accountCode,
-                    t07.Field_006 as name,
-                    SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
-                FROM ACT_TBL_007 t07
-                LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
-                WHERE (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                GROUP BY t07.Field_005, t07.Field_006
-                HAVING SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) <> 0
+            // 1. Fetch Tafsilis
+            const tafsiliSql = `
+                SELECT DISTINCT 
+                    Field_003 as Code, 
+                    Field_006 as Name, 
+                    Field_005 as TafsiliCode,
+                    Field_004 as MoeinGroup
+                FROM ACT_TBL_007 
+                WHERE Field_004 LIKE '11%' OR Field_004 LIKE '31%' OR Field_003 LIKE '11%' OR Field_003 LIKE '31%'
             `;
-            const sayanRows = await runSayanQuery(db, sql);
-            if (sayanRows && sayanRows.length > 0) {
-                list = sayanRows.map(r => {
-                    const bal = Number(r.balance || 0);
-                    return {
-                        accountCode: r.accountCode,
-                        name: r.name || 'مشتری سایان',
-                        balance: Math.abs(bal),
-                        type: bal > 0 ? 'بدهکار' : 'بستانکار',
-                        rawBalance: bal,
-                        updatedAt: Date.now()
-                    };
-                });
-            }
+            const tafsilis = await runSayanQuery(db, tafsiliSql);
+
+            // 2. Fetch Traz
+            const trazSql = `
+                SELECT 
+                    t24.Field_010 as TafsiliRaw,
+                    SUM(CAST(t24.Field_006 AS FLOAT)) as TotalBed,
+                    SUM(CAST(t24.Field_007 AS FLOAT)) as TotalBes
+                FROM ACT_TBL_024 t24
+                WHERE (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                  AND t24.Field_010 NOT LIKE '%-12%'
+                  AND t24.Field_010 NOT LIKE '%-13%'
+                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                  AND t24.Field_003 <> '9'
+                GROUP BY t24.Field_010
+            `;
+            const rawRows = await runSayanQuery(db, trazSql);
+
+            // Helper to parse TafsiliRaw
+            const parseTafsiliRaw = (raw) => {
+                if (!raw) return { moein: '', code: '' };
+                const parts = raw.split('-');
+                for (const part of parts) {
+                    const match = part.match(/^(11\d*|31\d*):(\d+)/);
+                    if (match) {
+                        return { moein: match[1], code: match[2] };
+                    }
+                }
+                const match = raw.match(/(11\d*|31\d*):(\d+)/);
+                if (match) {
+                    return { moein: match[1], code: match[2] };
+                }
+                return { moein: '', code: '' };
+            };
+
+            // 3. Map and group
+            const groupedMap = new Map();
+            rawRows.forEach((row) => {
+                const parsed = parseTafsiliRaw(row.TafsiliRaw);
+                const code = parsed.code;
+                if (!code) return;
+                
+                const tafsili = tafsilis.find(t => matchAccountCode(t.Code, code) || matchAccountCode(t.TafsiliCode, code));
+                const name = tafsili ? tafsili.Name : `کد اشخاص ${code}`;
+                const bed = parseFloat(row.TotalBed || 0);
+                const bes = parseFloat(row.TotalBes || 0);
+                
+                if (groupedMap.has(code)) {
+                    const existing = groupedMap.get(code);
+                    existing.bed += bed;
+                    existing.bes += bes;
+                    existing.balance = existing.bed - existing.bes;
+                } else {
+                    groupedMap.set(code, {
+                        accountCode: code,
+                        name,
+                        bed,
+                        bes,
+                        balance: bed - bes
+                    });
+                }
+            });
+
+            list = Array.from(groupedMap.values())
+                .filter((r) => r.balance !== 0)
+                .map((r) => ({
+                    accountCode: r.accountCode,
+                    name: r.name,
+                    balance: Math.abs(r.balance),
+                    type: r.balance > 0 ? 'بدهکار' : 'بستانکار',
+                    rawBalance: r.balance,
+                    updatedAt: Date.now()
+                }));
         } catch (err) {
             console.error("Failed to query live Sayan balances:", err);
         }
@@ -1386,7 +1458,7 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             session.state = 'IDLE';
 
             const rawList = await getCustomerBalancesData(db);
-            const rec = rawList.find(b => b.accountCode === code);
+            const rec = rawList.find(b => matchAccountCode(b.accountCode, code));
             if (rec) {
                 const balanceStr = Number(rec.balance).toLocaleString('fa-IR');
                 const successMsg = `✅ *ارتباط با حسابداری برقرار شد!*\n\n👤 *مشتری:* ${rec.name}\n🔢 کد حسابداری: \`${rec.accountCode}\`\n\n💰 *مانده حساب شما (آنلاین سایان):* ${balanceStr} ریال (${rec.type})\n📅 آخرین بروزرسانی: ${new Date(rec.updatedAt || Date.now()).toLocaleDateString('fa-IR')}\n\n💬 مانده حساب شما ذخیره شد و در پرسش‌های بعدی با زدن دکمه مربوطه مستقیماً نشان داده خواهد شد.`;
@@ -1399,11 +1471,18 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
                 if (db.settings?.sayanApiUrl) {
                     try {
                         const sql = `
-                            SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
-                                   SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
-                            FROM ACT_TBL_007 t07
-                            LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
-                            WHERE t07.Field_005 = '${code}'
+                            SELECT 
+                                t07.Field_005 as accountCode,
+                                t07.Field_006 as name,
+                                SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
+                            FROM ACT_TBL_024 t24
+                            INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                            WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                              AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                              AND t24.Field_010 NOT LIKE '%-12%'
+                              AND t24.Field_010 NOT LIKE '%-13%'
+                              AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                              AND t24.Field_003 <> '9'
                             GROUP BY t07.Field_005, t07.Field_006
                         `;
                         const res = await runSayanQuery(db, sql);
@@ -1480,10 +1559,17 @@ export const handleMessage = async (platform, chatId, text, sendFn, sendPhotoFn,
             if (found.length === 0 && db.settings?.sayanApiUrl) {
                 try {
                     const sql = `
-                        SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
-                               SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
+                        SELECT 
+                            t07.Field_005 as accountCode,
+                            t07.Field_006 as name,
+                            SUM(CAST(ISNULL(t24.Field_006, 0) AS FLOAT)) - SUM(CAST(ISNULL(t24.Field_007, 0) AS FLOAT)) as balance
                         FROM ACT_TBL_007 t07
-                        LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
+                        LEFT JOIN ACT_TBL_024 t24 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                          AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                          AND t24.Field_010 NOT LIKE '%-12%'
+                          AND t24.Field_010 NOT LIKE '%-13%'
+                          AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                          AND t24.Field_003 <> '9'
                         WHERE (t07.Field_004 = '11' OR t07.Field_004 = '31')
                           AND (t07.Field_005 LIKE '%${query}%' OR t07.Field_006 LIKE N'%${query}%')
                         GROUP BY t07.Field_005, t07.Field_006
@@ -2579,11 +2665,11 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
             if (code) {
                 const rawList = await getCustomerBalancesData(db);
-                const rec = rawList.find(b => b.accountCode === code);
+                const rec = rawList.find(b => matchAccountCode(b.accountCode, code));
                 
                 // Fetch statements for this accountCode
                 const statements = db.customerStatements || [];
-                const matchedStatements = statements.filter(s => s.accountCode === code);
+                const matchedStatements = statements.filter(s => matchAccountCode(s.accountCode, code));
                 
                 const inline_keyboard = [];
                 if (matchedStatements.length > 0) {
@@ -2608,11 +2694,18 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     if (db.settings?.sayanApiUrl) {
                         try {
                             const sql = `
-                                SELECT t07.Field_005 as accountCode, t07.Field_006 as name,
-                                       SUM(ISNULL(t10.Field_012, 0)) - SUM(ISNULL(t10.Field_013, 0)) as balance
-                                FROM ACT_TBL_007 t07
-                                LEFT JOIN ACT_TBL_010 t10 ON t10.Field_010 = t07.Field_005
-                                WHERE t07.Field_005 = '${code}'
+                                SELECT 
+                                    t07.Field_005 as accountCode,
+                                    t07.Field_006 as name,
+                                    SUM(CAST(t24.Field_006 AS FLOAT)) - SUM(CAST(t24.Field_007 AS FLOAT)) as balance
+                                FROM ACT_TBL_024 t24
+                                INNER JOIN ACT_TBL_007 t07 ON t24.Field_010 LIKE '%' + RTRIM(LTRIM(t07.Field_003)) + '%'
+                                WHERE (t07.Field_005 = '${code}' OR t07.Field_003 = '${code}' OR t07.Field_005 LIKE '%${code}' OR t07.Field_003 LIKE '%${code}')
+                                  AND (t24.Field_010 LIKE '11%' OR t24.Field_010 LIKE '%-11%' OR t24.Field_010 LIKE '31%' OR t24.Field_010 LIKE '%-31%') 
+                                  AND t24.Field_010 NOT LIKE '%-12%'
+                                  AND t24.Field_010 NOT LIKE '%-13%'
+                                  AND t24.Field_005 NOT IN ('102', '103', '107', '109', '114', '116', '117')
+                                  AND t24.Field_003 <> '9'
                                 GROUP BY t07.Field_005, t07.Field_006
                             `;
                             const res = await runSayanQuery(db, sql);
@@ -3343,7 +3436,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data.startsWith('SALES_BAL_VIEW_')) {
         const code = data.replace('SALES_BAL_VIEW_', '');
         const rawList = await getCustomerBalancesData(db);
-        const rec = rawList.find(b => b.accountCode === code);
+        const rec = rawList.find(b => matchAccountCode(b.accountCode, code));
         
         if (!rec) {
             return sendFn(chatId, "❌ مشتری یافت نشد.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'SALES_CUSTOMER_BALANCES' }]] } });
@@ -3359,7 +3452,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         msg += `📅 *آخرین بروزرسانی:* ${updateStr}\n\n`;
         
         const statements = db.customerStatements || [];
-        const hasStatement = statements.some(s => s.accountCode === code);
+        const hasStatement = statements.some(s => matchAccountCode(s.accountCode, code));
         
         const kb = [
             [
@@ -3385,7 +3478,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
         const code = data.replace('SALES_BAL_STMT_DOWNLOAD_', '');
         const statements = db.customerStatements || [];
         const matched = statements
-            .filter(s => s.accountCode === code)
+            .filter(s => matchAccountCode(s.accountCode, code))
             .sort((a, b) => b.uploadedAt - a.uploadedAt);
             
         if (matched.length > 0) {
@@ -3407,7 +3500,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     if (data.startsWith('SALES_BAL_MAKE_CONFIRMATION_')) {
         const code = data.replace('SALES_BAL_MAKE_CONFIRMATION_', '');
         const rawList = await getCustomerBalancesData(db);
-        const rec = rawList.find(b => b.accountCode === code);
+        const rec = rawList.find(b => matchAccountCode(b.accountCode, code));
         
         if (!rec) {
             return sendFn(chatId, "❌ مشتری یافت نشد.");

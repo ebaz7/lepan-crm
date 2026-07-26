@@ -160,8 +160,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         
         // Since active year is 1404, we default to 1404/01/01 as start date and today as end date
         const activeYear = jToday.jy === 1405 ? 1404 : jToday.jy;
-        const initialFrom = `${activeYear}/01/01`;
-        const initialTo = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
+        
+        const savedFrom = localStorage.getItem('sayan_default_date_from');
+        const savedTo = localStorage.getItem('sayan_default_date_to');
+        
+        const initialFrom = savedFrom || `${activeYear}/01/01`;
+        const initialTo = savedTo || `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
         
         setDateFrom(initialFrom);
         setDateTo(initialTo);
@@ -174,6 +178,70 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
         fetchTafsilis();
     }, []);
+
+    const applyQuickDate = (mode: 'today' | 'month' | 'quarter' | 'default') => {
+        const today = new Date();
+        const jToday = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
+        
+        if (mode === 'today') {
+            const dateStr = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
+            setDateFrom(dateStr);
+            setDateTo(dateStr);
+            toast.success(`بازه زمانی به امروز (${dateStr}) تغییر یافت.`);
+        } else if (mode === 'month') {
+            const startStr = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/01`;
+            let endDay = '30';
+            if (jToday.jm >= 1 && jToday.jm <= 6) {
+                endDay = '31';
+            } else if (jToday.jm === 12) {
+                endDay = jalaali.isLeapJalaaliYear(jToday.jy) ? '30' : '29';
+            }
+            const endStr = `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${endDay}`;
+            setDateFrom(startStr);
+            setDateTo(endStr);
+            toast.success(`بازه زمانی به ماه جاری (${startStr} تا ${endStr}) تغییر یافت.`);
+        } else if (mode === 'quarter') {
+            let startMonth = 1;
+            let endMonth = 3;
+            let endDay = '31';
+            let quarterName = 'بهار';
+            
+            if (jToday.jm >= 1 && jToday.jm <= 3) {
+                startMonth = 1; endMonth = 3; endDay = '31'; quarterName = 'بهار';
+            } else if (jToday.jm >= 4 && jToday.jm <= 6) {
+                startMonth = 4; endMonth = 6; endDay = '31'; quarterName = 'تابستان';
+            } else if (jToday.jm >= 7 && jToday.jm <= 9) {
+                startMonth = 7; endMonth = 9; endDay = '30'; quarterName = 'پاییز';
+            } else if (jToday.jm >= 10 && jToday.jm <= 12) {
+                startMonth = 10; endMonth = 12; endDay = jalaali.isLeapJalaaliYear(jToday.jy) ? '30' : '29'; quarterName = 'زمستان';
+            }
+            
+            const startStr = `${jToday.jy}/${String(startMonth).padStart(2, '0')}/01`;
+            const endStr = `${jToday.jy}/${String(endMonth).padStart(2, '0')}/${endDay}`;
+            setDateFrom(startStr);
+            setDateTo(endStr);
+            toast.success(`بازه زمانی به فصل جاری (${quarterName}: ${startStr} تا ${endStr}) تغییر یافت.`);
+        } else if (mode === 'default') {
+            const activeYear = jToday.jy === 1405 ? 1404 : jToday.jy;
+            const savedFrom = localStorage.getItem('sayan_default_date_from');
+            const savedTo = localStorage.getItem('sayan_default_date_to');
+            const initialFrom = savedFrom || `${activeYear}/01/01`;
+            const initialTo = savedTo || `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
+            setDateFrom(initialFrom);
+            setDateTo(initialTo);
+            toast.success(`بازه زمانی به حالت پیش‌فرض بازنشانی شد.`);
+        }
+    };
+
+    const saveCurrentAsDefaultDate = () => {
+        if (!dateFrom || !dateTo) {
+            toast.error('بازه معتبری برای ذخیره پیش‌فرض وجود ندارد.');
+            return;
+        }
+        localStorage.setItem('sayan_default_date_from', dateFrom);
+        localStorage.setItem('sayan_default_date_to', dateTo);
+        toast.success(`بازه ${dateFrom} تا ${dateTo} با موفقیت به عنوان پیش‌فرض ثبت گردید.`);
+    };
 
     const formatMoney = (val: number) => new Intl.NumberFormat('fa-IR').format(Math.round(Math.abs(val)));
     
@@ -1277,15 +1345,21 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t10.Field_008 as Date,
                         RTRIM(LTRIM(t10.Field_009)) as DocType,
                         t11.Field_005 as ItemCode,
-                        COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام') as ItemName,
+                        COALESCE(t_name.ItemName, t22.Field_004, t11.Field_005, 'کالای بدون نام') as ItemName,
                         t11.Field_006 as Quantity
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
+                    LEFT JOIN (
+                        SELECT RTRIM(LTRIM(t21_sub.Field_004)) as ItemCode, MIN(t02_sub.Field_003) as ItemName
+                        FROM IND_TBL_021 t21_sub
+                        LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                        GROUP BY t21_sub.Field_004
+                    ) t_name ON t_name.ItemCode = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
                       AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z'
                       AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'
-                    ORDER BY COALESCE(t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
+                    ORDER BY COALESCE(t_name.ItemName, t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
                 `;
                 
                 const rawRows = await runSayanQuery(sql);
@@ -1293,9 +1367,18 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 let q61 = 0, q67 = 0, q79 = 0, q73 = 0;
 
                 rawRows.forEach((r: any) => {
-                    const rawName = (r.ItemName || r.ItemCode || 'کالای بدون نام').trim();
+                    const itemCode = String(r.ItemCode || '').trim();
+                    let rawName = (r.ItemName || itemCode || 'کالای بدون نام').trim();
                     const qty = parseFloat(r.Quantity || 0);
                     const docType = String(r.DocType).trim();
+
+                    // Fallback for intermediate production codes that don't have registered names in master tables
+                    if (rawName === itemCode && itemCode) {
+                        if (docType === '61') rawName = `نخ POY (${itemCode})`;
+                        else if (docType === '67') rawName = `نخ DTY (${itemCode})`;
+                        else if (docType === '79') rawName = `نخ کش (${itemCode})`;
+                        else if (docType === '73') rawName = `نخ اسپاندکس (${itemCode})`;
+                    }
 
                     if (!itemsMap.has(rawName)) {
                         itemsMap.set(rawName, {
@@ -1662,30 +1745,73 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 </div>
                 
                 {/* Global Date Filter */}
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2 sm:p-2.5 flex flex-wrap items-center gap-2 sm:gap-3 justify-between sm:justify-start w-full lg:w-auto">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold">
-                        <Calendar className="w-4 h-4 text-blue-600" />
-                        <span>بازه زمانی گزارش:</span>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 bg-white rounded-lg shadow-sm border border-slate-200 p-2 sm:p-2.5 w-full lg:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            <span>بازه زمانی گزارش:</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
+                            <input 
+                                type="text" 
+                                placeholder="۱۴۰۴/۰۱/۰۱"
+                                value={dateFrom}
+                                onChange={(e) => setDateFrom(e.target.value)}
+                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
+                            />
+                        </div>
+                        <span className="text-xs text-slate-400 font-bold">تا</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
+                            <input 
+                                type="text" 
+                                placeholder="۱۴۰۴/۱۲/۲۹"
+                                value={dateTo}
+                                onChange={(e) => setDateTo(e.target.value)}
+                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
+                            />
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
-                        <input 
-                            type="text" 
-                            placeholder="۱۴۰۴/۰۱/۰۱"
-                            value={dateFrom}
-                            onChange={(e) => setDateFrom(e.target.value)}
-                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
-                        />
+
+                    {/* Quick Date Buttons */}
+                    <div className="flex flex-wrap items-center gap-1 border-t sm:border-t-0 sm:border-r border-slate-200 pt-2 sm:pt-0 sm:pr-3">
+                        <button
+                            onClick={() => applyQuickDate('today')}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] sm:text-xs px-2 py-1 font-semibold transition-colors cursor-pointer"
+                            title="تنظیم بازه روی امروز"
+                        >
+                            امروز
+                        </button>
+                        <button
+                            onClick={() => applyQuickDate('month')}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] sm:text-xs px-2 py-1 font-semibold transition-colors cursor-pointer"
+                            title="تنظیم بازه روی کل ماه جاری"
+                        >
+                            ماه جاری
+                        </button>
+                        <button
+                            onClick={() => applyQuickDate('quarter')}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] sm:text-xs px-2 py-1 font-semibold transition-colors cursor-pointer"
+                            title="تنظیم بازه روی فصل جاری"
+                        >
+                            فصل جاری
+                        </button>
+                        <button
+                            onClick={() => applyQuickDate('default')}
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-[10px] sm:text-xs px-2 py-1 font-bold transition-colors cursor-pointer border border-amber-200"
+                            title="بازنشانی بازه به پیش‌فرض"
+                        >
+                            پیش‌فرض
+                        </button>
+                        <button
+                            onClick={saveCurrentAsDefaultDate}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-800 rounded text-[10px] sm:text-xs px-2 py-1 font-bold transition-colors cursor-pointer border border-blue-200 flex items-center gap-0.5"
+                            title="ذخیره بازه فعلی به عنوان پیش‌فرض"
+                        >
+                            <Save className="w-3 h-3" />
+                            <span>ثبت دیفالت</span>
+                        </button>
                     </div>
-                    <span className="text-xs text-slate-400 font-bold">تا</span>
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 shadow-inner">
-                        <input 
-                            type="text" 
-                            placeholder="۱۴۰۴/۱۲/۲۹"
-                            value={dateTo}
-                            onChange={(e) => setDateTo(e.target.value)}
-                            className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-24 text-center"
-                        />
-                    </div>
+
                     <button 
                         onClick={() => {
                             if (activeTab === 'traz') fetchTraz();
@@ -1693,7 +1819,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             if (activeTab === 'production') fetchProduction();
                             if (activeTab === 'cheques') fetchCheques();
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded text-xs px-3 py-1.5 font-semibold flex items-center gap-1 transition-colors cursor-pointer mr-auto lg:mr-0 mt-1 sm:mt-0"
                     >
                         {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'بروزرسانی'}
                     </button>

@@ -356,6 +356,11 @@ export interface SystemSettings {
   dailyExitReportSendToThirdGroup?: boolean;
   dailyExitReportSendToDedicatedGroup?: boolean;
   
+  dailySalesTelegramGroupId?: string;
+  dailySalesBaleGroupId?: string;
+  productionTelegramGroupId?: string;
+  productionBaleGroupId?: string;
+  
   salesNotificationUsers?: { username: string; platforms: string[]; name?: string }[]; // Usernames and their active platforms (telegram, bale)
   salesContactMessage?: string;
   defaultMeetingAttendees?: string[];
