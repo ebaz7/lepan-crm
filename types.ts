@@ -35,6 +35,11 @@ export interface User {
   lastSeen?: number; // New: For online status
   signatureUrl?: string; // Appended for Secretariat letter signatures
   canAccessBotReports?: boolean;
+  canAccessSayanReports?: boolean;
+  canAccessSayanBalances?: boolean;
+  canAccessSayanPendingDocs?: boolean;
+  canAccessSayanDailySales?: boolean;
+  canAccessSayanCompareSales?: boolean;
 }
 
 export interface AppNotification {
@@ -163,6 +168,11 @@ export interface RolePermissions {
   canViewSayanSales?: boolean;
   canViewSayanProduction?: boolean;
   canViewSayanCheques?: boolean;
+  canAccessSayanReports?: boolean;
+  canAccessSayanBalances?: boolean;
+  canAccessSayanPendingDocs?: boolean;
+  canAccessSayanDailySales?: boolean;
+  canAccessSayanCompareSales?: boolean;
   canAccessSecretariat?: boolean;
   canManageSecretariatSettings?: boolean;
   [key: string]: boolean | undefined;

@@ -119,13 +119,53 @@ const runSayanQuery = async (db, queryStr) => {
     return data.data || [];
 };
 
-const hasSayanReportsAccess = (user) => {
+export const hasSayanReportsAccess = (user, section) => {
     if (!user) return false;
-    if (user.canViewSayanReports === false) return false;
+    if (['admin', 'ceo', 'financial'].includes(user.role)) return true;
+    
+    // Check if overall report access is explicitly revoked
+    if (user.canAccessBotReports === false && user.canViewSayanReports === false && user.canAccessSayanReports === false) {
+        return false;
+    }
+    
+    // Check granular sections if requested
+    if (section === 'balances' && user.canAccessSayanBalances === false) return false;
+    if (section === 'pending' && user.canAccessSayanPendingDocs === false) return false;
+    if (section === 'daily_sales' && user.canAccessSayanDailySales === false) return false;
+    if (section === 'compare_sales' && user.canAccessSayanCompareSales === false) return false;
+
     return true;
 };
 
-const getCustomerBalancesData = async (db) => {
+export const getSayanReportsKeyboard = (user) => {
+    const buttons = [];
+    if (hasSayanReportsAccess(user, 'balances')) {
+        buttons.push([{ text: '💳 استعلام و مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }]);
+    }
+    if (hasSayanReportsAccess(user, 'pending')) {
+        buttons.push([{ text: '📜 گزارش اسناد و چک‌های آویزان (PDF)', callback_data: 'BOT_SAYAN_PENDING_DOCS' }]);
+    }
+    if (hasSayanReportsAccess(user, 'daily_sales')) {
+        buttons.push([{ text: '🧾 فاکتور فروش روزانه سایان (PDF)', callback_data: 'BOT_SAYAN_DAILY_SALES' }]);
+    }
+    if (hasSayanReportsAccess(user, 'compare_sales')) {
+        buttons.push([{ text: '⚖️ مقایسه تحلیل فروش دو بازه (PDF)', callback_data: 'BOT_SAYAN_COMPARE_SALES' }]);
+    }
+    if (hasSayanReportsAccess(user, 'balances')) {
+        buttons.push([
+            { text: '🔴 دانلود بدهکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS' },
+            { text: '📊 اکسل بدهکاران', callback_data: 'SALES_BAL_DOWNLOAD_DEBTORS_XLSX' }
+        ]);
+        buttons.push([
+            { text: '🟢 دانلود بستانکاران (PDF)', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS' },
+            { text: '📈 اکسل بستانکاران', callback_data: 'SALES_BAL_DOWNLOAD_CREDITORS_XLSX' }
+        ]);
+    }
+    buttons.push([{ text: '🔙 بازگشت به گزارشات مدیریتی', callback_data: 'MENU_REPORTS' }]);
+    return { inline_keyboard: buttons };
+};
+
+export const getCustomerBalancesData = async (db) => {
     let list = [];
 
     if (db.settings?.sayanApiUrl) {
@@ -356,6 +396,7 @@ const KEYBOARDS = {
     },
     SALES: {
         inline_keyboard: [
+            [{ text: '💳 استعلام و مانده حساب مشتریان', callback_data: 'SALES_CUSTOMER_BALANCES' }],
             [{ text: '🔍 جستجوی کالا (نام/کد)', callback_data: 'SALES_SEARCH' }],
             [{ text: '🔖 دسته‌بندی محصولات (هرمی)', callback_data: 'SALES_GROUPS' }],
             [{ text: '📦 لیست کامل قیمت محصولات', callback_data: 'SALES_LIST_ALL' }],
@@ -2849,7 +2890,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                 return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی و ERP سایان را ندارید.");
             }
             session.lastFinMenu = 'SAYAN_REPORTS_MENU';
-            return sendFn(chatId, "🏢 *گزارشات و اطلاعات مالی ERP سایان*\n\nلطفاً یکی از گزینه‌های تخصصی زیر را انتخاب نمایید:", { reply_markup: KEYBOARDS.SAYAN_REPORTS, parse_mode: 'Markdown' });
+            const userKb = getSayanReportsKeyboard(user);
+            return sendFn(chatId, "🏢 *گزارشات و اطلاعات مالی ERP سایان*\n\nلطفاً یکی از گزینه‌های تخصصی زیر را انتخاب نمایید:", { reply_markup: userKb, parse_mode: 'Markdown' });
         }
     }
 
@@ -3197,7 +3239,7 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     if (data === 'SALES_CUSTOMER_BALANCES') {
         const perms = settings ? getRolePermissions(user?.role, settings, user) : {};
-        const isAuthorized = user && (['admin', 'financial', 'ceo', 'manager'].includes(user.role) || perms.canViewCustomerBalances === true);
+        const isAuthorized = user && (['admin', 'financial', 'ceo', 'manager', 'sales_manager'].includes(user.role) || perms.canViewCustomerBalances === true || hasSayanReportsAccess(user, 'balances'));
         if (!isAuthorized) {
             return sendFn(chatId, "⚠️ شما دسترسی به بخش مانده حساب مشتریان را ندارید.", { reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'MENU_SALES' }]] } });
         }
@@ -3438,8 +3480,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
 
     // --- MANAGEMENT REPORTS HANDLERS ---
     if (data === 'BOT_SAYAN_PENDING_DOCS') {
-        if (!hasSayanReportsAccess(user)) {
-            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات سایان در ربات را ندارید.");
+        if (!hasSayanReportsAccess(user, 'pending')) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارش اسناد آویزان سایان را ندارید.");
         }
 
         await sendFn(chatId, "⏳ در حال استعلام و استخراج اسناد و چک‌های آویزان از سرور سایان... لطفا شکیبا باشید.");
@@ -3531,8 +3573,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     if (data === 'BOT_SAYAN_DAILY_SALES') {
-        if (!hasSayanReportsAccess(user)) {
-            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی سایان در ربات را ندارید. لطفاً از طریق پنل مدیریت دسترسی خود را فعال کنید.");
+        if (!hasSayanReportsAccess(user, 'daily_sales')) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارش فاکتور فروش روزانه سایان را ندارید.");
         }
         
         await sendFn(chatId, "⏳ در حال استعلام اطلاعات فروش امروز از سرور سایان و تولید فرم چاپی... لطفا شکیبا باشید.");
@@ -3629,8 +3671,8 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
     }
 
     if (data === 'BOT_SAYAN_COMPARE_SALES') {
-        if (!hasSayanReportsAccess(user)) {
-            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارشات مالی سایان در ربات را ندارید. لطفاً از طریق پنل مدیریت دسترسی خود را فعال کنید.");
+        if (!hasSayanReportsAccess(user, 'compare_sales')) {
+            return sendFn(chatId, "❌ شما دسترسی لازم جهت دریافت گزارش مقایسه‌ای فروش سایان را ندارید.");
         }
         
         const kb = [

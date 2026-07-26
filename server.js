@@ -14,7 +14,7 @@ import AdmZip from 'adm-zip';
 import webpush from 'web-push';
 import * as dbManager from './backend/db-manager.js';
 import * as utils from './backend/utils.js';
-import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep, runDailyReport, notifySecretariatLetter } from './backend/bot-core.js';
+import { notifyExitPermitStep, notifyPaymentOrderStep, notifyWarehouseBijak, notifyMeetingAnnouncement, notifyMeetingMinutes, notifyPurchaseRequestStep, runDailyReport, notifySecretariatLetter, getCustomerBalancesData } from './backend/bot-core.js';
 import * as telegram from './backend/telegram.js';
 import * as bale from './backend/bale.js';
 import * as Renderer from './backend/renderer.js';
@@ -2378,10 +2378,25 @@ app.delete('/api/bot-subscribers/:id', (req, res) => {
 });
 
 // --- CUSTOMER BALANCES API ---
-app.get('/api/customer-balances', (req, res) => {
+app.get('/api/customer-balances', async (req, res) => {
     const db = getDb();
+    if (db.settings?.sayanApiUrl) {
+        try {
+            const sayanBalances = await getCustomerBalancesData(db);
+            if (sayanBalances && sayanBalances.length > 0) {
+                return res.json({
+                    balances: sayanBalances,
+                    source: 'sayan',
+                    lastXlsxUploadAt: Date.now()
+                });
+            }
+        } catch (e) {
+            console.error("Failed to fetch live Sayan balances for API:", e);
+        }
+    }
     res.json({
         balances: db.customerBalances || [],
+        source: 'local',
         lastXlsxUploadAt: db.lastXlsxUploadAt || null
     });
 });
