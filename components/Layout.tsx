@@ -825,18 +825,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                         className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-md border border-gray-200/50 dark:border-white/10 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs px-2 py-2 mr-2 shadow-sm"
                         dir="ltr"
                     >
-                        {Array.isArray(settings?.fiscalYears) && settings.fiscalYears.length > 0 ? (
-                            settings.fiscalYears.map(fy => (
-                                <option key={fy.id || fy.label} value={fy.label} className="bg-white dark:bg-gray-800">{fy.label}</option>
-                            ))
-                        ) : (
-                            <>
-                                <option value="1402">1402</option>
-                                <option value="1403">1403</option>
-                                <option value="1404">1404</option>
-                                <option value="1405">1405</option>
-                            </>
-                        )}
+                        {settings?.fiscalYears?.map(fy => (
+                            <option key={fy.id} value={fy.label} className="bg-white dark:bg-gray-800">{fy.label}</option>
+                        )) || <>
+                            <option value="1402">1402</option>
+                            <option value="1403">1403</option>
+                            <option value="1404">1404</option>
+                            <option value="1405">1405</option>
+                        </>
+                        }
                     </select>
                 )}
                 <button 
@@ -875,7 +872,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                     <span className="bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-[9px] font-black">Ctrl K</span>
                 </button>
                 <span className="font-bold text-gray-600 dark:text-gray-300 mr-3 text-sm">سال مالی:</span>
-                {Array.isArray(settings?.fiscalYears) && settings.fiscalYears.length > 0 && (
+                {settings?.fiscalYears && (
                     <select 
                         value={settings.activeFiscalYearId || ''} 
                         onChange={async (e) => {
@@ -889,7 +886,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                         dir="ltr"
                     >
                         {settings.fiscalYears.map(fy => (
-                            <option key={fy.id || Math.random()} value={fy.id}>{fy.label || fy.id} سال مالی</option>
+                            <option key={fy.id} value={fy.id}>{fy.label} سال مالی</option>
                         ))}
                     </select>
                 )}
