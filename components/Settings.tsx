@@ -65,6 +65,7 @@ import {
   ClipboardList,
   Lock,
   Camera,
+  Bot,
 } from "lucide-react";
 import { apiCall } from "../services/apiService";
 import { Capacitor } from "@capacitor/core";
@@ -221,6 +222,41 @@ const Settings: React.FC<SettingsProps> = ({
     botAccountingGroupIdWhatsApp: "",
     purchaseRolePermissions: {},
   });
+
+  const [sendingManualSalesToday, setSendingManualSalesToday] = useState(false);
+  const [sendingManualSalesYesterday, setSendingManualSalesYesterday] = useState(false);
+
+  const handleSendManualSales = async (targetDate: 'today' | 'yesterday') => {
+    if (targetDate === 'today') {
+      setSendingManualSalesToday(true);
+    } else {
+      setSendingManualSalesYesterday(true);
+    }
+
+    try {
+      const response = await fetch('/api/sayan/sales-report/send-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ targetDate })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert(`✅ ${data.message}`);
+      } else {
+        alert(`❌ خطا در ارسال گزارش: ${data.error || 'پاسخ ناموفق از سرور'}`);
+      }
+    } catch (e: any) {
+      alert(`❌ خطا در برقراری ارتباط با سرور: ${e.message || e}`);
+    } finally {
+      if (targetDate === 'today') {
+        setSendingManualSalesToday(false);
+      } else {
+        setSendingManualSalesYesterday(false);
+      }
+    }
+  };
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -1512,7 +1548,7 @@ const Settings: React.FC<SettingsProps> = ({
                 onClick={() => setActiveCategory("bot")}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeCategory === "bot" ? "glass-panel shadow text-sky-700 font-bold" : "text-gray-600 hover:bg-gray-100"}`}
               >
-                <Power size={18} /> تنظیمات ربات و فروش
+                <Bot size={18} className="text-sky-600" /> تنظیمات ربات و گزارشات خودکار (آمار)
               </button>
               <button
                 onClick={() => setActiveCategory("meetings")}
@@ -1547,7 +1583,7 @@ const Settings: React.FC<SettingsProps> = ({
 
       <div className="flex-1 p-6 md:p-8 overflow-y-auto h-[calc(100dvh-140px)] md:h-full pb-20">
         {activeCategory === "fiscal" ? (
-          <FiscalYearManager settings={settings} />
+          <FiscalYearManager settings={settings} onSettingsChange={(newSettings) => setSettings(newSettings)} />
         ) : (
           <form onSubmit={handleSave} className="space-y-8 max-w-4xl mx-auto">
             {activeCategory === "system" && (
@@ -1716,9 +1752,13 @@ const Settings: React.FC<SettingsProps> = ({
                   <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
                     <Truck size={20} /> شماره‌گذاری اسناد (تنظیمات پیش‌فرض)
                   </h3>
-                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-800 mb-2">
-                    نکته: این تنظیمات فقط در صورتی اعمال می‌شود که سال مالی فعال
-                    نباشد یا تنظیمی برای شرکت در سال مالی وجود نداشته باشد.
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-2 text-xs text-amber-800 mb-2">
+                    <p className="font-bold">⚠️ توجه ویژه در مورد سال مالی فعال:</p>
+                    <p>
+                      این شماره‌ها تنظیمات سراسری پیش‌فرض سیستم هستند. اگر یک سال مالی فعال دارید، سیستم شماره‌های شروع را از بخش 
+                      <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded mx-1 cursor-pointer" onClick={() => setActiveCategory("fiscal")}>مدیریت سال مالی</span> 
+                      (جدول پایین آن بخش) دریافت می‌کند. لطفاً برای تنظیم شماره‌های شروع سال مالی فعال، به آن تب مراجعه فرمایید.
+                    </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
@@ -3170,7 +3210,7 @@ const Settings: React.FC<SettingsProps> = ({
             {activeCategory === "bot" && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
-                  <Power size={20} /> تنظیمات ربات و فروشگاه
+                  <Bot size={20} className="text-sky-600" /> تنظیمات ربات، فروشگاه و گزارشات خودکار (آمار تولید و فروش روزانه)
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3804,6 +3844,34 @@ const Settings: React.FC<SettingsProps> = ({
                             className="w-full border rounded-lg p-2 text-xs dir-ltr"
                             placeholder="ID..."
                           />
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3 mt-2">
+                        <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                          <Send size={16} className="text-amber-700" />
+                          <span>ارسال دستی آمار فروش به گروه‌ها</span>
+                        </div>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                          در صورت نیاز به ارسال مجدد یا خارج از برنامه گزارش، می‌توانید آمار فروش امروز یا دیروز را به طور دستی به گروه‌های بالا ارسال کنید.
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={sendingManualSalesToday || sendingManualSalesYesterday}
+                            onClick={() => handleSendManualSales('today')}
+                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {sendingManualSalesToday ? 'در حال ارسال امروز...' : '🚀 ارسال دستی آمار امروز'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sendingManualSalesToday || sendingManualSalesYesterday}
+                            onClick={() => handleSendManualSales('yesterday')}
+                            className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-3 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {sendingManualSalesYesterday ? 'در حال ارسال دیروز...' : '🕒 ارسال دستی آمار دیروز'}
+                          </button>
                         </div>
                       </div>
                     </div>

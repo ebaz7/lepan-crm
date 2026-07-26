@@ -325,128 +325,200 @@ const setupDailyReports = () => {
         }
     });
 
+// Helper to build Persian captioned production report
+const buildProductionCaption = (dateStr, totals, waste) => {
+    let dateObj = new Date();
+    if (typeof dateStr === 'string' && dateStr.includes('/')) {
+        const engDateStr = dateStr.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+        const parts = engDateStr.split('/').map(x => parseInt(x));
+        if (parts.length === 3) {
+            const { gy, gm, gd } = jalaali.toGregorian(parts[0], parts[1], parts[2]);
+            dateObj = new Date(gy, gm - 1, gd, 12, 0, 0);
+        }
+    } else if (dateStr) {
+        dateObj = new Date(dateStr);
+    }
+
+    const dayLabel = utils.toShamsiWeekdayAndDay(dateObj);
+    const poyQty = utils.toPersianDigitsNoGrouping(totals.qty_61);
+    const poyPct = utils.toPersianDigitsNoGrouping(waste.pct_61);
+    const stretchQty = utils.toPersianDigitsNoGrouping(totals.qty_67);
+    const stretchPct = utils.toPersianDigitsNoGrouping(waste.pct_67);
+    const keshQty = utils.toPersianDigitsNoGrouping(totals.qty_79);
+    const keshPct = utils.toPersianDigitsNoGrouping(waste.pct_79);
+    const spandexQty = utils.toPersianDigitsNoGrouping(totals.qty_73);
+    const spandexPct = utils.toPersianDigitsNoGrouping(waste.pct_73);
+    const grandTotalVal = totals.grandTotal !== undefined && totals.grandTotal !== null ? totals.grandTotal : ((totals.qty_61 || 0) + (totals.qty_67 || 0) + (totals.qty_79 || 0) + (totals.qty_73 || 0));
+    const totalWasteVal = waste.totalWaste !== undefined && waste.totalWaste !== null ? waste.totalWaste : ((waste.waste_61 || 0) + (waste.waste_67 || 0) + (waste.waste_79 || 0) + (waste.waste_73 || 0));
+    
+    const grandTotal = utils.toPersianDigitsNoGrouping(grandTotalVal);
+    const totalWaste = utils.toPersianDigitsNoGrouping(totalWasteVal);
+
+    return `تولید روز ${dayLabel}
+کش:${keshQty}
+درصد ضایعات:${keshPct}
+اسپندکس:${spandexQty}
+درصد ضایعات:${spandexPct}
+استرچ:${stretchQty}
+درصد ضایعات:${stretchPct}
+پی او وای:${poyQty}
+درصد ضایعات:${poyPct}
+مجموع تولید:${grandTotal}
+مجموع ضایعات:${totalWaste}`;
+};
+
+// Helper to generate and send daily sales report for a specific Date
+const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', targetsOverride = null) => {
+    const settings = db.settings || {};
+    const shamsiDate = utils.toShamsiFull(dateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
+    const gregDate = utils.getTehranDateString(dateObj);
+
+    const salesTargets = targetsOverride || [];
+    if (!targetsOverride) {
+        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
+        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
+    }
+
+    if (salesTargets.length === 0) {
+        throw new Error('گروهی برای ارسال گزارش فروش (تلگرام یا بله) تنظیم نشده است.');
+    }
+
+    // Fetch sales data from Sayan ERP
+    const sql = `
+        SELECT 
+            t10.Field_005 as DocId,
+            t10.Field_006 as InvoiceNum,
+            t10.Field_008 as Date,
+            t10.Field_029 as Notes,
+            t11.Field_005 as ItemCode,
+            t22.Field_004 as ItemName,
+            t11.Field_006 as Quantity,
+            t11.Field_031 as ItemNotes,
+            t11.Field_007 as Amount,
+            t_group.GroupName,
+            t07.Field_006 as CustomerName
+        FROM STR_TBL_010 t10
+        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                                  AND t11.Field_003 = t10.Field_004
+        LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
+        LEFT JOIN (
+            SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+            FROM IND_TBL_021 t21_sub
+            LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+            LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+            GROUP BY t21_sub.Field_004
+        ) t_group ON t11.Field_005 = t_group.ItemCode
+        LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+        WHERE t10.Field_009 IN ('3', '12', '23')
+          AND t11.Field_036 = t10.Field_009
+          AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+          AND (t10.Field_008 = '${gregDate}' OR t10.Field_008 LIKE '${gregDate}%' OR t10.Field_008 BETWEEN '${gregDate}T00:00:00.000Z' AND '${gregDate}T23:59:59.999Z')
+        ORDER BY t10.Field_008 DESC
+    `;
+
+    const salesRows = await executeSayanQuery(db, sql);
+    if (salesRows.length > 0) {
+        const title = `گزارش رسمی فروش روزانه سایان - مورخ ${shamsiDate} (${labelSuffix})`;
+        const columns = ['ردیف', 'شماره فاکتور', 'مشتری', 'نام کالا', 'گروه کالا', 'مقدار (کیلوگرم)', 'مبلغ کل (ریال)'];
+        
+        let totalQty = 0;
+        let totalAmt = 0;
+        
+        const tableRows = salesRows.map((row, idx) => {
+            const qty = parseFloat(row.Quantity || 0);
+            const amt = parseFloat(row.Amount || 0);
+            totalQty += qty;
+            totalAmt += amt;
+            
+            const customerName = row.CustomerName || (() => {
+                const notes = row.Notes || '';
+                const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
+                return match ? match[1].trim() : notes;
+            })() || 'نامعلوم';
+            
+            return [
+                (idx + 1).toLocaleString('fa-IR'),
+                (row.InvoiceNum || row.DocId || '-').toLocaleString('fa-IR'),
+                customerName,
+                row.ItemName || 'کالای بدون نام',
+                row.GroupName || 'بدون گروه',
+                qty.toLocaleString('fa-IR'),
+                amt.toLocaleString('fa-IR')
+            ];
+        });
+        
+        tableRows.push([
+            'جمع کل',
+            '-',
+            '-',
+            '-',
+            '-',
+            totalQty.toLocaleString('fa-IR'),
+            totalAmt.toLocaleString('fa-IR')
+        ]);
+        
+        const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
+        const filename = `Sayan_Daily_Sales_${gregDate}_${labelSuffix === 'دیروز' ? 'Yesterday' : 'Today'}.pdf`;
+        const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد ردیف‌های فروش: ${salesRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
+
+        for (const tgt of salesTargets) {
+            try {
+                if (tgt.platform === 'telegram') {
+                    await telegram.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                } else if (tgt.platform === 'bale') {
+                    await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                }
+            } catch (e) {
+                console.error(`[Manual/Auto Sales Report] Failed to send to ${tgt.platform} group ${tgt.id}:`, e.message);
+            }
+        }
+        return { count: salesRows.length, totalQty, totalAmt, sent: true };
+    } else {
+        const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
+        for (const tgt of salesTargets) {
+            try {
+                if (tgt.platform === 'telegram') {
+                    await telegram.sendBotMessage(tgt.id, emptyMsg);
+                } else if (tgt.platform === 'bale') {
+                    await bale.sendBotMessage(tgt.id, emptyMsg);
+                }
+            } catch (e) {
+                console.error(`[Manual/Auto Sales Report] Failed to send empty msg to ${tgt.platform} group ${tgt.id}:`, e.message);
+            }
+        }
+        return { count: 0, sent: false };
+    }
+};
+
     // Schedule daily automated reports for 19:00 Tehran time (15:30 UTC)
     cron.schedule('30 15 * * *', async () => {
         console.log(">>> Running Automated 19:00 Reports (Sales & Production)...");
         const db = getDb();
         const settings = db.settings || {};
-        const now = new Date();
-        const shamsiDate = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
-        const gregDate = utils.getTehranDateString();
 
-        // 1. AUTOMATED DAILY SALES REPORT
+        // 1. AUTOMATED DAILY SALES REPORT (TODAY AND YESTERDAY)
         const salesTargets = [];
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
         if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
 
         if (salesTargets.length > 0) {
-            console.log(`[Cron 19:00] Preparing Automated Sales Report for ${salesTargets.length} targets...`);
+            console.log(`[Cron 19:00] Preparing Automated Sales Reports for ${salesTargets.length} targets...`);
+            
+            // Send Today's Report
             try {
-                // Fetch sales data from Sayan ERP
-                const sql = `
-                    SELECT 
-                        t10.Field_005 as DocId,
-                        t10.Field_006 as InvoiceNum,
-                        t10.Field_008 as Date,
-                        t10.Field_029 as Notes,
-                        t11.Field_005 as ItemCode,
-                        t22.Field_004 as ItemName,
-                        t11.Field_006 as Quantity,
-                        t11.Field_031 as ItemNotes,
-                        t11.Field_007 as Amount,
-                        t_group.GroupName,
-                        t07.Field_006 as CustomerName
-                    FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
-                                              AND t11.Field_003 = t10.Field_004
-                    LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
-                    LEFT JOIN (
-                        SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
-                        FROM IND_TBL_021 t21_sub
-                        LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
-                        LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
-                        GROUP BY t21_sub.Field_004
-                    ) t_group ON t11.Field_005 = t_group.ItemCode
-                    LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                    WHERE t10.Field_009 IN ('3', '12', '23')
-                      AND t11.Field_036 = t10.Field_009
-                      AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
-                      AND (t10.Field_008 = '${gregDate}' OR t10.Field_008 LIKE '${gregDate}%' OR t10.Field_008 BETWEEN '${gregDate}T00:00:00.000Z' AND '${gregDate}T23:59:59.999Z')
-                    ORDER BY t10.Field_008 DESC
-                `;
-
-                const salesRows = await executeSayanQuery(db, sql);
-                if (salesRows.length > 0) {
-                    const title = `گزارش رسمی فروش روزانه سایان - مورخ ${shamsiDate}`;
-                    const columns = ['ردیف', 'شماره فاکتور', 'مشتری', 'نام کالا', 'گروه کالا', 'مقدار (کیلوگرم)', 'مبلغ کل (ریال)'];
-                    
-                    let totalQty = 0;
-                    let totalAmt = 0;
-                    
-                    const tableRows = salesRows.map((row, idx) => {
-                        const qty = parseFloat(row.Quantity || 0);
-                        const amt = parseFloat(row.Amount || 0);
-                        totalQty += qty;
-                        totalAmt += amt;
-                        
-                        const customerName = row.CustomerName || (() => {
-                            const notes = row.Notes || '';
-                            const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
-                            return match ? match[1].trim() : notes;
-                        })() || 'نامعلوم';
-                        
-                        return [
-                            (idx + 1).toLocaleString('fa-IR'),
-                            (row.InvoiceNum || row.DocId || '-').toLocaleString('fa-IR'),
-                            customerName,
-                            row.ItemName || 'کالای بدون نام',
-                            row.GroupName || 'بدون گروه',
-                            qty.toLocaleString('fa-IR'),
-                            amt.toLocaleString('fa-IR')
-                        ];
-                    });
-                    
-                    tableRows.push([
-                        'جمع کل',
-                        '-',
-                        '-',
-                        '-',
-                        '-',
-                        totalQty.toLocaleString('fa-IR'),
-                        totalAmt.toLocaleString('fa-IR')
-                    ]);
-                    
-                    const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows);
-                    const filename = `Sayan_Daily_Sales_${gregDate}.pdf`;
-                    const caption = `📊 *گزارش فروش روزانه (ارسال خودکار سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد ردیف‌های فروش: ${salesRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
-
-                    for (const tgt of salesTargets) {
-                        try {
-                            if (tgt.platform === 'telegram') {
-                                await telegram.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
-                            } else if (tgt.platform === 'bale') {
-                                await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
-                            }
-                        } catch (e) {
-                            console.error(`[Cron 19:00] Failed to send sales PDF to ${tgt.platform} group ${tgt.id}:`, e.message);
-                        }
-                    }
-                } else {
-                    const emptyMsg = `⚠️ هیچ فاکتور فروشی برای امروز (${shamsiDate}) در سرور سایان ثبت نشده است.`;
-                    for (const tgt of salesTargets) {
-                        try {
-                            if (tgt.platform === 'telegram') {
-                                await telegram.sendBotMessage(tgt.id, emptyMsg);
-                            } else if (tgt.platform === 'bale') {
-                                await bale.sendBotMessage(tgt.id, emptyMsg);
-                            }
-                        } catch (e) {
-                            console.error(`[Cron 19:00] Failed to send empty sales message to ${tgt.platform} group ${tgt.id}:`, e.message);
-                        }
-                    }
-                }
+                const today = new Date();
+                await sendDailySalesReportForDate(db, today, 'امروز', salesTargets);
             } catch (err) {
-                console.error("[Cron 19:00] Daily sales automatic cron error:", err);
+                console.error("[Cron 19:00] Daily sales (today) automatic cron error:", err);
+            }
+
+            // Send Yesterday's Report
+            try {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                await sendDailySalesReportForDate(db, yesterday, 'دیروز', salesTargets);
+            } catch (err) {
+                console.error("[Cron 19:00] Daily sales (yesterday) automatic cron error:", err);
             }
         }
 
@@ -534,22 +606,7 @@ const setupDailyReports = () => {
                 const pdfBuffer = await Renderer.generateProductionReportPDF(prodTitle, shamsiDate, shamsiDate, items, totals, waste);
                 const filename = `Production_Report_${shamsiDate.replace(/[\/\\]/g, '-')}.pdf`;
 
-                const caption = `📊 *گزارش تولید و ضایعات (ارسال خودکار سایان ERP)*\n` +
-                    `📅 *تاریخ:* ${shamsiDate}\n\n` +
-                    `🏭 *آمار کل تولید:* \n` +
-                    `🔹 سند ۶۱ (POY): ${totals.qty_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-                    `🔹 سند ۶۷ (DTY): ${totals.qty_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-                    `🔹 سند ۷۹ (کش): ${totals.qty_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-                    `🔹 سند ۷۳ (اسپاندکس): ${totals.qty_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-                    `✨ *جمع کل تولید:* ${totals.grandTotal.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n\n` +
-                    `♻️ *جزئیات ضایعات:* \n` +
-                    `🔸 ضایعات POY: ${waste.waste_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_61.toFixed(2)}%)\n` +
-                    `🔸 ضایعات DTY: ${waste.waste_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_67.toFixed(2)}%)\n` +
-                    `🔸 ضایعات کش: ${waste.waste_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_79.toFixed(2)}%)\n` +
-                    `🔸 ضایعات اسپاندکس: ${waste.waste_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_73.toFixed(2)}%)\n` +
-                    `💥 *جمع ضایعات:* ${waste.totalWaste.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.totalPct.toFixed(2)}%)\n` +
-                    (waste.details ? `\n📝 *توضیحات ضایعات:*\n${waste.details}\n` : '') +
-                    `\n📎 فایل PDF کامل گزارش تولید به پیوست می‌باشد.`;
+                const caption = buildProductionCaption(shamsiDate, totals, waste);
 
                 for (const tgt of prodTargets) {
                     try {
@@ -3089,24 +3146,7 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         const title = `گزارش آمار کل تولید و ضایعات (${dateFrom})`;
         const pdfBuffer = await Renderer.generateProductionReportPDF(title, dateFrom, dateTo, items, totals, waste);
 
-        const caption = `📊 *گزارش تولید و ضایعات (زنده سایان ERP)*\n` +
-            `📅 *از تاریخ:* ${dateFrom}  *تا تاریخ:* ${dateTo}\n\n` +
-            `🏭 *آمار کل تولید:*
-` +
-            `🔹 سند ۶۱ (POY): ${totals.qty_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-            `🔹 سند ۶۷ (DTY): ${totals.qty_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-            `🔹 سند ۷۹ (کش): ${totals.qty_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-            `🔹 سند ۷۳ (اسپاندکس): ${totals.qty_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n` +
-            `✨ *جمع کل تولید:* ${totals.grandTotal.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم\n\n` +
-            `♻️ *جزئیات ضایعات:*
-` +
-            `🔸 ضایعات POY: ${waste.waste_61.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_61.toFixed(2)}%)\n` +
-            `🔸 ضایعات DTY: ${waste.waste_67.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_67.toFixed(2)}%)\n` +
-            `🔸 ضایعات کش: ${waste.waste_79.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_79.toFixed(2)}%)\n` +
-            `🔸 ضایعات اسپاندکس: ${waste.waste_73.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.pct_73.toFixed(2)}%)\n` +
-            `💥 *جمع ضایعات:* ${waste.totalWaste.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} کیلوگرم (${waste.totalPct.toFixed(2)}%)\n` +
-            (waste.details ? `\n📝 *توضیحات ضایعات:*\n${waste.details}\n` : '') +
-            `\n📎 فایل PDF کامل گزارش تولید به پیوست می‌باشد.`;
+        const caption = buildProductionCaption(dateFrom, totals, waste);
 
         const filename = `Production_Report_${dateFrom.replace(/[\/\\]/g, '-')}.pdf`;
         const settings = db.settings || {};
@@ -3117,6 +3157,8 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
         if (settings.factoryGroupId) targetIds.push({ platform: 'telegram', id: settings.factoryGroupId });
         if (settings.accountingGroupId) targetIds.push({ platform: 'telegram', id: settings.accountingGroupId });
+        if (settings.productionTelegramGroupId) targetIds.push({ platform: 'telegram', id: settings.productionTelegramGroupId });
+        if (settings.productionBaleGroupId) targetIds.push({ platform: 'bale', id: settings.productionBaleGroupId });
         
         // Add any subscribed groups from db
         if (db.groups && Array.isArray(db.groups)) {
@@ -3153,6 +3195,30 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         });
     } catch (e) {
         console.error("Send Production Report Bot Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/sayan/sales-report/send-manual', async (req, res) => {
+    try {
+        const db = getDb();
+        const { targetDate } = req.body; // 'today' or 'yesterday'
+        
+        let dateObj = new Date();
+        let label = 'امروز';
+        if (targetDate === 'yesterday') {
+            dateObj.setDate(dateObj.getDate() - 1);
+            label = 'دیروز';
+        }
+
+        const result = await sendDailySalesReportForDate(db, dateObj, label);
+        res.json({
+            success: true,
+            message: `گزارش فروش ${label} با موفقیت به پیام‌رسان‌ها ارسال شد.`,
+            result
+        });
+    } catch (e) {
+        console.error("Manual Sales Report Sending Error:", e);
         res.status(500).json({ error: e.message });
     }
 });

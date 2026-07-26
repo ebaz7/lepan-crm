@@ -65,7 +65,10 @@ export const FiscalYearSwitcher: React.FC = () => {
 };
 
 // --- MANAGER COMPONENT (FOR SETTINGS) ---
-export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> = ({ settings: propSettings }) => {
+export const FiscalYearManager: React.FC<{ 
+    settings?: SystemSettings | null;
+    onSettingsChange?: (newSettings: SystemSettings) => void;
+}> = ({ settings: propSettings, onSettingsChange }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(propSettings || null);
     const [newYearLabel, setNewYearLabel] = useState('1405'); 
     
@@ -76,20 +79,24 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
     const [companyConfig, setCompanyConfig] = useState<Record<string, { pay: string, exit: string, bijak: string, cheque: string }>>({});
 
     useEffect(() => {
-        if (propSettings) {
-             setSettings(propSettings);
-             // Automatically load configuration for the active year if one exists
-             if (propSettings.activeFiscalYearId) {
-                 loadCompanyConfig(propSettings.activeFiscalYearId, propSettings);
-             }
-        } else {
-             getSettings().then(s => {
-                setSettings(s);
-                // Automatically load configuration for the active year if one exists
-                if (s.activeFiscalYearId) {
-                    loadCompanyConfig(s.activeFiscalYearId, s);
+        const initializeConfig = (currentSettings: SystemSettings) => {
+            setSettings(currentSettings);
+            const years = currentSettings.fiscalYears || [];
+            if (years.length > 0) {
+                // Try to find the active fiscal year, or default to the latest one
+                const activeId = currentSettings.activeFiscalYearId;
+                const activeExists = years.some(y => y.id === activeId);
+                const targetId = activeExists ? activeId : years[years.length - 1].id;
+                if (targetId) {
+                    loadCompanyConfig(targetId, currentSettings);
                 }
-            });
+            }
+        };
+
+        if (propSettings) {
+             initializeConfig(propSettings);
+        } else {
+             getSettings().then(initializeConfig);
         }
     }, [propSettings]);
 
@@ -145,6 +152,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
         
         await saveSettings(updated);
         setSettings(updated);
+        if (onSettingsChange) onSettingsChange(updated);
         setNewYearLabel('');
         alert('سال مالی جدید ایجاد شد. اکنون می‌توانید تنظیمات شماره‌گذاری هر شرکت را ویرایش کنید.');
         
@@ -160,6 +168,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
         };
         await saveSettings(updated);
         setSettings(updated);
+        if (onSettingsChange) onSettingsChange(updated);
     };
 
     const handleSaveCompanyConfig = async () => {
@@ -185,6 +194,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
         const updatedSettings = { ...settings, fiscalYears: updatedYears };
         await saveSettings(updatedSettings);
         setSettings(updatedSettings);
+        if (onSettingsChange) onSettingsChange(updatedSettings);
         alert('تنظیمات شماره‌گذاری اختصاصی شرکت‌ها برای این سال ذخیره شد.');
     };
 
@@ -226,6 +236,7 @@ export const FiscalYearManager: React.FC<{ settings?: SystemSettings | null }> =
                                     if(confirm('آیا مطمئن هستید که می‌خواهید سال مالی فعال را تغییر دهید؟')) {
                                         const newSettings = { ...settings, activeFiscalYearId: y.id };
                                         await saveSettings(newSettings);
+                                        if (onSettingsChange) onSettingsChange(newSettings);
                                         window.location.reload();
                                     }
                                 }} className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg border border-green-200 hover:bg-green-100 transition-colors">

@@ -280,7 +280,7 @@ const CctiConverter: React.FC<Props> = ({ financialYear, currentUser, canManageA
             }
 
             generatedCount++;
-            const nAmount = Number(amount) || 0;
+            const nAmount = Math.round(Number(amount)) || 0;
             totalAmount += nAmount;
             detailsArchive.push({ id, name, account, amount: nAmount });
 
