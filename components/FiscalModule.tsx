@@ -128,15 +128,9 @@ export const FiscalYearManager: React.FC<{
 
         let list = Array.from(companyMap.values());
 
-        // Filter out default "شرکت اصلی" if user has registered other custom companies AND "شرکت اصلی" has no sequence configured
-        const hasOtherCompanies = list.some(c => c.name !== 'شرکت اصلی');
         const hasSeqForDefault = currentYear?.companySequences?.['شرکت اصلی'];
-        if (hasOtherCompanies && !hasSeqForDefault) {
+        if (!hasSeqForDefault) {
             list = list.filter(c => c.name !== 'شرکت اصلی');
-        }
-
-        if (list.length === 0) {
-            list = [{ id: 'comp_default', name: 'شرکت اصلی' }];
         }
 
         return list;

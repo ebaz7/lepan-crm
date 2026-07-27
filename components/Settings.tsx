@@ -604,21 +604,27 @@ const Settings: React.FC<SettingsProps> = ({
             companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
           }
         });
+        if (Array.isArray(normalizedSettings.fiscalYears)) {
+          normalizedSettings.fiscalYears.forEach((fy: any) => {
+            if (fy && fy.companySequences) {
+              Object.keys(fy.companySequences).forEach((k: string) => {
+                if (k && k.trim() && !companyMap.has(k.trim())) {
+                  companyMap.set(k.trim(), { id: generateUUID(), name: k.trim(), showInWarehouse: true, banks: [] });
+                }
+              });
+            }
+          });
+        }
         let normCompanies = Array.from(companyMap.values());
-        if (normCompanies.length > 1 && normCompanies.some(c => c.name !== 'شرکت اصلی')) {
-          normCompanies = normCompanies.filter(c => 
-            c.name !== 'شرکت اصلی' || 
-            c.logo || 
-            c.registrationNumber || 
-            c.nationalId || 
-            c.address || 
-            c.economicCode || 
-            (c.banks && c.banks.length > 0)
-          );
-        }
-        if (normCompanies.length === 0) {
-          normCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
-        }
+        normCompanies = normCompanies.filter(c => 
+          c.name !== 'شرکت اصلی' || 
+          c.logo || 
+          c.registrationNumber || 
+          c.nationalId || 
+          c.address || 
+          c.economicCode || 
+          (c.banks && c.banks.length > 0)
+        );
         normalizedSettings.companies = normCompanies;
         normalizedSettings.companyNames = normCompanies.map((c: any) => c.name);
         if (!Array.isArray(normalizedSettings.fiscalYears) || normalizedSettings.fiscalYears.length === 0) {
@@ -663,21 +669,32 @@ const Settings: React.FC<SettingsProps> = ({
           });
         }
       });
+      (safeData.companyNames || []).forEach((name: string) => {
+        if (name && name.trim() && !companyMap.has(name.trim())) {
+          companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
+        }
+      });
+      if (Array.isArray(safeData.fiscalYears)) {
+        safeData.fiscalYears.forEach((fy: any) => {
+          if (fy && fy.companySequences) {
+            Object.keys(fy.companySequences).forEach((k: string) => {
+              if (k && k.trim() && !companyMap.has(k.trim())) {
+                companyMap.set(k.trim(), { id: generateUUID(), name: k.trim(), showInWarehouse: true, banks: [] });
+              }
+            });
+          }
+        });
+      }
       let loadedCompanies = Array.from(companyMap.values());
-      if (loadedCompanies.length > 1 && loadedCompanies.some(c => c.name !== 'شرکت اصلی')) {
-        loadedCompanies = loadedCompanies.filter(c => 
-          c.name !== 'شرکت اصلی' || 
-          c.logo || 
-          c.registrationNumber || 
-          c.nationalId || 
-          c.address || 
-          c.economicCode || 
-          (c.banks && c.banks.length > 0)
-        );
-      }
-      if (loadedCompanies.length === 0) {
-        loadedCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
-      }
+      loadedCompanies = loadedCompanies.filter(c => 
+        c.name !== 'شرکت اصلی' || 
+        c.logo || 
+        c.registrationNumber || 
+        c.nationalId || 
+        c.address || 
+        c.economicCode || 
+        (c.banks && c.banks.length > 0)
+      );
       safeData.companies = loadedCompanies;
       safeData.companyNames = loadedCompanies.map((c: any) => c.name);
 
@@ -1317,13 +1334,8 @@ const Settings: React.FC<SettingsProps> = ({
         c.id === editingCompanyId ? companyData : c,
       );
     } else {
-      // If adding a new company and only default unconfigured "شرکت اصلی" exists, replace it
-      const isOnlyDefault = updatedCompanies.length === 1 && updatedCompanies[0].name === "شرکت اصلی" && !updatedCompanies[0].logo && !updatedCompanies[0].registrationNumber;
-      if (isOnlyDefault) {
-        updatedCompanies = [companyData];
-      } else {
-        updatedCompanies = [...updatedCompanies, companyData];
-      }
+      updatedCompanies = updatedCompanies.filter(c => c.name !== 'شرکت اصلی' || c.logo || c.registrationNumber);
+      updatedCompanies = [...updatedCompanies, companyData];
     }
     const newSettings = {
       ...settings,
@@ -1385,8 +1397,8 @@ const Settings: React.FC<SettingsProps> = ({
       const updated = (settings.companies || []).filter((c) => c.id !== id);
       const newSettings = {
         ...settings,
-        companies: updated.length > 0 ? updated : [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }],
-        companyNames: updated.length > 0 ? updated.map((c) => c.name) : ["شرکت اصلی"],
+        companies: updated,
+        companyNames: updated.map((c) => c.name),
       };
       setSettings(newSettings);
       try {

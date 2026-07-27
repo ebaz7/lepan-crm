@@ -66,8 +66,10 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.companyNames = [];
                 }
 
-                // Keep companies strictly to explicitly defined settings.companies
+                // Populate companyMap from settings.companies, settings.companyNames, and fiscalYears
                 const companyMap = new Map();
+
+                // 1. From settings.companies
                 (MEMORY_DB_CACHE.settings.companies || []).forEach((c, idx) => {
                     const cName = typeof c === 'string' ? c.trim() : (c && c.name ? c.name.trim() : '');
                     if (cName) {
@@ -89,23 +91,48 @@ export const getDb = () => {
                     }
                 });
 
-                let allCompanies = Array.from(companyMap.values());
-                const hasCustomCompanies = allCompanies.some(c => c.name !== 'شرکت اصلی');
-                if (hasCustomCompanies) {
-                    allCompanies = allCompanies.filter(c => 
-                        c.name !== 'شرکت اصلی' || 
-                        c.logo || 
-                        c.registrationNumber || 
-                        c.nationalId || 
-                        c.address || 
-                        c.economicCode || 
-                        (c.banks && c.banks.length > 0)
-                    );
+                // 2. From settings.companyNames if companyMap doesn't have it
+                (MEMORY_DB_CACHE.settings.companyNames || []).forEach((n, idx) => {
+                    const name = typeof n === 'string' ? n.trim() : '';
+                    if (name && !companyMap.has(name)) {
+                        companyMap.set(name, {
+                            id: 'comp_name_' + idx + '_' + Date.now(),
+                            name,
+                            showInWarehouse: true,
+                            banks: []
+                        });
+                    }
+                });
+
+                // 3. From fiscalYears sequences if any
+                if (Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears)) {
+                    MEMORY_DB_CACHE.settings.fiscalYears.forEach(fy => {
+                        if (fy && fy.companySequences) {
+                            Object.keys(fy.companySequences).forEach((k, idx) => {
+                                const name = k ? k.trim() : '';
+                                if (name && !companyMap.has(name)) {
+                                    companyMap.set(name, {
+                                        id: 'comp_fy_' + idx + '_' + Date.now(),
+                                        name,
+                                        showInWarehouse: true,
+                                        banks: []
+                                    });
+                                }
+                            });
+                        }
+                    });
                 }
 
-                if (allCompanies.length === 0) {
-                    allCompanies = [{ id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }];
-                }
+                let allCompanies = Array.from(companyMap.values());
+                allCompanies = allCompanies.filter(c => 
+                    c.name !== 'شرکت اصلی' || 
+                    c.logo || 
+                    c.registrationNumber || 
+                    c.nationalId || 
+                    c.address || 
+                    c.economicCode || 
+                    (c.banks && c.banks.length > 0)
+                );
 
                 MEMORY_DB_CACHE.settings.companies = allCompanies;
                 MEMORY_DB_CACHE.settings.companyNames = allCompanies.map(c => c.name);
