@@ -87,7 +87,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     // --- TAB 3: SALES STATE ---
     const [salesData, setSalesData] = useState<any[]>([]);
     const [salesViewMode, setSalesViewMode] = useState<'today' | 'range'>('today');
-    const [officialInvoices, setOfficialInvoices] = useState<Record<string, boolean>>({});
     const [compareMode, setCompareMode] = useState(false);
     const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
     // Period B for sales comparison
@@ -96,7 +95,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
     const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
-    const [applyOfficialTax, setApplyOfficialTax] = useState<boolean>(true);
 
     // --- TAB 4: PRODUCTION STATE ---
     const [prodLiveItems, setProdLiveItems] = useState<any[]>([]);
@@ -372,8 +370,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                       AND t9.Field_015 NOT LIKE '%-13%'
                       AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117') 
                       AND t9.Field_005 <> '9'
-                      AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
-                      AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                      AND t8.Field_008 >= '${gregFrom}' 
+                      AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
                     GROUP BY t9.Field_015
                 `;
             } else {
@@ -610,8 +608,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                   AND t9.Field_015 NOT LIKE '%-13%'
                   AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117')
                   AND t9.Field_005 <> '9'
-                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
-                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                  AND t8.Field_008 >= '${gregFrom}'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
@@ -671,8 +669,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                 LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
                 WHERE ${chequeFilter}
-                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
-                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
+                  AND t8.Field_008 >= '${gregFrom}'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const rawChequeData = await runSayanQuery(chequeSql);
@@ -810,7 +808,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const gregTo = jalaliToGregorianStr(dateTo);
             
             const dateFilter = gregFrom && gregTo 
-                ? `AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'` 
+                ? `AND t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'` 
                 : '';
 
             // Fetch Period A
@@ -862,14 +860,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     Amount: rawAmt.toString()
                 };
             });
-            const initialOfficial: Record<string, boolean> = {};
-            processedA.forEach((row: any) => {
-                const key = row.InvoiceNum || row.DocId;
-                if (key) {
-                    initialOfficial[key] = row.IsOfficial;
-                }
-            });
-            setOfficialInvoices(prev => ({ ...prev, ...initialOfficial }));
             setSalesData(processedA);
             setCompareSalesDataA(processedA);
 
@@ -879,7 +869,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const gregToB = jalaliToGregorianStr(salesDateToB);
                 
                 const dateFilterB = gregFromB && gregToB 
-                    ? `AND t10.Field_008 >= '${gregFromB}T00:00:00.000Z' AND t10.Field_008 <= '${gregToB}T23:59:59.000Z'` 
+                    ? `AND t10.Field_008 >= '${gregFromB}' AND t10.Field_008 <= '${gregToB}T23:59:59.999Z'` 
                     : '';
 
                 const sqlB = `
@@ -957,8 +947,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const qty = parseFloat(row.Quantity || 0);
             const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
             const key = row.InvoiceNum || row.DocId;
-            const isOfficial = (key && officialInvoices[key] !== undefined) ? officialInvoices[key] : row.IsOfficial;
-            const amt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            const isOfficial = row.IsOfficial;
+            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
             const isRet = row.IsReturn;
 
             if (isRet) {
@@ -1069,8 +1059,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const qty = parseFloat(row.Quantity || 0);
             const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
             const rowKey = row.InvoiceNum || row.DocId;
-            const isOfficial = (rowKey && officialInvoices[rowKey] !== undefined) ? officialInvoices[rowKey] : row.IsOfficial;
-            const amt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            const isOfficial = row.IsOfficial;
+            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
             const isRet = row.IsReturn;
 
             if (!map.has(key)) {
@@ -1148,24 +1138,13 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 dataToSend = salesData.filter(row => formatDateToJalali(row.Date) === targetD);
             }
 
-            // Map custom toggled official statuses
-            const mappedDataToSend = dataToSend.map(row => {
-                const rowKey = row.InvoiceNum || row.DocId;
-                const isOfficial = (rowKey && officialInvoices[rowKey] !== undefined) ? officialInvoices[rowKey] : row.IsOfficial;
-                return {
-                    ...row,
-                    IsOfficial: isOfficial
-                };
-            });
-            
             const res = await fetch('/api/sayan/sales-report/send-manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     targetDate,
                     dateRangeLabel: label,
-                    salesData: mappedDataToSend,
-                    applyOfficialTax
+                    salesData: dataToSend
                 })
             });
             const data = await res.json();
@@ -1778,7 +1757,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     ) t_name ON t_name.ItemCode = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
-                      AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                      AND t10.Field_008 >= '${gregFrom}'
                       AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'
                     ORDER BY COALESCE(t_name.ItemName, t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
                 `;
@@ -2810,15 +2789,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     />
                                     <span className="text-xs font-bold text-slate-700">فعال‌سازی مقایسه دو بازه</span>
                                 </label>
-                                <label className="flex items-center gap-1.5 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg border border-emerald-200 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={applyOfficialTax}
-                                        onChange={(e) => setApplyOfficialTax(e.target.checked)}
-                                        className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
-                                    />
-                                    <span className="text-xs font-bold text-emerald-800">۱۰٪ ارزش افزوده رسمی (فاکتورهای رسمی)</span>
-                                </label>
                             </div>
                         </div>
 
@@ -3004,7 +2974,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             <th className="p-3 font-semibold text-center">تعداد اقلام</th>
                                             <th className="p-3 font-semibold text-center">مجموع وزن/مقدار</th>
                                             <th className="p-3 font-semibold text-left">مبلغ کل (ریال)</th>
-                                            <th className="p-3 font-semibold text-center w-36">ارزش افزوده (۱۰٪)</th>
+                                            <th className="p-3 font-semibold text-center w-36">نوع فاکتور</th>
                                             <th className="p-3 font-semibold text-center w-24">جزئیات</th>
                                         </tr>
                                     </thead>
@@ -3018,6 +2988,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 notes: string;
                                                 totalAmount: number;
                                                 totalQuantity: number;
+                                                isOfficial: boolean;
                                                 items: {
                                                     itemName: string;
                                                     itemCode: string;
@@ -3032,10 +3003,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 const key = row.InvoiceNum || row.DocId;
                                                 if (!key) return;
                                                 
-                                                const rowKey = row.InvoiceNum || row.DocId;
-                                                const isOfficial = (rowKey && officialInvoices[rowKey] !== undefined) ? officialInvoices[rowKey] : row.IsOfficial;
+                                                const isOfficial = row.IsOfficial;
                                                 const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
-                                                const itemAmt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+                                                const itemAmt = isOfficial ? rawAmt * 1.10 : rawAmt;
                                                 const itemQty = parseFloat(row.Quantity || 0);
                                                 const customerName = row.CustomerName || (() => {
                                                     const notes = row.Notes || '';
@@ -3064,6 +3034,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                         notes: row.Notes || '',
                                                         totalAmount: itemAmt,
                                                         totalQuantity: itemQty,
+                                                        isOfficial: isOfficial,
                                                         items: [{
                                                             itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
                                                             itemCode: row.ItemCode || '',
@@ -3100,20 +3071,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                             <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center font-mono font-bold text-slate-600">{inv.totalQuantity.toFixed(1)}</td>
                                                             <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(inv.totalAmount)}</td>
                                                             <td className="p-3 text-center">
-                                                                <label className="inline-flex items-center justify-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={officialInvoices[inv.invoiceNum] !== undefined ? officialInvoices[inv.invoiceNum] : false}
-                                                                        onChange={() => {
-                                                                            setOfficialInvoices(prev => ({
-                                                                                ...prev,
-                                                                                [inv.invoiceNum]: !prev[inv.invoiceNum]
-                                                                            }));
-                                                                        }}
-                                                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                                                                    />
-                                                                    <span className="text-[11px] font-bold mr-1.5 text-slate-700">رسمی (۱۰٪ مالیات)</span>
-                                                                </label>
+                                                                {inv.isOfficial ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                                        رسمی (۱۰٪ مالیات)
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200">
+                                                                        غیررسمی
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                             <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center">
                                                                 <button className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold focus:outline-none">

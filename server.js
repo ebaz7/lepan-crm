@@ -396,7 +396,13 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         salesRows.forEach(inv => {
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
-            const amt = parseFloat(inv.Amount || 0);
+            
+            const notesStr = String(inv.Notes || "") + " " + String(inv.ItemNotes || "");
+            const isOfficial = (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || inv.InvoiceNum === "123" || String(inv.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+            
+            const rawAmt = parseFloat(inv.Amount || 0);
+            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
+            
             totalQty += qty;
             totalAmt += amt;
             
@@ -3540,7 +3546,7 @@ app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
             const rawAmt = parseFloat(row.Amount || row.amount || 0);
             
             // 10% official invoice tax increase
-            const effectiveAmt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            const effectiveAmt = isOfficial ? rawAmt * 1.10 : rawAmt;
             
             const groupName = row.GroupName || row.groupName || row.ItemName || row.itemName || "سایر کالاها";
             const itemName = row.ItemName || row.itemName || "کالا";
@@ -3627,11 +3633,6 @@ app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
             success: true,
             message: `گزارش تحلیلی فروش و مرجوعی با موفقیت به ${sentCount} گروه / چت در بات‌ها ارسال شد.`
         });
-    } catch (e) {
-        console.error("Manual Sales Report Sending Error:", e);
-        res.status(500).json({ error: e.message });
-    }
-});;
     } catch (e) {
         console.error("Manual Sales Report Sending Error:", e);
         res.status(500).json({ error: e.message });
