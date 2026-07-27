@@ -510,36 +510,6 @@ const Settings: React.FC<SettingsProps> = ({
 
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingLetterhead, setIsUploadingLetterhead] = useState(false);
-  const [isSyncingCompanies, setIsSyncingCompanies] = useState(false);
-
-  const handleSyncCompanyBaseData = async () => {
-    setIsSyncingCompanies(true);
-    try {
-      const res = await fetch("/api/sayan/sync-companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.companies)) {
-        const updatedNames = data.companies.map((c: Company) => c.name);
-        const newSet = {
-          ...settings,
-          companies: data.companies,
-          companyNames: updatedNames
-        };
-        setSettings(newSet);
-        onUpdateSettings?.(newSet);
-        await saveSettings(newSet);
-        alert(`✅ ${data.message || 'اطلاعات پایه شرکت‌ها با موفقیت استخراج و بروزرسانی شد.'}`);
-      } else {
-        alert(`❌ خطا در استخراج اطلاعات پایه: ${data.error || 'پاسخ ناموفق از سرور'}`);
-      }
-    } catch (e: any) {
-      alert(`❌ خطا در ارتباط با سرور: ${e.message}`);
-    } finally {
-      setIsSyncingCompanies(false);
-    }
-  };
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   const companyLetterheadInputRef = useRef<HTMLInputElement>(null);
 
@@ -2815,20 +2785,9 @@ const Settings: React.FC<SettingsProps> = ({
               <div className="space-y-8 animate-fade-in">
                 <BackupManager />
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-2 gap-2">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                      <Building size={20} /> مدیریت شرکت‌ها و بانک‌ها
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={handleSyncCompanyBaseData}
-                      disabled={isSyncingCompanies}
-                      className="flex items-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all disabled:opacity-50"
-                    >
-                      <RefreshCw size={14} className={isSyncingCompanies ? "animate-spin" : ""} />
-                      {isSyncingCompanies ? "در حال استخراج اطلاعات..." : "استخراج و بارگذاری اطلاعات پایه از دیتابیس سایان"}
-                    </button>
-                  </div>
+                  <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+                    <Building size={20} /> مدیریت شرکت‌ها و بانک‌ها
+                  </h3>
 
                   {/* Company Form */}
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">

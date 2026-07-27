@@ -11,142 +11,13 @@ let MEMORY_DB_CACHE = null;
 let saveTimeout = null;
 let isSaving = false;
 
-// Helper to extract company & bank details from Sayan schema files, dump files, and internal DB
-export function extractExternalCompanyDetails(dbState) {
-    const map = new Map();
-
-    function getComp(name) {
-        if (!name || !name.trim()) return null;
-        const clean = name.trim();
-        if (clean.length < 2 || clean === 'd _' || clean === 'e' || clean === 'null' || clean === 'undefined' || clean === 'تامین کننده') return null;
-        if (!map.has(clean)) {
-            map.set(clean, {
-                id: 'comp_ext_' + Math.random().toString(36).substring(2, 9),
-                name: clean,
-                registrationNumber: '',
-                nationalId: '',
-                address: '',
-                phone: '',
-                fax: '',
-                postalCode: '',
-                economicCode: '',
-                banks: []
-            });
-        }
-        return map.get(clean);
-    }
-
-    // 1. Scan schema files and sayan dumps on disk
-    const schemaFiles = ['schema_output2.json', 'schema_output.json', 'sayan_db_dump.json'];
-    schemaFiles.forEach(file => {
-        const fullPath = path.join(__dirname, '..', file);
-        if (!fs.existsSync(fullPath)) return;
-        try {
-            const schema = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-
-            // TBL_008 (Insurance/Workshop Templates)
-            if (Array.isArray(schema.TBL_008)) {
-                schema.TBL_008.forEach(r => {
-                    const raw = String(r[3] || r[4] || '');
-                    if (raw.includes('&')) {
-                        const parts = raw.split('&');
-                        if (parts.length >= 5) {
-                            const regNo = parts[1]?.trim();
-                            const compName = parts[2]?.trim();
-                            const addr = parts[4]?.trim();
-                            if (compName) {
-                                const comp = getComp(compName);
-                                if (comp) {
-                                    if (regNo && !comp.registrationNumber) comp.registrationNumber = regNo;
-                                    if (addr && !comp.address) comp.address = addr;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // GNR_TBL_001 (Entities / People / Companies / Customers)
-            if (Array.isArray(schema.GNR_TBL_001) && schema.GNR_TBL_001.length > 1) {
-                schema.GNR_TBL_001.slice(1).forEach(r => {
-                    const firstName = String(r[4] || '').trim();
-                    const lastName = String(r[5] || '').trim();
-                    const fullName = (firstName + ' ' + lastName).trim() || lastName || firstName;
-                    if (!fullName || fullName === 'تامین کننده') return;
-
-                    const natId = String(r[7] || '').trim();
-                    const phone = String(r[13] || r[14] || '').trim();
-                    const addr = String(r[15] || '').trim();
-                    const accNo = String(r[30] || '').trim();
-                    const cardNo = String(r[31] || '').trim();
-                    const sheba = String(r[32] || '').trim();
-
-                    const comp = getComp(fullName);
-                    if (comp) {
-                        if (natId && natId !== '0' && !comp.nationalId) comp.nationalId = natId;
-                        if (phone && !comp.phone) comp.phone = phone;
-                        if (addr && !comp.address) comp.address = addr;
-
-                        if (accNo || cardNo || sheba) {
-                            const exists = comp.banks.some(b => (accNo && b.accountNumber === accNo) || (sheba && b.sheba === sheba));
-                            if (!exists) {
-                                comp.banks.push({
-                                    id: 'bank_' + Math.random().toString(36).substring(2, 9),
-                                    bankName: 'بانک',
-                                    accountNumber: accNo,
-                                    cardNumber: cardNo,
-                                    sheba: sheba
-                                });
-                            }
-                        }
-                    }
-                });
-            }
-
-            // ACT_TBL_007 (Accounts/Tafsili)
-            if (Array.isArray(schema.ACT_TBL_007) && schema.ACT_TBL_007.length > 1) {
-                schema.ACT_TBL_007.slice(1).forEach(r => {
-                    const name = String(r[2] || r[1] || '').trim();
-                    if (name && !name.startsWith('11') && !name.startsWith('31')) {
-                        getComp(name);
-                    }
-                });
-            }
-        } catch (e) {
-            console.error("Error parsing schema file:", file, e);
-        }
-    });
-
-    // 2. Scan savedContacts in DB settings
-    if (dbState && dbState.settings && Array.isArray(dbState.settings.savedContacts)) {
-        dbState.settings.savedContacts.forEach(contact => {
-            const compName = (contact.company || contact.name || '').trim();
-            if (!compName) return;
-            const comp = getComp(compName);
-            if (comp) {
-                if (contact.nationalId && !comp.nationalId) comp.nationalId = contact.nationalId;
-                if (contact.registrationNumber && !comp.registrationNumber) comp.registrationNumber = contact.registrationNumber;
-                if (contact.address && !comp.address) comp.address = contact.address;
-                if ((contact.phone || contact.mobile) && !comp.phone) comp.phone = contact.phone || contact.mobile;
-                if (contact.economicCode && !comp.economicCode) comp.economicCode = contact.economicCode;
-
-                if (contact.accountNumber || contact.sheba || contact.cardNumber) {
-                    const exists = comp.banks.some(b => (contact.accountNumber && b.accountNumber === contact.accountNumber) || (contact.sheba && b.sheba === contact.sheba));
-                    if (!exists) {
-                        comp.banks.push({
-                            id: 'bank_' + Math.random().toString(36).substring(2, 9),
-                            bankName: contact.bankName || 'بانک',
-                            accountNumber: contact.accountNumber || '',
-                            cardNumber: contact.cardNumber || '',
-                            sheba: contact.sheba || ''
-                        });
-                    }
-                }
-            }
-        });
-    }
-
-    return Array.from(map.values());
+// Filter out junk/test company names generated by past Sayan schema extraction
+function isJunkCompanyName(name) {
+    if (!name || typeof name !== 'string') return true;
+    const clean = name.trim();
+    if (!clean) return true;
+    if (clean === 'd _' || clean === 'e' || clean === 'd_') return true;
+    return false;
 }
 
 export const getDb = () => {
@@ -227,7 +98,7 @@ export const getDb = () => {
         // Build existing company map
         const companyMap = new Map();
         (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
-            if (c && c.name && c.name.trim()) {
+            if (c && c.name && c.name.trim() && !isJunkCompanyName(c.name)) {
                 const nameKey = c.name.trim();
                 companyMap.set(nameKey, {
                     id: c.id || ('comp_' + Math.random().toString(36).substring(2, 9)),
@@ -248,57 +119,9 @@ export const getDb = () => {
             }
         });
 
-        // Extract details from external files (Sayan dumps, schemas, contacts)
-        const externalCompanies = extractExternalCompanyDetails(MEMORY_DB_CACHE);
-        externalCompanies.forEach(ext => {
-            if (!ext || !ext.name) return;
-            dbCompanies.add(ext.name);
-
-            if (companyMap.has(ext.name)) {
-                // Enrich existing company with missing fields
-                const existing = companyMap.get(ext.name);
-                if (!existing.registrationNumber && ext.registrationNumber) existing.registrationNumber = ext.registrationNumber;
-                if (!existing.nationalId && ext.nationalId) existing.nationalId = ext.nationalId;
-                if (!existing.address && ext.address) existing.address = ext.address;
-                if (!existing.phone && ext.phone) existing.phone = ext.phone;
-                if (!existing.economicCode && ext.economicCode) existing.economicCode = ext.economicCode;
-
-                // Merge bank accounts
-                if (Array.isArray(ext.banks) && ext.banks.length > 0) {
-                    if (!Array.isArray(existing.banks)) existing.banks = [];
-                    ext.banks.forEach(eb => {
-                        const hasBank = existing.banks.some(b => 
-                            (eb.accountNumber && b.accountNumber === eb.accountNumber) ||
-                            (eb.sheba && b.sheba === eb.sheba) ||
-                            (eb.cardNumber && b.cardNumber === eb.cardNumber)
-                        );
-                        if (!hasBank) {
-                            existing.banks.push(eb);
-                        }
-                    });
-                }
-            } else {
-                companyMap.set(ext.name, {
-                    id: ext.id || ('comp_' + Math.random().toString(36).substring(2, 9)),
-                    name: ext.name,
-                    showInWarehouse: true,
-                    banks: Array.isArray(ext.banks) ? [...ext.banks] : [],
-                    logo: "",
-                    registrationNumber: ext.registrationNumber || "",
-                    nationalId: ext.nationalId || "",
-                    address: ext.address || "",
-                    phone: ext.phone || "",
-                    fax: "",
-                    postalCode: "",
-                    economicCode: ext.economicCode || "",
-                    letterhead: ""
-                });
-            }
-        });
-
-        // Add any remaining companies discovered across collections
+        // Add any remaining non-junk companies discovered across collections
         Array.from(dbCompanies).forEach((name, idx) => {
-            if (name && !companyMap.has(name)) {
+            if (name && !isJunkCompanyName(name) && !companyMap.has(name)) {
                 companyMap.set(name, {
                     id: 'comp_' + idx + '_' + Date.now(),
                     name,

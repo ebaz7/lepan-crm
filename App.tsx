@@ -736,10 +736,13 @@ function App() {
                 if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
                 if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
 
+                // Helper to filter out junk names
+                const isJunkName = (n: string) => !n || n.trim() === 'd _' || n.trim() === 'e' || n.trim() === 'd_';
+
                 // Sync companyNames with companies
                 const companyMap = new Map<string, any>();
                 settingsData.companies.forEach((c: any) => {
-                    if (c && c.name && c.name.trim()) {
+                    if (c && c.name && c.name.trim() && !isJunkName(c.name)) {
                         companyMap.set(c.name.trim(), {
                             ...c,
                             name: c.name.trim(),
@@ -748,7 +751,7 @@ function App() {
                     }
                 });
                 settingsData.companyNames.forEach((name: string) => {
-                    if (name && name.trim() && !companyMap.has(name.trim())) {
+                    if (name && name.trim() && !isJunkName(name) && !companyMap.has(name.trim())) {
                         companyMap.set(name.trim(), {
                             id: Math.random().toString(36).substring(2, 11),
                             name: name.trim(),
