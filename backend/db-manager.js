@@ -77,25 +77,7 @@ export const getDb = () => {
             MEMORY_DB_CACHE.settings.companyNames = [];
         }
 
-        // Gather all used company names across all collections
-        const dbCompanies = new Set();
-        (MEMORY_DB_CACHE.settings.companies || []).forEach(c => { if (c && c.name && c.name.trim()) dbCompanies.add(c.name.trim()); });
-        (MEMORY_DB_CACHE.settings.companyNames || []).forEach(n => { if (n && n.trim()) dbCompanies.add(n.trim()); });
-        (MEMORY_DB_CACHE.orders || []).forEach(o => { if (o.payingCompany) dbCompanies.add(o.payingCompany.trim()); if (o.company) dbCompanies.add(o.company.trim()); });
-        (MEMORY_DB_CACHE.exitPermits || []).forEach(p => { if (p.company) dbCompanies.add(p.company.trim()); });
-        (MEMORY_DB_CACHE.warehouseTransactions || []).forEach(w => { if (w.company) dbCompanies.add(w.company.trim()); });
-        (MEMORY_DB_CACHE.chequeReceipts || []).forEach(c => { if (c.company) dbCompanies.add(c.company.trim()); });
-        (MEMORY_DB_CACHE.secretariatLetters || []).forEach(l => { if (l.company) dbCompanies.add(l.company.trim()); });
-        (MEMORY_DB_CACHE.tradeRecords || []).forEach(t => { if (t.company) dbCompanies.add(t.company.trim()); });
-        if (Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears)) {
-            MEMORY_DB_CACHE.settings.fiscalYears.forEach(fy => {
-                if (fy && fy.companySequences) {
-                    Object.keys(fy.companySequences).forEach(k => { if (k && k.trim()) dbCompanies.add(k.trim()); });
-                }
-            });
-        }
-
-        // Build existing company map
+        // Build company map strictly from defined settings.companies and settings.companyNames
         const companyMap = new Map();
         (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
             if (c && c.name && c.name.trim() && !isJunkCompanyName(c.name)) {
@@ -119,12 +101,12 @@ export const getDb = () => {
             }
         });
 
-        // Add any remaining non-junk companies discovered across collections
-        Array.from(dbCompanies).forEach((name, idx) => {
-            if (name && !isJunkCompanyName(name) && !companyMap.has(name)) {
-                companyMap.set(name, {
-                    id: 'comp_' + idx + '_' + Date.now(),
-                    name,
+        // Check if any names in companyNames are not yet in companyMap
+        (MEMORY_DB_CACHE.settings.companyNames || []).forEach(name => {
+            if (name && typeof name === 'string' && name.trim() && !isJunkCompanyName(name) && !companyMap.has(name.trim())) {
+                companyMap.set(name.trim(), {
+                    id: 'comp_' + Math.random().toString(36).substring(2, 9),
+                    name: name.trim(),
                     showInWarehouse: true,
                     banks: []
                 });
