@@ -66,53 +66,25 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.companyNames = [];
                 }
 
-                // Scan all DB collections to gather all real registered/used company names
-                const dbCompanies = new Set();
-                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => { if (c && c.name && c.name.trim()) dbCompanies.add(c.name.trim()); });
-                (MEMORY_DB_CACHE.settings.companyNames || []).forEach(n => { if (n && n.trim()) dbCompanies.add(n.trim()); });
-                (MEMORY_DB_CACHE.orders || []).forEach(o => { if (o.payingCompany) dbCompanies.add(o.payingCompany.trim()); if (o.company) dbCompanies.add(o.company.trim()); });
-                (MEMORY_DB_CACHE.exitPermits || []).forEach(p => { if (p.company) dbCompanies.add(p.company.trim()); });
-                (MEMORY_DB_CACHE.warehouseTransactions || []).forEach(w => { if (w.company) dbCompanies.add(w.company.trim()); });
-                (MEMORY_DB_CACHE.chequeReceipts || []).forEach(c => { if (c.company) dbCompanies.add(c.company.trim()); });
-                (MEMORY_DB_CACHE.secretariatLetters || []).forEach(l => { if (l.company) dbCompanies.add(l.company.trim()); });
-                (MEMORY_DB_CACHE.tradeRecords || []).forEach(t => { if (t.company) dbCompanies.add(t.company.trim()); });
-                if (Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears)) {
-                    MEMORY_DB_CACHE.settings.fiscalYears.forEach(fy => {
-                        if (fy && fy.companySequences) {
-                            Object.keys(fy.companySequences).forEach(k => { if (k && k.trim()) dbCompanies.add(k.trim()); });
-                        }
-                    });
-                }
-
+                // Keep companies strictly to explicitly defined settings.companies
                 const companyMap = new Map();
-                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
-                    if (c && c.name && c.name.trim()) {
-                        companyMap.set(c.name.trim(), {
-                            id: c.id || ('comp_' + Date.now()),
-                            name: c.name.trim(),
-                            showInWarehouse: c.showInWarehouse !== false,
-                            banks: Array.isArray(c.banks) ? c.banks : [],
-                            logo: c.logo || "",
-                            registrationNumber: c.registrationNumber || "",
-                            nationalId: c.nationalId || "",
-                            address: c.address || "",
-                            phone: c.phone || "",
-                            fax: c.fax || "",
-                            postalCode: c.postalCode || "",
-                            economicCode: c.economicCode || "",
-                            letterhead: c.letterhead || "",
-                            ...c
-                        });
-                    }
-                });
-
-                Array.from(dbCompanies).forEach((name, idx) => {
-                    if (name && !companyMap.has(name)) {
-                        companyMap.set(name, {
-                            id: 'comp_' + idx + '_' + Date.now(),
-                            name,
-                            showInWarehouse: true,
-                            banks: []
+                (MEMORY_DB_CACHE.settings.companies || []).forEach((c, idx) => {
+                    const cName = typeof c === 'string' ? c.trim() : (c && c.name ? c.name.trim() : '');
+                    if (cName) {
+                        companyMap.set(cName, {
+                            id: (typeof c === 'object' && c.id) ? c.id : ('comp_' + idx + '_' + Date.now()),
+                            name: cName,
+                            showInWarehouse: (typeof c === 'object' && c.showInWarehouse !== undefined) ? c.showInWarehouse : true,
+                            banks: (typeof c === 'object' && Array.isArray(c.banks)) ? c.banks : [],
+                            logo: (typeof c === 'object' && c.logo) || "",
+                            registrationNumber: (typeof c === 'object' && c.registrationNumber) || "",
+                            nationalId: (typeof c === 'object' && c.nationalId) || "",
+                            address: (typeof c === 'object' && c.address) || "",
+                            phone: (typeof c === 'object' && c.phone) || "",
+                            fax: (typeof c === 'object' && c.fax) || "",
+                            postalCode: (typeof c === 'object' && c.postalCode) || "",
+                            economicCode: (typeof c === 'object' && c.economicCode) || "",
+                            letterhead: (typeof c === 'object' && c.letterhead) || ""
                         });
                     }
                 });
@@ -137,6 +109,68 @@ export const getDb = () => {
 
                 MEMORY_DB_CACHE.settings.companies = allCompanies;
                 MEMORY_DB_CACHE.settings.companyNames = allCompanies.map(c => c.name);
+
+                // Scan and extract all bank names & bank account details across database collections
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.operatingBankNames)) {
+                    MEMORY_DB_CACHE.settings.operatingBankNames = [];
+                }
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.bankNames)) {
+                    MEMORY_DB_CACHE.settings.bankNames = [];
+                }
+
+                const extractedBanks = new Set();
+                (MEMORY_DB_CACHE.settings.operatingBankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) extractedBanks.add(b.trim()); });
+                (MEMORY_DB_CACHE.settings.bankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) extractedBanks.add(b.trim()); });
+                if (MEMORY_DB_CACHE.settings.companyBank && typeof MEMORY_DB_CACHE.settings.companyBank === 'string' && MEMORY_DB_CACHE.settings.companyBank.trim()) {
+                    extractedBanks.add(MEMORY_DB_CACHE.settings.companyBank.trim());
+                }
+
+                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
+                    if (c && Array.isArray(c.banks)) {
+                        c.banks.forEach(b => {
+                            if (b) {
+                                const bName = typeof b === 'string' ? b : (b.bankName || '');
+                                if (bName && bName.trim()) extractedBanks.add(bName.trim());
+                            }
+                        });
+                    }
+                });
+
+                (MEMORY_DB_CACHE.orders || []).forEach(o => {
+                    if (Array.isArray(o.paymentDetails)) {
+                        o.paymentDetails.forEach(p => {
+                            if (p && p.bankName && p.bankName.trim()) extractedBanks.add(p.bankName.trim());
+                            if (p && p.recipientBank && p.recipientBank.trim()) extractedBanks.add(p.recipientBank.trim());
+                        });
+                    }
+                });
+
+                (MEMORY_DB_CACHE.chequeReceipts || []).forEach(c => {
+                    if (c && c.bankName && c.bankName.trim()) extractedBanks.add(c.bankName.trim());
+                });
+
+                (MEMORY_DB_CACHE.tradeRecords || []).forEach(t => {
+                    ['inspectionPayments', 'clearancePayments', 'shippingPayments', 'agentPayments', 'guarantees'].forEach(key => {
+                        if (Array.isArray(t[key])) {
+                            t[key].forEach(p => {
+                                if (p && p.bank && p.bank.trim()) extractedBanks.add(p.bank.trim());
+                            });
+                        }
+                    });
+                });
+
+                const allExtractedBankList = Array.from(extractedBanks);
+                if (allExtractedBankList.length > 0) {
+                    MEMORY_DB_CACHE.settings.operatingBankNames = Array.from(new Set([
+                        ...MEMORY_DB_CACHE.settings.operatingBankNames,
+                        ...allExtractedBankList
+                    ]));
+                    MEMORY_DB_CACHE.settings.bankNames = Array.from(new Set([
+                        ...MEMORY_DB_CACHE.settings.bankNames,
+                        ...allExtractedBankList
+                    ]));
+                }
+
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [
                         { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },

@@ -663,11 +663,6 @@ const Settings: React.FC<SettingsProps> = ({
           });
         }
       });
-      (safeData.companyNames || []).forEach((name: string) => {
-        if (name && name.trim() && !companyMap.has(name.trim())) {
-          companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
-        }
-      });
       let loadedCompanies = Array.from(companyMap.values());
       if (loadedCompanies.length > 1 && loadedCompanies.some(c => c.name !== 'شرکت اصلی')) {
         loadedCompanies = loadedCompanies.filter(c => 
@@ -685,6 +680,26 @@ const Settings: React.FC<SettingsProps> = ({
       }
       safeData.companies = loadedCompanies;
       safeData.companyNames = loadedCompanies.map((c: any) => c.name);
+
+      const allBanksSet = new Set<string>();
+      (safeData.operatingBankNames || []).forEach((b: string) => { if (b && typeof b === 'string' && b.trim()) allBanksSet.add(b.trim()); });
+      (safeData.bankNames || []).forEach((b: string) => { if (b && typeof b === 'string' && b.trim()) allBanksSet.add(b.trim()); });
+      if (safeData.companyBank && typeof safeData.companyBank === 'string' && safeData.companyBank.trim()) {
+        allBanksSet.add(safeData.companyBank.trim());
+      }
+      loadedCompanies.forEach((c: any) => {
+        if (Array.isArray(c.banks)) {
+          c.banks.forEach((b: any) => {
+            if (b) {
+              const bName = typeof b === 'string' ? b : (b.bankName || '');
+              if (bName && bName.trim()) allBanksSet.add(bName.trim());
+            }
+          });
+        }
+      });
+      safeData.operatingBankNames = Array.from(allBanksSet);
+      safeData.bankNames = Array.from(allBanksSet);
+
       if (!safeData.warehouseSequences) safeData.warehouseSequences = {};
       if (!safeData.companyNotifications) safeData.companyNotifications = {};
       if (!safeData.customRoles) safeData.customRoles = [];

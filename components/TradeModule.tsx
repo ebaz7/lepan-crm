@@ -164,18 +164,55 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
 
     // Filter banks based on the selected company
     const companySpecificBanks = useMemo(() => {
-        const fallbacks = ['ملی', 'ملت', 'تجارت', 'صادرات', 'سپه', 'سامان', 'پارسیان', 'پاسارگاد', 'کارآفرین', 'سینا', 'شهر', 'مسکن', 'کشاورزی', 'توسعه صادرات', 'صنعت و معدن', 'خاورمیانه', 'رفاه'];
-        if (!settings) return fallbacks;
-        if (selectedRecord) {
+        const bankSet = new Set<string>();
+        const fallbacks = ['بانک ملی', 'بانک ملت', 'بانک تجارت', 'بانک صادرات', 'بانک سپه', 'بانک سامان', 'بانک پارسیان', 'بانک پاسارگاد', 'بانک کارآفرین', 'بانک سینا', 'بانک شهر', 'بانک مسکن', 'بانک کشاورزی', 'بانک توسعه صادرات', 'بانک صنعت و معدن', 'بانک خاورمیانه', 'بانک رفاه'];
+
+        if (selectedRecord && settings) {
             const targetCompany = settings.companies?.find(c => c.name === selectedRecord.company);
             if (targetCompany && targetCompany.banks && targetCompany.banks.length > 0) {
-                return targetCompany.banks.map(b => b.bankName);
+                targetCompany.banks.forEach(b => {
+                    if (b && b.bankName) {
+                        const label = `${b.bankName}${b.accountNumber ? ` - ${b.accountNumber}` : ''}`;
+                        bankSet.add(label);
+                        bankSet.add(b.bankName);
+                    }
+                });
             }
         }
-        if (availableBanks && availableBanks.length > 0) {
-            return availableBanks;
+
+        if (settings?.companies) {
+            settings.companies.forEach(c => {
+                if (c.banks && c.banks.length > 0) {
+                    c.banks.forEach(b => {
+                        if (b && b.bankName) {
+                            const label = `${b.bankName}${b.accountNumber ? ` - ${b.accountNumber}` : ''}`;
+                            bankSet.add(label);
+                            bankSet.add(b.bankName);
+                        }
+                    });
+                }
+            });
         }
-        return fallbacks;
+
+        if (settings?.operatingBankNames) {
+            settings.operatingBankNames.forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+        }
+        if (settings?.bankNames) {
+            settings.bankNames.forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+        }
+        if (settings?.companyBank && typeof settings.companyBank === 'string' && settings.companyBank.trim()) {
+            bankSet.add(settings.companyBank.trim());
+        }
+
+        if (availableBanks && availableBanks.length > 0) {
+            availableBanks.forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+        }
+
+        if (bankSet.size === 0) {
+            fallbacks.forEach(f => bankSet.add(f));
+        }
+
+        return Array.from(bankSet);
     }, [selectedRecord, settings, availableBanks]);
 
     useEffect(() => {
