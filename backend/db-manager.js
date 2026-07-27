@@ -11,39 +11,24 @@ let MEMORY_DB_CACHE = null;
 let saveTimeout = null;
 let isSaving = false;
 
-// Helper to generate a stable, deterministic ID for a company name
-function getStableCompanyId(name, existingId) {
-    if (existingId && typeof existingId === 'string' && existingId.trim() && !existingId.startsWith('comp_ext_')) {
-        return existingId.trim();
-    }
-    const clean = (name || '').trim();
-    if (!clean) return 'comp_default';
-    let hash = 0;
-    for (let i = 0; i < clean.length; i++) {
-        hash = ((hash << 5) - hash) + clean.charCodeAt(i);
-        hash |= 0;
-    }
-    return 'comp_' + Math.abs(hash).toString(36);
-}
-
 // Helper to extract company & bank details from Sayan schema files, dump files, and internal DB
-function extractExternalCompanyDetails(dbState) {
+export function extractExternalCompanyDetails(dbState) {
     const map = new Map();
 
     function getComp(name) {
-        if (!name || typeof name !== 'string') return null;
+        if (!name || !name.trim()) return null;
         const clean = name.trim();
-        // Skip junk / generic / test names
-        if (!clean || clean === 'تامین کننده' || clean === 'd _' || clean === 'e' || clean.length < 2) return null;
-
+        if (clean.length < 2 || clean === 'd _' || clean === 'e' || clean === 'null' || clean === 'undefined' || clean === 'تامین کننده') return null;
         if (!map.has(clean)) {
             map.set(clean, {
-                id: getStableCompanyId(clean),
+                id: 'comp_ext_' + Math.random().toString(36).substring(2, 9),
                 name: clean,
                 registrationNumber: '',
                 nationalId: '',
                 address: '',
                 phone: '',
+                fax: '',
+                postalCode: '',
                 economicCode: '',
                 banks: []
             });
@@ -84,7 +69,6 @@ function extractExternalCompanyDetails(dbState) {
             // GNR_TBL_001 (Entities / People / Companies / Customers)
             if (Array.isArray(schema.GNR_TBL_001) && schema.GNR_TBL_001.length > 1) {
                 schema.GNR_TBL_001.slice(1).forEach(r => {
-                    if (!Array.isArray(r)) return;
                     const firstName = String(r[4] || '').trim();
                     const lastName = String(r[5] || '').trim();
                     const fullName = (firstName + ' ' + lastName).trim() || lastName || firstName;
@@ -122,9 +106,8 @@ function extractExternalCompanyDetails(dbState) {
             // ACT_TBL_007 (Accounts/Tafsili)
             if (Array.isArray(schema.ACT_TBL_007) && schema.ACT_TBL_007.length > 1) {
                 schema.ACT_TBL_007.slice(1).forEach(r => {
-                    if (!Array.isArray(r)) return;
                     const name = String(r[2] || r[1] || '').trim();
-                    if (name && !name.startsWith('11') && !name.startsWith('31') && name.length >= 3) {
+                    if (name && !name.startsWith('11') && !name.startsWith('31')) {
                         getComp(name);
                     }
                 });
@@ -247,7 +230,7 @@ export const getDb = () => {
             if (c && c.name && c.name.trim()) {
                 const nameKey = c.name.trim();
                 companyMap.set(nameKey, {
-                    id: getStableCompanyId(nameKey, c.id),
+                    id: c.id || ('comp_' + Math.random().toString(36).substring(2, 9)),
                     name: nameKey,
                     showInWarehouse: c.showInWarehouse !== false,
                     banks: Array.isArray(c.banks) ? [...c.banks] : [],
@@ -269,7 +252,6 @@ export const getDb = () => {
         const externalCompanies = extractExternalCompanyDetails(MEMORY_DB_CACHE);
         externalCompanies.forEach(ext => {
             if (!ext || !ext.name) return;
-            if (ext.name === 'شرکت اصلی' || ext.name === 'تامین کننده' || ext.name === 'd _' || ext.name === 'e' || ext.name.length < 2) return;
             dbCompanies.add(ext.name);
 
             if (companyMap.has(ext.name)) {
@@ -297,7 +279,7 @@ export const getDb = () => {
                 }
             } else {
                 companyMap.set(ext.name, {
-                    id: ext.id || getStableCompanyId(ext.name),
+                    id: ext.id || ('comp_' + Math.random().toString(36).substring(2, 9)),
                     name: ext.name,
                     showInWarehouse: true,
                     banks: Array.isArray(ext.banks) ? [...ext.banks] : [],
@@ -315,17 +297,14 @@ export const getDb = () => {
         });
 
         // Add any remaining companies discovered across collections
-        Array.from(dbCompanies).forEach((name) => {
-            if (name && name.trim() && name !== 'شرکت اصلی' && name !== 'تامین کننده' && name !== 'd _' && name !== 'e' && name.trim().length >= 2) {
-                const clean = name.trim();
-                if (!companyMap.has(clean)) {
-                    companyMap.set(clean, {
-                        id: getStableCompanyId(clean),
-                        name: clean,
-                        showInWarehouse: true,
-                        banks: []
-                    });
-                }
+        Array.from(dbCompanies).forEach((name, idx) => {
+            if (name && !companyMap.has(name)) {
+                companyMap.set(name, {
+                    id: 'comp_' + idx + '_' + Date.now(),
+                    name,
+                    showInWarehouse: true,
+                    banks: []
+                });
             }
         });
 
@@ -387,67 +366,7 @@ export const getDb = () => {
     }
 };
 
-function sanitizeAndMergeCompanies(existingCompanies = [], newCompanies = []) {
-    const map = new Map();
-
-    (existingCompanies || []).forEach(c => {
-        if (c && c.name && c.name.trim()) {
-            const key = c.name.trim();
-            map.set(key, { ...c, name: key });
-        }
-    });
-
-    (newCompanies || []).forEach(nc => {
-        if (!nc || !nc.name || !nc.name.trim()) return;
-        const key = nc.name.trim();
-        if (key === 'd _' || key === 'e' || key === 'تامین کننده') return;
-
-        if (map.has(key)) {
-            const ex = map.get(key);
-            map.set(key, {
-                ...ex,
-                id: nc.id || ex.id || getStableCompanyId(key),
-                name: key,
-                showInWarehouse: nc.showInWarehouse !== undefined ? nc.showInWarehouse : (ex.showInWarehouse !== false),
-                logo: nc.logo || ex.logo || "",
-                registrationNumber: nc.registrationNumber || ex.registrationNumber || "",
-                nationalId: nc.nationalId || ex.nationalId || "",
-                address: nc.address || ex.address || "",
-                phone: nc.phone || ex.phone || "",
-                fax: nc.fax || ex.fax || "",
-                postalCode: nc.postalCode || ex.postalCode || "",
-                economicCode: nc.economicCode || ex.economicCode || "",
-                letterhead: nc.letterhead || ex.letterhead || "",
-                banks: (Array.isArray(nc.banks) && nc.banks.length > 0) ? nc.banks : (ex.banks || [])
-            });
-        } else {
-            map.set(key, {
-                id: nc.id || getStableCompanyId(key),
-                name: key,
-                showInWarehouse: nc.showInWarehouse !== false,
-                banks: Array.isArray(nc.banks) ? nc.banks : [],
-                logo: nc.logo || "",
-                registrationNumber: nc.registrationNumber || "",
-                nationalId: nc.nationalId || "",
-                address: nc.address || "",
-                phone: nc.phone || "",
-                fax: nc.fax || "",
-                postalCode: nc.postalCode || "",
-                economicCode: nc.economicCode || "",
-                letterhead: nc.letterhead || ""
-            });
-        }
-    });
-
-    return Array.from(map.values());
-}
-
 export const saveDb = (data) => {
-    if (data && data.settings && Array.isArray(data.settings.companies)) {
-        const merged = sanitizeAndMergeCompanies(MEMORY_DB_CACHE?.settings?.companies, data.settings.companies);
-        data.settings.companies = merged;
-        data.settings.companyNames = merged.map(c => c.name);
-    }
     MEMORY_DB_CACHE = data;
     
     // Always perform synchronous save if saveTimeout isn't scheduled, otherwise clear and re-schedule
@@ -475,11 +394,6 @@ export const saveDb = (data) => {
 // Immediate save for critical operations (e.g. backup, restore, settings changes)
 export const saveDbImmediate = (data) => {
     try {
-        if (data && data.settings && Array.isArray(data.settings.companies)) {
-            const merged = sanitizeAndMergeCompanies(MEMORY_DB_CACHE?.settings?.companies, data.settings.companies);
-            data.settings.companies = merged;
-            data.settings.companyNames = merged.map(c => c.name);
-        }
         MEMORY_DB_CACHE = data;
         if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
