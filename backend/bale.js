@@ -35,7 +35,17 @@ const callApi = (method, data, isMultipart = false) => {
         const req = https.request(options, (res) => {
             let body = '';
             res.on('data', c => body += c);
-            res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e){ resolve({}); } });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(body);
+                    if (parsed && parsed.ok === false) {
+                        return reject(new Error(parsed.description || `خطای بله: ${parsed.error_code || 'نامشخص'}`));
+                    }
+                    resolve(parsed);
+                } catch(e) {
+                    resolve({ raw: body });
+                }
+            });
         });
 
         req.on('error', (e) => reject(e));

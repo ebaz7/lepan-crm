@@ -137,9 +137,9 @@ export const sendBotPhoto = async (chatId, buffer, caption, opts) => {
 
 export const sendBotDocument = async (chatId, buffer, name, caption) => {
     await ensureBotActive();
-    if (!bot) return Promise.reject("Bot Telegram not initialized");
+    if (!bot) return Promise.reject(new Error("Bot Telegram not initialized - توکن ربات تلگرام در تنظیمات ثبت نشده است"));
     const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
-    return bot.sendDocument(chatId, buffer, { caption: safeCaption }, { filename: name });
+    return bot.sendDocument(chatId, buffer, { caption: safeCaption }, { filename: name || 'document.pdf', contentType: 'application/pdf' });
 };
 
 export const deleteBotMessage = async (chatId, messageId) => {
