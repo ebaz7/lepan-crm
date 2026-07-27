@@ -738,12 +738,20 @@ function App() {
 
                 // Sync companyNames with companies
                 const companyMap = new Map<string, any>();
-                settingsData.companies.forEach((c: any) => { if (c && c.name) companyMap.set(c.name, c); });
+                settingsData.companies.forEach((c: any) => {
+                    if (c && c.name && c.name.trim()) {
+                        companyMap.set(c.name.trim(), {
+                            ...c,
+                            name: c.name.trim(),
+                            banks: Array.isArray(c.banks) ? c.banks : []
+                        });
+                    }
+                });
                 settingsData.companyNames.forEach((name: string) => {
-                    if (name && !companyMap.has(name)) {
-                        companyMap.set(name, {
+                    if (name && name.trim() && !companyMap.has(name.trim())) {
+                        companyMap.set(name.trim(), {
                             id: Math.random().toString(36).substring(2, 11),
-                            name,
+                            name: name.trim(),
                             showInWarehouse: true,
                             banks: []
                         });
@@ -753,7 +761,15 @@ function App() {
                 let mergedCompanies = Array.from(companyMap.values());
                 // Filter out default "شرکت اصلی" if other custom companies exist and default was not modified
                 if (mergedCompanies.length > 1 && mergedCompanies.some(c => c.name !== 'شرکت اصلی')) {
-                    mergedCompanies = mergedCompanies.filter(c => c.name !== 'شرکت اصلی' || c.banks?.length > 0 || c.logo || c.registrationNumber);
+                    mergedCompanies = mergedCompanies.filter(c => 
+                        c.name !== 'شرکت اصلی' || 
+                        c.logo || 
+                        c.registrationNumber || 
+                        c.nationalId || 
+                        c.address || 
+                        c.economicCode || 
+                        (c.banks && c.banks.length > 0)
+                    );
                 }
 
                 if (mergedCompanies.length === 0) {

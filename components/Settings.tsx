@@ -590,15 +590,31 @@ const Settings: React.FC<SettingsProps> = ({
         
         // Ensure companies and companyNames arrays exist and are in sync
         const companyMap = new Map<string, any>();
-        (normalizedSettings.companies || []).forEach((c: any) => { if (c && c.name) companyMap.set(c.name, c); });
+        (normalizedSettings.companies || []).forEach((c: any) => {
+          if (c && c.name && c.name.trim()) {
+            companyMap.set(c.name.trim(), {
+              ...c,
+              name: c.name.trim(),
+              banks: Array.isArray(c.banks) ? c.banks : []
+            });
+          }
+        });
         (normalizedSettings.companyNames || []).forEach((name: string) => {
-          if (name && !companyMap.has(name)) {
-            companyMap.set(name, { id: generateUUID(), name, showInWarehouse: true, banks: [] });
+          if (name && name.trim() && !companyMap.has(name.trim())) {
+            companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
           }
         });
         let normCompanies = Array.from(companyMap.values());
         if (normCompanies.length > 1 && normCompanies.some(c => c.name !== 'شرکت اصلی')) {
-          normCompanies = normCompanies.filter(c => c.name !== 'شرکت اصلی' || c.banks?.length > 0 || c.logo || c.registrationNumber);
+          normCompanies = normCompanies.filter(c => 
+            c.name !== 'شرکت اصلی' || 
+            c.logo || 
+            c.registrationNumber || 
+            c.nationalId || 
+            c.address || 
+            c.economicCode || 
+            (c.banks && c.banks.length > 0)
+          );
         }
         if (normCompanies.length === 0) {
           normCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
@@ -638,15 +654,31 @@ const Settings: React.FC<SettingsProps> = ({
       safeData.operatingBankNames = safeData.operatingBankNames || [];
       safeData.insuranceCompanies = safeData.insuranceCompanies || [];
       const companyMap = new Map<string, any>();
-      (safeData.companies || []).forEach((c: any) => { if (c && c.name) companyMap.set(c.name, c); });
+      (safeData.companies || []).forEach((c: any) => {
+        if (c && c.name && c.name.trim()) {
+          companyMap.set(c.name.trim(), {
+            ...c,
+            name: c.name.trim(),
+            banks: Array.isArray(c.banks) ? c.banks : []
+          });
+        }
+      });
       (safeData.companyNames || []).forEach((name: string) => {
-        if (name && !companyMap.has(name)) {
-          companyMap.set(name, { id: generateUUID(), name, showInWarehouse: true, banks: [] });
+        if (name && name.trim() && !companyMap.has(name.trim())) {
+          companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
         }
       });
       let loadedCompanies = Array.from(companyMap.values());
       if (loadedCompanies.length > 1 && loadedCompanies.some(c => c.name !== 'شرکت اصلی')) {
-        loadedCompanies = loadedCompanies.filter(c => c.name !== 'شرکت اصلی' || c.banks?.length > 0 || c.logo || c.registrationNumber);
+        loadedCompanies = loadedCompanies.filter(c => 
+          c.name !== 'شرکت اصلی' || 
+          c.logo || 
+          c.registrationNumber || 
+          c.nationalId || 
+          c.address || 
+          c.economicCode || 
+          (c.banks && c.banks.length > 0)
+        );
       }
       if (loadedCompanies.length === 0) {
         loadedCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];

@@ -86,7 +86,24 @@ export const getDb = () => {
 
                 const companyMap = new Map();
                 (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
-                    if (c && c.name && c.name.trim()) companyMap.set(c.name.trim(), c);
+                    if (c && c.name && c.name.trim()) {
+                        companyMap.set(c.name.trim(), {
+                            id: c.id || ('comp_' + Date.now()),
+                            name: c.name.trim(),
+                            showInWarehouse: c.showInWarehouse !== false,
+                            banks: Array.isArray(c.banks) ? c.banks : [],
+                            logo: c.logo || "",
+                            registrationNumber: c.registrationNumber || "",
+                            nationalId: c.nationalId || "",
+                            address: c.address || "",
+                            phone: c.phone || "",
+                            fax: c.fax || "",
+                            postalCode: c.postalCode || "",
+                            economicCode: c.economicCode || "",
+                            letterhead: c.letterhead || "",
+                            ...c
+                        });
+                    }
                 });
 
                 Array.from(dbCompanies).forEach((name, idx) => {
@@ -103,7 +120,15 @@ export const getDb = () => {
                 let allCompanies = Array.from(companyMap.values());
                 const hasCustomCompanies = allCompanies.some(c => c.name !== 'شرکت اصلی');
                 if (hasCustomCompanies) {
-                    allCompanies = allCompanies.filter(c => c.name !== 'شرکت اصلی' || c.logo || c.registrationNumber || (c.banks && c.banks.length > 0));
+                    allCompanies = allCompanies.filter(c => 
+                        c.name !== 'شرکت اصلی' || 
+                        c.logo || 
+                        c.registrationNumber || 
+                        c.nationalId || 
+                        c.address || 
+                        c.economicCode || 
+                        (c.banks && c.banks.length > 0)
+                    );
                 }
 
                 if (allCompanies.length === 0) {
