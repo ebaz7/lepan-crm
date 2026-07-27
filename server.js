@@ -1080,7 +1080,8 @@ app.get('/api/next-tracking-number', (req, res) => {
     const company = req.query.company || '';
     let minStart = db.settings.currentTrackingNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
+        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
@@ -1097,7 +1098,8 @@ app.get('/api/next-exit-permit-number', (req, res) => {
     const company = req.query.company || '';
     let minStart = db.settings.currentExitPermitNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
+        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }
@@ -1114,7 +1116,8 @@ app.get('/api/next-bijak-number', (req, res) => {
     const company = req.query.company || '';
     let minStart = 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
+        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
+        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startBijakNumber || 1000;
         }
@@ -1986,7 +1989,8 @@ app.get('/api/next-cheque-receipt-number', (req, res) => {
     const settings = db.settings || {};
     let minStart = settings.currentChequeReceiptNumber || 1000;
     if (settings.activeFiscalYearId && company) {
-        const year = (settings.fiscalYears || []).find(y => y.id === settings.activeFiscalYearId);
+        const fiscalYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
+        const year = fiscalYears.find(y => y.id === settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startChequeReceiptNumber || minStart;
         }

@@ -38,7 +38,7 @@ export const getDb = () => {
             botSubscribers: [],
             customerBalances: [],
             customerChatCodes: [],
-            fiscalYears: {},
+            fiscalYears: [],
             sequences: {},
             notes: []
         };

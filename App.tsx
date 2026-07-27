@@ -680,7 +680,7 @@ function App() {
 
   const setFinancialYear = async (yearLabel: string) => {
       setFinancialYearState(yearLabel);
-      if (settings && settings.fiscalYears) {
+      if (settings && Array.isArray(settings.fiscalYears)) {
           const year = settings.fiscalYears.find(y => y.label === yearLabel);
           if (year && year.id !== settings.activeFiscalYearId) {
               const updated = { ...settings, activeFiscalYearId: year.id };
@@ -712,7 +712,7 @@ function App() {
         if (cachedOrders.length > 0) setOrders(cachedOrders);
         if (cachedSettings) {
             setSettings(cachedSettings);
-            if (cachedSettings.activeFiscalYearId && cachedSettings.fiscalYears) {
+            if (cachedSettings.activeFiscalYearId && Array.isArray(cachedSettings.fiscalYears)) {
                 const activeYear = cachedSettings.fiscalYears.find(y => y.id === cachedSettings.activeFiscalYearId);
                 if (activeYear) setFinancialYearState(activeYear.label);
             }
@@ -733,7 +733,17 @@ function App() {
                 // Sanitize settings arrays just in case
                 if (!Array.isArray(settingsData.companies)) settingsData.companies = [];
                 if (!Array.isArray(settingsData.companyNames)) settingsData.companyNames = [];
-                if (!Array.isArray(settingsData.fiscalYears)) settingsData.fiscalYears = [];
+                if (!Array.isArray(settingsData.fiscalYears) || settingsData.fiscalYears.length === 0) {
+                    settingsData.fiscalYears = [
+                        { id: 'fy_1402', label: '1402', isClosed: false, createdAt: Date.now() },
+                        { id: 'fy_1403', label: '1403', isClosed: false, createdAt: Date.now() },
+                        { id: 'fy_1404', label: '1404', isClosed: false, createdAt: Date.now() },
+                        { id: 'fy_1405', label: '1405', isClosed: false, createdAt: Date.now() }
+                    ];
+                }
+                if (!settingsData.activeFiscalYearId) {
+                    settingsData.activeFiscalYearId = 'fy_1404';
+                }
                 if (!Array.isArray(settingsData.savedContacts)) settingsData.savedContacts = [];
 
                 if (settingsData.companyNames.length > 0 && settingsData.companies.length === 0) {
@@ -748,7 +758,7 @@ function App() {
                 setSettings(settingsData);
                 
                 // Sync financial year state from server settings
-                if (settingsData.activeFiscalYearId && settingsData.fiscalYears) {
+                if (settingsData.activeFiscalYearId && Array.isArray(settingsData.fiscalYears)) {
                     const activeYear = settingsData.fiscalYears.find(y => y.id === settingsData.activeFiscalYearId);
                     if (activeYear) setFinancialYearState(activeYear.label);
                 }

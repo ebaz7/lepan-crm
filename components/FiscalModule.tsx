@@ -20,7 +20,7 @@ export const FiscalYearSwitcher: React.FC = () => {
         getSettings().then(setSettings);
     }, []);
 
-    const activeYear = settings?.fiscalYears?.find(y => y.id === settings.activeFiscalYearId);
+    const activeYear = Array.isArray(settings?.fiscalYears) ? settings.fiscalYears.find(y => y.id === settings.activeFiscalYearId) : undefined;
 
     const handleSelect = async (yearId: string) => {
         if (!settings) return;
@@ -30,7 +30,7 @@ export const FiscalYearSwitcher: React.FC = () => {
         window.location.reload(); 
     };
 
-    if (!settings || !settings.fiscalYears || settings.fiscalYears.length === 0) return null;
+    if (!settings || !Array.isArray(settings.fiscalYears) || settings.fiscalYears.length === 0) return null;
 
     return (
         <div className="relative no-print">
@@ -81,7 +81,7 @@ export const FiscalYearManager: React.FC<{
     useEffect(() => {
         const initializeConfig = (currentSettings: SystemSettings) => {
             setSettings(currentSettings);
-            const years = currentSettings.fiscalYears || [];
+            const years = Array.isArray(currentSettings.fiscalYears) ? currentSettings.fiscalYears : [];
             if (years.length > 0) {
                 // Try to find the active fiscal year, or default to the latest one
                 const activeId = currentSettings.activeFiscalYearId;
@@ -101,7 +101,8 @@ export const FiscalYearManager: React.FC<{
     }, [propSettings]);
 
     const loadCompanyConfig = (yearId: string, currentSettings: SystemSettings) => {
-        const year = currentSettings.fiscalYears?.find(y => y.id === yearId);
+        const years = Array.isArray(currentSettings.fiscalYears) ? currentSettings.fiscalYears : [];
+        const year = years.find(y => y.id === yearId);
         if (!year) return;
         setEditingYearId(yearId);
         
@@ -147,9 +148,10 @@ export const FiscalYearManager: React.FC<{
             createdAt: Date.now()
         };
 
+        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
         const updated = {
             ...settings,
-            fiscalYears: [...(settings.fiscalYears || []), newYear],
+            fiscalYears: [...currentYears, newYear],
         };
         
         await saveSettings(updated);
@@ -164,9 +166,10 @@ export const FiscalYearManager: React.FC<{
 
     const handleCloseYear = async (id: string) => {
         if (!settings || !confirm('آیا مطمئن هستید؟ سال بسته شده فقط قابل مشاهده خواهد بود.')) return;
+        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
         const updated = {
             ...settings,
-            fiscalYears: settings.fiscalYears?.map(y => y.id === id ? { ...y, isClosed: true } : y)
+            fiscalYears: currentYears.map(y => y.id === id ? { ...y, isClosed: true } : y)
         };
         await saveSettings(updated);
         setSettings(updated);
@@ -189,7 +192,8 @@ export const FiscalYearManager: React.FC<{
             };
         });
 
-        const updatedYears = settings.fiscalYears?.map(y => 
+        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
+        const updatedYears = currentYears.map(y => 
             y.id === editingYearId ? { ...y, companySequences: sequences } : y
         );
 
@@ -202,7 +206,8 @@ export const FiscalYearManager: React.FC<{
 
     if (!settings) return null;
 
-    const editingYear = settings.fiscalYears?.find(y => y.id === editingYearId);
+    const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
+    const editingYear = currentYears.find(y => y.id === editingYearId);
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -221,7 +226,7 @@ export const FiscalYearManager: React.FC<{
             {/* List Years */}
             <div className="space-y-3">
                 <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><ListOrdered size={20}/> لیست سال‌های مالی</h3>
-                {settings.fiscalYears?.map(y => (
+                {currentYears.map(y => (
                     <div key={y.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 transition-all ${y.id === settings.activeFiscalYearId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'glass-panel border-gray-200'} ${editingYearId === y.id ? 'shadow-md border-indigo-300' : ''}`}>
                         <div className="flex items-center gap-3 w-full md:w-auto">
                             {y.isClosed ? <Lock size={18} className="text-gray-400"/> : <Unlock size={18} className="text-green-500"/>}
