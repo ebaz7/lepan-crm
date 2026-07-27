@@ -40,43 +40,11 @@
         "postalCode": "",
         "economicCode": "",
         "letterhead": ""
-      },
-      {
-        "id": "comp_ext_2v7yray",
-        "name": "d _",
-        "showInWarehouse": true,
-        "banks": [],
-        "logo": "",
-        "registrationNumber": "",
-        "nationalId": "1",
-        "address": "",
-        "phone": "",
-        "fax": "",
-        "postalCode": "",
-        "economicCode": "",
-        "letterhead": ""
-      },
-      {
-        "id": "comp_ext_q7r9rnv",
-        "name": "e",
-        "showInWarehouse": true,
-        "banks": [],
-        "logo": "",
-        "registrationNumber": "",
-        "nationalId": "",
-        "address": "",
-        "phone": "",
-        "fax": "",
-        "postalCode": "",
-        "economicCode": "",
-        "letterhead": ""
       }
     ],
     "companyNames": [
       "شرکت لپان بافت",
-      "امین مویدی",
-      "d _",
-      "e"
+      "امین مویدی"
     ],
     "fiscalYears": [
       {

@@ -592,16 +592,22 @@ const Settings: React.FC<SettingsProps> = ({
         const companyMap = new Map<string, any>();
         (normalizedSettings.companies || []).forEach((c: any) => {
           if (c && c.name && c.name.trim()) {
-            companyMap.set(c.name.trim(), {
+            const nameKey = c.name.trim();
+            if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+            companyMap.set(nameKey, {
               ...c,
-              name: c.name.trim(),
+              name: nameKey,
               banks: Array.isArray(c.banks) ? c.banks : []
             });
           }
         });
         (normalizedSettings.companyNames || []).forEach((name: string) => {
-          if (name && name.trim() && !companyMap.has(name.trim())) {
-            companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
+          if (name && name.trim()) {
+            const nameKey = name.trim();
+            if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+            if (!companyMap.has(nameKey)) {
+              companyMap.set(nameKey, { id: 'comp_' + nameKey, name: nameKey, showInWarehouse: true, banks: [] });
+            }
           }
         });
         let normCompanies = Array.from(companyMap.values());
@@ -656,16 +662,22 @@ const Settings: React.FC<SettingsProps> = ({
       const companyMap = new Map<string, any>();
       (safeData.companies || []).forEach((c: any) => {
         if (c && c.name && c.name.trim()) {
-          companyMap.set(c.name.trim(), {
+          const nameKey = c.name.trim();
+          if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+          companyMap.set(nameKey, {
             ...c,
-            name: c.name.trim(),
+            name: nameKey,
             banks: Array.isArray(c.banks) ? c.banks : []
           });
         }
       });
       (safeData.companyNames || []).forEach((name: string) => {
-        if (name && name.trim() && !companyMap.has(name.trim())) {
-          companyMap.set(name.trim(), { id: generateUUID(), name: name.trim(), showInWarehouse: true, banks: [] });
+        if (name && name.trim()) {
+          const nameKey = name.trim();
+          if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+          if (!companyMap.has(nameKey)) {
+            companyMap.set(nameKey, { id: 'comp_' + nameKey, name: nameKey, showInWarehouse: true, banks: [] });
+          }
         }
       });
       let loadedCompanies = Array.from(companyMap.values());
@@ -1283,7 +1295,7 @@ const Settings: React.FC<SettingsProps> = ({
     if (!newCompanyName.trim()) return;
     let updatedCompanies = settings.companies || [];
     const companyData = {
-      id: editingCompanyId || generateUUID(),
+      id: editingCompanyId || 'comp_' + newCompanyName.trim(),
       name: newCompanyName.trim(),
       logo: newCompanyLogo,
       showInWarehouse: newCompanyShowInWarehouse,
@@ -1299,15 +1311,19 @@ const Settings: React.FC<SettingsProps> = ({
     };
     if (editingCompanyId) {
       updatedCompanies = updatedCompanies.map((c) =>
-        c.id === editingCompanyId ? companyData : c,
+        c.id === editingCompanyId ? { ...c, ...companyData } : c,
       );
     } else {
-      // If adding a new company and only default unconfigured "شرکت اصلی" exists, replace it
-      const isOnlyDefault = updatedCompanies.length === 1 && updatedCompanies[0].name === "شرکت اصلی" && !updatedCompanies[0].logo && !updatedCompanies[0].registrationNumber;
-      if (isOnlyDefault) {
-        updatedCompanies = [companyData];
+      const existingIdx = updatedCompanies.findIndex(c => c.name.trim().toLowerCase() === newCompanyName.trim().toLowerCase());
+      if (existingIdx !== -1) {
+        updatedCompanies[existingIdx] = { ...updatedCompanies[existingIdx], ...companyData };
       } else {
-        updatedCompanies = [...updatedCompanies, companyData];
+        const isOnlyDefault = updatedCompanies.length === 1 && updatedCompanies[0].name === "شرکت اصلی" && !updatedCompanies[0].logo && !updatedCompanies[0].registrationNumber;
+        if (isOnlyDefault) {
+          updatedCompanies = [companyData];
+        } else {
+          updatedCompanies = [...updatedCompanies, companyData];
+        }
       }
     }
     const newSettings = {
@@ -3140,37 +3156,79 @@ const Settings: React.FC<SettingsProps> = ({
                       {settings.companies?.map((c) => (
                         <div
                           key={c.id}
-                          className="flex flex-col glass-panel p-3 rounded border shadow-sm gap-2"
+                          className="flex flex-col glass-panel p-3 rounded-xl border border-gray-200/80 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 shadow-sm gap-2"
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
-                              {c.logo && (
+                              {c.logo ? (
                                 <img
                                   src={c.logo}
-                                  className="w-6 h-6 object-contain"
+                                  className="w-7 h-7 object-contain rounded bg-white p-0.5 border"
                                 />
+                              ) : (
+                                <div className="w-7 h-7 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                                  {c.name.substring(0, 2)}
+                                </div>
                               )}
-                              <span className="text-sm font-bold">
+                              <span className="text-sm font-black text-gray-800 dark:text-gray-100">
                                 {c.name}
                               </span>
                             </div>
-                            <div className="flex gap-1">
+                            <div className="flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => handleEditCompany(c)}
-                                className="text-blue-500 p-1 hover:bg-blue-50 rounded"
+                                className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg flex items-center gap-1 text-xs font-bold transition-colors"
+                                title="ویرایش اطلاعات"
                               >
                                 <Pencil size={14} />
+                                <span>ویرایش</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveCompany(c.id)}
-                                className="text-red-500 p-1 hover:bg-red-50 rounded"
+                                className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg flex items-center gap-1 text-xs font-bold transition-colors"
+                                title="حذف شرکت"
                               >
                                 <Trash2 size={14} />
                               </button>
                             </div>
                           </div>
+
+                          {(c.nationalId || c.registrationNumber || c.phone || c.address || (c.banks && c.banks.length > 0)) && (
+                            <div className="text-xs text-gray-700 dark:text-gray-300 bg-slate-50/80 dark:bg-gray-900/50 p-2.5 rounded-lg flex flex-wrap gap-x-4 gap-y-1.5 border border-slate-100 dark:border-gray-800">
+                              {c.nationalId && (
+                                <span>شناسه ملی: <strong className="font-mono text-gray-900 dark:text-gray-100 font-bold">{c.nationalId}</strong></span>
+                              )}
+                              {c.registrationNumber && (
+                                <span>شماره ثبت: <strong className="font-mono text-gray-900 dark:text-gray-100 font-bold">{c.registrationNumber}</strong></span>
+                              )}
+                              {c.economicCode && (
+                                <span>کد اقتصادی: <strong className="font-mono text-gray-900 dark:text-gray-100 font-bold">{c.economicCode}</strong></span>
+                              )}
+                              {c.phone && (
+                                <span>تلفن: <strong className="font-mono text-gray-900 dark:text-gray-100 font-bold">{c.phone}</strong></span>
+                              )}
+                              {c.address && (
+                                <span className="w-full">آدرس: <strong className="text-gray-900 dark:text-gray-100">{c.address}</strong></span>
+                              )}
+                              {c.banks && c.banks.length > 0 && (
+                                <div className="w-full mt-1 border-t border-slate-200/60 dark:border-gray-700/60 pt-1.5 space-y-1">
+                                  <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                                    <span>حساب‌های بانکی ({c.banks.length}):</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {c.banks.map((b, idx) => (
+                                      <span key={b.id || idx} className="bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-[11px] font-medium dir-ltr inline-flex items-center gap-1">
+                                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{b.bankName || 'بانک'}:</span>
+                                        <span className="font-mono">{b.accountNumber || b.sheba || b.cardNumber}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

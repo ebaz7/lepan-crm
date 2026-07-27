@@ -738,23 +738,29 @@ function App() {
 
                 // Sync companyNames with companies
                 const companyMap = new Map<string, any>();
-                settingsData.companies.forEach((c: any) => {
+                (settingsData.companies || []).forEach((c: any) => {
                     if (c && c.name && c.name.trim()) {
-                        companyMap.set(c.name.trim(), {
+                        const nameKey = c.name.trim();
+                        if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+                        companyMap.set(nameKey, {
                             ...c,
-                            name: c.name.trim(),
+                            name: nameKey,
                             banks: Array.isArray(c.banks) ? c.banks : []
                         });
                     }
                 });
-                settingsData.companyNames.forEach((name: string) => {
-                    if (name && name.trim() && !companyMap.has(name.trim())) {
-                        companyMap.set(name.trim(), {
-                            id: Math.random().toString(36).substring(2, 11),
-                            name: name.trim(),
-                            showInWarehouse: true,
-                            banks: []
-                        });
+                (settingsData.companyNames || []).forEach((name: string) => {
+                    if (name && name.trim()) {
+                        const nameKey = name.trim();
+                        if (nameKey === 'd _' || nameKey === 'e' || nameKey === 'تامین کننده') return;
+                        if (!companyMap.has(nameKey)) {
+                            companyMap.set(nameKey, {
+                                id: 'comp_' + nameKey,
+                                name: nameKey,
+                                showInWarehouse: true,
+                                banks: []
+                            });
+                        }
                     }
                 });
 
