@@ -66,46 +66,52 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.companyNames = [];
                 }
 
-                // Sync custom names from companyNames to companies if missing
-                if (MEMORY_DB_CACHE.settings.companyNames.length > 0) {
-                    const existingNames = new Set(MEMORY_DB_CACHE.settings.companies.map(c => c && c.name));
-                    MEMORY_DB_CACHE.settings.companyNames.forEach((name, idx) => {
-                        if (name && !existingNames.has(name)) {
-                            MEMORY_DB_CACHE.settings.companies.push({
-                                id: 'comp_' + idx + '_' + Date.now(),
-                                name,
-                                showInWarehouse: true,
-                                banks: []
-                            });
-                            existingNames.add(name);
+                // Scan all DB collections to gather all real registered/used company names
+                const dbCompanies = new Set();
+                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => { if (c && c.name && c.name.trim()) dbCompanies.add(c.name.trim()); });
+                (MEMORY_DB_CACHE.settings.companyNames || []).forEach(n => { if (n && n.trim()) dbCompanies.add(n.trim()); });
+                (MEMORY_DB_CACHE.orders || []).forEach(o => { if (o.payingCompany) dbCompanies.add(o.payingCompany.trim()); if (o.company) dbCompanies.add(o.company.trim()); });
+                (MEMORY_DB_CACHE.exitPermits || []).forEach(p => { if (p.company) dbCompanies.add(p.company.trim()); });
+                (MEMORY_DB_CACHE.warehouseTransactions || []).forEach(w => { if (w.company) dbCompanies.add(w.company.trim()); });
+                (MEMORY_DB_CACHE.chequeReceipts || []).forEach(c => { if (c.company) dbCompanies.add(c.company.trim()); });
+                (MEMORY_DB_CACHE.secretariatLetters || []).forEach(l => { if (l.company) dbCompanies.add(l.company.trim()); });
+                (MEMORY_DB_CACHE.tradeRecords || []).forEach(t => { if (t.company) dbCompanies.add(t.company.trim()); });
+                if (Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears)) {
+                    MEMORY_DB_CACHE.settings.fiscalYears.forEach(fy => {
+                        if (fy && fy.companySequences) {
+                            Object.keys(fy.companySequences).forEach(k => { if (k && k.trim()) dbCompanies.add(k.trim()); });
                         }
                     });
                 }
 
-                // If companies has only default 'شرکت اصلی' but custom company names exist, remove the default placeholder
-                const hasDefaultOnly = MEMORY_DB_CACHE.settings.companies.length === 1 && MEMORY_DB_CACHE.settings.companies[0].name === 'شرکت اصلی';
-                const hasCustomNames = MEMORY_DB_CACHE.settings.companyNames.some(n => n && n !== 'شرکت اصلی');
+                const companyMap = new Map();
+                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
+                    if (c && c.name && c.name.trim()) companyMap.set(c.name.trim(), c);
+                });
 
-                if (hasDefaultOnly && hasCustomNames) {
-                    MEMORY_DB_CACHE.settings.companies = MEMORY_DB_CACHE.settings.companyNames
-                        .filter(n => n && n !== 'شرکت اصلی')
-                        .map((name, idx) => ({
+                Array.from(dbCompanies).forEach((name, idx) => {
+                    if (name && !companyMap.has(name)) {
+                        companyMap.set(name, {
                             id: 'comp_' + idx + '_' + Date.now(),
                             name,
                             showInWarehouse: true,
                             banks: []
-                        }));
+                        });
+                    }
+                });
+
+                let allCompanies = Array.from(companyMap.values());
+                const hasCustomCompanies = allCompanies.some(c => c.name !== 'شرکت اصلی');
+                if (hasCustomCompanies) {
+                    allCompanies = allCompanies.filter(c => c.name !== 'شرکت اصلی' || c.logo || c.registrationNumber || (c.banks && c.banks.length > 0));
                 }
 
-                // If still empty, default to 'شرکت اصلی'
-                if (MEMORY_DB_CACHE.settings.companies.length === 0) {
-                    MEMORY_DB_CACHE.settings.companies = [
-                        { id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }
-                    ];
+                if (allCompanies.length === 0) {
+                    allCompanies = [{ id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }];
                 }
 
-                // Keep companyNames synced
-                MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
+                MEMORY_DB_CACHE.settings.companies = allCompanies;
+                MEMORY_DB_CACHE.settings.companyNames = allCompanies.map(c => c.name);
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [
                         { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },
