@@ -847,7 +847,6 @@ app.post('/api/sayan-proxy/dump', (req, res) => {
     try {
         const fs = require('fs');
         fs.writeFileSync('./sayan_db_dump.json', JSON.stringify(req.body, null, 2), 'utf8');
-        refreshCache();
         res.json({ success: true, message: 'اطلاعات با موفقیت در سرور ذخیره شد.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2690,7 +2689,7 @@ app.post('/api/settings', (req, res) => {
 
     const oldSettings = db.settings || {};
     db.settings = { ...db.settings, ...newSettings }; 
-    saveDbImmediate(db); 
+    saveDb(db); 
 
     // Auto-restart bots if tokens changed
     if (newSettings.telegramBotToken && newSettings.telegramBotToken !== oldSettings.telegramBotToken) {
