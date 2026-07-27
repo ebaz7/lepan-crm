@@ -13,13 +13,6 @@
     "bankNames": [],
     "fiscalYears": [
       {
-        "id": "fy_1402",
-        "label": "1402",
-        "isClosed": false,
-        "companySequences": {},
-        "createdAt": 1785156624828
-      },
-      {
         "id": "fy_1403",
         "label": "1403",
         "isClosed": false,
@@ -32,16 +25,9 @@
         "isClosed": false,
         "companySequences": {},
         "createdAt": 1785156624828
-      },
-      {
-        "id": "fy_1405",
-        "label": "1405",
-        "isClosed": false,
-        "companySequences": {},
-        "createdAt": 1785156624828
       }
     ],
-    "activeFiscalYearId": "fy_1404"
+    "activeFiscalYearId": "fy_1403"
   },
   "users": [
     {

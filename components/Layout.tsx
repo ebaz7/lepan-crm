@@ -878,7 +878,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onBack, activeTab, setActiveT
                         onChange={async (e) => {
                             const newYearId = e.target.value;
                             const newSettings = { ...settings, activeFiscalYearId: newYearId };
-                            await saveSettings(newSettings);
+                            await saveSettings(newSettings); localStorage.setItem('app_data_settings', JSON.stringify(newSettings));
                             // Force reload to apply new context globally
                             window.location.reload(); 
                         }}

@@ -2697,7 +2697,7 @@ app.get('/api/settings', (req, res) => {
 });
 app.post('/api/settings', (req, res) => { 
     const db = getDb(); 
-    const newSettings = { ...req.body };
+    const newSettings = { ...req.body }; console.log('POST settings activeFiscalYearId:', newSettings.activeFiscalYearId);
 
     // Sanitize Group IDs (Handle "123-" typo from RTL input)
     const sanitizeId = (id) => {
@@ -3595,11 +3595,6 @@ app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });;
-    } catch (e) {
-        console.error("Manual Sales Report Sending Error:", e);
-        res.status(500).json({ error: e.message });
-    }
-});
 
 app.post('/api/users', (req, res) => { 
     const db = getDb(); 
