@@ -111,26 +111,16 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave 
           });
       }
 
-      // 2. All companies banks in database
-      (currentSettings.companies || []).forEach(c => {
-          if (c.banks && c.banks.length > 0) {
-              c.banks.forEach(b => {
-                  if (b && b.bankName) {
-                      const label = `${b.bankName}${b.accountNumber ? ` - ${b.accountNumber}` : ''}`;
-                      bankSet.add(label);
-                  }
-              });
+      // 2. Fallback operating banks ONLY if no company-specific bank exists
+      if (bankSet.size === 0) {
+          (currentSettings.operatingBankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+          (currentSettings.bankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+          if (currentSettings.companyBank && typeof currentSettings.companyBank === 'string' && currentSettings.companyBank.trim()) {
+              bankSet.add(currentSettings.companyBank.trim());
           }
-      });
-
-      // 3. Operating banks / general bank names in settings
-      (currentSettings.operatingBankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
-      (currentSettings.bankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
-      if (currentSettings.companyBank && typeof currentSettings.companyBank === 'string' && currentSettings.companyBank.trim()) {
-          bankSet.add(currentSettings.companyBank.trim());
       }
 
-      // 4. Default Iranian banks fallback
+      // 3. Default Iranian banks fallback
       if (bankSet.size === 0) {
           ['بانک ملی', 'بانک ملت', 'بانک تجارت', 'بانک صادرات', 'بانک سپه', 'بانک پاسارگاد', 'بانک سامان', 'بانک پارسیان', 'بانک کشاورزی', 'بانک مسکن', 'بانک رفاه'].forEach(b => bankSet.add(b));
       }

@@ -373,6 +373,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     const shamsiDate = utils.toShamsiFull(dateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
     const gregDate = utils.getTehranDateString(dateObj);
 
+    const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === 'string' && settings.telegramBotToken.trim());
+    const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === 'string' && settings.baleBotToken.trim());
+
     const salesTargets = targetsOverride ? [...targetsOverride] : [];
     if (!targetsOverride) {
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
@@ -402,6 +405,15 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     const uniqueSalesTargets = [];
     const seenMap = new Set();
     for (const t of salesTargets) {
+        if (t.platform === 'telegram' && !isTelegramConfigured) {
+            console.log(`[Sales Report] Skipping Telegram target ${t.id} because Telegram token is not set.`);
+            continue;
+        }
+        if (t.platform === 'bale' && !isBaleConfigured) {
+            console.log(`[Sales Report] Skipping Bale target ${t.id} because Bale token is not set.`);
+            continue;
+        }
+
         const cleanId = utils.sanitizeGroupId(t.id);
         if (!cleanId) continue;
         const key = `${t.platform}_${cleanId}`;
@@ -412,7 +424,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     }
 
     if (uniqueSalesTargets.length === 0) {
-        throw new Error('گروهی برای ارسال گزارش فروش (تلگرام یا بله) در تنظیمات سیستم ثبت نشده است.');
+        throw new Error('هیچ گروه‌ یا چت فعالی برای پیام‌رسان‌های تنظیم‌شده (بله یا تلگرام) یافت نشد. لطفاً آیدی گروه بله/تلگرام و توکن ربات مربوطه را در تنظیمات وارد کنید.');
     }
 
     // Fetch sales data from Sayan ERP
@@ -3316,6 +3328,9 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         const filename = `Production_Report_${dateFrom.replace(/[\/\\]/g, '-')}.pdf`;
         const settings = db.settings || {};
         
+        const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === 'string' && settings.telegramBotToken.trim());
+        const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === 'string' && settings.baleBotToken.trim());
+
         // Collect target chat/group IDs
         const targetIds = [];
         if (settings.productionTelegramGroupId) targetIds.push({ platform: 'telegram', id: settings.productionTelegramGroupId });
@@ -3347,6 +3362,15 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         const uniqueTargets = [];
         const seenSet = new Set();
         for (const t of targetIds) {
+            if (t.platform === 'telegram' && !isTelegramConfigured) {
+                console.log(`[Production Report] Skipping Telegram target ${t.id} because Telegram token is not set.`);
+                continue;
+            }
+            if (t.platform === 'bale' && !isBaleConfigured) {
+                console.log(`[Production Report] Skipping Bale target ${t.id} because Bale token is not set.`);
+                continue;
+            }
+
             const cleanId = utils.sanitizeGroupId(t.id);
             if (!cleanId) continue;
             const key = `${t.platform}:${cleanId}`;
@@ -3357,7 +3381,7 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         }
 
         if (uniqueTargets.length === 0) {
-            return res.status(400).json({ error: 'هیچ شناسه گروه یا چت باتی در تنظیمات سیستم یافت نشد.' });
+            return res.status(400).json({ error: 'هیچ آیدی گروه فعال و توکن ربات تنظیم‌شده‌ای (بله یا تلگرام) برای ارسال گزارش تولید یافت نشد.' });
         }
 
         let sentCount = 0;
