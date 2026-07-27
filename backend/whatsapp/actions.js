@@ -16,8 +16,7 @@ export const handleCreatePayment = (db, args) => {
     const company = db.settings.defaultCompany || '';
     let minStart = db.settings.currentTrackingNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
-        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startTrackingNumber || minStart;
         }
@@ -64,8 +63,7 @@ export const handleCreateBijak = (db, args) => {
     const company = db.settings.defaultCompany || '';
     let minStart = 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
-        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startBijakNumber || 1000;
         }
@@ -115,8 +113,7 @@ export const handleCreateExitPermit = (db, args) => {
     const company = db.settings.defaultCompany || '';
     let minStart = db.settings.currentExitPermitNumber || 1000;
     if (db.settings.activeFiscalYearId && company) {
-        const fiscalYears = Array.isArray(db.settings.fiscalYears) ? db.settings.fiscalYears : [];
-        const year = fiscalYears.find(y => y.id === db.settings.activeFiscalYearId);
+        const year = (db.settings.fiscalYears || []).find(y => y.id === db.settings.activeFiscalYearId);
         if (year && year.companySequences && year.companySequences[company]) {
             minStart = year.companySequences[company].startExitPermitNumber || minStart;
         }

@@ -20,7 +20,7 @@ export const FiscalYearSwitcher: React.FC = () => {
         getSettings().then(setSettings);
     }, []);
 
-    const activeYear = Array.isArray(settings?.fiscalYears) ? settings.fiscalYears.find(y => y.id === settings.activeFiscalYearId) : undefined;
+    const activeYear = settings?.fiscalYears?.find(y => y.id === settings.activeFiscalYearId);
 
     const handleSelect = async (yearId: string) => {
         if (!settings) return;
@@ -30,7 +30,7 @@ export const FiscalYearSwitcher: React.FC = () => {
         window.location.reload(); 
     };
 
-    if (!settings || !Array.isArray(settings.fiscalYears) || settings.fiscalYears.length === 0) return null;
+    if (!settings || !settings.fiscalYears || settings.fiscalYears.length === 0) return null;
 
     return (
         <div className="relative no-print">
@@ -81,7 +81,7 @@ export const FiscalYearManager: React.FC<{
     useEffect(() => {
         const initializeConfig = (currentSettings: SystemSettings) => {
             setSettings(currentSettings);
-            const years = Array.isArray(currentSettings.fiscalYears) ? currentSettings.fiscalYears : [];
+            const years = currentSettings.fiscalYears || [];
             if (years.length > 0) {
                 // Try to find the active fiscal year, or default to the latest one
                 const activeId = currentSettings.activeFiscalYearId;
@@ -100,34 +100,68 @@ export const FiscalYearManager: React.FC<{
         }
     }, [propSettings]);
 
+    const getActiveCompaniesList = (currentSettings: SystemSettings, currentYear?: FiscalYear): { id: string; name: string }[] => {
+        const companyMap = new Map<string, { id: string; name: string }>();
+
+        // 1. Add from settings.companies
+        (currentSettings.companies || []).forEach(c => {
+            if (c && c.name && c.name.trim()) {
+                companyMap.set(c.name.trim(), { id: c.id || generateUUID(), name: c.name.trim() });
+            }
+        });
+
+        // 2. Add from settings.companyNames
+        (currentSettings.companyNames || []).forEach(name => {
+            if (name && name.trim() && !companyMap.has(name.trim())) {
+                companyMap.set(name.trim(), { id: generateUUID(), name: name.trim() });
+            }
+        });
+
+        // 3. Add from currentYear sequences if any exist
+        if (currentYear?.companySequences) {
+            Object.keys(currentYear.companySequences).forEach(name => {
+                if (name && name.trim() && !companyMap.has(name.trim())) {
+                    companyMap.set(name.trim(), { id: generateUUID(), name: name.trim() });
+                }
+            });
+        }
+
+        let list = Array.from(companyMap.values());
+
+        // Filter out default "شرکت اصلی" if user has registered other custom companies AND "شرکت اصلی" has no sequence configured
+        const hasOtherCompanies = list.some(c => c.name !== 'شرکت اصلی');
+        const hasSeqForDefault = currentYear?.companySequences?.['شرکت اصلی'];
+        if (hasOtherCompanies && !hasSeqForDefault) {
+            list = list.filter(c => c.name !== 'شرکت اصلی');
+        }
+
+        if (list.length === 0) {
+            list = [{ id: 'comp_default', name: 'شرکت اصلی' }];
+        }
+
+        return list;
+    };
+
     const loadCompanyConfig = (yearId: string, currentSettings: SystemSettings) => {
-        const years = Array.isArray(currentSettings.fiscalYears) ? currentSettings.fiscalYears : [];
-        const year = years.find(y => y.id === yearId);
+        const year = currentSettings.fiscalYears?.find(y => y.id === yearId);
         if (!year) return;
         setEditingYearId(yearId);
         
         const configMap: Record<string, { pay: string, exit: string, bijak: string, cheque: string }> = {};
-        const companies = currentSettings.companies && currentSettings.companies.length > 0 
-            ? currentSettings.companies 
-            : (currentSettings.companyNames || []).map((name, i) => ({ id: `comp_${i}`, name, showInWarehouse: true, banks: [] }));
+        const companies = getActiveCompaniesList(currentSettings, year);
         
         // GLOBAL DEFAULTS (Current System State)
-        // If year config is missing, we suggest the current system numbers + 1 or existing
         const defaultPay = currentSettings.currentTrackingNumber ? currentSettings.currentTrackingNumber + 1 : 1000;
         const defaultExit = currentSettings.currentExitPermitNumber ? currentSettings.currentExitPermitNumber + 1 : 1000;
-        const defaultCheque = currentSettings.currentChequeReceiptNumber ? currentSettings.currentChequeReceiptNumber : 1000;
+        const defaultCheque = currentSettings.currentChequeReceiptNumber ? parseInt(String(currentSettings.currentChequeReceiptNumber)) || 1000 : 1000;
 
         companies.forEach(c => {
-            // FIX: Using type assertion to avoid property errors on empty object
-            // Also ensure we handle potential company renames gracefully in future (though ID based is better, current logic is Name based)
             const seq = (year.companySequences?.[c.name] || {}) as CompanySequenceConfig;
             
-            // Warehouse Bijak: Use specific company sequence if available in settings, else 1
             const currentBijak = currentSettings.warehouseSequences?.[c.name];
             const defaultBijak = currentBijak ? currentBijak + 1 : 1000;
 
             configMap[c.name] = {
-                // Priority: 1. Existing Fiscal Config, 2. Current System Counter, 3. Default 1000
                 pay: seq.startTrackingNumber ? String(seq.startTrackingNumber) : String(defaultPay),
                 exit: seq.startExitPermitNumber ? String(seq.startExitPermitNumber) : String(defaultExit),
                 bijak: seq.startBijakNumber ? String(seq.startBijakNumber) : String(defaultBijak),
@@ -148,10 +182,9 @@ export const FiscalYearManager: React.FC<{
             createdAt: Date.now()
         };
 
-        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
         const updated = {
             ...settings,
-            fiscalYears: [...currentYears, newYear],
+            fiscalYears: [...(settings.fiscalYears || []), newYear],
         };
         
         await saveSettings(updated);
@@ -166,10 +199,9 @@ export const FiscalYearManager: React.FC<{
 
     const handleCloseYear = async (id: string) => {
         if (!settings || !confirm('آیا مطمئن هستید؟ سال بسته شده فقط قابل مشاهده خواهد بود.')) return;
-        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
         const updated = {
             ...settings,
-            fiscalYears: currentYears.map(y => y.id === id ? { ...y, isClosed: true } : y)
+            fiscalYears: settings.fiscalYears?.map(y => y.id === id ? { ...y, isClosed: true } : y)
         };
         await saveSettings(updated);
         setSettings(updated);
@@ -192,8 +224,7 @@ export const FiscalYearManager: React.FC<{
             };
         });
 
-        const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
-        const updatedYears = currentYears.map(y => 
+        const updatedYears = settings.fiscalYears?.map(y => 
             y.id === editingYearId ? { ...y, companySequences: sequences } : y
         );
 
@@ -206,8 +237,7 @@ export const FiscalYearManager: React.FC<{
 
     if (!settings) return null;
 
-    const currentYears = Array.isArray(settings.fiscalYears) ? settings.fiscalYears : [];
-    const editingYear = currentYears.find(y => y.id === editingYearId);
+    const editingYear = settings.fiscalYears?.find(y => y.id === editingYearId);
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -226,7 +256,7 @@ export const FiscalYearManager: React.FC<{
             {/* List Years */}
             <div className="space-y-3">
                 <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><ListOrdered size={20}/> لیست سال‌های مالی</h3>
-                {currentYears.map(y => (
+                {settings.fiscalYears?.map(y => (
                     <div key={y.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 transition-all ${y.id === settings.activeFiscalYearId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'glass-panel border-gray-200'} ${editingYearId === y.id ? 'shadow-md border-indigo-300' : ''}`}>
                         <div className="flex items-center gap-3 w-full md:w-auto">
                             {y.isClosed ? <Lock size={18} className="text-gray-400"/> : <Unlock size={18} className="text-green-500"/>}
@@ -288,10 +318,7 @@ export const FiscalYearManager: React.FC<{
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {(settings.companies && settings.companies.length > 0
-                                    ? settings.companies
-                                    : (settings.companyNames || []).map((name, i) => ({ id: `comp_${i}`, name, showInWarehouse: true, banks: [] }))
-                                ).map(c => {
+                                {getActiveCompaniesList(settings, editingYear).map(c => {
                                     const conf = companyConfig[c.name] || { pay: '1', exit: '1', bijak: '1', cheque: '1' };
                                     return (
                                         <tr key={c.id} className="hover:bg-indigo-50/30">

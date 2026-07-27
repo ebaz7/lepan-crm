@@ -589,12 +589,22 @@ const Settings: React.FC<SettingsProps> = ({
         }
         
         // Ensure companies and companyNames arrays exist and are in sync
-        if (!Array.isArray(normalizedSettings.companies) || normalizedSettings.companies.length === 0) {
-          normalizedSettings.companies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
+        const companyMap = new Map<string, any>();
+        (normalizedSettings.companies || []).forEach((c: any) => { if (c && c.name) companyMap.set(c.name, c); });
+        (normalizedSettings.companyNames || []).forEach((name: string) => {
+          if (name && !companyMap.has(name)) {
+            companyMap.set(name, { id: generateUUID(), name, showInWarehouse: true, banks: [] });
+          }
+        });
+        let normCompanies = Array.from(companyMap.values());
+        if (normCompanies.length > 1 && normCompanies.some(c => c.name !== 'شرکت اصلی')) {
+          normCompanies = normCompanies.filter(c => c.name !== 'شرکت اصلی' || c.banks?.length > 0 || c.logo || c.registrationNumber);
         }
-        if (!Array.isArray(normalizedSettings.companyNames) || normalizedSettings.companyNames.length === 0) {
-          normalizedSettings.companyNames = normalizedSettings.companies.map((c: any) => c.name);
+        if (normCompanies.length === 0) {
+          normCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
         }
+        normalizedSettings.companies = normCompanies;
+        normalizedSettings.companyNames = normCompanies.map((c: any) => c.name);
         if (!Array.isArray(normalizedSettings.fiscalYears) || normalizedSettings.fiscalYears.length === 0) {
           normalizedSettings.fiscalYears = [
             { id: "fy_1402", label: "1402", isClosed: false, createdAt: Date.now() },
@@ -627,12 +637,22 @@ const Settings: React.FC<SettingsProps> = ({
       safeData.companies = safeData.companies || [];
       safeData.operatingBankNames = safeData.operatingBankNames || [];
       safeData.insuranceCompanies = safeData.insuranceCompanies || [];
-      if (!Array.isArray(safeData.companies) || safeData.companies.length === 0) {
-        safeData.companies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
+      const companyMap = new Map<string, any>();
+      (safeData.companies || []).forEach((c: any) => { if (c && c.name) companyMap.set(c.name, c); });
+      (safeData.companyNames || []).forEach((name: string) => {
+        if (name && !companyMap.has(name)) {
+          companyMap.set(name, { id: generateUUID(), name, showInWarehouse: true, banks: [] });
+        }
+      });
+      let loadedCompanies = Array.from(companyMap.values());
+      if (loadedCompanies.length > 1 && loadedCompanies.some(c => c.name !== 'شرکت اصلی')) {
+        loadedCompanies = loadedCompanies.filter(c => c.name !== 'شرکت اصلی' || c.banks?.length > 0 || c.logo || c.registrationNumber);
       }
-      if (!Array.isArray(safeData.companyNames) || safeData.companyNames.length === 0) {
-        safeData.companyNames = safeData.companies.map((c: any) => c.name);
+      if (loadedCompanies.length === 0) {
+        loadedCompanies = [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }];
       }
+      safeData.companies = loadedCompanies;
+      safeData.companyNames = loadedCompanies.map((c: any) => c.name);
       if (!safeData.warehouseSequences) safeData.warehouseSequences = {};
       if (!safeData.companyNotifications) safeData.companyNotifications = {};
       if (!safeData.customRoles) safeData.customRoles = [];
@@ -1227,7 +1247,7 @@ const Settings: React.FC<SettingsProps> = ({
   };
   // -------------------------------------
 
-  const handleSaveCompany = () => {
+  const handleSaveCompany = async () => {
     if (!newCompanyName.trim()) return;
     let updatedCompanies = settings.companies || [];
     const companyData = {
@@ -1250,13 +1270,25 @@ const Settings: React.FC<SettingsProps> = ({
         c.id === editingCompanyId ? companyData : c,
       );
     } else {
-      updatedCompanies = [...updatedCompanies, companyData];
+      // If adding a new company and only default unconfigured "شرکت اصلی" exists, replace it
+      const isOnlyDefault = updatedCompanies.length === 1 && updatedCompanies[0].name === "شرکت اصلی" && !updatedCompanies[0].logo && !updatedCompanies[0].registrationNumber;
+      if (isOnlyDefault) {
+        updatedCompanies = [companyData];
+      } else {
+        updatedCompanies = [...updatedCompanies, companyData];
+      }
     }
-    setSettings({
+    const newSettings = {
       ...settings,
       companies: updatedCompanies,
       companyNames: updatedCompanies.map((c) => c.name),
-    });
+    };
+    setSettings(newSettings);
+    try {
+      await saveSettings(newSettings);
+    } catch (err) {
+      console.error("Save company settings error:", err);
+    }
     resetCompanyForm();
   };
   const handleEditCompany = (c: Company) => {
@@ -1301,14 +1333,20 @@ const Settings: React.FC<SettingsProps> = ({
     setTempDualPrint(false);
     setEditingBankId(null);
   };
-  const handleRemoveCompany = (id: string) => {
-    if (confirm("حذف؟")) {
+  const handleRemoveCompany = async (id: string) => {
+    if (confirm("آیا از حذف این شرکت مطمئن هستید؟")) {
       const updated = (settings.companies || []).filter((c) => c.id !== id);
-      setSettings({
+      const newSettings = {
         ...settings,
-        companies: updated,
-        companyNames: updated.map((c) => c.name),
-      });
+        companies: updated.length > 0 ? updated : [{ id: generateUUID(), name: "شرکت اصلی", showInWarehouse: true, banks: [] }],
+        companyNames: updated.length > 0 ? updated.map((c) => c.name) : ["شرکت اصلی"],
+      };
+      setSettings(newSettings);
+      try {
+        await saveSettings(newSettings);
+      } catch (err) {
+        console.error("Remove company settings error:", err);
+      }
     }
   };
   const addOrUpdateCompanyBank = () => {
@@ -6032,48 +6070,6 @@ const Settings: React.FC<SettingsProps> = ({
                         <p className="text-[9px] text-gray-400 mt-1 font-bold">
                           فقط کد توکن را وارد کنید. کلمه Bearer به صورت خودکار
                           اضافه می‌شود.
-                        </p>
-                      </div>
-
-                      {/* Default Sayan Report Date Range Settings */}
-                      <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl space-y-3">
-                        <label className="text-xs font-black text-indigo-700 dark:text-indigo-400 block">
-                          📅 بازه زمانی پیش‌فرض گزارشات سایان و دریافت مانده مشتریان ربات
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <span className="text-[11px] font-bold text-gray-500 block mb-1">از تاریخ (شمسی):</span>
-                            <input
-                              type="text"
-                              placeholder="1404/01/01"
-                              className="w-full border border-gray-200 rounded-lg p-2.5 text-sm dir-ltr text-center font-mono focus:ring-2 ring-indigo-500 outline-none"
-                              value={settings.sayanDateFrom || ""}
-                              onChange={(e) =>
-                                setSettings({
-                                  ...settings,
-                                  sayanDateFrom: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <span className="text-[11px] font-bold text-gray-500 block mb-1">تا تاریخ (شمسی):</span>
-                            <input
-                              type="text"
-                              placeholder="1404/12/29"
-                              className="w-full border border-gray-200 rounded-lg p-2.5 text-sm dir-ltr text-center font-mono focus:ring-2 ring-indigo-500 outline-none"
-                              value={settings.sayanDateTo || ""}
-                              onChange={(e) =>
-                                setSettings({
-                                  ...settings,
-                                  sayanDateTo: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-gray-500 leading-relaxed">
-                          * ربات و گزارشات سایان، مانده بدهکاران/بستانکاران را بر اساس این تاریخ محاسبه و دریافت می‌کنند.
                         </p>
                       </div>
                     </div>

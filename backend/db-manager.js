@@ -38,7 +38,7 @@ export const getDb = () => {
             botSubscribers: [],
             customerBalances: [],
             customerChatCodes: [],
-            fiscalYears: [],
+            fiscalYears: {},
             sequences: {},
             notes: []
         };
@@ -58,21 +58,54 @@ export const getDb = () => {
                     MEMORY_DB_CACHE.settings.sayanApiKey = "";
                 }
 
-                // Ensure companies and companyNames exist and are synchronized
-                if (Array.isArray(MEMORY_DB_CACHE.settings.companyNames) && MEMORY_DB_CACHE.settings.companyNames.length > 0) {
-                    if (!Array.isArray(MEMORY_DB_CACHE.settings.companies) || MEMORY_DB_CACHE.settings.companies.length === 0) {
-                        MEMORY_DB_CACHE.settings.companies = MEMORY_DB_CACHE.settings.companyNames.map((name, i) => ({
-                            id: `comp_${i}`, name, showInWarehouse: true, banks: []
+                // Ensure companies and fiscalYears exist in settings
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.companies)) {
+                    MEMORY_DB_CACHE.settings.companies = [];
+                }
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.companyNames)) {
+                    MEMORY_DB_CACHE.settings.companyNames = [];
+                }
+
+                // Sync custom names from companyNames to companies if missing
+                if (MEMORY_DB_CACHE.settings.companyNames.length > 0) {
+                    const existingNames = new Set(MEMORY_DB_CACHE.settings.companies.map(c => c && c.name));
+                    MEMORY_DB_CACHE.settings.companyNames.forEach((name, idx) => {
+                        if (name && !existingNames.has(name)) {
+                            MEMORY_DB_CACHE.settings.companies.push({
+                                id: 'comp_' + idx + '_' + Date.now(),
+                                name,
+                                showInWarehouse: true,
+                                banks: []
+                            });
+                            existingNames.add(name);
+                        }
+                    });
+                }
+
+                // If companies has only default 'شرکت اصلی' but custom company names exist, remove the default placeholder
+                const hasDefaultOnly = MEMORY_DB_CACHE.settings.companies.length === 1 && MEMORY_DB_CACHE.settings.companies[0].name === 'شرکت اصلی';
+                const hasCustomNames = MEMORY_DB_CACHE.settings.companyNames.some(n => n && n !== 'شرکت اصلی');
+
+                if (hasDefaultOnly && hasCustomNames) {
+                    MEMORY_DB_CACHE.settings.companies = MEMORY_DB_CACHE.settings.companyNames
+                        .filter(n => n && n !== 'شرکت اصلی')
+                        .map((name, idx) => ({
+                            id: 'comp_' + idx + '_' + Date.now(),
+                            name,
+                            showInWarehouse: true,
+                            banks: []
                         }));
-                    }
-                } else if (Array.isArray(MEMORY_DB_CACHE.settings.companies) && MEMORY_DB_CACHE.settings.companies.length > 0) {
-                    MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
-                } else {
+                }
+
+                // If still empty, default to 'شرکت اصلی'
+                if (MEMORY_DB_CACHE.settings.companies.length === 0) {
                     MEMORY_DB_CACHE.settings.companies = [
                         { id: 'comp_default', name: 'شرکت اصلی', showInWarehouse: true, banks: [] }
                     ];
-                    MEMORY_DB_CACHE.settings.companyNames = ['شرکت اصلی'];
                 }
+
+                // Keep companyNames synced
+                MEMORY_DB_CACHE.settings.companyNames = MEMORY_DB_CACHE.settings.companies.map(c => c.name);
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [
                         { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },

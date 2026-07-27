@@ -321,8 +321,6 @@ export interface SystemSettings {
   exitPermitThirdGroupConfig?: ExitPermitGroupConfig;
   sayanApiUrl?: string;
   sayanApiKey?: string;
-  sayanDateFrom?: string;
-  sayanDateTo?: string;
   printTemplates?: PrintTemplate[];
   fiscalYears?: FiscalYear[];
   activeFiscalYearId?: string;
