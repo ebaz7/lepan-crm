@@ -2736,7 +2736,7 @@ app.post('/api/settings', (req, res) => {
 
     const oldSettings = db.settings || {};
     db.settings = { ...db.settings, ...newSettings }; 
-    saveDb(db); 
+    dbManager.saveDbImmediate(db); 
 
     // Auto-restart bots if tokens changed
     if (newSettings.telegramBotToken && newSettings.telegramBotToken !== oldSettings.telegramBotToken) {

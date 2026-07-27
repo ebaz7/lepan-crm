@@ -220,28 +220,38 @@ export const sendBotDocument = async (chatId, buffer, name, caption) => {
     }
     const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
 
-    const doSend = async (attempt = 1) => {
+    const doSend = async (parseMode = 'Markdown', attempt = 1) => {
         try {
             const form = new FormData();
             form.append('chat_id', chatId);
-            form.append('document', buffer, { filename: name || 'document.pdf' });
+            form.append('document', buffer, { filename: name || 'document.pdf', contentType: 'application/pdf' });
             form.append('caption', safeCaption || '');
+            if (parseMode) {
+                form.append('parse_mode', parseMode);
+            }
             const res = await callApi('sendDocument', form, true);
             if (!res || res.ok === false) {
                 throw new Error(res ? (res.description || "پاسخ ناموفق از بله") : "پاسخ خالی از بله");
             }
             return res;
         } catch (e) {
-            console.error(`[Bale sendBotDocument] (تلاش ${attempt}/3) خطا برای چت ${chatId}:`, e.message);
+            console.error(`[Bale sendBotDocument] (تلاش ${attempt}/3, parseMode: ${parseMode}) خطا برای چت ${chatId}:`, e.message);
+            
+            // If Markdown parsing failed, try without markdown first
+            if (parseMode === 'Markdown') {
+                return doSend(null, attempt);
+            }
+
             if (attempt < 3) {
                 await new Promise(r => setTimeout(r, 2000 * attempt));
-                return doSend(attempt + 1);
+                return doSend(null, attempt + 1);
             }
             throw e;
         }
     };
 
-    return doSend(1);
+    const hasMarkdown = caption && (caption.includes('*') || caption.includes('_') || caption.includes('`'));
+    return doSend(hasMarkdown ? 'Markdown' : null, 1);
 };
 
 export const deleteBotMessage = (chatId, messageId) => {
