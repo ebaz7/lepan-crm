@@ -659,7 +659,7 @@ const Settings: React.FC<SettingsProps> = ({
       safeData.currentExitPermitNumber =
         safeData.currentExitPermitNumber || 1000;
       safeData.companies = safeData.companies || [];
-      
+      safeData.operatingBankNames = safeData.operatingBankNames || [];
       safeData.insuranceCompanies = safeData.insuranceCompanies || [];
       const companyMap = new Map<string, any>();
       (safeData.companies || []).forEach((c: any) => {
@@ -3212,6 +3212,43 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                   </div>
 
+                  <div className="glass-panel p-4 rounded-xl border border-gray-200">
+                    <h3 className="font-bold text-gray-800 border-b pb-2 mb-3">
+                      بانک‌های عامل (عمومی)
+                    </h3>
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        className="border rounded p-2 text-sm flex-1"
+                        placeholder="نام بانک..."
+                        value={newOperatingBank}
+                        onChange={(e) => setNewOperatingBank(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddOperatingBank}
+                        className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold"
+                      >
+                        افزودن
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {settings.operatingBankNames?.map((b) => (
+                        <span
+                          key={b}
+                          className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-1"
+                        >
+                          {b}{" "}
+                          <button
+                            onClick={() => handleRemoveOperatingBank(b)}
+                            className="text-red-500 hover:bg-red-100 rounded-full p-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

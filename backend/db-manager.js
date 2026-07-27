@@ -137,12 +137,73 @@ export const getDb = () => {
                 MEMORY_DB_CACHE.settings.companies = allCompanies;
                 MEMORY_DB_CACHE.settings.companyNames = allCompanies.map(c => c.name);
 
+                // Scan and extract all bank names & bank account details across database collections
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.operatingBankNames)) {
+                    MEMORY_DB_CACHE.settings.operatingBankNames = [];
+                }
+                if (!Array.isArray(MEMORY_DB_CACHE.settings.bankNames)) {
+                    MEMORY_DB_CACHE.settings.bankNames = [];
+                }
+
+                const extractedBanks = new Set();
+                (MEMORY_DB_CACHE.settings.operatingBankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) extractedBanks.add(b.trim()); });
+                (MEMORY_DB_CACHE.settings.bankNames || []).forEach(b => { if (b && typeof b === 'string' && b.trim()) extractedBanks.add(b.trim()); });
+                if (MEMORY_DB_CACHE.settings.companyBank && typeof MEMORY_DB_CACHE.settings.companyBank === 'string' && MEMORY_DB_CACHE.settings.companyBank.trim()) {
+                    extractedBanks.add(MEMORY_DB_CACHE.settings.companyBank.trim());
+                }
+
+                (MEMORY_DB_CACHE.settings.companies || []).forEach(c => {
+                    if (c && Array.isArray(c.banks)) {
+                        c.banks.forEach(b => {
+                            if (b) {
+                                const bName = typeof b === 'string' ? b : (b.bankName || '');
+                                if (bName && bName.trim()) extractedBanks.add(bName.trim());
+                            }
+                        });
+                    }
+                });
+
+                (MEMORY_DB_CACHE.orders || []).forEach(o => {
+                    if (Array.isArray(o.paymentDetails)) {
+                        o.paymentDetails.forEach(p => {
+                            if (p && p.bankName && p.bankName.trim()) extractedBanks.add(p.bankName.trim());
+                            if (p && p.recipientBank && p.recipientBank.trim()) extractedBanks.add(p.recipientBank.trim());
+                        });
+                    }
+                });
+
+                (MEMORY_DB_CACHE.chequeReceipts || []).forEach(c => {
+                    if (c && c.bankName && c.bankName.trim()) extractedBanks.add(c.bankName.trim());
+                });
+
+                (MEMORY_DB_CACHE.tradeRecords || []).forEach(t => {
+                    ['inspectionPayments', 'clearancePayments', 'shippingPayments', 'agentPayments', 'guarantees'].forEach(key => {
+                        if (Array.isArray(t[key])) {
+                            t[key].forEach(p => {
+                                if (p && p.bank && p.bank.trim()) extractedBanks.add(p.bank.trim());
+                            });
+                        }
+                    });
+                });
+
+                const allExtractedBankList = Array.from(extractedBanks);
+                if (allExtractedBankList.length > 0) {
+                    MEMORY_DB_CACHE.settings.operatingBankNames = Array.from(new Set([
+                        ...MEMORY_DB_CACHE.settings.operatingBankNames,
+                        ...allExtractedBankList
+                    ]));
+                    MEMORY_DB_CACHE.settings.bankNames = Array.from(new Set([
+                        ...MEMORY_DB_CACHE.settings.bankNames,
+                        ...allExtractedBankList
+                    ]));
+                }
+
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [
-                        
+                        { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },
                         { id: 'fy_1403', label: '1403', isClosed: false, companySequences: {}, createdAt: Date.now() },
                         { id: 'fy_1404', label: '1404', isClosed: false, companySequences: {}, createdAt: Date.now() },
-                        
+                        { id: 'fy_1405', label: '1405', isClosed: false, companySequences: {}, createdAt: Date.now() }
                     ];
                 }
                 if (!MEMORY_DB_CACHE.settings.activeFiscalYearId) {

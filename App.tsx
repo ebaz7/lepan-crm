@@ -685,7 +685,7 @@ function App() {
           if (year && year.id !== settings.activeFiscalYearId) {
               const updated = { ...settings, activeFiscalYearId: year.id };
               await saveSettings(updated);
-              setSettings(updated); localStorage.setItem('app_data_settings', JSON.stringify(updated)); window.location.reload();
+              setSettings(updated);
           }
       }
   };
