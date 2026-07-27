@@ -3425,24 +3425,176 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
     }
 });
 
-app.post('/api/sayan/sales-report/send-manual', async (req, res) => {
+app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
     try {
         const db = getDb();
-        const { targetDate } = req.body; // 'today' or 'yesterday'
+        const { targetDate, salesData, dateRangeLabel, applyOfficialTax = true } = req.body; 
         
-        let dateObj = new Date();
-        let label = 'امروز';
-        if (targetDate === 'yesterday') {
-            dateObj.setDate(dateObj.getDate() - 1);
-            label = 'دیروز';
+        const settings = db.settings || {};
+        const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === "string" && settings.telegramBotToken.trim());
+        const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === "string" && settings.baleBotToken.trim());
+        
+        let label = targetDate === "today" ? "امروز" : (targetDate === "yesterday" ? "دیروز" : (dateRangeLabel || targetDate));
+        
+        const salesTargets = [];
+        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: "telegram", id: settings.dailySalesTelegramGroupId });
+        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: "bale", id: settings.dailySalesBaleGroupId });
+        if (settings.dailySalesWhatsappGroupId) salesTargets.push({ platform: "whatsapp", id: settings.dailySalesWhatsappGroupId });
+        if (settings.botAccountingGroupIdTele) salesTargets.push({ platform: "telegram", id: settings.botAccountingGroupIdTele });
+        if (settings.botAccountingGroupIdBale) salesTargets.push({ platform: "bale", id: settings.botAccountingGroupIdBale });
+        if (settings.botAccountingGroupIdWhatsApp) salesTargets.push({ platform: "whatsapp", id: settings.botAccountingGroupIdWhatsApp });
+        if (settings.botAccountingGroupId) salesTargets.push({ platform: "telegram", id: settings.botAccountingGroupId });
+        if (settings.reportsGroupId) salesTargets.push({ platform: "telegram", id: settings.reportsGroupId });
+        if (settings.telegramReportsGroupId) salesTargets.push({ platform: "telegram", id: settings.telegramReportsGroupId });
+        if (settings.telegramReportsGroupId2) salesTargets.push({ platform: "telegram", id: settings.telegramReportsGroupId2 });
+        if (settings.baleReportsGroupId) salesTargets.push({ platform: "bale", id: settings.baleReportsGroupId });
+        if (settings.baleReportsGroupId2) salesTargets.push({ platform: "bale", id: settings.baleReportsGroupId2 });
+        if (settings.telegramChatId) salesTargets.push({ platform: "telegram", id: settings.telegramChatId });
+        if (settings.baleChatId) salesTargets.push({ platform: "bale", id: settings.baleChatId });
+        if (db.groups && Array.isArray(db.groups)) {
+            db.groups.forEach(g => {
+                if (g.chatId) salesTargets.push({ platform: g.platform || "telegram", id: g.chatId });
+            });
+        }
+        
+        const uniqueTargets = [];
+        const seenSet = new Set();
+        for (const t of salesTargets) {
+            if (t.platform === "telegram" && !isTelegramConfigured) continue;
+            if (t.platform === "bale" && !isBaleConfigured) continue;
+            const cleanId = utils.sanitizeGroupId(t.id);
+            if (!cleanId) continue;
+            const key = `${t.platform}:${cleanId}`;
+            if (!seenSet.has(key)) {
+                seenSet.add(key);
+                uniqueTargets.push({ platform: t.platform, id: cleanId });
+            }
+        }
+        
+        if (uniqueTargets.length === 0) {
+            return res.status(400).json({ error: "هیچ آیدی گروه فعال و توکن ربات تنظیم‌شده‌ای (بله یا تلگرام) برای ارسال گزارش فروش یافت نشد." });
+        }
+        
+        if (!salesData || !Array.isArray(salesData)) {
+            return res.status(400).json({ error: "اطلاعات فروش ارسال نشده است." });
         }
 
-        const result = await sendDailySalesReportForDate(db, dateObj, label);
+        const title = `گزارش جامع فروش، مرجوعی و میانگین قیمت - ${label}`;
+        
+        const itemMap = new Map();
+        let summaryStats = {
+            salesQty: 0,
+            salesAmt: 0,
+            returnQty: 0,
+            returnAmt: 0,
+            netQty: 0,
+            netAmt: 0,
+            avgPricePerKg: 0
+        };
+
+        salesData.forEach(row => {
+            const docType = String(row.DocType || row.Field_009 || "").trim();
+            const isReturn = row.IsReturn || ["4", "13", "24"].includes(docType) || (row.Notes || "").includes("مرجوع") || (row.Notes || "").includes("برگشت");
+            
+            const notesStr = String(row.Notes || "") + " " + String(row.ItemNotes || "");
+            const isOfficial = row.IsOfficial || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || row.InvoiceNum === "123" || String(row.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+            
+            const qty = parseFloat(row.Quantity || row.quantity || 0);
+            const rawAmt = parseFloat(row.Amount || row.amount || 0);
+            
+            // 10% official invoice tax increase
+            const effectiveAmt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            
+            const groupName = row.GroupName || row.groupName || row.ItemName || row.itemName || "سایر کالاها";
+            const itemName = row.ItemName || row.itemName || "کالا";
+            const key = groupName;
+
+            if (!itemMap.has(key)) {
+                itemMap.set(key, {
+                    groupName,
+                    itemName,
+                    salesQty: 0,
+                    salesAmt: 0,
+                    returnQty: 0,
+                    returnAmt: 0,
+                    netQty: 0,
+                    netAmt: 0,
+                    avgPricePerKg: 0
+                });
+            }
+
+            const item = itemMap.get(key);
+            if (isReturn) {
+                item.returnQty += qty;
+                item.returnAmt += effectiveAmt;
+                summaryStats.returnQty += qty;
+                summaryStats.returnAmt += effectiveAmt;
+            } else {
+                item.salesQty += qty;
+                item.salesAmt += effectiveAmt;
+                summaryStats.salesQty += qty;
+                summaryStats.salesAmt += effectiveAmt;
+            }
+        });
+
+        const items = Array.from(itemMap.values()).map(item => {
+            item.netQty = item.salesQty - item.returnQty;
+            item.netAmt = item.salesAmt - item.returnAmt;
+            item.avgPricePerKg = item.netQty > 0 ? Math.round(item.netAmt / item.netQty) : 0;
+            return item;
+        });
+
+        summaryStats.netQty = summaryStats.salesQty - summaryStats.returnQty;
+        summaryStats.netAmt = summaryStats.salesAmt - summaryStats.returnAmt;
+        summaryStats.avgPricePerKg = summaryStats.netQty > 0 ? Math.round(summaryStats.netAmt / summaryStats.netQty) : 0;
+
+        const pdfBuffer = await Renderer.generateSalesReportPDF(title, label, items, summaryStats);
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        const filename = `Sales_Return_Report_${timestamp}.pdf`;
+        
+        const fmtFa = (num, decimals = 0) => Number(num || 0).toLocaleString("fa-IR", { maximumFractionDigits: decimals });
+        
+        let caption = `📊 **گزارش تحلیلی فروش و مرجوعی سایان ERP**\n`;
+        caption += `📅 **تاریخ / بازه:** ${label}\n\n`;
+        caption += `🟢 **فروش ناخالص:** ${(summaryStats.salesQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.salesQty, 1)} ک‌گ) | **${fmtFa(summaryStats.salesAmt)} ریال**\n`;
+        if (summaryStats.returnQty > 0 || summaryStats.returnAmt > 0) {
+            caption += `🔴 **مرجوعی (برگشت از فروش):** ${(summaryStats.returnQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.returnQty, 1)} ک‌گ) | **${fmtFa(summaryStats.returnAmt)} ریال**\n`;
+        }
+        caption += `⚖️ **فروش خالص:** ${(summaryStats.netQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.netQty, 1)} ک‌گ) | **${fmtFa(summaryStats.netAmt)} ریال**\n`;
+        caption += `💰 **میانگین قیمت فروش خالص:** **${fmtFa(summaryStats.avgPricePerKg)} ریال / کیلوگرم**\n\n`;
+        caption += `📄 **جدول تفکیکی و خروجی کامل PDF گزارش پیوست گردید.**`;
+
+        let sentCount = 0;
+        let lastError = null;
+        for (const target of uniqueTargets) {
+            try {
+                if (target.platform === "telegram") {
+                    await telegram.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                } else if (target.platform === "bale") {
+                    await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                }
+            } catch (err) {
+                lastError = err.message;
+                console.error(`[Send Sales Report] Failed for ${target.platform}:${target.id}:`, err.message);
+            }
+        }
+        
+        if (sentCount === 0) {
+            return res.status(400).json({ error: `ارسال گزارش آمار فروش ناموفق بود: ${lastError || "خطای ناشناخته"}` });
+        }
+        
         res.json({
             success: true,
-            message: `گزارش فروش ${label} با موفقیت به پیام‌رسان‌ها ارسال شد.`,
-            result
+            message: `گزارش تحلیلی فروش و مرجوعی با موفقیت به ${sentCount} گروه / چت در بات‌ها ارسال شد.`
         });
+    } catch (e) {
+        console.error("Manual Sales Report Sending Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});;
     } catch (e) {
         console.error("Manual Sales Report Sending Error:", e);
         res.status(500).json({ error: e.message });
