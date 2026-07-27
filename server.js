@@ -581,6 +581,10 @@ const setupDailyReports = () => {
         const db = getDb();
         const settings = db.settings || {};
 
+        const todayDateObj = new Date();
+        const shamsiDate = utils.toShamsiFull(todayDateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
+        const gregDate = utils.getTehranDateString(todayDateObj);
+
         // 1. AUTOMATED DAILY SALES REPORT (TODAY AND YESTERDAY)
         const salesTargets = [];
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
@@ -708,6 +712,39 @@ const setupDailyReports = () => {
                 }
             } catch (err) {
                 console.error("[Cron 19:00] Daily production automatic cron error:", err);
+            }
+        }
+    });
+
+    // Schedule daily automated reports for 07:00 Tehran time (03:30 UTC)
+    cron.schedule('30 3 * * *', async () => {
+        console.log(">>> Running Automated 07:00 Reports (Sales yesterday and today)...");
+        const db = getDb();
+        const settings = db.settings || {};
+
+        // 1. AUTOMATED DAILY SALES REPORT (TODAY AND YESTERDAY)
+        const salesTargets = [];
+        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
+        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
+
+        if (salesTargets.length > 0) {
+            console.log(`[Cron 07:00] Preparing Automated Sales Reports for ${salesTargets.length} targets...`);
+            
+            // Send Yesterday's Report
+            try {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                await sendDailySalesReportForDate(db, yesterday, 'دیروز', salesTargets);
+            } catch (err) {
+                console.error("[Cron 07:00] Daily sales (yesterday) automatic cron error:", err);
+            }
+
+            // Send Today's Report
+            try {
+                const today = new Date();
+                await sendDailySalesReportForDate(db, today, 'امروز', salesTargets);
+            } catch (err) {
+                console.error("[Cron 07:00] Daily sales (today) automatic cron error:", err);
             }
         }
     });
