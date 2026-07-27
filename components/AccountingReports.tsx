@@ -95,6 +95,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
     const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
+    const [applyOfficialTax, setApplyOfficialTax] = useState<boolean>(true);
 
     // --- TAB 4: PRODUCTION STATE ---
     const [prodLiveItems, setProdLiveItems] = useState<any[]>([]);
@@ -370,8 +371,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                       AND t9.Field_015 NOT LIKE '%-13%'
                       AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117') 
                       AND t9.Field_005 <> '9'
-                      AND t8.Field_008 >= '${gregFrom}' 
-                      AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
+                      AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z' 
+                      AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                     GROUP BY t9.Field_015
                 `;
             } else {
@@ -608,8 +609,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                   AND t9.Field_015 NOT LIKE '%-13%'
                   AND t9.Field_007 NOT IN ('102', '103', '107', '109', '114', '116', '117')
                   AND t9.Field_005 <> '9'
-                  AND t8.Field_008 >= '${gregFrom}'
-                  AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
+                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const data = await runSayanQuery(sql);
@@ -669,8 +670,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 LEFT JOIN ACT_TBL_008 t8 ON t8.Field_004 = t9.Field_003 AND t8.Field_005 = t9.Field_004
                 LEFT JOIN ACT_TBL_003 m3 ON t9.Field_005 = m3.Field_003 AND t9.Field_006 = m3.Field_004 AND t9.Field_007 = m3.Field_005
                 WHERE ${chequeFilter}
-                  AND t8.Field_008 >= '${gregFrom}'
-                  AND t8.Field_008 <= '${gregTo}T23:59:59.999Z'
+                  AND t8.Field_008 >= '${gregFrom}T00:00:00.000Z'
+                  AND t8.Field_008 <= '${gregTo}T23:59:59.000Z'
                 ORDER BY t8.Field_008 ASC, CAST(t9.Field_001 AS INT) ASC
             `;
             const rawChequeData = await runSayanQuery(chequeSql);
@@ -808,9 +809,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const gregTo = jalaliToGregorianStr(dateTo);
             
             const dateFilter = gregFrom && gregTo 
-                ? `AND t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'` 
+                ? `AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z' AND t10.Field_008 <= '${gregTo}T23:59:59.000Z'` 
                 : '';
- 
+
             // Fetch Period A
             const sqlA = `
                 SELECT 
@@ -824,13 +825,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
                     t11.Field_007 as Amount,
-                    t10.Field_026 as Subtotal,
-                    t10.Field_037 as TaxedTotal,
-                    t10.Field_040 as Payable,
                     t_group.GroupName,
                     t07.Field_006 as CustomerName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN (
@@ -852,10 +850,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
                 const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
                 const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
-                const sub = parseFloat(row.Subtotal || '0');
-                const taxed = parseFloat(row.TaxedTotal || row.Payable || '0');
-                const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
-                const isOfficial = ratio > 1.01 || (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
                 const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
                 return {
                     ...row,
@@ -868,35 +863,32 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             });
             setSalesData(processedA);
             setCompareSalesDataA(processedA);
- 
+
             // Fetch Period B for comparison if active
             if (compareMode && salesDateFromB && salesDateToB) {
                 const gregFromB = jalaliToGregorianStr(salesDateFromB);
                 const gregToB = jalaliToGregorianStr(salesDateToB);
                 
                 const dateFilterB = gregFromB && gregToB 
-                    ? `AND t10.Field_008 >= '${gregFromB}' AND t10.Field_008 <= '${gregToB}T23:59:59.999Z'` 
+                    ? `AND t10.Field_008 >= '${gregFromB}T00:00:00.000Z' AND t10.Field_008 <= '${gregToB}T23:59:59.000Z'` 
                     : '';
- 
+
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
                         t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
-                        t10.Field_009 as DocType,
+                    t10.Field_009 as DocType,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
                         t11.Field_031 as ItemNotes,
                         t11.Field_007 as Amount,
-                        t10.Field_026 as Subtotal,
-                        t10.Field_037 as TaxedTotal,
-                        t10.Field_040 as Payable,
                         t_group.GroupName,
                         t07.Field_006 as CustomerName
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN (
@@ -918,10 +910,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
                     const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
                     const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
-                    const sub = parseFloat(row.Subtotal || '0');
-                    const taxed = parseFloat(row.TaxedTotal || row.Payable || '0');
-                    const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
-                    const isOfficial = ratio > 1.01 || (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                    const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
                     const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
                     return {
                         ...row,
@@ -958,9 +947,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const date = new Date(row.Date);
             const qty = parseFloat(row.Quantity || 0);
             const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
-            const key = row.InvoiceNum || row.DocId;
-            const isOfficial = row.IsOfficial;
-            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
+            const amt = (row.IsOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
             const isRet = row.IsReturn;
 
             if (isRet) {
@@ -1049,8 +1036,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     };
 
     const getAveragePriceTableData = () => {
-        const effectiveViewMode = (dateFrom && dateTo && dateFrom !== dateTo) ? 'range' : salesViewMode;
-        const currentList = effectiveViewMode === 'range' ? salesData : getTodayInvoices();
+        const currentList = salesViewMode === 'range' ? salesData : getTodayInvoices();
         const map = new Map<string, {
             groupName: string;
             itemName: string;
@@ -1070,9 +1056,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
             const qty = parseFloat(row.Quantity || 0);
             const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
-            const rowKey = row.InvoiceNum || row.DocId;
-            const isOfficial = row.IsOfficial;
-            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
+            const amt = (row.IsOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
             const isRet = row.IsReturn;
 
             if (!map.has(key)) {
@@ -1149,14 +1133,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 })();
                 dataToSend = salesData.filter(row => formatDateToJalali(row.Date) === targetD);
             }
-
+            
             const res = await fetch('/api/sayan/sales-report/send-manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     targetDate,
                     dateRangeLabel: label,
-                    salesData: dataToSend
+                    salesData: dataToSend,
+                    applyOfficialTax
                 })
             });
             const data = await res.json();
@@ -1480,213 +1465,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         }
     };
 
-    const handlePrintSalesComparison = () => {
-        const title = 'گزارش تحلیلی مقایسه فروش دوره‌ای (مدیریت)';
-        const cData = getComparisonChartData();
-        
-        let totalWeightA = 0;
-        let totalWeightB = 0;
-        let totalAmountA = 0;
-        let totalAmountB = 0;
-        
-        cData.forEach(g => {
-            totalWeightA += g.weightA;
-            totalWeightB += g.weightB;
-            totalAmountA += g.amountA;
-            totalAmountB += g.amountB;
-        });
-
-        const dWeightPct = totalWeightA > 0 ? ((totalWeightB - totalWeightA) / totalWeightA) * 100 : 0;
-        const dAmountPct = totalAmountA > 0 ? ((totalAmountB - totalAmountA) / totalAmountA) * 100 : 0;
-
-        const docHtml = `
-            <html dir="rtl" lang="fa">
-            <head>
-                <meta charset="utf-8">
-                <title>${title}</title>
-                <style>
-                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 30px; background: #fff; color: #333; }
-                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
-                    .header h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: bold; }
-                    .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
-                    
-                    .date-banner { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; margin-bottom: 25px; font-size: 13px; display: flex; justify-content: space-around; font-weight: bold; }
-                    
-                    .stats-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 25px; }
-                    .stat-card { border: 1px solid #cbd5e1; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
-                    .stat-card h3 { margin: 0 0 10px 0; font-size: 13px; color: #1e293b; font-weight: bold; }
-                    .stat-card .grid-stat { display: flex; justify-content: space-around; align-items: center; }
-                    .stat-card .val { font-size: 15px; font-weight: 800; font-family: 'Consolas', monospace; }
-                    .stat-card .label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-                    .stat-card .diff-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block; font-family: 'Consolas', monospace; }
-                    .badge-up { background-color: #dcfce7; color: #15803d; }
-                    .badge-down { background-color: #fee2e2; color: #b91c1c; }
-                    .badge-zero { background-color: #f1f5f9; color: #475569; }
-                    
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; font-size: 12px; line-height: 1.5; }
-                    th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
-                    tr:nth-child(even) { background-color: #f8fafc; }
-                    .total { font-weight: bold; background: #e2e8f0 !important; }
-                    .text-center { text-align: center; }
-                    .text-left { text-align: left; }
-                    
-                    .text-up { color: #16a34a; font-weight: bold; }
-                    .text-down { color: #dc2626; font-weight: bold; }
-                    .text-zero { color: #4b5563; }
-                    
-                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 60px; text-align: center; font-size: 12px; font-weight: bold; }
-                    .signature-box { height: 100px; border-bottom: 1px solid #cbd5e1; margin-bottom: 10px; }
-                    .footer { text-align: center; margin-top: 45px; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
-                    @media print {
-                        body { padding: 0; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <div>
-                        <h1>${title}</h1>
-                        <p>سیستم یکپارچه گزارشات تحلیلی سایان ERP</p>
-                    </div>
-                    <div style="text-align: left;">
-                        <p>گزارش مدیریت عالی</p>
-                        <p>تاریخ چاپ: ${formatDateToJalali(new Date().toISOString())}</p>
-                    </div>
-                </div>
-
-                <div class="date-banner">
-                    <div>بازه اول (دوره A): <span style="color: #1d4ed8;">${dateFrom || 'نامعلوم'}</span> تا <span style="color: #1d4ed8;">${dateTo || 'نامعلوم'}</span></div>
-                    <div>بازه دوم (دوره B): <span style="color: #4f46e5;">${salesDateFromB || 'نامعلوم'}</span> تا <span style="color: #4f46e5;">${salesDateToB || 'نامعلوم'}</span></div>
-                </div>
-
-                <div class="stats-container">
-                    <div class="stat-card">
-                        <h3>مقایسه برآیند وزنی فروش (کیلوگرم)</h3>
-                        <div class="grid-stat">
-                            <div>
-                                <div class="label">دوره A</div>
-                                <div class="val">${totalWeightA.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</div>
-                            </div>
-                            <div>
-                                <div class="label">دوره B</div>
-                                <div class="val">${totalWeightB.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</div>
-                            </div>
-                            <div>
-                                <div class="label">تغییرات (%)</div>
-                                <span class="diff-badge ${dWeightPct > 0 ? 'badge-up' : dWeightPct < 0 ? 'badge-down' : 'badge-zero'}">
-                                    ${dWeightPct > 0 ? '+' : ''}${dWeightPct.toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <h3>مقایسه برآیند ریالی فروش (ریال)</h3>
-                        <div class="grid-stat">
-                            <div>
-                                <div class="label">دوره A</div>
-                                <div class="val">${totalAmountA.toLocaleString('fa-IR')}</div>
-                            </div>
-                            <div>
-                                <div class="label">دوره B</div>
-                                <div class="val">${totalAmountB.toLocaleString('fa-IR')}</div>
-                            </div>
-                            <div>
-                                <div class="label">تغییرات (%)</div>
-                                <span class="diff-badge ${dAmountPct > 0 ? 'badge-up' : dAmountPct < 0 ? 'badge-down' : 'badge-zero'}">
-                                    ${dAmountPct > 0 ? '+' : ''}${dAmountPct.toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 50px; text-align: center;">ردیف</th>
-                            <th>گروه کالایی / محصول</th>
-                            <th class="text-left">وزن دوره A (ک‌گ)</th>
-                            <th class="text-left">وزن دوره B (ک‌گ)</th>
-                            <th class="text-center" style="width: 100px;">تغییر وزن (%)</th>
-                            <th class="text-left">مبلغ دوره A (ریال)</th>
-                            <th class="text-left">مبلغ دوره B (ریال)</th>
-                            <th class="text-center" style="width: 100px;">تغییر مبلغ (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${cData.map((row, idx) => {
-                            const wPct = row.weightA > 0 ? ((row.weightB - row.weightA) / row.weightA) * 100 : 0;
-                            const aPct = row.amountA > 0 ? ((row.amountB - row.amountA) / row.amountA) * 100 : 0;
-                            
-                            return `
-                                <tr>
-                                    <td class="text-center">${idx + 1}</td>
-                                    <td style="font-weight: bold;">${row.name}</td>
-                                    <td class="text-left">${row.weightA.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
-                                    <td class="text-left">${row.weightB.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
-                                    <td class="text-center ${wPct > 0 ? 'text-up' : wPct < 0 ? 'text-down' : 'text-zero'}">
-                                        ${wPct > 0 ? '+' : ''}${wPct.toFixed(1)}%
-                                    </td>
-                                    <td class="text-left">${row.amountA.toLocaleString('fa-IR')}</td>
-                                    <td class="text-left">${row.amountB.toLocaleString('fa-IR')}</td>
-                                    <td class="text-center ${aPct > 0 ? 'text-up' : aPct < 0 ? 'text-down' : 'text-zero'}">
-                                        ${aPct > 0 ? '+' : ''}${aPct.toFixed(1)}%
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                        <tr class="total">
-                            <td class="text-center" colspan="2">جمع کل گزارش مقایسه</td>
-                            <td class="text-left">${totalWeightA.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
-                            <td class="text-left">${totalWeightB.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
-                            <td class="text-center ${dWeightPct > 0 ? 'text-up' : dWeightPct < 0 ? 'text-down' : 'text-zero'}">
-                                ${dWeightPct > 0 ? '+' : ''}${dWeightPct.toFixed(1)}%
-                            </td>
-                            <td class="text-left">${totalAmountA.toLocaleString('fa-IR')}</td>
-                            <td class="text-left">${totalAmountB.toLocaleString('fa-IR')}</td>
-                            <td class="text-center ${dAmountPct > 0 ? 'text-up' : dAmountPct < 0 ? 'text-down' : 'text-zero'}">
-                                ${dAmountPct > 0 ? '+' : ''}${dAmountPct.toFixed(1)}%
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div class="signatures">
-                    <div>
-                        <p>امضا تهیه کننده</p>
-                        <div class="signature-box"></div>
-                    </div>
-                    <div>
-                        <p>امضا مدیر مالی</p>
-                        <div class="signature-box"></div>
-                    </div>
-                    <div>
-                        <p>امضا مدیریت عامل</p>
-                        <div class="signature-box"></div>
-                    </div>
-                </div>
-
-                <div class="footer">
-                    <p>گزارش تحلیلی مدیریت صادره از درگاه سایان ERP - بخش ارزیابی عملکرد و پایش دوره‌ای فروش</p>
-                </div>
-            </body>
-            </html>
-        `;
-
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            printWindow.document.write(docHtml);
-            printWindow.document.close();
-            printWindow.focus();
-            setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 500);
-        }
-    };
-
     // Prepare chart comparison data grouped by Product Group
     const getComparisonChartData = () => {
         const groups: { [key: string]: { name: string; amountA: number; weightA: number; amountB: number; weightB: number; } } = {};
@@ -1769,7 +1547,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     ) t_name ON t_name.ItemCode = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     WHERE RTRIM(LTRIM(t10.Field_009)) IN ('61', '67', '79', '73')
-                      AND t10.Field_008 >= '${gregFrom}'
+                      AND t10.Field_008 >= '${gregFrom}T00:00:00.000Z'
                       AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'
                     ORDER BY COALESCE(t_name.ItemName, t22.Field_004, t11.Field_005, 'کالای بدون نام'), t10.Field_008
                 `;
@@ -2202,8 +1980,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const stats = getSalesOverviewStats();
     const chartData = getComparisonChartData();
     const todayInvoices = getTodayInvoices();
-    const effectiveSalesViewMode = (dateFrom && dateTo && dateFrom !== dateTo) ? 'range' : salesViewMode;
-    const displayedInvoices = effectiveSalesViewMode === 'range' ? salesData : todayInvoices;
+    const displayedInvoices = salesViewMode === 'range' ? salesData : todayInvoices;
     const filteredTraz = getFilteredTraz();
     const groupedProduction = getGroupedProduction();
     const filteredCheques = getFilteredCheques();
@@ -2732,48 +2509,34 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <span>فرم چاپی فروش دوره‌ای (PDF)</span>
                                 </button>
                                 
-                                {compareMode && (
-                                    <button 
-                                        onClick={handlePrintSalesComparison}
-                                        className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
-                                        title="دریافت گزارش مدیریت مقایسه دو بازه فروش با فرمت چاپی رسمی و خروجی PDF"
-                                    >
-                                        <Printer className="w-3.5 h-3.5" />
-                                        <span>فرم چاپی مقایسه فروش (PDF)</span>
-                                    </button>
-                                )}
+                                <button 
+                                    onClick={() => handleSendSalesBotReport('range')}
+                                    disabled={isSendingSalesBot}
+                                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال آمار دوره‌ای (بازه زمانی انتخاب شده) به کانال‌ها و گروه‌های بله و تلگرام"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>{isSendingSalesBot ? 'در حال ارسال بازه...' : 'ارسال فروش دوره‌ای به بات'}</span>
+                                </button>
 
                                 <button 
                                     onClick={() => handleSendSalesBotReport('today')}
                                     disabled={isSendingSalesBot}
-                                    className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
-                                    title="تولید PDF رسمی و ارسال فوری گزارش فروش امروز به کانال‌ها و گروه‌های تلگرام و بله"
+                                    className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال دستی آمار و گزارش فروش امروز به کانال‌ها و گروه‌های بله و تلگرام"
                                 >
                                     <Send className="w-3.5 h-3.5" />
-                                    <span>{isSendingSalesBot ? 'در حال ارسال...' : 'ارسال فروش امروز به بات'}</span>
+                                    <span>{isSendingSalesBot ? 'در حال ارسال امروز...' : 'ارسال دستی فروش امروز به بات'}</span>
                                 </button>
-
                                 <button 
                                     onClick={() => handleSendSalesBotReport('yesterday')}
                                     disabled={isSendingSalesBot}
-                                    className="flex items-center gap-1.5 bg-violet-500 hover:bg-violet-600 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
-                                    title="تولید PDF رسمی و ارسال فوری گزارش فروش دیروز به کانال‌ها و گروه‌های تلگرام و بله"
+                                    className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال دستی آمار و گزارش فروش دیروز به کانال‌ها و گروه‌های بله و تلگرام"
                                 >
                                     <Send className="w-3.5 h-3.5" />
-                                    <span>{isSendingSalesBot ? 'در حال ارسال...' : 'ارسال فروش دیروز به بات'}</span>
+                                    <span>{isSendingSalesBot ? 'در حال ارسال دیروز...' : 'ارسال دستی فروش دیروز به بات'}</span>
                                 </button>
-
-                                {salesViewMode === 'range' && (
-                                    <button 
-                                        onClick={() => handleSendSalesBotReport('range')}
-                                        disabled={isSendingSalesBot}
-                                        className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
-                                        title="تولید PDF رسمی و ارسال فوری گزارش فروش بازه انتخابی به کانال‌ها و گروه‌های تلگرام و بله"
-                                    >
-                                        <Send className="w-3.5 h-3.5" />
-                                        <span>{isSendingSalesBot ? 'در حال ارسال...' : 'ارسال فروش این بازه به بات'}</span>
-                                    </button>
-                                )}
 
                                 <div className="flex bg-slate-150 p-1 rounded-lg border border-slate-200 select-none">
                                     <button
@@ -2800,6 +2563,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span className="text-xs font-bold text-slate-700">فعال‌سازی مقایسه دو بازه</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg border border-emerald-200 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={applyOfficialTax}
+                                        onChange={(e) => setApplyOfficialTax(e.target.checked)}
+                                        className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-xs font-bold text-emerald-800">۱۰٪ ارزش افزوده رسمی (فاکتورهای رسمی)</span>
                                 </label>
                             </div>
                         </div>
@@ -2964,7 +2736,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
                             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-slate-800">
-                                    {effectiveSalesViewMode === 'range' ? 'لیست فاکتورهای فروش طبق بازه' : 'لیست فاکتورهای فروش روز'} ({
+                                    {salesViewMode === 'range' ? 'لیست فاکتورهای فروش طبق بازه' : 'لیست فاکتورهای فروش روز'} ({
                                         (() => {
                                             const invoicesMap = new Map<string, any>();
                                             displayedInvoices.forEach(row => {
@@ -2986,7 +2758,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             <th className="p-3 font-semibold text-center">تعداد اقلام</th>
                                             <th className="p-3 font-semibold text-center">مجموع وزن/مقدار</th>
                                             <th className="p-3 font-semibold text-left">مبلغ کل (ریال)</th>
-                                            <th className="p-3 font-semibold text-center w-36">نوع فاکتور</th>
                                             <th className="p-3 font-semibold text-center w-24">جزئیات</th>
                                         </tr>
                                     </thead>
@@ -3000,7 +2771,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 notes: string;
                                                 totalAmount: number;
                                                 totalQuantity: number;
-                                                isOfficial: boolean;
                                                 items: {
                                                     itemName: string;
                                                     itemCode: string;
@@ -3015,9 +2785,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 const key = row.InvoiceNum || row.DocId;
                                                 if (!key) return;
                                                 
-                                                const isOfficial = row.IsOfficial;
-                                                const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
-                                                const itemAmt = isOfficial ? rawAmt * 1.10 : rawAmt;
+                                                const itemAmt = parseFloat(row.Amount || 0);
                                                 const itemQty = parseFloat(row.Quantity || 0);
                                                 const customerName = row.CustomerName || (() => {
                                                     const notes = row.Notes || '';
@@ -3046,7 +2814,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                         notes: row.Notes || '',
                                                         totalAmount: itemAmt,
                                                         totalQuantity: itemQty,
-                                                        isOfficial: isOfficial,
                                                         items: [{
                                                             itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
                                                             itemCode: row.ItemCode || '',
@@ -3064,7 +2831,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             if (groupedList.length === 0) {
                                                 return (
                                                     <tr>
-                                                        <td colSpan={8} className="p-8 text-center text-slate-400 text-sm">{effectiveSalesViewMode === 'range' ? 'هیچ فاکتور فروشی برای بازه زمانی انتخابی ثبت نشده است' : 'هیچ فاکتور فروشی برای تاریخ انتخابی ثبت نشده است'}</td>
+                                                        <td colSpan={7} className="p-8 text-center text-slate-400 text-sm">{salesViewMode === 'range' ? 'هیچ فاکتور فروشی برای بازه زمانی انتخابی ثبت نشده است' : 'هیچ فاکتور فروشی برای تاریخ انتخابی ثبت نشده است'}</td>
                                                     </tr>
                                                 );
                                             }
@@ -3074,26 +2841,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 return (
                                                     <React.Fragment key={inv.invoiceNum}>
                                                         <tr 
+                                                            onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)}
                                                             className="hover:bg-slate-50 transition-colors cursor-pointer"
                                                         >
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 font-mono font-bold text-blue-600">{inv.invoiceNum}</td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 font-bold text-slate-800">{inv.customerName}</td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center font-mono font-semibold text-slate-500">{inv.items.length} کالا</td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center font-mono font-bold text-slate-600">{inv.totalQuantity.toFixed(1)}</td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(inv.totalAmount)}</td>
+                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                            <td className="p-3 font-mono font-bold text-blue-600">{inv.invoiceNum}</td>
+                                                            <td className="p-3 font-bold text-slate-800">{inv.customerName}</td>
+                                                            <td className="p-3 text-center font-mono font-semibold text-slate-500">{inv.items.length} کالا</td>
+                                                            <td className="p-3 text-center font-mono font-bold text-slate-600">{inv.totalQuantity.toFixed(1)}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(inv.totalAmount)}</td>
                                                             <td className="p-3 text-center">
-                                                                {inv.isOfficial ? (
-                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                                        رسمی (۱۰٪ مالیات)
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-500 border border-slate-200">
-                                                                        غیررسمی
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                            <td onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="p-3 text-center">
                                                                 <button className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold focus:outline-none">
                                                                     <span>{isExpanded ? 'بستن' : 'مشاهده'}</span>
                                                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -3102,7 +2859,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                         </tr>
                                                         {isExpanded && (
                                                             <tr className="bg-slate-50/50">
-                                                                <td colSpan={8} className="p-4 bg-slate-50/30">
+                                                                <td colSpan={7} className="p-4 bg-slate-50/30">
                                                                     <div className="border border-slate-200 rounded-lg bg-white p-3 shadow-inner">
                                                                         <div className="text-[11px] font-bold text-slate-500 mb-2 pb-1 border-b border-slate-100 flex justify-between">
                                                                             <span>جزئیات فاکتور {inv.invoiceNum}</span>
@@ -3434,11 +3191,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 <button
                                     onClick={handleSendBotReport}
                                     disabled={isSendingBot}
-                                    className="bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-                                    title="تولید PDF رسمی و ارسال فوری آمار کل تولید و ضایعات به کانال‌ها و گروه‌های تلگرام و بله"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
                                 >
                                     <Send className="h-4 w-4" />
-                                    <span>{isSendingBot ? 'در حال ارسال...' : 'ارسال تولید به بات'}</span>
+                                    {isSendingBot ? 'در حال ارسال...' : 'ارسال به گروه‌های تلگرام / بله'}
                                 </button>
                             </div>
                         </div>

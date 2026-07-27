@@ -363,13 +363,10 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             t11.Field_006 as Quantity,
             t11.Field_031 as ItemNotes,
             t11.Field_007 as Amount,
-            t10.Field_026 as Subtotal,
-            t10.Field_037 as TaxedTotal,
-            t10.Field_040 as Payable,
             t_group.GroupName,
             t07.Field_006 as CustomerName
         FROM STR_TBL_010 t10
-        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
+        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                   AND t11.Field_003 = t10.Field_004
         LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
         LEFT JOIN (
@@ -399,16 +396,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         salesRows.forEach(inv => {
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
-            
-            const notesStr = String(inv.Notes || "") + " " + String(inv.ItemNotes || "");
-            const sub = parseFloat(inv.Subtotal || '0');
-            const taxed = parseFloat(inv.TaxedTotal || inv.Payable || '0');
-            const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
-            const isOfficial = ratio > 1.01 || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || inv.InvoiceNum === "123" || String(inv.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
-            
-            const rawAmt = parseFloat(inv.Amount || 0);
-            const amt = isOfficial ? rawAmt * (ratio > 1.01 ? ratio : 1.10) : rawAmt;
-            
+            const amt = parseFloat(inv.Amount || 0);
             totalQty += qty;
             totalAmt += amt;
             
@@ -593,10 +581,6 @@ const setupDailyReports = () => {
         const db = getDb();
         const settings = db.settings || {};
 
-        const todayDateObj = new Date();
-        const shamsiDate = utils.toShamsiFull(todayDateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
-        const gregDate = utils.getTehranDateString(todayDateObj);
-
         // 1. AUTOMATED DAILY SALES REPORT (TODAY AND YESTERDAY)
         const salesTargets = [];
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
@@ -724,39 +708,6 @@ const setupDailyReports = () => {
                 }
             } catch (err) {
                 console.error("[Cron 19:00] Daily production automatic cron error:", err);
-            }
-        }
-    });
-
-    // Schedule daily automated reports for 07:00 Tehran time (03:30 UTC)
-    cron.schedule('30 3 * * *', async () => {
-        console.log(">>> Running Automated 07:00 Reports (Sales yesterday and today)...");
-        const db = getDb();
-        const settings = db.settings || {};
-
-        // 1. AUTOMATED DAILY SALES REPORT (TODAY AND YESTERDAY)
-        const salesTargets = [];
-        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
-        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
-
-        if (salesTargets.length > 0) {
-            console.log(`[Cron 07:00] Preparing Automated Sales Reports for ${salesTargets.length} targets...`);
-            
-            // Send Yesterday's Report
-            try {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                await sendDailySalesReportForDate(db, yesterday, 'دیروز', salesTargets);
-            } catch (err) {
-                console.error("[Cron 07:00] Daily sales (yesterday) automatic cron error:", err);
-            }
-
-            // Send Today's Report
-            try {
-                const today = new Date();
-                await sendDailySalesReportForDate(db, today, 'امروز', salesTargets);
-            } catch (err) {
-                console.error("[Cron 07:00] Daily sales (today) automatic cron error:", err);
             }
         }
     });
@@ -3552,7 +3503,7 @@ app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
             const rawAmt = parseFloat(row.Amount || row.amount || 0);
             
             // 10% official invoice tax increase
-            const effectiveAmt = isOfficial ? rawAmt * 1.10 : rawAmt;
+            const effectiveAmt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
             
             const groupName = row.GroupName || row.groupName || row.ItemName || row.itemName || "سایر کالاها";
             const itemName = row.ItemName || row.itemName || "کالا";
@@ -3639,6 +3590,11 @@ app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
             success: true,
             message: `گزارش تحلیلی فروش و مرجوعی با موفقیت به ${sentCount} گروه / چت در بات‌ها ارسال شد.`
         });
+    } catch (e) {
+        console.error("Manual Sales Report Sending Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});;
     } catch (e) {
         console.error("Manual Sales Report Sending Error:", e);
         res.status(500).json({ error: e.message });
