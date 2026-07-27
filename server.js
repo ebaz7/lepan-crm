@@ -249,82 +249,6 @@ const setupAutoBackup = () => {
     activeBackupJob = cron.schedule(`0 */${intervalHours} * * *`, performAutoBackup);
 };
 
-const setupDailyReports = () => {
-    // Schedule daily reports for 23:45 Tehran time
-    // Cron runs in UTC. Tehran is UTC+3:30. So 23:45 Tehran is 20:15 UTC.
-    cron.schedule('15 20 * * *', async () => {
-        console.log(">>> Running Automatic Daily Reports...");
-        const db = getDb();
-        const settings = db.settings || {};
-        
-        // Get Tehran current date in Shamsi format for the report
-        const now = new Date();
-        const dateStr = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
-        
-        // Groups to notify
-        const targets = [];
-        
-        // 1. Accounting Groups
-        if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele, type: 'accounting' });
-        if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale, type: 'accounting' });
-        if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId, type: 'accounting' }); // Fallback
-
-        // 2. Bijak Groups
-        if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
-        if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
-
-        // 3. Exit Permit Groups (First, Second, Third, and/or Dedicated based on configuration)
-        const sendToFirst = settings.dailyExitReportSendToFirstGroup !== false;
-        const sendToSecond = settings.dailyExitReportSendToSecondGroup === true;
-        const sendToThird = settings.dailyExitReportSendToThirdGroup === true;
-        const sendToDedicated = settings.dailyExitReportSendToDedicatedGroup === true;
-
-        if (sendToFirst) {
-            if (settings.exitPermitNotificationTelegramId) targets.push({ platform: 'telegram', id: settings.exitPermitNotificationTelegramId, type: 'exit' });
-            if (settings.exitPermitNotificationBaleId) targets.push({ platform: 'bale', id: settings.exitPermitNotificationBaleId, type: 'exit' });
-            
-            if (settings.exitPermitFirstGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitFirstGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitFirstGroupConfig.baleId, type: 'exit' });
-        }
-        
-        if (sendToSecond) {
-            if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
-        }
-
-        if (sendToThird) {
-            if (settings.exitPermitThirdGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitThirdGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitThirdGroupConfig.baleId, type: 'exit' });
-        }
-
-        if (sendToDedicated) {
-            if (settings.dailyExitReportDedicatedTelegramId) targets.push({ platform: 'telegram', id: settings.dailyExitReportDedicatedTelegramId, type: 'exit' });
-            if (settings.dailyExitReportDedicatedBaleId) targets.push({ platform: 'bale', id: settings.dailyExitReportDedicatedBaleId, type: 'exit' });
-        }
-
-        // Remove duplicates
-        const uniqueTargets = Array.from(new Set(targets.map(t => `${t.platform}:${t.id}`)))
-            .map(uid => targets.find(t => `${t.platform}:${t.id}` === uid));
-
-        for (const target of uniqueTargets) {
-            try {
-                const sendFn = async (id, txt, opts) => {
-                    if (target.platform === 'telegram') return telegram.sendBotMessage(id, txt, opts);
-                    if (target.platform === 'bale') return bale.sendBotMessage(id, txt, opts);
-                };
-                const sendDocFn = async (id, buf, name, cap) => {
-                    if (target.platform === 'telegram') return telegram.sendBotDocument(id, buf, name, cap);
-                    if (target.platform === 'bale') return bale.sendBotDocument(id, buf, name, cap);
-                };
-                
-                console.log(`[Cron] Sending daily report to ${target.platform} group ${target.id}`);
-                await runDailyReport(target.platform, target.id, dateStr, sendFn, sendDocFn);
-            } catch (e) {
-                console.error(`[Cron] Failed to send daily report to ${target.id}:`, e.message);
-            }
-        }
-    });
-
 // Helper to build Persian captioned production report
 const buildProductionCaption = (dateStr, totals, waste) => {
     let dateObj = new Date();
@@ -574,6 +498,82 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         return { count: 0, sent: true, successfulSends };
     }
 };
+const setupDailyReports = () => {
+    // Schedule daily reports for 23:45 Tehran time
+    // Cron runs in UTC. Tehran is UTC+3:30. So 23:45 Tehran is 20:15 UTC.
+    cron.schedule('15 20 * * *', async () => {
+        console.log(">>> Running Automatic Daily Reports...");
+        const db = getDb();
+        const settings = db.settings || {};
+        
+        // Get Tehran current date in Shamsi format for the report
+        const now = new Date();
+        const dateStr = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
+        
+        // Groups to notify
+        const targets = [];
+        
+        // 1. Accounting Groups
+        if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele, type: 'accounting' });
+        if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale, type: 'accounting' });
+        if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId, type: 'accounting' }); // Fallback
+
+        // 2. Bijak Groups
+        if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
+        if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
+
+        // 3. Exit Permit Groups (First, Second, Third, and/or Dedicated based on configuration)
+        const sendToFirst = settings.dailyExitReportSendToFirstGroup !== false;
+        const sendToSecond = settings.dailyExitReportSendToSecondGroup === true;
+        const sendToThird = settings.dailyExitReportSendToThirdGroup === true;
+        const sendToDedicated = settings.dailyExitReportSendToDedicatedGroup === true;
+
+        if (sendToFirst) {
+            if (settings.exitPermitNotificationTelegramId) targets.push({ platform: 'telegram', id: settings.exitPermitNotificationTelegramId, type: 'exit' });
+            if (settings.exitPermitNotificationBaleId) targets.push({ platform: 'bale', id: settings.exitPermitNotificationBaleId, type: 'exit' });
+            
+            if (settings.exitPermitFirstGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitFirstGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitFirstGroupConfig.baleId, type: 'exit' });
+        }
+        
+        if (sendToSecond) {
+            if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
+        }
+
+        if (sendToThird) {
+            if (settings.exitPermitThirdGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitThirdGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitThirdGroupConfig.baleId, type: 'exit' });
+        }
+
+        if (sendToDedicated) {
+            if (settings.dailyExitReportDedicatedTelegramId) targets.push({ platform: 'telegram', id: settings.dailyExitReportDedicatedTelegramId, type: 'exit' });
+            if (settings.dailyExitReportDedicatedBaleId) targets.push({ platform: 'bale', id: settings.dailyExitReportDedicatedBaleId, type: 'exit' });
+        }
+
+        // Remove duplicates
+        const uniqueTargets = Array.from(new Set(targets.map(t => `${t.platform}:${t.id}`)))
+            .map(uid => targets.find(t => `${t.platform}:${t.id}` === uid));
+
+        for (const target of uniqueTargets) {
+            try {
+                const sendFn = async (id, txt, opts) => {
+                    if (target.platform === 'telegram') return telegram.sendBotMessage(id, txt, opts);
+                    if (target.platform === 'bale') return bale.sendBotMessage(id, txt, opts);
+                };
+                const sendDocFn = async (id, buf, name, cap) => {
+                    if (target.platform === 'telegram') return telegram.sendBotDocument(id, buf, name, cap);
+                    if (target.platform === 'bale') return bale.sendBotDocument(id, buf, name, cap);
+                };
+                
+                console.log(`[Cron] Sending daily report to ${target.platform} group ${target.id}`);
+                await runDailyReport(target.platform, target.id, dateStr, sendFn, sendDocFn);
+            } catch (e) {
+                console.error(`[Cron] Failed to send daily report to ${target.id}:`, e.message);
+            }
+        }
+    });
+
 
     // Schedule daily automated reports for 19:00 Tehran time (15:30 UTC)
     cron.schedule('30 15 * * *', async () => {
