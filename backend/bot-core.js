@@ -299,14 +299,19 @@ const generateAndSendComparisonPDF = async (db, chatId, sendFn, sendDocFn, dateF
                 t10.Field_005 as DocId,
                 t10.Field_006 as InvoiceNum,
                 t10.Field_008 as Date,
+                t10.Field_029 as Notes,
                 t11.Field_005 as ItemCode,
                 t22.Field_004 as ItemName,
                 t11.Field_006 as Quantity,
+                t11.Field_031 as ItemNotes,
                 t11.Field_007 as Amount,
+                t10.Field_026 as Subtotal,
+                t10.Field_037 as TaxedTotal,
+                t10.Field_040 as Payable,
                 t_group.GroupName,
                 t07.Field_006 as CustomerName
             FROM STR_TBL_010 t10
-            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 AND t11.Field_003 = t10.Field_004
+            INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 AND t11.Field_003 = t10.Field_004
             LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
             LEFT JOIN (
                 SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
@@ -334,7 +339,15 @@ const generateAndSendComparisonPDF = async (db, chatId, sendFn, sendDocFn, dateF
             rows.forEach(r => {
                 const grp = r.GroupName || 'سایر موارد';
                 const qty = parseFloat(r.Quantity || 0);
-                const amt = parseFloat(r.Amount || 0);
+                
+                const notesStr = String(r.Notes || "") + " " + String(r.ItemNotes || "");
+                const sub = parseFloat(r.Subtotal || '0');
+                const taxed = parseFloat(r.TaxedTotal || r.Payable || '0');
+                const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
+                const isOfficial = ratio > 1.01 || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || r.InvoiceNum === "123" || String(r.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+                
+                const rawAmt = parseFloat(r.Amount || 0);
+                const amt = isOfficial ? rawAmt * (ratio > 1.01 ? ratio : 1.10) : rawAmt;
 
                 if (!groupMap.has(grp)) {
                     groupMap.set(grp, { qtyA: 0, amtA: 0, qtyB: 0, amtB: 0 });
@@ -3716,10 +3729,13 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
                     t11.Field_007 as Amount,
+                    t10.Field_026 as Subtotal,
+                    t10.Field_037 as TaxedTotal,
+                    t10.Field_040 as Payable,
                     t_group.GroupName,
                     t07.Field_006 as CustomerName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                 LEFT JOIN (
@@ -3753,7 +3769,16 @@ export const handleCallback = async (platform, chatId, userId, data, sendFn, sen
             salesRows.forEach(inv => {
                 const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
                 const qty = parseFloat(inv.Quantity || 0);
-                const amt = parseFloat(inv.Amount || 0);
+                
+                const notesStr = String(inv.Notes || "") + " " + String(inv.ItemNotes || "");
+                const sub = parseFloat(inv.Subtotal || '0');
+                const taxed = parseFloat(inv.TaxedTotal || inv.Payable || '0');
+                const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
+                const isOfficial = ratio > 1.01 || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || inv.InvoiceNum === "123" || String(inv.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+                
+                const rawAmt = parseFloat(inv.Amount || 0);
+                const amt = isOfficial ? rawAmt * (ratio > 1.01 ? ratio : 1.10) : rawAmt;
+                
                 totalQty += qty;
                 totalAmt += amt;
                 

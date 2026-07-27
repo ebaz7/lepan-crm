@@ -363,10 +363,13 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             t11.Field_006 as Quantity,
             t11.Field_031 as ItemNotes,
             t11.Field_007 as Amount,
+            t10.Field_026 as Subtotal,
+            t10.Field_037 as TaxedTotal,
+            t10.Field_040 as Payable,
             t_group.GroupName,
             t07.Field_006 as CustomerName
         FROM STR_TBL_010 t10
-        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+        INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
                                   AND t11.Field_003 = t10.Field_004
         LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
         LEFT JOIN (
@@ -398,10 +401,13 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             const qty = parseFloat(inv.Quantity || 0);
             
             const notesStr = String(inv.Notes || "") + " " + String(inv.ItemNotes || "");
-            const isOfficial = (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || inv.InvoiceNum === "123" || String(inv.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+            const sub = parseFloat(inv.Subtotal || '0');
+            const taxed = parseFloat(inv.TaxedTotal || inv.Payable || '0');
+            const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
+            const isOfficial = ratio > 1.01 || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || inv.InvoiceNum === "123" || String(inv.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
             
             const rawAmt = parseFloat(inv.Amount || 0);
-            const amt = isOfficial ? rawAmt * 1.10 : rawAmt;
+            const amt = isOfficial ? rawAmt * (ratio > 1.01 ? ratio : 1.10) : rawAmt;
             
             totalQty += qty;
             totalAmt += amt;

@@ -810,7 +810,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const dateFilter = gregFrom && gregTo 
                 ? `AND t10.Field_008 >= '${gregFrom}' AND t10.Field_008 <= '${gregTo}T23:59:59.999Z'` 
                 : '';
-
+ 
             // Fetch Period A
             const sqlA = `
                 SELECT 
@@ -824,10 +824,13 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
                     t11.Field_007 as Amount,
+                    t10.Field_026 as Subtotal,
+                    t10.Field_037 as TaxedTotal,
+                    t10.Field_040 as Payable,
                     t_group.GroupName,
                     t07.Field_006 as CustomerName
                 FROM STR_TBL_010 t10
-                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN (
@@ -849,7 +852,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
                 const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
                 const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
-                const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                const sub = parseFloat(row.Subtotal || '0');
+                const taxed = parseFloat(row.TaxedTotal || row.Payable || '0');
+                const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
+                const isOfficial = ratio > 1.01 || (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
                 const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
                 return {
                     ...row,
@@ -862,7 +868,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             });
             setSalesData(processedA);
             setCompareSalesDataA(processedA);
-
+ 
             // Fetch Period B for comparison if active
             if (compareMode && salesDateFromB && salesDateToB) {
                 const gregFromB = jalaliToGregorianStr(salesDateFromB);
@@ -871,23 +877,26 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const dateFilterB = gregFromB && gregToB 
                     ? `AND t10.Field_008 >= '${gregFromB}' AND t10.Field_008 <= '${gregToB}T23:59:59.999Z'` 
                     : '';
-
+ 
                 const sqlB = `
                     SELECT 
                         t10.Field_001 as DocId,
                         t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
-                    t10.Field_009 as DocType,
+                        t10.Field_009 as DocType,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
                         t11.Field_031 as ItemNotes,
                         t11.Field_007 as Amount,
+                        t10.Field_026 as Subtotal,
+                        t10.Field_037 as TaxedTotal,
+                        t10.Field_040 as Payable,
                         t_group.GroupName,
                         t07.Field_006 as CustomerName
                     FROM STR_TBL_010 t10
-                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
+                    INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_006 
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN (
@@ -909,7 +918,10 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
                     const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
                     const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
-                    const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                    const sub = parseFloat(row.Subtotal || '0');
+                    const taxed = parseFloat(row.TaxedTotal || row.Payable || '0');
+                    const ratio = (sub > 0 && taxed > 0) ? (taxed / sub) : 1.0;
+                    const isOfficial = ratio > 1.01 || (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
                     const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
                     return {
                         ...row,
