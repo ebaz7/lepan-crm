@@ -324,7 +324,6 @@ const setupDailyReports = () => {
             }
         }
     });
-}; // End of setupDailyReports
 
 // Helper to build Persian captioned production report
 const buildProductionCaption = (dateStr, totals, waste) => {
@@ -630,7 +629,6 @@ cron.schedule('30 15 * * *', async () => {
         console.error("[Cron 19:00] Daily sales (yesterday) automatic cron error:", err);
     }
 });
-
 
 // --- SAYAN PRODUCTION REPORT ENDPOINTS ---
 const normalizeShamsiDate = (str) => {
@@ -1850,6 +1848,7 @@ app.get('/manifest.json', (req, res) => {
     res.send(JSON.stringify(manifest));
 });
 
+}
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 if (process.env.NODE_ENV !== "production") {
     console.log("Starting in Development mode with Vite Middleware...");
@@ -1892,7 +1891,6 @@ app.listen(PORT, '0.0.0.0', () => {
         } catch (err) {
             console.error("Background services initialization error:", err);
         }
-        setupAutoBackup();
-        setupDailyReports();
     }, 1000);
 });
+}

@@ -198,6 +198,16 @@ export const getDb = () => {
                     ]));
                 }
 
+                // Migrate fiscal years if they are stored at the root or as an object
+                if (MEMORY_DB_CACHE.fiscalYears && Array.isArray(MEMORY_DB_CACHE.fiscalYears) && MEMORY_DB_CACHE.fiscalYears.length > 0) {
+                    if (!MEMORY_DB_CACHE.settings.fiscalYears || (Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) && MEMORY_DB_CACHE.settings.fiscalYears.length === 0)) {
+                        MEMORY_DB_CACHE.settings.fiscalYears = MEMORY_DB_CACHE.fiscalYears;
+                    }
+                } else if (MEMORY_DB_CACHE.settings.fiscalYears && !Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) && typeof MEMORY_DB_CACHE.settings.fiscalYears === 'object') {
+                    // Convert object to array
+                    MEMORY_DB_CACHE.settings.fiscalYears = Object.values(MEMORY_DB_CACHE.settings.fiscalYears);
+                }
+
                 if (!Array.isArray(MEMORY_DB_CACHE.settings.fiscalYears) || MEMORY_DB_CACHE.settings.fiscalYears.length === 0) {
                     MEMORY_DB_CACHE.settings.fiscalYears = [
                         { id: 'fy_1402', label: '1402', isClosed: false, companySequences: {}, createdAt: Date.now() },
@@ -206,7 +216,10 @@ export const getDb = () => {
                         { id: 'fy_1405', label: '1405', isClosed: false, companySequences: {}, createdAt: Date.now() }
                     ];
                 }
-                if (!MEMORY_DB_CACHE.settings.activeFiscalYearId) {
+                let activeFound = MEMORY_DB_CACHE.settings.activeFiscalYearId && MEMORY_DB_CACHE.settings.fiscalYears.some(fy => fy.id === MEMORY_DB_CACHE.settings.activeFiscalYearId);
+                if (!activeFound && MEMORY_DB_CACHE.settings.fiscalYears.length > 0) {
+                    MEMORY_DB_CACHE.settings.activeFiscalYearId = MEMORY_DB_CACHE.settings.fiscalYears[0].id;
+                } else if (!MEMORY_DB_CACHE.settings.activeFiscalYearId) {
                     MEMORY_DB_CACHE.settings.activeFiscalYearId = 'fy_1404';
                 }
 

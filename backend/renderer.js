@@ -1039,7 +1039,7 @@ export const generateReportPDF = async (
           cellStyleClass = `p-3.5 text-sm font-black font-mono ${isDebtor ? "text-red-700" : "text-emerald-700"} text-center border-l border-gray-100/50`;
         }
 
-        if (cellIdx === 3) {
+        if (cellIdx === 3 && title.includes("بدهکار")) {
           tbody += `<td class="p-3.5 text-center"><span class="px-3 py-1 text-[10px] font-black rounded-lg ${isDebtor ? "bg-red-50 text-red-800 border border-red-200/50" : "bg-emerald-50 text-emerald-800 border border-emerald-200/50"}">${cell}</span></td>`;
         } else {
           tbody += `<td class="${cellStyleClass}">${cell}</td>`;
