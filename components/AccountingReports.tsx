@@ -832,10 +832,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                 LEFT JOIN (
-                    SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                    SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
                     LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
                     LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                    LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
                     GROUP BY t21_sub.Field_004
                 ) t_group ON t11.Field_005 = t_group.ItemCode
                 LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
@@ -870,6 +871,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
+                        t10.Field_009 as OpCode,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
@@ -882,16 +884,19 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
                     LEFT JOIN (
-                        SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
-                        FROM IND_TBL_021 t21_sub
-                        LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
-                        LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
-                        GROUP BY t21_sub.Field_004
+                        SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+                    FROM IND_TBL_021 t21_sub
+                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
+                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+                    LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
+                    GROUP BY t21_sub.Field_004
                     ) t_group ON t11.Field_005 = t_group.ItemCode
                     LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                    WHERE t10.Field_009 IN ('3', '12', '23')
-                      AND t11.Field_036 = t10.Field_009
-                      AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+                    WHERE (
+                        (t10.Field_009 IN ('3', '12', '23') AND t11.Field_036 = t10.Field_009 AND t11.Field_007 > 0)
+                        OR
+                        (t10.Field_009 = '13' AND t11.Field_036 IN ('3', '12', '23', '13'))
+                      )
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
@@ -2862,19 +2867,23 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                                 html += `<tr>
                                                                     <td><strong>${row.name}</strong></td>
                                                                     <td>${(row.netWeightA || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightA || 0).toFixed(2)}</span></td>
-                                                                    <td>${(row.netAmountA || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountA || 0).toLocaleString('fa-IR')}</span></td>
-                                                                    <td>${(row.netWeightB || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightB || 0).toFixed(2)}</span></td>
-                                                                    <td>${(row.netAmountB || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountB || 0).toLocaleString('fa-IR')}</span></td>
+     <td>${(row.netWeightA ? (row.netAmountA / row.netWeightA) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0})}</td>
+     <td>${(row.netAmountA || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountA || 0).toLocaleString('fa-IR')}</span></td>
+     <td>${(row.netWeightB || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightB || 0).toFixed(2)}</span></td>
+     <td>${(row.netWeightB ? (row.netAmountB / row.netWeightB) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0})}</td>
+     <td>${(row.netAmountB || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountB || 0).toLocaleString('fa-IR')}</span></td>
                                                                     <td class="diff" style="color: ${diff>=0?'#16a34a':'#dc2626'}">${diff>0?'+':''}${diff.toFixed(1)}%</td>
                                                                 </tr>`;
                                                             });
                                                             const totDiff = sumB ? ((sumA - sumB) / sumB) * 100 : 0;
                                                             html += `<tr>
                                                                 <th>جمع کل</th>
-                                                                <th>-</th>
-                                                                <th>${sumA.toLocaleString('fa-IR')}</th>
-                                                                <th>-</th>
-                                                                <th>${sumB.toLocaleString('fa-IR')}</th>
+     <th>-</th>
+     <th>-</th>
+     <th>${sumA.toLocaleString('fa-IR')}</th>
+     <th>-</th>
+     <th>-</th>
+     <th>${sumB.toLocaleString('fa-IR')}</th>
                                                                 <th class="diff" style="color: ${totDiff>=0?'#16a34a':'#dc2626'}">${totDiff>0?'+':''}${totDiff.toFixed(1)}%</th>
                                                             </tr>`;
                                                             html += '</tbody></table></body></html>';
@@ -2911,6 +2920,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     <Send className="w-3.5 h-3.5" />
                                                     ارسال دستی به ربات
                                                 </button>
+                                                </div>
                                             </div>
                                             {chartData.map((row, idx) => {
                                                 const weightDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;

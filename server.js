@@ -436,10 +436,11 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                                    AND t11.Field_003 = t10.Field_004
         LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
         LEFT JOIN (
-            SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_parent.Field_003, t02_sub.Field_003)) as GroupName
+            SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
             FROM IND_TBL_021 t21_sub
             LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
             LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
+            LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
             GROUP BY t21_sub.Field_004
         ) t_group ON t11.Field_005 = t_group.ItemCode
         LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
@@ -668,7 +669,7 @@ app.post('/api/sayan/sales-report/send-compare', async (req, res) => {
         }
 
         const title = `گزارش مقایسه ای فروش (گروه کالا)`;
-        const columns = ['گروه کالا', 'مقدار A (kg)', 'مبلغ خالص A (ریال)', 'مقدار B (kg)', 'مبلغ خالص B (ریال)', 'تغییر مبلغ (%)'];
+        const columns = ['گروه کالا', 'خالص A', 'فی A', 'مرجوعی A', 'خالص B', 'فی B', 'مرجوعی B', 'تغییر مبلغ'];
         
         let totalNetAmtA = 0;
         let totalNetAmtB = 0;
@@ -681,9 +682,11 @@ app.post('/api/sayan/sales-report/send-compare', async (req, res) => {
             return [
                 row.name || 'سایر',
                 (row.netWeightA || 0).toFixed(2),
-                (row.netAmountA || 0).toLocaleString('fa-IR'),
+                (row.netWeightA ? (row.netAmountA / row.netWeightA) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0}),
+                (row.retWeightA || 0).toFixed(2),
                 (row.netWeightB || 0).toFixed(2),
-                (row.netAmountB || 0).toLocaleString('fa-IR'),
+                (row.netWeightB ? (row.netAmountB / row.netWeightB) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0}),
+                (row.retWeightB || 0).toFixed(2),
                 (amountDiff > 0 ? '+' : '') + amountDiff.toFixed(1) + '%'
             ];
         });
@@ -692,9 +695,11 @@ app.post('/api/sayan/sales-report/send-compare', async (req, res) => {
         tableRows.push([
             'جمع کل',
             '-',
-            totalNetAmtA.toLocaleString('fa-IR'),
             '-',
-            totalNetAmtB.toLocaleString('fa-IR'),
+            '-',
+            '-',
+            '-',
+            '-',
             (totalDiff > 0 ? '+' : '') + totalDiff.toFixed(1) + '%'
         ]);
 

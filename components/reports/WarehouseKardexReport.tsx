@@ -70,25 +70,28 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
 
         // 2. Compute running balance chronologically across ALL transactions
         let currentBalance = 0;
-        const txsWithBalance = itemTxs.map(tx => {
-            const txItem = tx.items.find(i => i.itemId === selectedItem);
-            const qty = txItem ? txItem.quantity : 0;
-            const weight = txItem ? txItem.weight : 0;
-            const unitPrice = txItem ? txItem.unitPrice : 0;
+        const txsWithBalance = itemTxs.flatMap(tx => {
+            const matchingItems = tx.items.filter(i => i.itemId === selectedItem);
+            return matchingItems.map((txItem, idx) => {
+                const qty = txItem ? txItem.quantity : 0;
+                const weight = txItem ? txItem.weight : 0;
+                const unitPrice = txItem ? txItem.unitPrice : 0;
 
-            if (tx.type === 'IN') {
-                currentBalance += qty;
-            } else {
-                currentBalance -= qty;
-            }
+                if (tx.type === 'IN') {
+                    currentBalance += qty;
+                } else {
+                    currentBalance -= qty;
+                }
 
-            return {
-                tx,
-                qty,
-                weight,
-                unitPrice,
-                balanceAtThisPoint: currentBalance
-            };
+                return {
+                    tx,
+                    txItemId: tx.id + '_' + idx,
+                    qty,
+                    weight,
+                    unitPrice,
+                    balanceAtThisPoint: currentBalance
+                };
+            });
         });
 
         // 3. Segment into openingBalance (before the active window) and visibleRows
@@ -157,7 +160,7 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
                 // Filter by transaction type if needed, but preserve correct historical balance!
                 if (txType === 'ALL' || tx.type === txType) {
                     visibleRows.push({
-                        id: tx.id,
+                        id: item.txItemId,
                         date: tx.date,
                         number: tx.number || tx.proformaNumber || '-',
                         type: tx.type,
