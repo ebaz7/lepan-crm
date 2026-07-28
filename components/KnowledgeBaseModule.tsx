@@ -952,10 +952,7 @@ const KnowledgeBaseModule: React.FC<KnowledgeBaseModuleProps> = ({ currentUser, 
                                         <div className="space-y-1">
                                             {company.nationalId && <div>شناسه ملی: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.nationalId}</span></div>}
                                             {company.registrationNumber && <div>شماره ثبت: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.registrationNumber}</span></div>}
-                                            {company.economicCode && <div>کد اقتصادی: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.economicCode}</span></div>}
-                                            {company.postalCode && <div>کد پستی: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.postalCode}</span></div>}
                                             {company.phone && <div>تلفن: <span className="font-mono glass-panel px-1.5 py-0.5 rounded text-gray-800 border border-yellow-100 select-all">{company.phone}</span></div>}
-                                            {company.address && <div className="text-xs text-gray-700 mt-1 font-normal">آدرس: <span className="font-medium text-gray-900">{company.address}</span></div>}
                                         </div>
                                         
                                         {company.banks && company.banks.length > 0 ? (

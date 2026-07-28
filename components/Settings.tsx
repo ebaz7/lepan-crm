@@ -595,8 +595,6 @@ const Settings: React.FC<SettingsProps> = ({
             companyMap.set(c.name.trim(), {
               ...c,
               name: c.name.trim(),
-              address: c.address || normalizedSettings.companyAddress || "",
-              phone: c.phone || normalizedSettings.companyPhone || "",
               banks: Array.isArray(c.banks) ? c.banks : []
             });
           }
@@ -667,8 +665,6 @@ const Settings: React.FC<SettingsProps> = ({
           companyMap.set(c.name.trim(), {
             ...c,
             name: c.name.trim(),
-            address: c.address || safeData.companyAddress || "",
-            phone: c.phone || safeData.companyPhone || "",
             banks: Array.isArray(c.banks) ? c.banks : []
           });
         }
@@ -708,6 +704,16 @@ const Settings: React.FC<SettingsProps> = ({
       if (safeData.companyBank && typeof safeData.companyBank === 'string' && safeData.companyBank.trim()) {
         allBanksSet.add(safeData.companyBank.trim());
       }
+      loadedCompanies.forEach((c: any) => {
+        if (Array.isArray(c.banks)) {
+          c.banks.forEach((b: any) => {
+            if (b) {
+              const bName = typeof b === 'string' ? b : (b.bankName || '');
+              if (bName && bName.trim()) allBanksSet.add(bName.trim());
+            }
+          });
+        }
+      });
       safeData.operatingBankNames = Array.from(allBanksSet);
       safeData.bankNames = Array.from(allBanksSet);
 
@@ -3180,7 +3186,6 @@ const Settings: React.FC<SettingsProps> = ({
                                 type="button"
                                 onClick={() => handleEditCompany(c)}
                                 className="text-blue-500 p-1 hover:bg-blue-50 rounded"
-                                title="ویرایش"
                               >
                                 <Pencil size={14} />
                               </button>
@@ -3188,25 +3193,11 @@ const Settings: React.FC<SettingsProps> = ({
                                 type="button"
                                 onClick={() => handleRemoveCompany(c.id)}
                                 className="text-red-500 p-1 hover:bg-red-50 rounded"
-                                title="حذف"
                               >
                                 <Trash2 size={14} />
                               </button>
                             </div>
                           </div>
-                          {(c.nationalId || c.registrationNumber || c.phone || c.address) && (
-                            <div className="text-xs text-gray-500 space-y-0.5 border-t pt-1 mt-1">
-                              {c.nationalId && <div>شناسه ملی: <span className="font-mono text-gray-800">{c.nationalId}</span></div>}
-                              {c.registrationNumber && <div>شماره ثبت: <span className="font-mono text-gray-800">{c.registrationNumber}</span></div>}
-                              {c.phone && <div>تلفن: <span className="font-mono text-gray-800">{c.phone}</span></div>}
-                              {c.address && <div>آدرس: <span className="text-gray-800">{c.address}</span></div>}
-                            </div>
-                          )}
-                          {c.banks && c.banks.length > 0 && (
-                            <div className="text-[11px] text-teal-700 bg-teal-50 px-2 py-1 rounded font-bold">
-                              {c.banks.length} حساب بانکی: {c.banks.map(b => b.bankName).join('، ')}
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
