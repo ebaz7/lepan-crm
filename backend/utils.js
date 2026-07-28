@@ -95,35 +95,13 @@ export const toPersianDigitsNoGrouping = (val) => {
 };
 
 export const sanitizeGroupId = (id) => {
-    if (id === null || id === undefined) return '';
+    if (!id) return '';
     let str = id.toString().trim();
-    if (!str) return '';
-
-    // Handle RTL trailing minus "123456-" -> "-123456"
+    // Handle RTL trailing minus "123-" -> "-123"
     if (str.endsWith('-')) {
         str = '-' + str.slice(0, -1);
     }
-
-    // Handle URL format e.g. https://t.me/channel_name or https://ble.ir/group_name
-    if (str.includes('t.me/') || str.includes('ble.ir/')) {
-        const parts = str.split('/');
-        const lastPart = parts[parts.length - 1].split('?')[0].trim();
-        if (lastPart) {
-            str = (lastPart.startsWith('-') || /^\d+$/.test(lastPart)) ? lastPart : (lastPart.startsWith('@') ? lastPart : `@${lastPart}`);
-        }
-    }
-
-    // Preserve WhatsApp JIDs (e.g., 123456789@g.us or @c.us or @s.whatsapp.net)
-    if (str.includes('@g.us') || str.includes('@c.us') || str.includes('@s.whatsapp.net')) {
-        return str;
-    }
-
-    // Preserve Telegram/Bale handles or string IDs starting with @ or letters (e.g. @mychannel or g123456)
-    if (str.startsWith('@') || /^[a-zA-Z]/.test(str)) {
-        return str;
-    }
-
-    // Extract leading numeric ID (e.g. -100123456789 or 123456789)
+    // Remove any other non-numeric chars (except minus at start)
     const match = str.match(/^-?\d+/);
     return match ? match[0] : str;
 };

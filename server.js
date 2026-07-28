@@ -377,26 +377,14 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     if (!targetsOverride) {
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
         if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
-        if (settings.dailySalesWhatsappGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.dailySalesWhatsappGroupId });
         if (settings.botAccountingGroupIdTele) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
         if (settings.botAccountingGroupIdBale) salesTargets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
-        if (settings.botAccountingGroupIdWhatsApp) salesTargets.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
         if (settings.botAccountingGroupId) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupId });
         if (settings.reportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.reportsGroupId });
         if (settings.telegramReportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId });
-        if (settings.telegramReportsGroupId2) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId2 });
         if (settings.baleReportsGroupId) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId });
-        if (settings.baleReportsGroupId2) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId2 });
-        if (settings.whatsappReportsGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId });
-        if (settings.whatsappReportsGroupId2) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId2 });
         if (settings.telegramChatId) salesTargets.push({ platform: 'telegram', id: settings.telegramChatId });
         if (settings.baleChatId) salesTargets.push({ platform: 'bale', id: settings.baleChatId });
-
-        if (db.groups && Array.isArray(db.groups)) {
-            db.groups.forEach(g => {
-                if (g.chatId) salesTargets.push({ platform: g.platform || 'telegram', id: g.chatId });
-            });
-        }
     }
 
     const uniqueSalesTargets = [];
@@ -503,7 +491,6 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد اقلام فروخته شده: ${groupedRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
 
         let successfulSends = 0;
-        let lastErr = null;
         for (const tgt of uniqueSalesTargets) {
             try {
                 if (tgt.platform === 'telegram') {
@@ -512,30 +499,18 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                 } else if (tgt.platform === 'bale') {
                     await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
                     successfulSends++;
-                } else if (tgt.platform === 'whatsapp') {
-                    const wa = await safeImport('./backend/whatsapp.js');
-                    if (wa && wa.sendMessage) {
-                        await wa.sendMessage(tgt.id, caption, {
-                            data: pdfBuffer.toString('base64'),
-                            mimeType: 'application/pdf',
-                            filename: filename
-                        });
-                        successfulSends++;
-                    }
                 }
             } catch (e) {
-                lastErr = e.message;
                 console.error(`[Manual/Auto Sales Report] Failed to send to ${tgt.platform} group ${tgt.id}:`, e.message);
             }
         }
         if (successfulSends === 0) {
-            throw new Error(`ارسال گزارش فروش ناموفق بود: ${lastErr || 'خطا در اتصال به پیام‌رسان‌ها'}`);
+            throw new Error('ارسال گزارش فروش بایت خطا در اتصال یا تنظیمات پیام‌رسان‌ها ناموفق بود.');
         }
         return { count: salesRows.length, totalQty, totalAmt, sent: true, successfulSends };
     } else {
         const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
         let successfulSends = 0;
-        let lastErr = null;
         for (const tgt of uniqueSalesTargets) {
             try {
                 if (tgt.platform === 'telegram') {
@@ -544,22 +519,12 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                 } else if (tgt.platform === 'bale') {
                     await bale.sendBotMessage(tgt.id, emptyMsg);
                     successfulSends++;
-                } else if (tgt.platform === 'whatsapp') {
-                    const wa = await safeImport('./backend/whatsapp.js');
-                    if (wa && wa.sendMessage) {
-                        await wa.sendMessage(tgt.id, emptyMsg);
-                        successfulSends++;
-                    }
                 }
             } catch (e) {
-                lastErr = e.message;
                 console.error(`[Manual/Auto Sales Report] Failed to send empty msg to ${tgt.platform} group ${tgt.id}:`, e.message);
             }
         }
-        if (successfulSends === 0) {
-            throw new Error(`ارسال پیام عدم وجود فاکتور فروش ناموفق بود: ${lastErr || 'خطا در پیام‌رسان‌ها'}`);
-        }
-        return { count: 0, sent: true, successfulSends };
+        return { count: 0, sent: successfulSends > 0, successfulSends };
     }
 };
 
@@ -3318,24 +3283,18 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         
         // Collect target chat/group IDs
         const targetIds = [];
-        if (settings.productionTelegramGroupId) targetIds.push({ platform: 'telegram', id: settings.productionTelegramGroupId });
-        if (settings.productionBaleGroupId) targetIds.push({ platform: 'bale', id: settings.productionBaleGroupId });
-        if (settings.productionWhatsappGroupId) targetIds.push({ platform: 'whatsapp', id: settings.productionWhatsappGroupId });
+        if (settings.telegramChatId) targetIds.push({ platform: 'telegram', id: settings.telegramChatId });
+        if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
         if (settings.factoryGroupId) targetIds.push({ platform: 'telegram', id: settings.factoryGroupId });
         if (settings.accountingGroupId) targetIds.push({ platform: 'telegram', id: settings.accountingGroupId });
+        if (settings.productionTelegramGroupId) targetIds.push({ platform: 'telegram', id: settings.productionTelegramGroupId });
+        if (settings.productionBaleGroupId) targetIds.push({ platform: 'bale', id: settings.productionBaleGroupId });
         if (settings.botAccountingGroupIdTele) targetIds.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
         if (settings.botAccountingGroupIdBale) targetIds.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
-        if (settings.botAccountingGroupIdWhatsApp) targetIds.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
         if (settings.botAccountingGroupId) targetIds.push({ platform: 'telegram', id: settings.botAccountingGroupId });
         if (settings.reportsGroupId) targetIds.push({ platform: 'telegram', id: settings.reportsGroupId });
         if (settings.telegramReportsGroupId) targetIds.push({ platform: 'telegram', id: settings.telegramReportsGroupId });
-        if (settings.telegramReportsGroupId2) targetIds.push({ platform: 'telegram', id: settings.telegramReportsGroupId2 });
         if (settings.baleReportsGroupId) targetIds.push({ platform: 'bale', id: settings.baleReportsGroupId });
-        if (settings.baleReportsGroupId2) targetIds.push({ platform: 'bale', id: settings.baleReportsGroupId2 });
-        if (settings.whatsappReportsGroupId) targetIds.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId });
-        if (settings.whatsappReportsGroupId2) targetIds.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId2 });
-        if (settings.telegramChatId) targetIds.push({ platform: 'telegram', id: settings.telegramChatId });
-        if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
         
         // Add any subscribed groups from db
         if (db.groups && Array.isArray(db.groups)) {
@@ -3370,16 +3329,6 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
                 } else if (target.platform === 'bale') {
                     await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
                     sentCount++;
-                } else if (target.platform === 'whatsapp') {
-                    const wa = await safeImport('./backend/whatsapp.js');
-                    if (wa && wa.sendMessage) {
-                        await wa.sendMessage(target.id, caption, {
-                            data: pdfBuffer.toString('base64'),
-                            mimeType: 'application/pdf',
-                            filename: filename
-                        });
-                        sentCount++;
-                    }
                 }
             } catch (err) {
                 lastError = err.message;
